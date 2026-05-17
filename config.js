@@ -11,9 +11,9 @@ const DERATEK_CONFIG = {
   email: {
     deratek: 'info@deratek.ch'
   },
-  groq: {
-    apiKey: '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',
-    model:  'mixtral-8x7b-32768'
+  mistral: {
+    apiKey: 'xr9IwkMxT8Pn2aCZhB33svpNo2X55smz',
+    model:  'mistral-small-latest'
   },
   app: {
     name: 'DERATEK',

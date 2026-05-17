@@ -834,25 +834,54 @@ async function correctWithAI(fieldId, type) {
   const btn = document.getElementById('ai-btn-' + type);
   if (btn) { btn.textContent = '⏳ Correction...'; btn.disabled = true; }
 
+  const basePrompt = `Tu es un correcteur expert de la langue française. Tu travailles pour DERATEK, une entreprise suisse de lutte anti-nuisibles. Tu reçois des textes saisis rapidement par des techniciens sur le terrain — ils contiennent des fautes, des espaces mal placés, des mots mal écrits, des majuscules partout, des phrases cassées.
+
+TON RÔLE : réécrire entièrement le texte en français parfait, professionnel et fluide.
+
+CORRECTIONS OBLIGATOIRES — tu ne peux en manquer aucune :
+1. ORTHOGRAPHE : corrige chaque mot mal orthographié (ex: "trouvées" au lieu de "trouvé", "avons" au lieu de "avont")
+2. ACCENTS : ajoute tous les accents manquants sans exception (é, è, ê, ë, à, â, ù, û, î, ï, ô, ç)
+3. ESPACES : supprime les espaces avant virgule/point (ex: "lit ," → "lit,"), ajoute les espaces manquants après ponctuation
+4. MAJUSCULES : une seule majuscule en début de phrase et après un point. Tout le reste en minuscules.
+5. PONCTUATION : ajoute les virgules, points-virgules et points là où ils manquent. Termine toujours par un point.
+6. GRAMMAIRE : corrige les accords (genre, nombre), les conjugaisons, les temps verbaux
+7. SYNTAXE : reformule les phrases maladroites ou incomplètes pour qu'elles soient claires et naturelles
+8. RÉPÉTITIONS : supprime les mots ou tournures répétés inutilement
+9. STYLE : utilise un vocabulaire professionnel et technique du secteur dératisation / désinsectisation
+
+EXEMPLES de corrections attendues :
+- "a la suite de ce traitements contre les punaises de lit , nous avons remarqué que nous avons trouvées des centaines de punaises de lit dans le cadre du lit" → "À la suite de ce traitement contre les punaises de lit, nous avons constaté la présence de plusieurs centaines de punaises dans le cadre du lit."
+- "gupe trouver dans grenier" → "Des guêpes ont été découvertes dans les combles."
+- "pas de probleme acces facile traitement effectuer" → "Pas de contrainte particulière. L'accès est facile et le traitement a été effectué sans difficulté."
+
+ABSOLUMENT INTERDIT :
+- Ajouter une introduction, explication ou commentaire
+- Mettre des guillemets autour du texte
+- Écrire "Voici le texte corrigé :" ou toute phrase similaire
+- Inventer des informations non présentes dans le texte original
+
+Réponds UNIQUEMENT avec le texte réécrit et corrigé, rien d'autre.`;
+
   const prompts = {
-    description:     "Tu es un expert en deratisation professionnelle en Suisse. Le texte que je vais te donner peut contenir des fautes d orthographe, de grammaire, des mots en majuscules ou un style informel. Tu dois le réécrire entierement en francais professionnel et technique : corrige toutes les fautes, mets les majuscules uniquement en debut de phrase et apres les points, utilise un vocabulaire technique precis. Reponds UNIQUEMENT avec le texte reecrit, sans commentaire ni explication.",
-    origine:         "Tu es expert en nuisibles professionnels. Reecris ce texte en francais professionnel : corrige les fautes, normalise les majuscules, ameliore le style. Reponds UNIQUEMENT avec le texte reecrit.",
-    contraintes:     "Expert en intervention anti-nuisible. Reecris ce texte en francais professionnel : corrige les fautes, normalise les majuscules, ameliore le style. Reponds UNIQUEMENT avec le texte reecrit.",
-    precautions:     "Expert en traitement anti-nuisible. Reecris ces precautions en francais professionnel clair et rassurant : corrige les fautes, normalise les majuscules. Reponds UNIQUEMENT avec le texte reecrit.",
-    recommandations: "Expert en deratisation suisse. Reecris ces recommandations en francais professionnel : corrige les fautes, normalise les majuscules, ameliore le style. Reponds UNIQUEMENT avec le texte reecrit.",
+    description:     basePrompt + "\n\nContexte : description d'une intervention anti-nuisibles sur site.",
+    origine:         basePrompt + "\n\nContexte : origine probable de l'infestation.",
+    contraintes:     basePrompt + "\n\nContexte : contraintes et informations utiles pour l'intervention.",
+    precautions:     basePrompt + "\n\nContexte : précautions post-traitement à communiquer au client.",
+    recommandations: basePrompt + "\n\nContexte : recommandations et suivi après intervention.",
   };
-  const systemPrompt = prompts[type] || "Corrige l'orthographe et la grammaire de ce texte en français professionnel. Réponds UNIQUEMENT avec le texte corrigé.";
+  const systemPrompt = prompts[type] || basePrompt;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + DERATEK_CONFIG.groq.apiKey
+        'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey
       },
       body: JSON.stringify({
-        model: DERATEK_CONFIG.groq.model,
-        max_tokens: 500,
+        model: DERATEK_CONFIG.mistral.model,
+        max_tokens: 600,
+        temperature: 0.1,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: text }
