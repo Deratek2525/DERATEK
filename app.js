@@ -230,7 +230,27 @@ const DB = {
     }
   },
 
-  // Compatibilité ancienne API synchrone (pour le code existant)
+  // Upload PDF dans Supabase Storage
+  async uploadPDF(rapportId, pdfBlob) {
+    try {
+      const fileName = `${rapportId}.pdf`;
+      const res = await fetch(`${SUPA_URL}/storage/v1/object/rapport/${fileName}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPA_KEY,
+          'Authorization': `Bearer ${SUPA_KEY}`,
+          'Content-Type': 'application/pdf',
+          'x-upsert': 'true'
+        },
+        body: pdfBlob
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return `${SUPA_URL}/storage/v1/object/public/rapport/${fileName}`;
+    } catch(e) {
+      console.warn('PDF upload error:', e);
+      return null;
+    }
+  },
   get techs()    { return JSON.parse(localStorage.getItem('drt_techs') || '["Marc Dubois","Sophie Martin","Jean-Pierre Favre"]'); },
   set techs(v)   { localStorage.setItem('drt_techs', JSON.stringify(v)); this.saveTechs(v); },
   get clients()  { return this._cache.clients || JSON.parse(localStorage.getItem('drt_clients') || '[]'); },
@@ -239,7 +259,43 @@ const DB = {
   set locataires(v){ localStorage.setItem('drt_locataires', JSON.stringify(v)); },
   get rapports() { return this._cache.rapports || JSON.parse(localStorage.getItem('drt_rapports') || '[]'); },
   set rapports(v){ localStorage.setItem('drt_rapports', JSON.stringify(v)); },
-};
+  get intervs()  { return this._cache.intervs || JSON.parse(localStorage.getItem('drt_intervs') || '[]'); },
+  set intervs(v) {
+    this._cache.intervs = v;
+    localStorage.setItem('drt_intervs', JSON.stringify(v));
+    // Sync Supabase
+    this._syncIntervs(v);
+  },
+  async _syncIntervs(list) {
+    try {
+      // Upsert toutes les interventions
+      if (list.length) await supa.upsert('interventions', list.map(iv => ({
+        id: iv.id, date: iv.date, heure: iv.heure || '',
+        client_id: iv.clientId || null, client_nom: iv.clientNom || '',
+        adresse: iv.adresse || '', nuisible: iv.nuisible || '',
+        tech: iv.tech || '', statut: iv.statut || 'Planifiée',
+        couleur: iv.couleur || '#1a2744', notes: iv.notes || ''
+      })));
+    } catch(e) { console.warn('Intervs sync:', e); }
+  },
+  async getIntervs() {
+    try {
+      const rows = await supa.select('interventions', '?order=date,heure');
+      const list = rows.map(r => ({
+        id: r.id, date: r.date, heure: r.heure,
+        clientId: r.client_id, clientNom: r.client_nom,
+        adresse: r.adresse, nuisible: r.nuisible,
+        tech: r.tech, statut: r.statut,
+        couleur: r.couleur, notes: r.notes
+      }));
+      this._cache.intervs = list;
+      localStorage.setItem('drt_intervs', JSON.stringify(list));
+      return list;
+    } catch(e) {
+      console.warn('getIntervs:', e);
+      return JSON.parse(localStorage.getItem('drt_intervs') || '[]');
+    }
+  },
 
 // Compression photo async — réduit à max 900px largeur, qualité JPEG 0.65
 function compressPhotoAsync(dataUrl) {
@@ -267,16 +323,17 @@ async function seedData() {
   // Charger depuis Supabase
   try {
     showLoading(true);
-    const [clients, rapports, locataires] = await Promise.all([
-      DB.getClients(), DB.getRapports(), DB.getLocataires()
+    const [clients, rapports, locataires, intervs] = await Promise.all([
+      DB.getClients(), DB.getRapports(), DB.getLocataires(), DB.getIntervs()
     ]);
-    // Mettre en cache local pour accès synchrone
     DB._cache.clients = clients;
     DB._cache.rapports = rapports;
     DB._cache.locataires = locataires;
+    DB._cache.intervs = intervs;
     localStorage.setItem('drt_clients', JSON.stringify(clients));
     localStorage.setItem('drt_rapports', JSON.stringify(rapports));
     localStorage.setItem('drt_locataires', JSON.stringify(locataires));
+    localStorage.setItem('drt_intervs', JSON.stringify(intervs));
 
     // Seed données exemple si vide
     if (!clients.length) {
@@ -457,16 +514,38 @@ function renderDashboard() {
     : '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Aucun rapport</div></div>';
   }
 
-  // Upcoming intervs
+  // Upcoming — interventions agenda + RDV rapports
   const di = $('dash-intervs');
   if (di) {
     const upcoming = DB.intervs.filter(iv => iv.date >= today()).sort((a,b) => (a.date+a.heure).localeCompare(b.date+b.heure)).slice(0,5);
-    di.innerHTML = upcoming.length ? upcoming.map(iv => `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--g100);cursor:pointer;" onclick="openEditInterv('${iv.id}')">
-        <div style="width:10px;height:10px;border-radius:50%;background:${iv.couleur};flex-shrink:0;"></div>
+
+    // Ajouter les RDV des rapports
+    const rdvRapports = DB.rapports
+      .filter(r => r.rdv && r.rdv >= today())
+      .sort((a,b) => a.rdv.localeCompare(b.rdv))
+      .slice(0, 5)
+      .map(r => ({
+        type: 'rdv',
+        id: r.id,
+        date: r.rdv,
+        heure: '—',
+        clientNom: r.clientNom || '—',
+        nuisible: (r.nuisibles||[]).join(', ') || 'Suivi',
+        statut: 'Planifiée',
+        couleur: '#f4a623'
+      }));
+
+    // Fusionner et trier
+    const all = [...upcoming, ...rdvRapports]
+      .sort((a,b) => a.date.localeCompare(b.date))
+      .slice(0, 6);
+
+    di.innerHTML = all.length ? all.map(iv => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--g100);cursor:pointer;" onclick="${iv.type === 'rdv' ? `editRapport('${iv.id}')` : `openEditInterv('${iv.id}')`}">
+        <div style="width:10px;height:10px;border-radius:50%;background:${iv.couleur||'#1a2744'};flex-shrink:0;"></div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:12px;">${iv.clientNom||'—'}</div>
-          <div style="font-size:11px;color:var(--g400);">${fmtDate(iv.date)} à ${iv.heure} · ${iv.nuisible}</div>
+          <div style="font-weight:700;font-size:12px;">${iv.clientNom||'—'} ${iv.type==='rdv' ? '<span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:4px;margin-left:4px;">RDV rapport</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--g400);">${fmtDate(iv.date)}${iv.heure && iv.heure !== '—' ? ' à '+iv.heure : ''} · ${iv.nuisible}</div>
         </div>
         <span class="badge ${badgeCls(iv.statut)}">${iv.statut}</span>
       </div>`).join('')
@@ -1126,13 +1205,44 @@ function saveRapport(statut) {
       garantie_note:     r.garantieNote || '—',
       // Photos
       photo_comments:    photoCommentsStr,
+      // Lien PDF — sera mis à jour après upload
+      pdf_link:          '⏳ Génération en cours...',
       // Email
       email:             DERATEK_CONFIG.email.deratek,
       name:              r.tech || 'DERATEK',
     };
-    emailjs.send(DERATEK_CONFIG.emailjs.serviceId, DERATEK_CONFIG.emailjs.templateId, params)
-      .then(() => {
-        toast('Rapport envoyé à ' + DERATEK_CONFIG.email.deratek + ' ✓', '#2d9e6b');
+
+    // Générer et uploader le PDF, puis envoyer l'email avec le lien
+    toast('Génération et upload du PDF...', '#f4a623');
+    (async () => {
+      try {
+        // Charger les photos
+        const photos = state.photos && state.photos.some(p=>p)
+          ? state.photos
+          : await DB.loadPhotos(r.id).catch(() => []);
+
+        // Générer le PDF
+        const rPdf = { ...r, photos };
+        const doc = generatePDF(rPdf);
+        let pdfLink = null;
+
+        if (doc) {
+          // Convertir en Blob
+          const pdfBlob = doc.output('blob');
+          // Uploader dans Supabase Storage
+          pdfLink = await DB.uploadPDF(r.id, pdfBlob);
+        }
+
+        // Ajouter le lien dans les params
+        params.pdf_link = pdfLink
+          ? `📥 Télécharger le rapport PDF complet :\n${pdfLink}`
+          : '(PDF non disponible)';
+
+        // Envoyer l'email
+        await emailjs.send(DERATEK_CONFIG.emailjs.serviceId, DERATEK_CONFIG.emailjs.templateId, params);
+        toast('Rapport envoyé avec PDF ✓', '#2d9e6b');
+
+        // Envoyer aussi au client si différent
         const clientEmail = r.email;
         if (clientEmail && clientEmail !== DERATEK_CONFIG.email.deratek) {
           const p2 = { ...params, email: clientEmail };
@@ -1140,13 +1250,12 @@ function saveRapport(statut) {
             .then(() => toast('Email envoyé au client ✓', '#2d9e6b'))
             .catch(() => toast('Envoi client échoué', '#f4a623'));
         }
-        setTimeout(() => showScreen('rapports'), 1200);
-      })
-      .catch(err => {
-        console.error('EmailJS error:', err);
+      } catch(err) {
+        console.error('Envoi error:', err);
         toast('Rapport sauvegardé — email échoué', '#f4a623');
-        setTimeout(() => showScreen('rapports'), 1200);
-      });
+      }
+      setTimeout(() => showScreen('rapports'), 1500);
+    })();
   } else {
     toast(statut === 'Brouillon' ? 'Brouillon sauvegardé ✓' : 'Rapport finalisé ✓', '#2d9e6b');
     if (statut === 'Finalisé') setTimeout(() => showScreen('rapports'), 800);
