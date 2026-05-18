@@ -54,7 +54,7 @@ const supa = {
 // ============================================================
 const DB = {
   // Cache local pour éviter trop de requêtes
-  _cache: { techs: null, clients: null, locataires: null, rapports: null },
+  _cache: { techs: null, clients: null, locataires: null, rapports: null, intervs: null },
 
   // TECHS
   async getTechs() {
