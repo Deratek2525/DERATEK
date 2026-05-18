@@ -1,54 +1,312 @@
 /* ============================================================
-   DERATEK — Application v2.0
+   DERATEK — Application v2.0 — Supabase Edition
    ============================================================ */
 
 // ============================================================
-// BASE DE DONNÉES (localStorage — prête pour Supabase)
+// SUPABASE CLIENT
+// ============================================================
+const SUPA_URL = 'https://orhgyizvoudikkrfwdtt.supabase.co';
+const SUPA_KEY = 'sb_publishable_iwk-ReoFQev9PtI504IaMQ_WRl8bqVg';
+
+const supa = {
+  async query(table, method = 'GET', body = null, params = '') {
+    const url = `${SUPA_URL}/rest/v1/${table}${params}`;
+    const opts = {
+      method,
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': `Bearer ${SUPA_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
+      }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Supabase ${method} ${table}: ${err}`);
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
+  },
+  async select(table, params = '') { return this.query(table, 'GET', null, params); },
+  async insert(table, data)        { return this.query(table, 'POST', data); },
+  async update(table, data, where) { return this.query(table, 'PATCH', data, `?${where}`); },
+  async upsert(table, data)        {
+    const res = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': `Bearer ${SUPA_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(data)
+    });
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
+  },
+  async delete(table, where) { return this.query(table, 'DELETE', null, `?${where}`); },
+};
+
+// ============================================================
+// BASE DE DONNÉES (Supabase + cache local)
 // ============================================================
 const DB = {
-  _get(key, fallback = []) {
-    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-    catch { return fallback; }
+  // Cache local pour éviter trop de requêtes
+  _cache: { techs: null, clients: null, locataires: null, rapports: null },
+
+  // TECHS
+  async getTechs() {
+    if (this._cache.techs) return this._cache.techs;
+    try {
+      const rows = await supa.select('techniciens', '?order=nom');
+      this._cache.techs = rows.map(r => r.nom);
+      return this._cache.techs;
+    } catch { return localStorage.getItem('drt_techs') ? JSON.parse(localStorage.getItem('drt_techs')) : []; }
   },
-  _set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
-    catch (e) {
-      console.warn('Storage full, trimming...', key);
-      if (Array.isArray(val)) {
-        try { localStorage.setItem(key, JSON.stringify(val.slice(-20))); return true; }
-        catch { return false; }
+  async saveTechs(list) {
+    this._cache.techs = list;
+    localStorage.setItem('drt_techs', JSON.stringify(list));
+    try {
+      // Upsert chaque technicien
+      for (const nom of list) {
+        await supa.upsert('techniciens', { id: 'tech_' + nom.replace(/\s/g,'_').toLowerCase(), nom });
       }
-      return false;
+    } catch(e) { console.warn('Supabase techs save:', e); }
+  },
+
+  // CLIENTS
+  async getClients() {
+    if (this._cache.clients) return this._cache.clients;
+    try {
+      const rows = await supa.select('clients', '?order=nom');
+      this._cache.clients = rows;
+      return rows;
+    } catch { return localStorage.getItem('drt_clients') ? JSON.parse(localStorage.getItem('drt_clients')) : []; }
+  },
+  async saveClient(client) {
+    this._cache.clients = null;
+    localStorage.setItem('drt_clients_dirty', '1');
+    try {
+      await supa.upsert('clients', {
+        id: client.id, nom: client.nom, type: client.type,
+        contact: client.contact, tel: client.tel, email: client.email,
+        web: client.web, adresse: client.adresse, npa: client.npa,
+        ville: client.ville, num: client.num, tarif: client.tarif, notes: client.notes
+      });
+    } catch(e) { console.warn('Supabase client save:', e); toast('⚠ Sauvegardé localement uniquement', '#f4a623'); }
+  },
+  async deleteClient(id) {
+    this._cache.clients = null;
+    try { await supa.delete('clients', `id=eq.${id}`); } catch(e) { console.warn(e); }
+  },
+
+  // LOCATAIRES
+  async getLocataires() {
+    if (this._cache.locataires) return this._cache.locataires;
+    try {
+      const rows = await supa.select('locataires', '?order=nom');
+      this._cache.locataires = rows;
+      return rows;
+    } catch { return []; }
+  },
+  async saveLocataire(loc) {
+    this._cache.locataires = null;
+    try {
+      await supa.upsert('locataires', {
+        id: loc.id, prenom: loc.prenom, nom: loc.nom,
+        tel: loc.tel, email: loc.email, adresse: loc.adresse,
+        npa: loc.npa, ville: loc.ville, client_id: loc.clientId || null, notes: loc.notes
+      });
+    } catch(e) { console.warn('Supabase locataire save:', e); }
+  },
+  async deleteLocataire(id) {
+    this._cache.locataires = null;
+    try { await supa.delete('locataires', `id=eq.${id}`); } catch(e) { console.warn(e); }
+  },
+
+  // RAPPORTS
+  async getRapports() {
+    if (this._cache.rapports) return this._cache.rapports;
+    try {
+      const rows = await supa.select('rapports', '?order=created_at.desc');
+      // Mapper colonnes snake_case → camelCase
+      this._cache.rapports = rows.map(r => this._mapRapport(r));
+      return this._cache.rapports;
+    } catch(e) {
+      console.warn('Supabase rapports load:', e);
+      return localStorage.getItem('drt_rapports') ? JSON.parse(localStorage.getItem('drt_rapports')) : [];
     }
   },
-  get techs()    { return this._get('drt_techs',   []); },
-  set techs(v)   { this._set('drt_techs', v); },
-  get clients()  { return this._get('drt_clients', []); },
-  set clients(v) { this._set('drt_clients', v); },
-  get locataires() { return this._get('drt_locataires', []); },
-  set locataires(v){ this._set('drt_locataires', v); },
-  get rapports() { return this._get('drt_rapports', []); },
-  set rapports(v){ this._set('drt_rapports', v); },
-  get intervs()  { return this._get('drt_intervs', []); },
-  set intervs(v) { this._set('drt_intervs', v); }
+  _mapRapport(r) {
+    return {
+      id: r.id, clientId: r.client_id, clientNom: r.client_nom, clientEmail: r.client_email,
+      date: r.date, tech: r.tech, contact: r.contact, tel: r.tel, email: r.email,
+      adresse: r.adresse, npa: r.npa, ville: r.ville, localisation: r.localisation,
+      batiment: r.batiment, noint: r.noint, bonCommande: r.bon_commande,
+      locataireId: r.locataire_id, locataire: r.locataire, locataireTel: r.locataire_tel,
+      locataireEmail: r.locataire_email, locataireAdresse: r.locataire_adresse,
+      showPrix: r.show_prix, nuisibles: r.nuisibles || [], description: r.description,
+      niveau: r.niveau, superficie: r.superficie, volume: r.volume,
+      pieces: r.pieces, zones: r.zones, origine: r.origine, contraintes: r.contraintes,
+      traitement: r.traitement || [], produits: r.produits || [],
+      materiels: r.materiels || [], materielComment: r.materiel_comment,
+      precautions: r.precautions, duree: r.duree, montant: r.montant,
+      resultat: r.resultat, recommandations: r.recommandations,
+      rdv: r.rdv, garantie: r.garantie, garantieNote: r.garantie_note,
+      statut: r.statut, photoComments: r.photo_comments || [],
+      sigClient: r.sig_client, sigLocataire: r.sig_locataire, sigTech: r.sig_tech,
+      photos: []
+    };
+  },
+  async saveRapport(r) {
+    this._cache.rapports = null;
+    const row = {
+      id: r.id, client_id: r.clientId, client_nom: r.clientNom, client_email: r.clientEmail,
+      date: r.date, tech: r.tech, contact: r.contact, tel: r.tel, email: r.email,
+      adresse: r.adresse, npa: r.npa, ville: r.ville, localisation: r.localisation,
+      batiment: r.batiment, noint: r.noint, bon_commande: r.bonCommande,
+      locataire_id: r.locataireId || null, locataire: r.locataire,
+      locataire_tel: r.locataireTel, locataire_email: r.locataireEmail,
+      locataire_adresse: r.locataireAdresse, show_prix: r.showPrix !== false,
+      nuisibles: r.nuisibles || [], description: r.description, niveau: r.niveau,
+      superficie: r.superficie, volume: r.volume, pieces: r.pieces, zones: r.zones,
+      origine: r.origine, contraintes: r.contraintes,
+      traitement: r.traitement || [], produits: r.produits || [],
+      materiels: r.materiels || [], materiel_comment: r.materielComment,
+      precautions: r.precautions, duree: r.duree, montant: r.montant,
+      resultat: r.resultat, recommandations: r.recommandations,
+      rdv: r.rdv || null, garantie: r.garantie, garantie_note: r.garantieNote,
+      statut: r.statut, photo_comments: r.photoComments || [],
+      sig_client: r.sigClient || null, sig_locataire: r.sigLocataire || null,
+      updated_at: new Date().toISOString()
+    };
+    try {
+      await supa.upsert('rapports', row);
+      toast('Rapport sauvegardé ✓', '#2d9e6b');
+    } catch(e) {
+      console.warn('Supabase rapport save:', e);
+      // Fallback localStorage
+      const list = JSON.parse(localStorage.getItem('drt_rapports') || '[]');
+      const i = list.findIndex(x => x.id === r.id);
+      if (i >= 0) list[i] = r; else list.push(r);
+      localStorage.setItem('drt_rapports', JSON.stringify(list));
+      toast('⚠ Sauvegardé localement (hors ligne)', '#f4a623');
+    }
+  },
+  async deleteRapport(id) {
+    this._cache.rapports = null;
+    try { await supa.delete('rapports', `id=eq.${id}`); } catch(e) { console.warn(e); }
+  },
+
+  // PHOTOS
+  async savePhotos(rapportId, photos) {
+    if (!photos || !photos.some(p=>p)) return;
+    try {
+      // Compresser d'abord
+      const compressed = await Promise.all(photos.map(p => compressPhotoAsync(p)));
+      // Supprimer anciennes photos
+      await supa.delete('photos', `rapport_id=eq.${rapportId}`);
+      // Insérer nouvelles
+      const rows = compressed.map((data, slot) => data ? { rapport_id: rapportId, slot, data } : null).filter(Boolean);
+      if (rows.length) await supa.insert('photos', rows);
+    } catch(e) {
+      console.warn('Supabase photos save:', e);
+      // Fallback localStorage
+      const compressed = await Promise.all(photos.map(p => compressPhotoAsync(p)));
+      try { localStorage.setItem('drt_photos_' + rapportId, JSON.stringify(compressed)); } catch {}
+    }
+  },
+  async loadPhotos(rapportId) {
+    try {
+      const rows = await supa.select('photos', `?rapport_id=eq.${rapportId}&order=slot`);
+      const arr = [null,null,null,null,null,null];
+      rows.forEach(r => { if (r.slot >= 0 && r.slot < 6) arr[r.slot] = r.data; });
+      return arr;
+    } catch {
+      const data = localStorage.getItem('drt_photos_' + rapportId);
+      return data ? JSON.parse(data) : [null,null,null,null,null,null];
+    }
+  },
+
+  // Compatibilité ancienne API synchrone (pour le code existant)
+  get techs()    { return JSON.parse(localStorage.getItem('drt_techs') || '["Marc Dubois","Sophie Martin","Jean-Pierre Favre"]'); },
+  set techs(v)   { localStorage.setItem('drt_techs', JSON.stringify(v)); this.saveTechs(v); },
+  get clients()  { return this._cache.clients || JSON.parse(localStorage.getItem('drt_clients') || '[]'); },
+  set clients(v) { localStorage.setItem('drt_clients', JSON.stringify(v)); },
+  get locataires(){ return this._cache.locataires || JSON.parse(localStorage.getItem('drt_locataires') || '[]'); },
+  set locataires(v){ localStorage.setItem('drt_locataires', JSON.stringify(v)); },
+  get rapports() { return this._cache.rapports || JSON.parse(localStorage.getItem('drt_rapports') || '[]'); },
+  set rapports(v){ localStorage.setItem('drt_rapports', JSON.stringify(v)); },
 };
+
+// Compression photo async — réduit à max 900px largeur, qualité JPEG 0.65
+function compressPhotoAsync(dataUrl) {
+  return new Promise(resolve => {
+    if (!dataUrl) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.65));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 
 // ============================================================
 // SEED DATA
 // ============================================================
-function seedData() {
-  if (!DB.techs.length)
-    DB.techs = ['Marc Dubois', 'Sophie Martin', 'Jean-Pierre Favre'];
-  if (!DB.clients.length)
-    DB.clients = [
-      { id:'cl1', nom:'Régie Naef SA', type:'Gérance', contact:'M. Naef', tel:'+41 21 320 45 00', email:'naef@naef.ch', adresse:'Av. de la Gare 22', npa:'1003', ville:'Lausanne', notes:'Client VIP', tarif:'150', num:'CLI-001' },
-      { id:'cl2', nom:'Mme Véronique Roche', type:'Particulier', contact:'Mme Roche', tel:'+41 79 234 56 78', email:'v.roche@bluewin.ch', adresse:'Rue du Mont-Blanc 14', npa:'1201', ville:'Genève', notes:'', tarif:'120', num:'CLI-002' },
-      { id:'cl3', nom:'Commune de Nyon', type:'Commune', contact:'M. Blanc', tel:'+41 22 365 80 00', email:'info@nyon.ch', adresse:'Rue de Rive 9', npa:'1260', ville:'Nyon', notes:'', tarif:'130', num:'CLI-003' },
-    ];
-  if (!DB.rapports.length)
-    DB.rapports = [
-      { id:'R-2026-0419', clientId:'cl2', clientNom:'Mme Véronique Roche', clientEmail:'v.roche@bluewin.ch', date:'2026-05-13', tech:'Marc Dubois', adresse:'Rue du Mont-Blanc 14', npa:'1201', ville:'Genève', localisation:'3ème étage', batiment:'Appartement', contact:'Mme Roche', tel:'+41 79 234 56 78', email:'v.roche@bluewin.ch', nuisibles:['Punaises de lit'], description:'Présence de punaises de lit dans la chambre principale.', niveau:'Important', superficie:'35', pieces:'2', zones:'Chambre, couloir', origine:'Bagage récent', contraintes:'Allergie produits chimiques', traitement:['t-pulv','t-vapeur'], produits:[{nom:'Alon Wax Block',dosage:'10g/m²',zone:'Chambre'},{nom:'Erpex',dosage:'5ml/L',zone:'Couloir'}], precautions:'Ne pas réintégrer 4h. Laver literie 60°C.', duree:'2', montant:'380', resultat:'Traitement effectué — Suivi nécessaire', recommandations:'Contrôle dans 3 semaines.', rdv:'2026-06-03', garantie:'3 mois', statut:'Envoyé' },
-    ];
+async function seedData() {
+  // Charger depuis Supabase
+  try {
+    showLoading(true);
+    const [clients, rapports, locataires] = await Promise.all([
+      DB.getClients(), DB.getRapports(), DB.getLocataires()
+    ]);
+    // Mettre en cache local pour accès synchrone
+    DB._cache.clients = clients;
+    DB._cache.rapports = rapports;
+    DB._cache.locataires = locataires;
+    localStorage.setItem('drt_clients', JSON.stringify(clients));
+    localStorage.setItem('drt_rapports', JSON.stringify(rapports));
+    localStorage.setItem('drt_locataires', JSON.stringify(locataires));
+
+    // Seed données exemple si vide
+    if (!clients.length) {
+      const exemples = [
+        { id:'cl1', nom:'Régie Naef SA', type:'Gérance', contact:'M. Naef', tel:'+41 21 320 45 00', email:'naef@naef.ch', adresse:'Av. de la Gare 22', npa:'1003', ville:'Lausanne', notes:'Client VIP', tarif:'150', num:'CLI-001' },
+        { id:'cl2', nom:'Mme Véronique Roche', type:'Particulier', contact:'Mme Roche', tel:'+41 79 234 56 78', email:'v.roche@bluewin.ch', adresse:'Rue du Mont-Blanc 14', npa:'1201', ville:'Genève', notes:'', tarif:'120', num:'CLI-002' },
+      ];
+      for (const c of exemples) await DB.saveClient(c);
+      DB._cache.clients = exemples;
+    }
+    if (!DB.techs.length) DB.techs = ['Marc Dubois', 'Sophie Martin', 'Jean-Pierre Favre'];
+  } catch(e) {
+    console.warn('Seed data error:', e);
+    // Fallback localStorage
+    if (!DB.techs.length) DB.techs = ['Marc Dubois', 'Sophie Martin', 'Jean-Pierre Favre'];
+  } finally {
+    showLoading(false);
+  }
+}
+
+function showLoading(show) {
+  let el = document.getElementById('app-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-loading';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(26,39,68,.85);z-index:9999;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;letter-spacing:1px;';
+    el.innerHTML = '<div style="text-align:center;"><div style="font-size:32px;margin-bottom:12px;">🐀</div>Chargement DERATEK...</div>';
+    document.body.appendChild(el);
+  }
+  el.style.display = show ? 'flex' : 'none';
 }
 
 // ============================================================
@@ -124,7 +382,9 @@ function doLogin() {
     $('login-screen').style.display = 'none';
     $('app').style.display = 'block';
     emailjs.init(DERATEK_CONFIG.emailjs.publicKey);
-    renderDashboard();
+    seedData().then(() => {
+      renderDashboard();
+    });
   } else {
     $('login-error').style.display = 'block';
     $('login-pwd').value = '';
@@ -466,22 +726,29 @@ function saveClient() {
     adresse: $('cl-adresse').value, npa: $('cl-npa').value, ville: $('cl-ville').value,
     num: $('cl-num').value, tarif: $('cl-tarif').value, notes: $('cl-notes').value,
   };
-  const list = DB.clients;
   if (state.editingClientId) {
-    const i = list.findIndex(c => c.id === state.editingClientId);
-    if (i >= 0) list[i] = { ...list[i], ...data };
-    toast('Client mis à jour ✓', '#2d9e6b');
+    data.id = state.editingClientId;
   } else {
     data.id = 'cl' + Date.now();
-    list.push(data);
-    toast('Client ajouté ✓', '#2d9e6b');
   }
-  DB.clients = list;
-  closeModal('modal-client'); renderClients(); renderDashboard();
+  DB._cache.clients = null;
+  DB.saveClient(data).then(() => {
+    DB.getClients().then(list => {
+      DB._cache.clients = list;
+      localStorage.setItem('drt_clients', JSON.stringify(list));
+      closeModal('modal-client'); renderClients(); renderDashboard();
+      toast(state.editingClientId ? 'Client mis à jour ✓' : 'Client ajouté ✓', '#2d9e6b');
+    });
+  });
 }
 function confirmDeleteClient(id, nom) {
   $('confirm-msg').textContent = `Supprimer "${nom}" ? Cette action est irréversible.`;
-  $('confirm-btn').onclick = () => { DB.clients = DB.clients.filter(c => c.id !== id); closeModal('modal-confirm'); renderClients(); toast('Client supprimé', '#e63946'); };
+  $('confirm-btn').onclick = () => {
+    DB.deleteClient(id).then(() => {
+      DB._cache.clients = null;
+      DB.getClients().then(list => { DB._cache.clients = list; closeModal('modal-confirm'); renderClients(); toast('Client supprimé', '#e63946'); });
+    });
+  };
   openModal('modal-confirm');
 }
 
@@ -556,26 +823,29 @@ function saveLocataire() {
     prenom, nom, tel: $('loc-tel').value, email: $('loc-email').value,
     adresse: $('loc-adresse').value, npa: $('loc-npa').value, ville: $('loc-ville').value,
     clientId: $('loc-client').value, notes: $('loc-notes').value,
+    id: state.editingLocataireId || ('loc' + Date.now()),
   };
-  const list = DB.locataires;
-  if (state.editingLocataireId) {
-    const i = list.findIndex(l => l.id === state.editingLocataireId);
-    if (i >= 0) list[i] = { ...list[i], ...data };
-    toast('Locataire mis à jour ✓', '#2d9e6b');
-  } else {
-    data.id = 'loc' + Date.now();
-    list.push(data);
-    toast('Locataire ajouté ✓', '#2d9e6b');
-  }
-  DB.locataires = list;
-  closeModal('modal-locataire');
-  renderLocataires();
-  populateLocataireSelectRapport('');
+  DB._cache.locataires = null;
+  DB.saveLocataire(data).then(() => {
+    DB.getLocataires().then(list => {
+      DB._cache.locataires = list;
+      localStorage.setItem('drt_locataires', JSON.stringify(list));
+      closeModal('modal-locataire');
+      renderLocataires();
+      populateLocataireSelectRapport('');
+      toast(state.editingLocataireId ? 'Locataire mis à jour ✓' : 'Locataire ajouté ✓', '#2d9e6b');
+    });
+  });
 }
 
 function confirmDeleteLocataire(id) {
   $('confirm-msg').textContent = 'Supprimer ce locataire ? Cette action est irréversible.';
-  $('confirm-btn').onclick = () => { DB.locataires = DB.locataires.filter(l => l.id !== id); closeModal('modal-confirm'); closeModal('modal-locataire'); renderLocataires(); toast('Locataire supprimé', '#e63946'); };
+  $('confirm-btn').onclick = () => {
+    DB.deleteLocataire(id).then(() => {
+      DB._cache.locataires = null;
+      DB.getLocataires().then(list => { DB._cache.locataires = list; closeModal('modal-confirm'); closeModal('modal-locataire'); renderLocataires(); toast('Locataire supprimé', '#e63946'); });
+    });
+  };
   openModal('modal-confirm');
 }
 
@@ -682,8 +952,12 @@ function editRapport(id) {
   const r = DB.rapports.find(x => x.id === id); if (!r) return;
   state.editingRapportId = id;
   state.produits = r.produits ? JSON.parse(JSON.stringify(r.produits)) : [];
-  state.photos = r.photos || [null,null,null,null,null,null];
-  while (state.photos.length < 6) state.photos.push(null);
+  // Charger photos depuis Supabase (async)
+  state.photos = [null,null,null,null,null,null];
+  DB.loadPhotos(r.id).then(photos => {
+    state.photos = photos;
+    resetPhotoGrid();
+  });
   $('r-id').value = r.id; $('r-date').value = r.date || today();
   populateTechSelect($('r-tech'), r.tech || '');
   populateClientSelectRapport(r.clientId);
@@ -766,7 +1040,7 @@ function saveRapport(statut) {
     locataireAdresse: $('r-locataire-adresse') ? $('r-locataire-adresse').value : '',
     showPrix: $('r-show-prix') ? $('r-show-prix').checked : true,
     volume: $('r-volume') ? $('r-volume').value : '',
-    photos: state.photos || [],
+    photos: [], // photos stockées séparément via DB.savePhotos
     photoComments: [0,1,2,3,4,5].map(i => $('r-photo-comment-'+i) ? $('r-photo-comment-'+i).value : ''),
     materiels: JSON.parse(JSON.stringify(state.materiels || [])),
     materielComment: $('r-materiel-comment') ? $('r-materiel-comment').value : '',
@@ -784,25 +1058,77 @@ function saveRapport(statut) {
   const list = DB.rapports;
   const i = list.findIndex(x => x.id === state.editingRapportId);
   if (i >= 0) list[i] = r; else list.push(r);
-  DB.rapports = list; state.editingRapportId = r.id;
+  DB._cache.rapports = null;
+  state.editingRapportId = r.id;
+  // Sauvegarder dans Supabase
+  DB.saveRapport(r);
+  // Sauvegarder photos séparément (compressées)
+  if (state.photos && state.photos.some(p=>p)) {
+    DB.savePhotos(r.id, state.photos);
+  }
   $('edit-id').textContent = r.id;
   $('edit-status').className = 'badge ' + badgeCls(statut); $('edit-status').textContent = statut;
 
   if (statut === 'Envoyé') {
     toast('Envoi en cours...', '#f4a623');
-    const produitsStr = state.produits.map(p => `${p.nom}${p.dosage ? ' — '+p.dosage : ''}${p.zone ? ' ('+p.zone+')' : ''}`).join(', ');
+    const produitsStr = state.produits.length
+      ? state.produits.map(p => `• ${p.nom||''}${p.dosage ? ' — '+p.dosage : ''}${p.zone ? ' ('+p.zone+')' : ''}`).join('\n')
+      : '—';
+    const materielsStr = (state.materiels||[]).length
+      ? state.materiels.map(m => `• ${m.nom||''}${m.qte ? ' × '+m.qte : ''}${m.zone ? ' — '+m.zone : ''}`).join('\n')
+      : '—';
+    const photoCommentsStr = (r.photoComments||[]).filter(c=>c).length
+      ? (r.photoComments||[]).map((c,i) => c ? `Photo ${i+1} : ${c}` : '').filter(Boolean).join('\n')
+      : '—';
+    const superficieStr = (r.superficie ? r.superficie+' m²' : '') + (r.volume ? ' / '+r.volume+' m³' : '') + (r.pieces ? ' / '+r.pieces+' pièce(s)' : '') || '—';
     const params = {
-      rapport_id: r.id, client_nom: clientNom || '—', date: fmtDate(r.date),
-      technicien: r.tech || '—',
-      adresse: (r.adresse||'') + (r.npa?' '+r.npa:'') + (r.ville?' '+r.ville:''),
-      superficie: (r.superficie ? r.superficie+' m²' : '—') + (r.pieces ? ' / '+r.pieces+' pièce(s)' : ''),
-      noint: r.noint || '—', nuisibles: nuisibles.join(', ') || '—', niveau: r.niveau || '—',
-      description: r.description || '—', traitement: traitementLabels.join(', ') || '—',
-      produits: produitsStr || '—', precautions: r.precautions || '—',
-      resultat: r.resultat || '—', recommandations: r.recommandations || '—',
-      montant: r.montant ? r.montant + ' CHF' : '—',
-      rdv: r.rdv ? fmtDate(r.rdv) : '—', garantie: r.garantie || '—',
-      email: DERATEK_CONFIG.email.deratek, name: r.tech || 'DERATEK',
+      rapport_id:        r.id,
+      date:              fmtDate(r.date),
+      technicien:        r.tech || '—',
+      // Client
+      client_nom:        clientNom || '—',
+      contact:           r.contact || '—',
+      tel:               r.tel || '—',
+      adresse:           (r.adresse||'') + (r.npa?' '+r.npa:'') + (r.ville?' '+r.ville:''),
+      bon_commande:      r.bonCommande || '—',
+      // Locataire
+      locataire:         r.locataire || '—',
+      locataire_tel:     r.locataireTel || '—',
+      locataire_email:   r.locataireEmail || '—',
+      locataire_adresse: r.locataireAdresse || '—',
+      // Intervention
+      noint:             r.noint || '—',
+      batiment:          r.batiment || '—',
+      localisation:      r.localisation || '—',
+      superficie:        superficieStr,
+      zones:             r.zones || '—',
+      // Nuisibles
+      nuisibles:         nuisibles.join(', ') || '—',
+      niveau:            r.niveau || '—',
+      // Observations
+      description:       r.description || '—',
+      origine:           r.origine || '—',
+      contraintes:       r.contraintes || '—',
+      // Traitement
+      traitement:        traitementLabels.join(', ') || '—',
+      produits:          produitsStr,
+      materiels:         materielsStr,
+      materiel_comment:  r.materielComment || '—',
+      precautions:       r.precautions || '—',
+      // Résultat
+      resultat:          r.resultat || '—',
+      recommandations:   r.recommandations || '—',
+      // Facturation
+      duree:             r.duree ? r.duree + ' heure(s)' : '—',
+      montant:           (r.showPrix !== false && r.montant) ? r.montant + ' CHF' : '(non communiqué)',
+      rdv:               r.rdv ? fmtDate(r.rdv) : '—',
+      garantie:          r.garantie || '—',
+      garantie_note:     r.garantieNote || '—',
+      // Photos
+      photo_comments:    photoCommentsStr,
+      // Email
+      email:             DERATEK_CONFIG.email.deratek,
+      name:              r.tech || 'DERATEK',
     };
     emailjs.send(DERATEK_CONFIG.emailjs.serviceId, DERATEK_CONFIG.emailjs.templateId, params)
       .then(() => {
@@ -1072,8 +1398,7 @@ function deleteTech(el) {
 // ============================================================
 // INIT
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  seedData();
+document.addEventListener('DOMContentLoaded', async () => {
   initSig();
   initSigCanvas('sig-client', 'sigClient');
   initSigCanvas('sig-locataire', 'sigLocataire');
