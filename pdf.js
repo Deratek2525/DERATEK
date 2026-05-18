@@ -274,6 +274,8 @@ function generatePDF(rapport, statut) {
       y += 3;
     }
     if (rapport.materielComment) { textBox(rapport.materielComment); y += 3; }
+
+    if (rapport.precautions) {
       checkPage(20);
       doc.setFillColor(255, 248, 230);
       doc.roundedRect(M, y, CW, 6, 2, 2, 'F');
@@ -428,23 +430,34 @@ function generatePDF(rapport, statut) {
 
 // ── BOUTON IMPRIMER ──────────────────────────────────────────
 function printRapport() {
-  const r = getCurrentRapportData();
-  window._currentPhotos = state.photos;
-  const doc = generatePDF(r);
-  if (doc) {
-    doc.autoPrint();
-    doc.output('dataurlnewwindow');
-  }
+  downloadOrPrintPDF(true);
 }
 
 // ── TÉLÉCHARGER PDF ──────────────────────────────────────────
 function downloadPDF() {
+  downloadOrPrintPDF(false);
+}
+
+async function downloadOrPrintPDF(print = false) {
+  toast('Génération PDF...', '#1a2744');
   const r = getCurrentRapportData();
-  window._currentPhotos = state.photos;
+  // Charger photos (async)
+  if (state.photos && state.photos.some(p=>p)) {
+    r.photos = state.photos;
+  } else {
+    try { r.photos = await DB.loadPhotos(r.id); } catch { r.photos = []; }
+  }
   const doc = generatePDF(r);
   if (doc) {
-    doc.save(`DERATEK-${r.id || 'rapport'}-${r.date || ''}.pdf`);
-    toast('PDF téléchargé ✓', '#2d9e6b');
+    if (print) {
+      doc.autoPrint();
+      doc.output('dataurlnewwindow');
+    } else {
+      doc.save(`DERATEK-${r.id || 'rapport'}-${r.date || ''}.pdf`);
+      toast('PDF téléchargé ✓', '#2d9e6b');
+    }
+  } else {
+    toast('Erreur génération PDF', '#e63946');
   }
 }
 
