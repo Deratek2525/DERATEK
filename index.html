@@ -72,6 +72,39 @@
 </div>
 
 <!-- Modal Client -->
+<div class="modal-bg" id="modal-locataire">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title" id="modal-locataire-title">Nouveau locataire</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-locataire')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Prénom *</label><input class="form-input" id="loc-prenom" placeholder="Marie"/></div>
+        <div class="form-group"><label class="form-label">Nom *</label><input class="form-input" id="loc-nom" placeholder="Dupont"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Téléphone</label><input class="form-input" id="loc-tel" placeholder="+41 79 000 00 00"/></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loc-email" placeholder="marie.dupont@email.ch"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Adresse</label><input class="form-input" id="loc-adresse" placeholder="Rue du Lac 12"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">NPA</label><input class="form-input" id="loc-npa" placeholder="1000"/></div>
+        <div class="form-group"><label class="form-label">Ville</label><input class="form-input" id="loc-ville" placeholder="Lausanne"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Gérance liée</label>
+        <select class="form-input" id="loc-client"><option value="">-- Aucune gérance --</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="loc-notes" rows="2" placeholder="Informations particulières..."></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('modal-locataire')">Annuler</button>
+      <button class="btn btn-red btn-xs" id="loc-delete-btn" style="display:none" onclick="confirmDeleteLocataire(state.editingLocataireId)">🗑 Supprimer</button>
+      <button class="btn btn-navy" onclick="saveLocataire()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-client">
   <div class="modal">
     <div class="modal-hd">
@@ -174,6 +207,7 @@
     <button id="nb-agenda" class="nav-btn" onclick="showScreen('agenda')">📅 <span>Agenda</span></button>
     <button id="nb-rapports" class="nav-btn" onclick="showScreen('rapports')">📋 <span>Rapports</span> <span class="nav-badge" id="nb-badge" style="display:none">0</span></button>
     <button id="nb-clients" class="nav-btn" onclick="showScreen('clients')">👥 <span>Clients</span></button>
+    <button id="nb-locataires" class="nav-btn" onclick="showScreen('locataires')">🏠 <span>Locataires</span></button>
     <div class="nav-right">
       <button class="btn btn-ghost btn-sm no-print" onclick="openTechModal()">⚙️ Techniciens</button>
       <button class="logout-btn no-print" onclick="doLogout()">Déconnexion</button>
@@ -318,7 +352,7 @@
             </div>
           </div>
           <div class="form-block">
-            <div class="section-title">Client</div>
+            <div class="section-title">Client (Gérance / Mandant)</div>
             <div class="form-group"><label class="form-label">Client *</label>
               <select class="form-input" id="r-client" onchange="onClientChange()"><option value="">-- Sélectionner --</option></select>
             </div>
@@ -327,6 +361,32 @@
               <div class="form-group"><label class="form-label">Téléphone</label><input class="form-input" id="r-tel"/></div>
             </div>
             <div class="form-group"><label class="form-label">Email client (pour envoi du rapport)</label><input class="form-input" id="r-email"/></div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">N° bon de commande</label><input class="form-input" id="r-bon-commande" placeholder="BC-2026-001" oninput="updatePDF()"/></div>
+            </div>
+          </div>
+
+          <div class="form-block">
+            <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Locataire</span>
+              <button class="btn btn-ghost btn-xs" onclick="openNewLocataire()" type="button">+ Nouveau</button>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sélectionner un locataire</label>
+              <select class="form-input" id="r-locataire-id" onchange="onLocataireChange()">
+                <option value="">-- Aucun locataire --</option>
+              </select>
+            </div>
+            <div id="r-locataire-details" style="display:none;">
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Prénom Nom</label><input class="form-input" id="r-locataire" placeholder="Marie Dupont" oninput="updatePDF()"/></div>
+                <div class="form-group"><label class="form-label">Téléphone locataire</label><input class="form-input" id="r-locataire-tel" placeholder="+41 79 000 00 00"/></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Email locataire</label><input class="form-input" id="r-locataire-email" placeholder="locataire@email.ch"/></div>
+                <div class="form-group"><label class="form-label">Adresse locataire</label><input class="form-input" id="r-locataire-adresse" placeholder="Rue du Lac 12, 1000 Lausanne"/></div>
+              </div>
+            </div>
           </div>
           <div class="form-block">
             <div class="section-title">Adresse d'intervention</div>
@@ -359,34 +419,57 @@
                 <label class="check-item"><input type="checkbox" value="Frelons" onchange="updatePDF()"> Frelons</label>
                 <label class="check-item"><input type="checkbox" value="Moustiques" onchange="updatePDF()"> Moustiques</label>
                 <label class="check-item"><input type="checkbox" value="Fausses teignes" onchange="updatePDF()"> Fausses teignes</label>
-                <div class="nuis-col-title" style="margin-top:8px;">Insectes du bois</div>
+                <label class="check-item"><input type="checkbox" value="Chenilles processionnaires" onchange="updatePDF()"> Chenilles processionnaires</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Insectes du bois</div>
                 <label class="check-item"><input type="checkbox" value="Capricornes" onchange="updatePDF()"> Capricornes</label>
                 <label class="check-item"><input type="checkbox" value="Vrillettes" onchange="updatePDF()"> Vrillettes</label>
+                <label class="check-item"><input type="checkbox" value="Ptines" onchange="updatePDF()"> Ptines</label>
+                <label class="check-item"><input type="checkbox" value="Fourmis charpentières" onchange="updatePDF()"> Fourmis charpentières</label>
                 <label class="check-item"><input type="checkbox" value="Termites" onchange="updatePDF()"> Termites</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Oiseaux</div>
+                <label class="check-item"><input type="checkbox" value="Pigeons" onchange="updatePDF()"> Pigeons</label>
+                <label class="check-item"><input type="checkbox" value="Étourneaux" onchange="updatePDF()"> Étourneaux</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Autres</div>
+                <label class="check-item"><input type="checkbox" value="Araignées" onchange="updatePDF()"> Araignées</label>
+                <label class="check-item"><input type="checkbox" value="Puces" onchange="updatePDF()"> Puces</label>
+                <label class="check-item"><input type="checkbox" value="Taupes" onchange="updatePDF()"> Taupes</label>
+                <label class="check-item"><input type="checkbox" value="Renards" onchange="updatePDF()"> Renards</label>
               </div>
               <div>
-                <div class="nuis-col-title">Insectes rampants</div>
-                <label class="check-item"><input type="checkbox" value="Blattes" onchange="updatePDF()"> Blattes</label>
-                <label class="check-item"><input type="checkbox" value="Fourmis" onchange="updatePDF()"> Fourmis</label>
+                <div class="nuis-col-title">Blattes</div>
+                <label class="check-item"><input type="checkbox" value="Blattes germaniques" onchange="updatePDF()"> Blattes germaniques</label>
+                <label class="check-item"><input type="checkbox" value="Blattes orientales" onchange="updatePDF()"> Blattes orientales</label>
+                <label class="check-item"><input type="checkbox" value="Blattes rayées" onchange="updatePDF()"> Blattes rayées</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Insectes rampants</div>
                 <label class="check-item"><input type="checkbox" value="Punaises de lit" onchange="updatePDF()"> Punaises de lit</label>
-                <label class="check-item"><input type="checkbox" value="Magnons" onchange="updatePDF()"> Magnons</label>
-                <label class="check-item"><input type="checkbox" value="Forficules" onchange="updatePDF()"> Forficules</label>
-                <label class="check-item"><input type="checkbox" value="Chenilles" onchange="updatePDF()"> Chenilles</label>
+                <label class="check-item"><input type="checkbox" value="Poissons d'argent" onchange="updatePDF()"> Poissons d'argent</label>
+                <label class="check-item"><input type="checkbox" value="Lépisme du papier" onchange="updatePDF()"> Lépisme du papier</label>
+                <label class="check-item"><input type="checkbox" value="Dermestidés" onchange="updatePDF()"> Dermestidés</label>
+                <label class="check-item"><input type="checkbox" value="Charançons du riz" onchange="updatePDF()"> Charançons du riz</label>
+                <label class="check-item"><input type="checkbox" value="Charançons du blé" onchange="updatePDF()"> Charançons du blé</label>
                 <label class="check-item"><input type="checkbox" value="Mites alimentaires" onchange="updatePDF()"> Mites alimentaires</label>
                 <label class="check-item"><input type="checkbox" value="Anthrènes" onchange="updatePDF()"> Anthrènes</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Fourmis</div>
+                <label class="check-item"><input type="checkbox" value="Fourmis Lasius" onchange="updatePDF()"> Fourmis Lasius</label>
+                <label class="check-item"><input type="checkbox" value="Fourmis du pharaon" onchange="updatePDF()"> Fourmis du pharaon</label>
               </div>
               <div>
                 <div class="nuis-col-title">Rongeurs</div>
                 <label class="check-item"><input type="checkbox" value="Souris" onchange="updatePDF()"> Souris</label>
-                <label class="check-item"><input type="checkbox" value="Rats" onchange="updatePDF()"> Rats</label>
+                <label class="check-item"><input type="checkbox" value="Rats d'égout" onchange="updatePDF()"> Rats d'égout</label>
+                <label class="check-item"><input type="checkbox" value="Rats noirs" onchange="updatePDF()"> Rats noirs</label>
                 <label class="check-item"><input type="checkbox" value="Campagnols" onchange="updatePDF()"> Campagnols</label>
                 <label class="check-item"><input type="checkbox" value="Loirs" onchange="updatePDF()"> Loirs</label>
-                <div class="nuis-col-title" style="margin-top:8px;">Oiseaux</div>
-                <label class="check-item"><input type="checkbox" value="Pigeons" onchange="updatePDF()"> Pigeons</label>
-                <label class="check-item"><input type="checkbox" value="Étourneaux" onchange="updatePDF()"> Étourneaux</label>
-                <div class="nuis-col-title" style="margin-top:8px;">Autres</div>
-                <label class="check-item"><input type="checkbox" value="Taupes" onchange="updatePDF()"> Taupes</label>
+
+                <div class="nuis-col-title" style="margin-top:10px;">Mammifères</div>
+                <label class="check-item"><input type="checkbox" value="Fouines" onchange="updatePDF()"> Fouines</label>
                 <label class="check-item"><input type="checkbox" value="Renards" onchange="updatePDF()"> Renards</label>
+                <label class="check-item"><input type="checkbox" value="Taupes" onchange="updatePDF()"> Taupes</label>
               </div>
             </div>
           </div>
@@ -402,9 +485,10 @@
               <div class="form-group"><label class="form-label">Superficie traitée (m²)</label><input class="form-input" id="r-superficie" type="number" oninput="updatePDF()"/></div>
             </div>
             <div class="form-row">
+              <div class="form-group"><label class="form-label">Volume traité (m³)</label><input class="form-input" id="r-volume" type="number" oninput="updatePDF()" placeholder="optionnel"/></div>
               <div class="form-group"><label class="form-label">Nombre de pièces</label><input class="form-input" id="r-pieces" type="number" oninput="updatePDF()"/></div>
-              <div class="form-group"><label class="form-label">Zones concernées</label><input class="form-input" id="r-zones" placeholder="Chambre, cuisine, cave..."/></div>
             </div>
+            <div class="form-group"><label class="form-label">Zones concernées</label><input class="form-input" id="r-zones" placeholder="Chambre, cuisine, cave..."/></div>
           </div>
         </div>
 
@@ -461,10 +545,24 @@
             <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="addProduit()">+ Ajouter un produit</button>
           </div>
           <div class="form-block">
+            <div class="section-title">Matériel posé</div>
+            <div id="materiels-list"></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="addMateriel()">+ Ajouter un matériel</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 4px;">
+              <label class="form-label" style="margin:0;">Commentaire matériel</label>
+              <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-materiel-comment','description')">✨ Corriger</button>
+            </div>
+            <textarea class="form-input" id="r-materiel-comment" rows="2" placeholder="Informations complémentaires sur le matériel posé..."></textarea>
+          </div>
+          <div class="form-block">
             <div class="section-title">Facturation</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Durée d'intervention (h)</label><input class="form-input" id="r-duree" type="number" step="0.5" placeholder="1.5"/></div>
               <div class="form-group"><label class="form-label">Montant total (CHF)</label><input class="form-input" id="r-montant" type="number" placeholder="280" oninput="updatePDF()"/></div>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+              <input type="checkbox" id="r-show-prix" checked onchange="updatePDF()" style="width:18px;height:18px;accent-color:var(--navy);cursor:pointer;"/>
+              <label for="r-show-prix" class="form-label" style="margin-bottom:0;cursor:pointer;">Afficher le prix sur le rapport PDF</label>
             </div>
             <div class="form-group">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
@@ -480,14 +578,56 @@
         <div id="tab-photos" class="tab-content">
           <div class="form-block">
             <div class="section-title">Photos d'intervention</div>
-            <div class="alert alert-info">Cliquez sur un emplacement pour ajouter une photo. Les photos ne sont pas sauvegardées pour optimiser l'espace.</div>
-            <div class="photo-grid" id="photo-grid">
-              <div class="photo-slot" onclick="addPhoto(0)" id="photo-0"><div class="photo-slot-icon">📷</div><span>Avant 1</span></div>
-              <div class="photo-slot" onclick="addPhoto(1)" id="photo-1"><div class="photo-slot-icon">📷</div><span>Avant 2</span></div>
-              <div class="photo-slot" onclick="addPhoto(2)" id="photo-2"><div class="photo-slot-icon">📷</div><span>Pendant</span></div>
-              <div class="photo-slot" onclick="addPhoto(3)" id="photo-3"><div class="photo-slot-icon">📷</div><span>Après 1</span></div>
-              <div class="photo-slot" onclick="addPhoto(4)" id="photo-4"><div class="photo-slot-icon">📷</div><span>Après 2</span></div>
-              <div class="photo-slot" onclick="addPhoto(5)" id="photo-5"><div class="photo-slot-icon">+</div><span>Autre</span></div>
+            <div class="alert alert-info">Cliquez sur un emplacement pour ajouter une photo.</div>
+            <div id="photos-with-comments">
+              <div class="photo-comment-block" id="pcb-0">
+                <div class="photo-slot" onclick="addPhoto(0)" id="photo-0"><div class="photo-slot-icon">📷</div><span>Avant 1</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-0','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-0" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
+              <div class="photo-comment-block" id="pcb-1">
+                <div class="photo-slot" onclick="addPhoto(1)" id="photo-1"><div class="photo-slot-icon">📷</div><span>Avant 2</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-1','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-1" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
+              <div class="photo-comment-block" id="pcb-2">
+                <div class="photo-slot" onclick="addPhoto(2)" id="photo-2"><div class="photo-slot-icon">📷</div><span>Pendant</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-2','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-2" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
+              <div class="photo-comment-block" id="pcb-3">
+                <div class="photo-slot" onclick="addPhoto(3)" id="photo-3"><div class="photo-slot-icon">📷</div><span>Après 1</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-3','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-3" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
+              <div class="photo-comment-block" id="pcb-4">
+                <div class="photo-slot" onclick="addPhoto(4)" id="photo-4"><div class="photo-slot-icon">📷</div><span>Après 2</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-4','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-4" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
+              <div class="photo-comment-block" id="pcb-5">
+                <div class="photo-slot" onclick="addPhoto(5)" id="photo-5"><div class="photo-slot-icon">+</div><span>Autre</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 2px;">
+                  <label class="form-label" style="margin:0;font-size:11px;">Commentaire</label>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI('r-photo-comment-5','description')">✨</button>
+                </div>
+                <textarea class="form-input" id="r-photo-comment-5" rows="2" placeholder="Description de la photo..." style="font-size:12px;"></textarea>
+              </div>
             </div>
             <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="onPhotoSelected(event)"/>
           </div>
@@ -518,15 +658,50 @@
               <div class="form-group"><label class="form-label">Prochain rendez-vous</label><input class="form-input" id="r-rdv" type="date"/></div>
               <div class="form-group"><label class="form-label">Garantie</label>
                 <select class="form-input" id="r-garantie">
-                  <option value="">Aucune</option><option>1 mois</option><option>3 mois</option><option>6 mois</option><option>1 an</option>
+                  <option value="">Aucune</option>
+                  <option>1 mois</option><option>2 mois</option><option>3 mois</option>
+                  <option>4 mois</option><option>5 mois</option><option>6 mois</option>
+                  <option>7 mois</option><option>8 mois</option><option>9 mois</option>
+                  <option>10 mois</option><option>11 mois</option><option>1 an</option>
+                  <option>18 mois</option><option>2 ans</option>
                 </select>
               </div>
+            </div>
+            <div class="form-group"><label class="form-label">Note garantie</label>
+              <textarea class="form-input" id="r-garantie-note" rows="2" placeholder="Conditions particulières de garantie..."></textarea>
             </div>
           </div>
           <div class="form-block">
             <div class="section-title">Signature technicien</div>
             <canvas id="sig-canvas" width="600" height="100" style="width:100%;border:1.5px solid var(--g200);border-radius:7px;background:#fff;cursor:crosshair;touch-action:none;display:block;"></canvas>
             <button class="btn btn-ghost btn-xs" style="margin-top:5px;" onclick="clearSig()">⌫ Effacer</button>
+          </div>
+          <div class="form-block">
+            <div class="section-title">Signatures (client & locataire)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div>
+                <label class="form-label">Signature client / gérance</label>
+                <div style="border:1.5px solid var(--g200);border-radius:7px;background:#fff;padding:10px;min-height:80px;display:flex;flex-direction:column;justify-content:flex-end;">
+                  <canvas id="sig-client" width="300" height="80" style="width:100%;cursor:crosshair;touch-action:none;display:block;"></canvas>
+                  <div style="border-top:1px solid var(--g300);margin-top:8px;padding-top:4px;font-size:10px;color:var(--g400);display:flex;justify-content:space-between;">
+                    <span id="sig-client-nom">Nom & prénom</span>
+                    <span id="sig-client-date"></span>
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-xs" style="margin-top:4px;" onclick="clearSigClient()">⌫ Effacer</button>
+              </div>
+              <div>
+                <label class="form-label">Signature locataire</label>
+                <div style="border:1.5px solid var(--g200);border-radius:7px;background:#fff;padding:10px;min-height:80px;display:flex;flex-direction:column;justify-content:flex-end;">
+                  <canvas id="sig-locataire" width="300" height="80" style="width:100%;cursor:crosshair;touch-action:none;display:block;"></canvas>
+                  <div style="border-top:1px solid var(--g300);margin-top:8px;padding-top:4px;font-size:10px;color:var(--g400);display:flex;justify-content:space-between;">
+                    <span id="sig-locataire-nom">Nom & prénom</span>
+                    <span id="sig-locataire-date"></span>
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-xs" style="margin-top:4px;" onclick="clearSigLocataire()">⌫ Effacer</button>
+              </div>
+            </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-full" onclick="saveRapport('Brouillon')">💾 Brouillon</button>
@@ -549,6 +724,8 @@
           <div class="pdf-row"><span class="pdf-key">Technicien</span><span class="pdf-val" id="pdf-tech">—</span></div>
           <div class="pdf-stitle">Client</div>
           <div id="pdf-client" style="font-weight:700;font-size:11px;">—</div>
+          <div id="pdf-bon-commande-prev" style="font-size:10px;color:var(--navy);display:none;"></div>
+          <div id="pdf-locataire-prev" style="font-size:10px;color:var(--g600);display:none;"></div>
           <div id="pdf-adresse" style="font-size:10px;color:var(--g400);">—</div>
           <div class="pdf-stitle">Nuisibles</div>
           <div id="pdf-nuisibles"><span style="color:var(--g400);font-size:10px;">Aucun</span></div>
@@ -560,7 +737,7 @@
           <div id="pdf-description" style="font-size:10px;color:var(--g600);max-height:55px;overflow:hidden;">—</div>
           <div class="pdf-stitle">Traitement</div>
           <div id="pdf-traitement" style="font-size:10px;color:var(--g600);">—</div>
-          <div class="pdf-stitle">Montant</div>
+          <div id="pdf-montant-block" class="pdf-stitle" style="margin-top:4px;">Montant</div>
           <div id="pdf-montant" style="font-size:12px;font-weight:700;color:var(--navy);">—</div>
           <div class="pdf-stitle">Résultat</div>
           <div id="pdf-resultat" style="font-size:10px;color:var(--g600);">—</div>
@@ -595,6 +772,25 @@
     </div>
     <div class="page-body">
       <div class="clients-grid" id="clients-grid"></div>
+    </div>
+  </div>
+
+  <!-- LOCATAIRES -->
+  <div id="screen-locataires" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">Locataires</div>
+        <div class="page-sub" id="locataires-count"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="search-wrap" style="min-width:180px;">
+          <input type="text" placeholder="Rechercher..." id="loc-search" oninput="renderLocataires()"/>
+        </div>
+        <button class="btn btn-red btn-sm" onclick="openNewLocataire()">+ Nouveau locataire</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="clients-grid" id="locataires-grid"></div>
     </div>
   </div>
 

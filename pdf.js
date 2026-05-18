@@ -133,15 +133,22 @@ function generatePDF(rapport, statut) {
 
     // ── INFOS GÉNÉRALES ──────────────────────────────────────
     sTitle('Informations générales');
-    row('Technicien',    rapport.tech,       false);
-    row('Client',        rapport.clientNom,  true);
-    row('Adresse',       (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:''), false);
-    row('Contact',       rapport.contact,    true);
-    row('Téléphone',     rapport.tel,        false);
-    row('Email',         rapport.email,      true);
-    row('Bâtiment',      rapport.batiment,   false);
-    row('Localisation',  rapport.localisation, true);
-    row('N° Intervention', rapport.noint,    false);
+    row('Technicien',      rapport.tech,       false);
+    row('Client',          rapport.clientNom,  true);
+    if (rapport.bonCommande) row('N° Bon de commande', rapport.bonCommande, false);
+    if (rapport.locataire) {
+      row('Locataire',          rapport.locataire,   true);
+      if (rapport.locataireTel)     row('Tél. locataire',    rapport.locataireTel, false);
+      if (rapport.locataireEmail)   row('Email locataire',   rapport.locataireEmail, true);
+      if (rapport.locataireAdresse) row('Adresse locataire', rapport.locataireAdresse, false);
+    }
+    row('Adresse',         (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:''), false);
+    row('Contact',         rapport.contact,    true);
+    row('Téléphone',       rapport.tel,        false);
+    row('Email',           rapport.email,      true);
+    row('Bâtiment',        rapport.batiment,   false);
+    row('Localisation',    rapport.localisation, true);
+    row('N° Intervention', rapport.noint,      false);
     y += 5;
 
     // ── NUISIBLES & NIVEAU ───────────────────────────────────
@@ -233,7 +240,40 @@ function generatePDF(rapport, statut) {
       y += 5;
     }
 
-    if (rapport.precautions) {
+    // Matériels posés
+    const materiels = rapport.materiels || [];
+    if (materiels.length) {
+      checkPage(10 + materiels.length * 8);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...C.navy);
+      doc.text('Matériel posé :', M, y);
+      y += 5;
+      doc.setFillColor(...C.navy);
+      doc.rect(M, y, CW, 7, 'F');
+      doc.setTextColor(...C.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text('Matériel', M + 3, y + 4.8);
+      doc.text('Qté', M + 110, y + 4.8);
+      doc.text('Emplacement', M + 130, y + 4.8);
+      y += 7;
+      materiels.forEach((m, i) => {
+        checkPage(8);
+        if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, 7, 'F'); }
+        doc.setTextColor(...C.text);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+        doc.text(m.nom || '—', M + 3, y + 4.8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(String(m.qte || '—'), M + 110, y + 4.8);
+        doc.text(m.zone || '—', M + 130, y + 4.8);
+        doc.setDrawColor(...C.border);
+        doc.line(M, y+7, M+CW, y+7);
+        y += 7;
+      });
+      y += 3;
+    }
+    if (rapport.materielComment) { textBox(rapport.materielComment); y += 3; }
       checkPage(20);
       doc.setFillColor(255, 248, 230);
       doc.roundedRect(M, y, CW, 6, 2, 2, 'F');
@@ -266,11 +306,13 @@ function generatePDF(rapport, statut) {
 
     // RDV + Garantie + Montant
     checkPage(25);
-    const boxW = (CW - 8) / 3;
-    [[rapport.montant ? rapport.montant+' CHF' : '—', 'Montant', C.navy, C.white],
-     [rapport.rdv ? fmtDate(rapport.rdv) : '—', 'Prochain RDV', [240,243,248], C.navy],
-     [rapport.garantie || '—', 'Garantie', [240,243,248], C.navy]
-    ].forEach(([val, lbl, bg, tc], i) => {
+    const showPrix = rapport.showPrix !== false;
+    const boxes = [];
+    if (showPrix) boxes.push([rapport.montant ? rapport.montant+' CHF' : '—', 'Montant', C.navy, C.white]);
+    boxes.push([rapport.rdv ? fmtDate(rapport.rdv) : '—', 'Prochain RDV', [240,243,248], C.navy]);
+    boxes.push([rapport.garantie || '—', 'Garantie', [240,243,248], C.navy]);
+    const boxW = (CW - (boxes.length - 1) * 4) / boxes.length;
+    boxes.forEach(([val, lbl, bg, tc], i) => {
       const bx = M + i*(boxW + 4);
       doc.setFillColor(...bg);
       doc.roundedRect(bx, y, boxW, 16, 2, 2, 'F');
@@ -282,39 +324,83 @@ function generatePDF(rapport, statut) {
       doc.text(String(val), bx + 3, y + 13);
     });
     y += 21;
+    if (rapport.garantieNote) { textBox(rapport.garantieNote); y += 3; }
 
     // ── DURÉE ────────────────────────────────────────────────
     if (rapport.duree) { row('Durée d\'intervention', rapport.duree + ' heure(s)', false); y += 3; }
 
-    // ── PHOTOS ───────────────────────────────────────────────
-    const photos = window._currentPhotos || [];
+    // ── PHOTOS avec commentaires ──────────────────────────────
+    const photos = rapport.photos || window._currentPhotos || [];
+    const photoComments = rapport.photoComments || [];
     const validPhotos = photos.filter(p => p);
     if (validPhotos.length) {
       doc.addPage();
       y = 15;
       sTitle('Photos d\'intervention');
       const labels = ['Avant 1','Avant 2','Pendant','Après 1','Après 2','Autre'];
-      const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i] })).filter(p => p.src);
+      const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i], comment: photoComments[i]||'' })).filter(p => p.src);
       const imgW = (CW - 6) / 2, imgH = 55;
       let col = 0;
       allPhotos.forEach((ph, i) => {
-        checkPage(imgH + 20);
+        const blockH = imgH + (ph.comment ? 18 : 10);
+        checkPage(blockH + 5);
         const x = M + col * (imgW + 6);
         try {
-          doc.addImage(ph.src, 'JPEG', x, y, imgW, imgH);
-          doc.setFillColor(0,0,0,0.4);
+          const fmt = ph.src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          doc.addImage(ph.src, fmt, x, y, imgW, imgH);
           doc.setDrawColor(...C.border);
           doc.rect(x, y, imgW, imgH, 'S');
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8);
           doc.setTextColor(...C.muted);
           doc.text(ph.label, x + 2, y + imgH + 5);
+          if (ph.comment) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...C.text);
+            const lines = doc.splitTextToSize(ph.comment, imgW - 4);
+            doc.text(lines[0], x + 2, y + imgH + 11);
+          }
         } catch(e) { console.warn('Image error:', e); }
         col++;
-        if (col >= 2) { col = 0; y += imgH + 12; }
+        if (col >= 2) { col = 0; y += imgH + (ph.comment ? 20 : 12); }
       });
-      if (col > 0) y += imgH + 12;
+      if (col > 0) y += imgH + 20;
     }
+
+    // ── SIGNATURES ───────────────────────────────────────────
+    checkPage(55);
+    sTitle('Signatures');
+    y += 3;
+    const sigW = (CW - 10) / 2;
+    const sigLabels = [
+      { label: 'Client / Gérance', nom: rapport.clientNom || '', data: rapport.sigClient },
+      { label: 'Locataire',        nom: rapport.locataire || '', data: rapport.sigLocataire },
+    ];
+    const today = fmtDate(rapport.date);
+    sigLabels.forEach((s, i) => {
+      const bx = M + i * (sigW + 10);
+      doc.setFillColor(249, 250, 251);
+      doc.roundedRect(bx, y, sigW, 38, 2, 2, 'F');
+      doc.setDrawColor(...C.border);
+      doc.roundedRect(bx, y, sigW, 38, 2, 2, 'S');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+      doc.text(s.label.toUpperCase(), bx + 3, y + 6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.text);
+      doc.text(s.nom || '—', bx + 3, y + 13);
+      // Zone de signature
+      doc.setFillColor(255,255,255);
+      doc.rect(bx + 3, y + 16, sigW - 6, 14, 'F');
+      if (s.data && s.data.length > 100 && s.data !== 'data:,') {
+        try { doc.addImage(s.data, 'PNG', bx + 3, y + 16, sigW - 6, 14); } catch(e) {}
+      }
+      doc.setDrawColor(...C.border);
+      doc.line(bx + 3, y + 31, bx + sigW - 3, y + 31);
+      doc.setFontSize(7); doc.setTextColor(...C.muted);
+      doc.text('Signature', bx + 3, y + 36);
+      doc.text(today, bx + sigW - 3, y + 36, { align: 'right' });
+    });
+    y += 44;
 
     // ── FOOTER ───────────────────────────────────────────────
     const pageCount = doc.internal.getNumberOfPages();
@@ -387,6 +473,19 @@ function getCurrentRapportData() {
     localisation: document.getElementById('r-localisation').value,
     batiment:     document.getElementById('r-batiment').value,
     noint:        document.getElementById('r-noint').value,
+    bonCommande:  document.getElementById('r-bon-commande') ? document.getElementById('r-bon-commande').value : '',
+    locataire:    document.getElementById('r-locataire') ? document.getElementById('r-locataire').value : '',
+    locataireTel: document.getElementById('r-locataire-tel') ? document.getElementById('r-locataire-tel').value : '',
+    locataireEmail: document.getElementById('r-locataire-email') ? document.getElementById('r-locataire-email').value : '',
+    locataireAdresse: document.getElementById('r-locataire-adresse') ? document.getElementById('r-locataire-adresse').value : '',
+    showPrix:     document.getElementById('r-show-prix') ? document.getElementById('r-show-prix').checked : true,
+    volume:       document.getElementById('r-volume') ? document.getElementById('r-volume').value : '',
+    photoComments: [0,1,2,3,4,5].map(i => { const el = document.getElementById('r-photo-comment-'+i); return el ? el.value : ''; }),
+    materiels:    state.materiels || [],
+    materielComment: document.getElementById('r-materiel-comment') ? document.getElementById('r-materiel-comment').value : '',
+    garantieNote: document.getElementById('r-garantie-note') ? document.getElementById('r-garantie-note').value : '',
+    sigClient:    document.getElementById('sig-client') ? document.getElementById('sig-client').toDataURL() : '',
+    sigLocataire: document.getElementById('sig-locataire') ? document.getElementById('sig-locataire').toDataURL() : '',
     nuisibles, description: document.getElementById('r-description').value,
     niveau:       document.getElementById('r-niveau').value,
     superficie:   document.getElementById('r-superficie').value,
@@ -403,5 +502,6 @@ function getCurrentRapportData() {
     recommandations: document.getElementById('r-recommandations').value,
     rdv:          document.getElementById('r-rdv').value,
     garantie:     document.getElementById('r-garantie').value,
+    photos:       state.photos || [],
   };
 }

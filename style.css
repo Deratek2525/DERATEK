@@ -561,3 +561,21 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .stats-grid { grid-template-columns: 1fr; }
   .nuis-grid { grid-template-columns: 1fr; }
 }
+
+/* Photo avec commentaire */
+#photos-with-comments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.photo-comment-block {
+  display: flex;
+  flex-direction: column;
+}
+.photo-comment-block .photo-slot {
+  width: 100%;
+  margin-bottom: 6px;
+}
+@media (max-width: 700px) {
+  #photos-with-comments { grid-template-columns: repeat(2, 1fr); }
+}

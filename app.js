@@ -25,6 +25,8 @@ const DB = {
   set techs(v)   { this._set('drt_techs', v); },
   get clients()  { return this._get('drt_clients', []); },
   set clients(v) { this._set('drt_clients', v); },
+  get locataires() { return this._get('drt_locataires', []); },
+  set locataires(v){ this._set('drt_locataires', v); },
   get rapports() { return this._get('drt_rapports', []); },
   set rapports(v){ this._set('drt_rapports', v); },
   get intervs()  { return this._get('drt_intervs', []); },
@@ -87,6 +89,7 @@ function showScreen(name) {
   if (nb) nb.classList.add('active');
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
+  if (name === 'locataires')   renderLocataires();
   if (name === 'rapports')     renderRapports();
   if (name === 'agenda')       renderAgenda();
   window.scrollTo(0, 0);
@@ -483,6 +486,126 @@ function confirmDeleteClient(id, nom) {
 }
 
 // ============================================================
+// LOCATAIRES
+// ============================================================
+function renderLocataires() {
+  const search = ($('loc-search') ? $('loc-search').value : '').toLowerCase();
+  const list = DB.locataires.filter(l =>
+    (l.prenom + ' ' + l.nom + ' ' + (l.ville||'')).toLowerCase().includes(search)
+  );
+  $('locataires-count').textContent = list.length + ' locataire(s)';
+  const grid = $('locataires-grid'); if (!grid) return;
+  grid.innerHTML = list.length ? list.map(l => {
+    const gerance = l.clientId ? (DB.clients.find(c => c.id === l.clientId) || {}).nom || '' : '';
+    return `<div class="client-card">
+      <div class="client-card-hd">
+        <div>
+          <div class="client-name">🏠 ${l.prenom} ${l.nom}</div>
+          <div class="client-type">${l.adresse||''}${l.npa ? ' '+l.npa : ''}${l.ville ? ' '+l.ville : ''}</div>
+        </div>
+      </div>
+      <div class="client-info">
+        ${l.tel ? `<div>📞 ${l.tel}</div>` : ''}
+        ${l.email ? `<div>✉️ ${l.email}</div>` : ''}
+        ${gerance ? `<div>🏢 ${gerance}</div>` : ''}
+      </div>
+      <div class="client-ft">
+        <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:var(--g400);padding:20px;text-align:center;">Aucun locataire enregistré</div>';
+}
+
+function populateLocClientSelect(selectedId) {
+  const sel = $('loc-client'); if (!sel) return;
+  sel.innerHTML = '<option value="">-- Aucune gérance --</option>';
+  DB.clients.filter(c => c.type === 'Gérance' || c.type === 'PPE' || c.type === 'Entreprise').forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.nom;
+    if (c.id === selectedId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function openNewLocataire() {
+  state.editingLocataireId = null;
+  $('modal-locataire-title').textContent = 'Nouveau locataire';
+  ['loc-prenom','loc-nom','loc-tel','loc-email','loc-adresse','loc-npa','loc-ville','loc-notes'].forEach(id => { if ($(id)) $(id).value = ''; });
+  populateLocClientSelect('');
+  $('loc-delete-btn').style.display = 'none';
+  openModal('modal-locataire');
+}
+
+function editLocataire(id) {
+  state.editingLocataireId = id;
+  const l = DB.locataires.find(x => x.id === id); if (!l) return;
+  $('modal-locataire-title').textContent = 'Modifier le locataire';
+  $('loc-prenom').value = l.prenom||''; $('loc-nom').value = l.nom||'';
+  $('loc-tel').value = l.tel||''; $('loc-email').value = l.email||'';
+  $('loc-adresse').value = l.adresse||''; $('loc-npa').value = l.npa||'';
+  $('loc-ville').value = l.ville||''; $('loc-notes').value = l.notes||'';
+  populateLocClientSelect(l.clientId||'');
+  $('loc-delete-btn').style.display = 'inline-flex';
+  openModal('modal-locataire');
+}
+
+function saveLocataire() {
+  const prenom = $('loc-prenom').value.trim(), nom = $('loc-nom').value.trim();
+  if (!prenom || !nom) { toast('Prénom et nom obligatoires', '#e63946'); return; }
+  const data = {
+    prenom, nom, tel: $('loc-tel').value, email: $('loc-email').value,
+    adresse: $('loc-adresse').value, npa: $('loc-npa').value, ville: $('loc-ville').value,
+    clientId: $('loc-client').value, notes: $('loc-notes').value,
+  };
+  const list = DB.locataires;
+  if (state.editingLocataireId) {
+    const i = list.findIndex(l => l.id === state.editingLocataireId);
+    if (i >= 0) list[i] = { ...list[i], ...data };
+    toast('Locataire mis à jour ✓', '#2d9e6b');
+  } else {
+    data.id = 'loc' + Date.now();
+    list.push(data);
+    toast('Locataire ajouté ✓', '#2d9e6b');
+  }
+  DB.locataires = list;
+  closeModal('modal-locataire');
+  renderLocataires();
+  populateLocataireSelectRapport('');
+}
+
+function confirmDeleteLocataire(id) {
+  $('confirm-msg').textContent = 'Supprimer ce locataire ? Cette action est irréversible.';
+  $('confirm-btn').onclick = () => { DB.locataires = DB.locataires.filter(l => l.id !== id); closeModal('modal-confirm'); closeModal('modal-locataire'); renderLocataires(); toast('Locataire supprimé', '#e63946'); };
+  openModal('modal-confirm');
+}
+
+function populateLocataireSelectRapport(selectedId) {
+  const sel = $('r-locataire-id'); if (!sel) return;
+  sel.innerHTML = '<option value="">-- Aucun locataire --</option>';
+  DB.locataires.forEach(l => {
+    const o = document.createElement('option');
+    o.value = l.id; o.textContent = l.prenom + ' ' + l.nom + (l.ville ? ' — ' + l.ville : '');
+    if (l.id === selectedId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function onLocataireChange() {
+  const id = $('r-locataire-id').value;
+  const details = $('r-locataire-details');
+  if (!id) { if (details) details.style.display = 'none'; updatePDF(); return; }
+  const l = DB.locataires.find(x => x.id === id);
+  if (l && details) {
+    details.style.display = 'block';
+    if ($('r-locataire')) $('r-locataire').value = l.prenom + ' ' + l.nom;
+    if ($('r-locataire-tel')) $('r-locataire-tel').value = l.tel || '';
+    if ($('r-locataire-email')) $('r-locataire-email').value = l.email || '';
+    if ($('r-locataire-adresse')) $('r-locataire-adresse').value = (l.adresse||'') + (l.npa?' '+l.npa:'') + (l.ville?' '+l.ville:'');
+  }
+  updatePDF();
+}
+
+// ============================================================
 // RAPPORTS LIST
 // ============================================================
 function renderRapports() {
@@ -528,14 +651,22 @@ function resetRapportForm() {
   $('r-id').value = newId; $('r-date').value = today();
   populateTechSelect($('r-tech'), DB.techs[0] || '');
   populateClientSelectRapport('');
+  populateLocataireSelectRapport('');
+  if ($('r-locataire-details')) $('r-locataire-details').style.display = 'none';
   ['r-contact','r-tel','r-email','r-adresse','r-npa','r-ville','r-localisation',
    'r-description','r-origine','r-contraintes','r-produits','r-precautions',
    'r-recommandations','r-rdv','r-noint','r-superficie','r-pieces','r-zones',
-   'r-duree','r-montant'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+   'r-duree','r-montant','r-bon-commande','r-locataire','r-locataire-tel',
+   'r-locataire-email','r-locataire-adresse','r-volume','r-garantie-note',
+   'r-materiel-comment'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  [0,1,2,3,4,5].forEach(i => { const el = $('r-photo-comment-'+i); if (el) el.value = ''; });
+  state.materiels = [];
+  clearSigClient(); clearSigLocataire();
   ['r-niveau','r-resultat','r-batiment','r-garantie'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  if ($('r-show-prix')) $('r-show-prix').checked = true;
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = false);
   ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose'].forEach(id => { const el = $(id); if (el) el.checked = false; });
-  renderProduits(); resetPhotoGrid(); clearSig();
+  renderProduits(); renderMateriels(); resetPhotoGrid(); clearSig();
   $('edit-id').textContent = newId;
   $('edit-status').className = 'badge b-gray'; $('edit-status').textContent = 'Brouillon';
   $('edit-meta').textContent = '';
@@ -560,6 +691,26 @@ function editRapport(id) {
     const el = $(id); const key = id.replace('r-','');
     if (el) el.value = r[key] || '';
   });
+  if ($('r-bon-commande')) $('r-bon-commande').value = r.bonCommande || '';
+  if ($('r-locataire')) $('r-locataire').value = r.locataire || '';
+  if ($('r-locataire-tel')) $('r-locataire-tel').value = r.locataireTel || '';
+  if ($('r-locataire-email')) $('r-locataire-email').value = r.locataireEmail || '';
+  if ($('r-locataire-adresse')) $('r-locataire-adresse').value = r.locataireAdresse || '';
+  if ($('r-show-prix')) $('r-show-prix').checked = r.showPrix !== false;
+  if ($('r-volume')) $('r-volume').value = r.volume || '';
+  if ($('r-garantie-note')) $('r-garantie-note').value = r.garantieNote || '';
+  if ($('r-materiel-comment')) $('r-materiel-comment').value = r.materielComment || '';
+  [0,1,2,3,4,5].forEach(i => { const el = $('r-photo-comment-'+i); if (el) el.value = (r.photoComments||[])[i] || ''; });
+  state.materiels = r.materiels ? JSON.parse(JSON.stringify(r.materiels)) : [];
+  populateLocataireSelectRapport(r.locataireId || '');
+  if ($('r-locataire-details')) $('r-locataire-details').style.display = r.locataire ? 'block' : 'none';
+  // Restaurer signatures
+  if (r.sigClient && $('sig-client')) {
+    const img = new Image(); img.onload = () => $('sig-client').getContext('2d').drawImage(img,0,0); img.src = r.sigClient;
+  }
+  if (r.sigLocataire && $('sig-locataire')) {
+    const img = new Image(); img.onload = () => $('sig-locataire').getContext('2d').drawImage(img,0,0); img.src = r.sigLocataire;
+  }
   ['r-niveau','r-resultat','r-garantie','r-superficie','r-pieces'].forEach(id => {
     const el = $(id); const key = id.replace('r-','');
     if (el) el.value = r[key] || '';
@@ -569,7 +720,7 @@ function editRapport(id) {
   $('edit-id').textContent = r.id;
   $('edit-status').className = 'badge ' + badgeCls(r.statut); $('edit-status').textContent = r.statut;
   $('edit-meta').textContent = (r.clientNom || '') + (r.date ? ' · ' + fmtDate(r.date) : '');
-  renderProduits(); resetPhotoGrid(); clearSig(); showTab('infos'); updatePDF();
+  renderProduits(); renderMateriels(); resetPhotoGrid(); clearSig(); showTab('infos'); updatePDF();
   showScreen('rapport-edit');
 }
 function onClientChange() {
@@ -607,6 +758,21 @@ function saveRapport(statut) {
     contact: $('r-contact').value, tel: $('r-tel').value, email: $('r-email').value,
     adresse: $('r-adresse').value, npa: $('r-npa').value, ville: $('r-ville').value,
     localisation: $('r-localisation').value, batiment: $('r-batiment').value, noint: $('r-noint').value,
+    bonCommande: $('r-bon-commande') ? $('r-bon-commande').value : '',
+    locataireId: $('r-locataire-id') ? $('r-locataire-id').value : '',
+    locataire: $('r-locataire') ? $('r-locataire').value : '',
+    locataireTel: $('r-locataire-tel') ? $('r-locataire-tel').value : '',
+    locataireEmail: $('r-locataire-email') ? $('r-locataire-email').value : '',
+    locataireAdresse: $('r-locataire-adresse') ? $('r-locataire-adresse').value : '',
+    showPrix: $('r-show-prix') ? $('r-show-prix').checked : true,
+    volume: $('r-volume') ? $('r-volume').value : '',
+    photos: state.photos || [],
+    photoComments: [0,1,2,3,4,5].map(i => $('r-photo-comment-'+i) ? $('r-photo-comment-'+i).value : ''),
+    materiels: JSON.parse(JSON.stringify(state.materiels || [])),
+    materielComment: $('r-materiel-comment') ? $('r-materiel-comment').value : '',
+    garantieNote: $('r-garantie-note') ? $('r-garantie-note').value : '',
+    sigClient: $('sig-client') ? $('sig-client').toDataURL() : '',
+    sigLocataire: $('sig-locataire') ? $('sig-locataire').toDataURL() : '',
     nuisibles, description: $('r-description').value, niveau: $('r-niveau').value,
     superficie: $('r-superficie').value, pieces: $('r-pieces').value, zones: $('r-zones').value,
     origine: $('r-origine').value, contraintes: $('r-contraintes').value,
@@ -678,20 +844,40 @@ function updatePDF() {
   st('pdf-date',  fmtDate($('r-date').value));
   st('pdf-tech',  $('r-tech').value);
   st('pdf-client', clientNom === '-- Sélectionner un client --' ? '—' : clientNom);
+
+  // Bon de commande
+  const bonCommande = $('r-bon-commande') ? $('r-bon-commande').value.trim() : '';
+  const bcPrev = $('pdf-bon-commande-prev');
+  if (bcPrev) { bcPrev.style.display = bonCommande ? 'block' : 'none'; bcPrev.textContent = bonCommande ? '📋 BC : ' + bonCommande : ''; }
+
+  // Locataire
+  const locataire = $('r-locataire') ? $('r-locataire').value.trim() : '';
+  const locPrev = $('pdf-locataire-prev');
+  if (locPrev) { locPrev.style.display = locataire ? 'block' : 'none'; locPrev.textContent = locataire ? '🏠 Locataire : ' + locataire : ''; }
+
   const adr = $('r-adresse').value, npa = $('r-npa').value, ville = $('r-ville').value;
   st('pdf-adresse', adr ? adr + (npa?' '+npa:'') + (ville?' '+ville:'') : '—');
   const pn = $('pdf-nuisibles');
   if (pn) pn.innerHTML = nuisibles.length
     ? nuisibles.map(n => `<span style="background:var(--red);color:#fff;font-size:8px;padding:1px 6px;border-radius:3px;display:inline-block;margin:1px;">${n}</span>`).join('')
     : '<span style="color:var(--g400);font-size:10px;">Aucun</span>';
-  const sup = $('r-superficie').value, pie = $('r-pieces').value;
-  st('pdf-superficie', (sup ? sup+'m²' : '—') + (pie ? ' / '+pie+' pièce(s)' : ''));
+  const sup = $('r-superficie').value, pie = $('r-pieces').value, vol = $('r-volume') ? $('r-volume').value : '';
+  let supTxt = sup ? sup+'m²' : '—';
+  if (vol) supTxt += ' / '+vol+'m³';
+  if (pie) supTxt += ' / '+pie+' pièce(s)';
+  st('pdf-superficie', supTxt);
   st('pdf-niveau',      $('r-niveau').value);
   const desc = $('r-description').value || '—';
   st('pdf-description', desc.substring(0,100) + (desc.length > 100 ? '…' : ''));
   st('pdf-traitement',  traitement.join(', ') || '—');
-  const montant = $('r-montant').value;
-  st('pdf-montant', montant ? montant+' CHF' : '—');
+
+  // Coche prix
+  const showPrix = $('r-show-prix') ? $('r-show-prix').checked : true;
+  const montantBlock = $('pdf-montant-block');
+  const montantEl = $('pdf-montant');
+  if (montantBlock) montantBlock.style.display = showPrix ? '' : 'none';
+  if (montantEl) { montantEl.style.display = showPrix ? '' : 'none'; if (showPrix) { const montant = $('r-montant').value; st('pdf-montant', montant ? montant+' CHF' : '—'); } }
+
   st('pdf-resultat', $('r-resultat').value);
 }
 
@@ -730,6 +916,44 @@ function addProduit() {
 function deleteProduit(el) {
   state.produits.splice(parseInt(el.dataset.idx), 1);
   renderProduits();
+}
+
+// ============================================================
+// MATÉRIELS
+// ============================================================
+const MATERIEL_OPTIONS = [
+  'Boîtes d\'appâtage sécurisées souris',
+  'Boîtes d\'appâtage sécurisées rats',
+  'Grilles de protection',
+  'Pièges mécaniques souris',
+  'Pièges mécaniques rats',
+  'Pièges à colle',
+  'Pièges à phéromones',
+  'Distributeurs de gel',
+  'Autres'
+];
+function renderMateriels() {
+  const el = $('materiels-list'); if (!el) return;
+  el.innerHTML = (state.materiels||[]).length
+    ? state.materiels.map((m,i) => `
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;">
+        <select class="form-input" oninput="state.materiels[${i}].nom=this.value">
+          ${MATERIEL_OPTIONS.map(o => `<option${o===m.nom?' selected':''}>${o}</option>`).join('')}
+        </select>
+        <input class="form-input" value="${m.qte||''}" placeholder="Qté" type="number" min="1" oninput="state.materiels[${i}].qte=this.value"/>
+        <input class="form-input" value="${m.zone||''}" placeholder="Emplacement" oninput="state.materiels[${i}].zone=this.value"/>
+        <button class="btn btn-ghost btn-xs" data-idx="${i}" onclick="deleteMateriel(this)">✕</button>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--g400);padding:8px 0;">Aucun matériel ajouté</div>';
+}
+function addMateriel() {
+  if (!state.materiels) state.materiels = [];
+  state.materiels.push({ nom: MATERIEL_OPTIONS[0], qte:'1', zone:'' });
+  renderMateriels();
+}
+function deleteMateriel(el) {
+  state.materiels.splice(parseInt(el.dataset.idx), 1);
+  renderMateriels();
 }
 
 // ============================================================
@@ -772,6 +996,39 @@ function initSig() {
   canvas.addEventListener('touchend',   () => state.sigDrawing = false);
 }
 function clearSig() { const c = $('sig-canvas'); if (c) c.getContext('2d').clearRect(0,0,c.width,c.height); }
+
+function initSigCanvas(canvasId, stateKey) {
+  const canvas = $(canvasId); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#1a2744'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  let drawing = false;
+  const gp = e => { const r = canvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: (t.clientX-r.left)*(canvas.width/r.width), y: (t.clientY-r.top)*(canvas.height/r.height) }; };
+  canvas.addEventListener('mousedown',  e => { drawing = true; const p = gp(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); });
+  canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = gp(e); ctx.lineTo(p.x,p.y); ctx.stroke(); });
+  canvas.addEventListener('mouseup',    () => drawing = false);
+  canvas.addEventListener('mouseleave', () => drawing = false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = gp(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); }, { passive:false });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = gp(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }, { passive:false });
+  canvas.addEventListener('touchend',   () => drawing = false);
+}
+
+function clearSigClient() {
+  const c = $('sig-client'); if (c) c.getContext('2d').clearRect(0,0,c.width,c.height);
+  state.sigClientData = null;
+}
+function clearSigLocataire() {
+  const c = $('sig-locataire'); if (c) c.getContext('2d').clearRect(0,0,c.width,c.height);
+  state.sigLocataireData = null;
+}
+function updateSigLabels() {
+  const today = new Date().toLocaleDateString('fr-CH');
+  const clientNom = (() => { const sel = $('r-client'); if (!sel) return ''; const c = DB.clients.find(x => x.id === sel.value); return c ? c.nom : ''; })();
+  const locNom = $('r-locataire') ? $('r-locataire').value : '';
+  if ($('sig-client-nom')) $('sig-client-nom').textContent = clientNom || 'Client / Gérance';
+  if ($('sig-locataire-nom')) $('sig-locataire-nom').textContent = locNom || 'Locataire';
+  if ($('sig-client-date')) $('sig-client-date').textContent = today;
+  if ($('sig-locataire-date')) $('sig-locataire-date').textContent = today;
+}
 
 // ============================================================
 // PRINT PDF
@@ -818,6 +1075,10 @@ function deleteTech(el) {
 document.addEventListener('DOMContentLoaded', () => {
   seedData();
   initSig();
+  initSigCanvas('sig-client', 'sigClient');
+  initSigCanvas('sig-locataire', 'sigLocataire');
+  updateSigLabels();
+  if (!state.materiels) state.materiels = [];
   const pwdInput = $('login-pwd');
   if (pwdInput) pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 });
