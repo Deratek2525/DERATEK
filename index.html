@@ -392,22 +392,23 @@
                 <span>Locataire</span>
                 <button class="btn btn-ghost btn-xs" onclick="openNewLocataire()" type="button">+ Nouveau</button>
               </div>
-            <div class="form-group">
-              <label class="form-label">Sélectionner un locataire</label>
-              <select class="form-input" id="r-locataire-id" onchange="onLocataireChange()">
-                <option value="">-- Aucun locataire --</option>
-              </select>
-            </div>
-            <div id="r-locataire-details" style="display:none;">
-              <div class="form-row">
-                <div class="form-group"><label class="form-label">Prénom Nom</label><input class="form-input" id="r-locataire" placeholder="Marie Dupont" oninput="updatePDF()"/></div>
-                <div class="form-group"><label class="form-label">Téléphone locataire</label><input class="form-input" id="r-locataire-tel" placeholder="+41 79 000 00 00"/></div>
+              <div class="form-group">
+                <label class="form-label">Sélectionner un locataire</label>
+                <select class="form-input" id="r-locataire-id" onchange="onLocataireChange()">
+                  <option value="">-- Aucun locataire --</option>
+                </select>
               </div>
-              <div class="form-row">
-                <div class="form-group"><label class="form-label">Email locataire</label><input class="form-input" id="r-locataire-email" placeholder="locataire@email.ch"/></div>
-                <div class="form-group"><label class="form-label">Adresse locataire</label><input class="form-input" id="r-locataire-adresse" placeholder="Rue du Lac 12, 1000 Lausanne"/></div>
+              <div id="r-locataire-details" style="display:none;">
+                <div class="form-row">
+                  <div class="form-group"><label class="form-label">Prénom Nom</label><input class="form-input" id="r-locataire" placeholder="Marie Dupont" oninput="updatePDF()"/></div>
+                  <div class="form-group"><label class="form-label">Téléphone locataire</label><input class="form-input" id="r-locataire-tel" placeholder="+41 79 000 00 00"/></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label class="form-label">Email locataire</label><input class="form-input" id="r-locataire-email" placeholder="locataire@email.ch"/></div>
+                  <div class="form-group"><label class="form-label">Adresse locataire</label><input class="form-input" id="r-locataire-adresse" placeholder="Rue du Lac 12, 1000 Lausanne"/></div>
+                </div>
               </div>
-            </div>
+            </div><!-- fin bloc-locataire -->
           </div>
           <div class="form-block" id="bloc-adresse-intervention">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
