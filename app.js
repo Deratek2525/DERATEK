@@ -28,7 +28,11 @@ const DB = {
   get rapports() { return this._get('drt_rapports', []); },
   set rapports(v){ this._set('drt_rapports', v); },
   get intervs()  { return this._get('drt_intervs', []); },
-  set intervs(v) { this._set('drt_intervs', v); }
+  set intervs(v) { this._set('drt_intervs', v); },
+  get locataires()  { return this._get('drt_locataires', []); },
+  set locataires(v) { this._set('drt_locataires', v); },
+  get bons()        { return this._get('drt_bons', []); },
+  set bons(v)       { this._set('drt_bons', v); }
 };
 
 // ============================================================
@@ -89,6 +93,7 @@ function showScreen(name) {
   if (name === 'clients')      renderClients();
   if (name === 'rapports')     renderRapports();
   if (name === 'agenda')       renderAgenda();
+  if (name === 'locataires')   renderLocataires();
   if (name === 'bons')         renderBons();
   window.scrollTo(0, 0);
 }
@@ -1328,23 +1333,248 @@ function bonCancel() {
   const fi = $('bon-file-input'); if (fi) fi.value = '';
 }
 
-// Livraison 1 : on confirme juste que l'extraction marche.
-// La création réelle des fiches (Clients + Locataires + Bons) arrive en Livraison 2.
-function bonConfirmSave() {
-  toast('Extraction validée ✓ (enregistrement automatique à la prochaine étape)', '#2d9e6b');
-  bonCancel();
+// Récupère la valeur d'un input du récap (ou chaîne vide)
+function _bonVal(key) { const el = $('bonf-' + key); return el ? el.value.trim() : ''; }
+
+// Trouve une gérance existante par nom (insensible à la casse) ou en crée une nouvelle
+function _findOrCreateGerance(infos) {
+  const nom = (infos.gerance_nom || '').trim();
+  if (!nom) return null;
+  const clients = DB.clients;
+  const existing = clients.find(c => (c.nom || '').toLowerCase() === nom.toLowerCase());
+  if (existing) {
+    const updates = {};
+    if (!existing.contact && infos.gerant_nom)      updates.contact = infos.gerant_nom;
+    if (!existing.tel     && infos.gerant_tel)      updates.tel     = infos.gerant_tel;
+    if (!existing.email   && infos.gerant_email)    updates.email   = infos.gerant_email;
+    if (!existing.adresse && infos.gerance_adresse) updates.adresse = infos.gerance_adresse;
+    if (!existing.npa     && infos.gerance_npa)     updates.npa     = infos.gerance_npa;
+    if (!existing.ville   && infos.gerance_ville)   updates.ville   = infos.gerance_ville;
+    if (Object.keys(updates).length) {
+      Object.assign(existing, updates);
+      DB.clients = clients;
+    }
+    return existing;
+  }
+  const newClient = {
+    id: 'cl' + Date.now(),
+    nom: nom,
+    type: 'Gérance',
+    contact: infos.gerant_nom || '',
+    tel:     infos.gerant_tel || '',
+    email:   infos.gerant_email || '',
+    web: '',
+    adresse: infos.gerance_adresse || '',
+    npa:     infos.gerance_npa || '',
+    ville:   infos.gerance_ville || '',
+    num: '', tarif: '',
+    notes: 'Créé automatiquement depuis un bon de travaux.'
+  };
+  clients.push(newClient);
+  DB.clients = clients;
+  return newClient;
 }
 
-// Liste des bons enregistrés (vide pour l'instant — rempli en Livraison 2)
+// Trouve un locataire existant ou en crée un nouveau
+function _findOrCreateLocataire(infos) {
+  const nom = (infos.locataire_nom || '').trim();
+  if (!nom) return null;
+  const locs = DB.locataires;
+  const existing = locs.find(l => (l.nom || '').toLowerCase() === nom.toLowerCase());
+  if (existing) {
+    const updates = {};
+    if (!existing.tel     && infos.locataire_tel)     updates.tel     = infos.locataire_tel;
+    if (!existing.email   && infos.locataire_email)   updates.email   = infos.locataire_email;
+    if (!existing.adresse && infos.locataire_adresse) updates.adresse = infos.locataire_adresse;
+    if (Object.keys(updates).length) {
+      Object.assign(existing, updates);
+      DB.locataires = locs;
+    }
+    return existing;
+  }
+  const newLoc = {
+    id: 'loc' + Date.now(),
+    nom: nom,
+    tel:     infos.locataire_tel || '',
+    email:   infos.locataire_email || '',
+    adresse: infos.locataire_adresse || '',
+    notes: 'Créé automatiquement depuis un bon de travaux.'
+  };
+  locs.push(newLoc);
+  DB.locataires = locs;
+  return newLoc;
+}
+
+// Validation : crée la Gérance (Client), le Locataire et le Bon, puis rafraîchit l'UI
+function bonConfirmSave() {
+  const infos = {
+    gerance_nom:       _bonVal('gerance_nom'),
+    gerant_nom:        _bonVal('gerant_nom'),
+    gerant_tel:        _bonVal('gerant_tel'),
+    gerant_email:      _bonVal('gerant_email'),
+    gerance_adresse:   _bonVal('gerance_adresse'),
+    gerance_npa:       _bonVal('gerance_npa'),
+    gerance_ville:     _bonVal('gerance_ville'),
+    numero_bon:        _bonVal('numero_bon'),
+    date_bon:          _bonVal('date_bon'),
+    immeuble:          _bonVal('immeuble'),
+    proprietaire:      _bonVal('proprietaire'),
+    locataire_nom:     _bonVal('locataire_nom'),
+    locataire_tel:     _bonVal('locataire_tel'),
+    locataire_email:   _bonVal('locataire_email'),
+    locataire_adresse: _bonVal('locataire_adresse'),
+    probleme:          (($('bonf-probleme') && $('bonf-probleme').value) || '').trim(),
+    contact_sur_place: _bonVal('contact_sur_place'),
+    concierge:         _bonVal('concierge'),
+  };
+
+  if (!infos.gerance_nom && !infos.locataire_nom && !infos.numero_bon) {
+    toast('Rien à enregistrer (gérance, locataire et numéro de bon vides)', '#e63946');
+    return;
+  }
+
+  const gerance   = _findOrCreateGerance(infos);
+  const locataire = _findOrCreateLocataire(infos);
+
+  const bons = DB.bons;
+  const bon = {
+    id: 'bon' + Date.now(),
+    numero:       infos.numero_bon,
+    date:         infos.date_bon,
+    geranceId:    gerance   ? gerance.id   : '',
+    geranceNom:   gerance   ? gerance.nom  : infos.gerance_nom,
+    locataireId:  locataire ? locataire.id : '',
+    locataireNom: locataire ? locataire.nom : infos.locataire_nom,
+    immeuble:        infos.immeuble,
+    proprietaire:    infos.proprietaire,
+    probleme:        infos.probleme,
+    contactSurPlace: infos.contact_sur_place,
+    concierge:       infos.concierge,
+    createdAt: new Date().toISOString()
+  };
+  bons.push(bon);
+  DB.bons = bons;
+
+  const parts = [];
+  if (gerance)   parts.push('Gérance');
+  if (locataire) parts.push('Locataire');
+  parts.push('Bon');
+  toast('✓ Enregistré : ' + parts.join(' + '), '#2d9e6b');
+
+  bonCancel();
+  if (typeof renderClients === 'function')    renderClients();
+  if (typeof renderLocataires === 'function') renderLocataires();
+  if (typeof renderBons === 'function')       renderBons();
+  if (typeof renderDashboard === 'function')  renderDashboard();
+}
+
+// Liste des locataires
+function renderLocataires() {
+  const q = (($('loc-search') || {}).value || '').toLowerCase();
+  const all = DB.locataires || [];
+  const list = q
+    ? all.filter(l => ((l.nom||'') + ' ' + (l.adresse||'')).toLowerCase().includes(q))
+    : all;
+  const count = $('locataires-count');
+  if (count) count.textContent = `${list.length} locataire${list.length !== 1 ? 's' : ''}`;
+  const grid = $('locataires-grid');
+  if (!grid) return;
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🏠</div><div class="empty-text">Aucun locataire pour le moment.<br>Les locataires sont créés automatiquement depuis les bons de travaux.</div></div>';
+    return;
+  }
+  grid.innerHTML = list.map(l => `
+    <div class="client-card">
+      <div class="client-hd">
+        <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
+        <div class="client-info">
+          <div class="client-name">${l.nom||''}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span class="badge b-gray">Locataire</span>
+          </div>
+        </div>
+      </div>
+      ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
+      ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
+      ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
+      <div class="client-actions">
+        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}','${(l.nom||'').replace(/'/g,"\\'")}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function confirmDeleteLocataire(id, nom) {
+  $('confirm-msg').textContent = `Supprimer le locataire "${nom}" ? Cette action est irréversible.`;
+  $('confirm-btn').onclick = () => {
+    DB.locataires = DB.locataires.filter(l => l.id !== id);
+    closeModal('modal-confirm');
+    renderLocataires();
+    toast('Locataire supprimé', '#e63946');
+  };
+  openModal('modal-confirm');
+}
+
+// Liste des bons enregistrés, regroupés par gérance
 function renderBons() {
   const list = $('bons-list');
   const count = $('bons-count');
-  const bons = DB.bons || [];
+  const q = (($('bon-search') || {}).value || '').toLowerCase();
+  let bons = DB.bons || [];
+  if (q) {
+    bons = bons.filter(b =>
+      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.probleme||''))
+        .toLowerCase().includes(q)
+    );
+  }
   if (count) count.textContent = bons.length ? bons.length + ' bon(s)' : '';
   if (!list) return;
   if (!bons.length) {
     list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Aucun bon enregistré pour le moment.<br>Glissez un PDF ci-dessus pour commencer.</div></div>';
     return;
   }
-  list.innerHTML = '';
+  const groups = {};
+  bons.forEach(b => {
+    const key = b.geranceNom || '(Sans gérance)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(b);
+  });
+  list.innerHTML = Object.keys(groups).sort().map(g => {
+    const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    return `
+      <div style="margin-top:14px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid var(--red);padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
+        <div class="clients-grid">
+          ${items.map(b => `
+            <div class="client-card">
+              <div class="client-hd">
+                <div class="av av-md" style="background:#0d1b3e">📄</div>
+                <div class="client-info">
+                  <div class="client-name">Bon ${b.numero || '(sans n°)'}</div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span class="badge b-gray">${fmtDate(b.date) || '—'}</span>
+                  </div>
+                </div>
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')">🗑</button>
+              </div>
+              ${b.locataireNom ? `<div class="client-contact-row">🏠 ${b.locataireNom}</div>` : ''}
+              ${b.immeuble ? `<div class="client-contact-row">📍 ${b.immeuble}</div>` : ''}
+              ${b.probleme ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${b.probleme}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function confirmDeleteBon(id, label) {
+  $('confirm-msg').textContent = `Supprimer le bon "${label}" ? Cette action est irréversible.`;
+  $('confirm-btn').onclick = () => {
+    DB.bons = DB.bons.filter(b => b.id !== id);
+    closeModal('modal-confirm');
+    renderBons();
+    toast('Bon supprimé', '#e63946');
+  };
+  openModal('modal-confirm');
 }
