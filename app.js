@@ -1457,17 +1457,19 @@ function _findOrCreateGerance(infos) {
   return newClient;
 }
 
-// Trouve un locataire existant ou en crée un nouveau
-function _findOrCreateLocataire(infos) {
+// Trouve un locataire existant ou en crée un nouveau (en mémorisant la gérance et la date)
+function _findOrCreateLocataire(infos, geranceId) {
   const nom = (infos.locataire_nom || '').trim();
   if (!nom) return null;
   const locs = DB.locataires;
   const existing = locs.find(l => (l.nom || '').toLowerCase() === nom.toLowerCase());
   if (existing) {
     const updates = {};
-    if (!existing.tel     && infos.locataire_tel)     updates.tel     = infos.locataire_tel;
-    if (!existing.email   && infos.locataire_email)   updates.email   = infos.locataire_email;
-    if (!existing.adresse && infos.locataire_adresse) updates.adresse = infos.locataire_adresse;
+    if (!existing.tel       && infos.locataire_tel)     updates.tel       = infos.locataire_tel;
+    if (!existing.email     && infos.locataire_email)   updates.email     = infos.locataire_email;
+    if (!existing.adresse   && infos.locataire_adresse) updates.adresse   = infos.locataire_adresse;
+    if (!existing.clientId  && geranceId)               updates.clientId  = geranceId;
+    if (!existing.createdAt)                            updates.createdAt = new Date().toISOString();
     if (Object.keys(updates).length) {
       Object.assign(existing, updates);
       DB.locataires = locs;
@@ -1480,6 +1482,8 @@ function _findOrCreateLocataire(infos) {
     tel:     infos.locataire_tel || '',
     email:   infos.locataire_email || '',
     adresse: infos.locataire_adresse || '',
+    clientId: geranceId || '',
+    createdAt: new Date().toISOString(),
     notes: 'Créé automatiquement depuis un bon de travaux.'
   };
   locs.push(newLoc);
@@ -1516,7 +1520,7 @@ function bonConfirmSave() {
   }
 
   const gerance   = _findOrCreateGerance(infos);
-  const locataire = _findOrCreateLocataire(infos);
+  const locataire = _findOrCreateLocataire(infos, gerance ? gerance.id : '');
 
   const bons = DB.bons;
   const bon = {
@@ -1565,21 +1569,44 @@ function renderLocataires() {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🏠</div><div class="empty-text">Aucun locataire pour le moment.<br>Les locataires sont créés automatiquement depuis les bons de travaux.</div></div>';
     return;
   }
+  const allBons = DB.bons || [];
   grid.innerHTML = list.map(l => {
-    const gerance = l.clientId ? DB.clients.find(c => c.id === l.clientId) : null;
+    // 1. Gérance : depuis clientId si présent, sinon depuis le bon le plus récent associé
+    let gerance = l.clientId ? DB.clients.find(c => c.id === l.clientId) : null;
+    let geranceNom = gerance ? gerance.nom : '';
+    let dateEnreg = l.createdAt || '';
+    if (!geranceNom || !dateEnreg) {
+      const bonsLies = allBons
+        .filter(b => b.locataireId === l.id || (l.nom && b.locataireNom && b.locataireNom.toLowerCase() === l.nom.toLowerCase()))
+        .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+      if (!geranceNom && bonsLies.length) geranceNom = bonsLies[0].geranceNom || '';
+      if (!dateEnreg && bonsLies.length)  dateEnreg  = bonsLies[0].createdAt || '';
+    }
+    // 2. Format de la date pour l'affichage (jj.mm.aaaa)
+    let dateFmt = '';
+    if (dateEnreg) {
+      try {
+        const d = new Date(dateEnreg);
+        if (!isNaN(d)) {
+          dateFmt = String(d.getDate()).padStart(2,'0') + '.' +
+                    String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+        }
+      } catch(e) {}
+    }
     return `
     <div class="client-card">
       <div class="client-hd">
         <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
         <div class="client-info">
           <div class="client-name">${l.nom||''}</div>
-          <div style="display:flex;gap:6px;align-items:center;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <span class="badge b-gray">Locataire</span>
-            ${gerance ? `<span style="font-size:10px;color:var(--g600);">via ${gerance.nom}</span>` : ''}
+            ${dateFmt ? `<span style="font-size:10px;color:var(--g600);">📅 ${dateFmt}</span>` : ''}
           </div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
       </div>
+      ${geranceNom ? `<div class="client-contact-row" style="font-weight:700;color:var(--navy);">🏢 ${geranceNom}</div>` : ''}
       ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
       ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
       ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
