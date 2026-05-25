@@ -60,6 +60,7 @@ let state = {
   editingRapportId: null,
   editingClientId:  null,
   editingIntervId:  null,
+  editingLocataireId: null,
   rapportsFilter:   'Tous',
   clientsFilter:    'Tous',
   agendaView:       'semaine',
@@ -684,17 +685,98 @@ function pickLocataire(id) {
   if (typeof updatePDF === 'function') updatePDF();
 }
 
-// "+ Nouveau" : coche la case et révèle les champs de saisie directe
+// Remplit le menu déroulant des gérances dans la modale locataire
+function _refreshLocClientDropdown(selectedId) {
+  const sel = $('loc-client');
+  if (!sel) return;
+  const opts = ['<option value="">-- Aucune gérance --</option>']
+    .concat(DB.clients
+      .filter(c => c.type === 'Gérance')
+      .map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom}</option>`));
+  sel.innerHTML = opts.join('');
+}
+
+// "+ Nouveau" : si on est sur l'écran Locataires, ouvre la modale ;
+// sinon (depuis le formulaire de rapport), révèle les champs inline.
 function openNewLocataire() {
+  const screenLoc = $('screen-locataires');
+  if (screenLoc && screenLoc.classList.contains('active')) {
+    state.editingLocataireId = null;
+    const setVal = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+    ['loc-prenom','loc-nom','loc-tel','loc-email','loc-adresse','loc-npa','loc-ville','loc-notes']
+      .forEach(id => setVal(id, ''));
+    _refreshLocClientDropdown('');
+    const t = $('modal-locataire-title'); if (t) t.textContent = 'Nouveau locataire';
+    const d = $('loc-delete-btn'); if (d) d.style.display = 'none';
+    openModal('modal-locataire');
+    return;
+  }
+  // Comportement d'origine (formulaire de rapport)
   const cb = $('r-avec-locataire'); if (cb && !cb.checked) cb.checked = true;
-  toggleLocataire();
+  if (typeof toggleLocataire === 'function') toggleLocataire();
   const details = $('r-locataire-details'); if (details) details.style.display = 'block';
   const first = $('r-locataire'); if (first) first.focus();
 }
 
-// Stubs inoffensifs (formulaire intervention / ancienne modale) — évitent toute erreur
+// Ouvre la modale en mode édition, pré-remplie avec les données du locataire
+function editLocataire(id) {
+  const l = (DB.locataires || []).find(x => x.id === id);
+  if (!l) return;
+  state.editingLocataireId = id;
+  const setVal = (fid, v) => { const el = $(fid); if (el) el.value = v || ''; };
+  setVal('loc-prenom', l.prenom || '');
+  setVal('loc-nom', l.nom || '');
+  setVal('loc-tel', l.tel || '');
+  setVal('loc-email', l.email || '');
+  setVal('loc-adresse', l.adresse || '');
+  setVal('loc-npa', l.npa || '');
+  setVal('loc-ville', l.ville || '');
+  setVal('loc-notes', l.notes || '');
+  _refreshLocClientDropdown(l.clientId || '');
+  const t = $('modal-locataire-title'); if (t) t.textContent = 'Modifier le locataire';
+  const d = $('loc-delete-btn'); if (d) d.style.display = 'inline-flex';
+  openModal('modal-locataire');
+}
+
+// Stub conservé (utilisé par le formulaire d'intervention)
 function onIvLocataireChange() {}
-function saveLocataire() { if (typeof closeModal === 'function') closeModal('modal-locataire'); }
+
+// Enregistre un locataire (création ou mise à jour)
+function saveLocataire() {
+  const get = (id) => { const el = $(id); return el ? el.value.trim() : ''; };
+  const prenom = get('loc-prenom');
+  const nomChamp = get('loc-nom');
+  // Le modèle stocke un nom unique : on combine prénom + nom si les deux sont remplis
+  const nomComplet = (prenom && nomChamp) ? (prenom + ' ' + nomChamp) : (nomChamp || prenom);
+  if (!nomComplet) { toast('Le nom du locataire est obligatoire', '#e63946'); return; }
+  const data = {
+    nom: nomComplet,
+    prenom: prenom,
+    tel: get('loc-tel'),
+    email: get('loc-email'),
+    adresse: get('loc-adresse'),
+    npa: get('loc-npa'),
+    ville: get('loc-ville'),
+    clientId: get('loc-client'),
+    notes: get('loc-notes')
+  };
+  const list = DB.locataires;
+  if (state.editingLocataireId) {
+    const i = list.findIndex(l => l.id === state.editingLocataireId);
+    if (i >= 0) list[i] = { ...list[i], ...data };
+    toast('Locataire mis à jour ✓', '#2d9e6b');
+  } else {
+    data.id = 'loc' + Date.now();
+    list.push(data);
+    toast('Locataire ajouté ✓', '#2d9e6b');
+  }
+  DB.locataires = list;
+  state.editingLocataireId = null;
+  closeModal('modal-locataire');
+  renderLocataires();
+  if (typeof renderBons === 'function') renderBons();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
 
 // ============================================================
 // SAVE RAPPORT
@@ -1483,7 +1565,9 @@ function renderLocataires() {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🏠</div><div class="empty-text">Aucun locataire pour le moment.<br>Les locataires sont créés automatiquement depuis les bons de travaux.</div></div>';
     return;
   }
-  grid.innerHTML = list.map(l => `
+  grid.innerHTML = list.map(l => {
+    const gerance = l.clientId ? DB.clients.find(c => c.id === l.clientId) : null;
+    return `
     <div class="client-card">
       <div class="client-hd">
         <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
@@ -1491,24 +1575,35 @@ function renderLocataires() {
           <div class="client-name">${l.nom||''}</div>
           <div style="display:flex;gap:6px;align-items:center;">
             <span class="badge b-gray">Locataire</span>
+            ${gerance ? `<span style="font-size:10px;color:var(--g600);">via ${gerance.nom}</span>` : ''}
           </div>
         </div>
+        <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
       </div>
       ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
       ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
       ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
+      ${(l.npa || l.ville) ? `<div class="client-contact-row">📍 ${l.npa||''} ${l.ville||''}</div>` : ''}
+      ${l.notes ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${l.notes}</div>` : ''}
       <div class="client-actions">
-        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}','${(l.nom||'').replace(/'/g,"\\'")}')">🗑</button>
+        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}')">🗑</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function confirmDeleteLocataire(id, nom) {
+  // Permet l'appel depuis la modale d'édition (sans nom) ou depuis la carte (avec nom)
+  if (!nom) {
+    const l = (DB.locataires || []).find(x => x.id === id);
+    nom = l ? (l.nom || '') : '';
+  }
   $('confirm-msg').textContent = `Supprimer le locataire "${nom}" ? Cette action est irréversible.`;
   $('confirm-btn').onclick = () => {
     DB.locataires = DB.locataires.filter(l => l.id !== id);
     closeModal('modal-confirm');
+    closeModal('modal-locataire');
+    state.editingLocataireId = null;
     renderLocataires();
     toast('Locataire supprimé', '#e63946');
   };
