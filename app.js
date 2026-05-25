@@ -1554,7 +1554,7 @@ function bonConfirmSave() {
   if (typeof renderDashboard === 'function')  renderDashboard();
 }
 
-// Liste des locataires
+// Liste des locataires, regroupés par gérance
 function renderLocataires() {
   const q = (($('loc-search') || {}).value || '').toLowerCase();
   const all = DB.locataires || [];
@@ -1565,13 +1565,16 @@ function renderLocataires() {
   if (count) count.textContent = `${list.length} locataire${list.length !== 1 ? 's' : ''}`;
   const grid = $('locataires-grid');
   if (!grid) return;
+  // L'élément a la classe CSS .clients-grid (grid layout) : on l'annule pour avoir des sections empilées
+  grid.style.display = 'block';
   if (!list.length) {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🏠</div><div class="empty-text">Aucun locataire pour le moment.<br>Les locataires sont créés automatiquement depuis les bons de travaux.</div></div>';
     return;
   }
   const allBons = DB.bons || [];
-  grid.innerHTML = list.map(l => {
-    // 1. Gérance : depuis clientId si présent, sinon depuis le bon le plus récent associé
+
+  // 1ʳᵉ passe : enrichir chaque locataire avec sa gérance et sa date (résolues via fallback)
+  const enriched = list.map(l => {
     let gerance = l.clientId ? DB.clients.find(c => c.id === l.clientId) : null;
     let geranceNom = gerance ? gerance.nom : '';
     let dateEnreg = l.createdAt || '';
@@ -1582,7 +1585,6 @@ function renderLocataires() {
       if (!geranceNom && bonsLies.length) geranceNom = bonsLies[0].geranceNom || '';
       if (!dateEnreg && bonsLies.length)  dateEnreg  = bonsLies[0].createdAt || '';
     }
-    // 2. Format de la date pour l'affichage (jj.mm.aaaa)
     let dateFmt = '';
     if (dateEnreg) {
       try {
@@ -1593,29 +1595,58 @@ function renderLocataires() {
         }
       } catch(e) {}
     }
+    return { l, geranceNom, dateFmt, dateEnreg };
+  });
+
+  // 2ᵉ passe : regrouper par gérance
+  const groups = {};
+  enriched.forEach(item => {
+    const key = item.geranceNom || '(Sans gérance)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+
+  // 3ᵉ passe : rendu HTML avec une section par gérance (les "(Sans gérance)" en dernier)
+  const keys = Object.keys(groups).sort((a, b) => {
+    if (a === '(Sans gérance)') return 1;
+    if (b === '(Sans gérance)') return -1;
+    return a.localeCompare(b, 'fr');
+  });
+
+  grid.innerHTML = keys.map(g => {
+    const items = groups[g].sort((a, b) => (b.dateEnreg || '').localeCompare(a.dateEnreg || ''));
     return `
-    <div class="client-card">
-      <div class="client-hd">
-        <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
-        <div class="client-info">
-          <div class="client-name">${l.nom||''}</div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <span class="badge b-gray">Locataire</span>
-            ${dateFmt ? `<span style="font-size:10px;color:var(--g600);">📅 ${dateFmt}</span>` : ''}
-          </div>
+      <div style="margin-top:14px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;border-bottom:2px solid var(--red);padding-bottom:5px;">
+          🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length} locataire${items.length !== 1 ? 's' : ''})</span>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
+        <div class="clients-grid">
+          ${items.map(({ l, dateFmt }) => `
+            <div class="client-card">
+              <div class="client-hd">
+                <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
+                <div class="client-info">
+                  <div class="client-name">${l.nom||''}</div>
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    <span class="badge b-gray">Locataire</span>
+                    ${dateFmt ? `<span style="font-size:10px;color:var(--g600);">📅 ${dateFmt}</span>` : ''}
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
+              </div>
+              ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
+              ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
+              ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
+              ${(l.npa || l.ville) ? `<div class="client-contact-row">📍 ${l.npa||''} ${l.ville||''}</div>` : ''}
+              ${l.notes ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${l.notes}</div>` : ''}
+              <div class="client-actions">
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}')">🗑</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
-      ${geranceNom ? `<div class="client-contact-row" style="font-weight:700;color:var(--navy);">🏢 ${geranceNom}</div>` : ''}
-      ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
-      ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
-      ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
-      ${(l.npa || l.ville) ? `<div class="client-contact-row">📍 ${l.npa||''} ${l.ville||''}</div>` : ''}
-      ${l.notes ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${l.notes}</div>` : ''}
-      <div class="client-actions">
-        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}')">🗑</button>
-      </div>
-    </div>`;
+    `;
   }).join('');
 }
 
