@@ -1,57 +1,171 @@
 /* ============================================================
-   DERATEK — Application v2.0
+   DERATEK — Application v3.0 (Supabase)
    ============================================================ */
 
 // ============================================================
-// BASE DE DONNÉES (localStorage — prête pour Supabase)
+// SUPABASE CLIENT + COUCHE DB (cache mémoire + sync async)
 // ============================================================
+let sb = null;
+function initSupabase() {
+  if (!window.supabase || !window.supabase.createClient) {
+    console.error('Lib Supabase non chargée');
+    return false;
+  }
+  sb = window.supabase.createClient(
+    DERATEK_CONFIG.supabase.url,
+    DERATEK_CONFIG.supabase.anonKey,
+    { auth: { persistSession: true, autoRefreshToken: true } }
+  );
+  return true;
+}
+
+// Génération d'ID (UUID v4 si dispo)
+const newId = () => (window.crypto && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+
+// Mapping JS field → Supabase column (uniquement pour les champs qui diffèrent)
+const TABLE_FIELDS = {
+  clients:    { js2db: {} },
+  locataires: { js2db: { clientId: 'client_id', createdAt: 'created_at' } },
+  bons:       { js2db: {
+    date: 'date_bon',
+    geranceId: 'gerance_id', geranceNom: 'gerance_nom',
+    locataireId: 'locataire_id', locataireNom: 'locataire_nom',
+    contactSurPlace: 'contact_sur_place',
+    createdAt: 'created_at',
+  } },
+  rapports:   { js2db: {
+    clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
+    bonCommande: 'bon_commande', rdvHeure: 'rdv_heure',
+  } },
+  techs:      { js2db: {} },
+  intervs:    { js2db: {} },
+};
+const META_COLS = new Set(['user_id', 'created_at']);
+
+function toDb(table, obj) {
+  const map = TABLE_FIELDS[table].js2db;
+  const out = {};
+  for (const k of Object.keys(obj)) {
+    if (obj[k] === undefined) continue;
+    out[map[k] || k] = obj[k];
+  }
+  return out;
+}
+function toJs(table, row) {
+  const map = TABLE_FIELDS[table].js2db;
+  const reverse = {};
+  for (const k of Object.keys(map)) reverse[map[k]] = k;
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (META_COLS.has(k) && k !== 'created_at') continue;
+    if (k === 'created_at' && table !== 'locataires' && table !== 'bons') continue;
+    out[reverse[k] || k] = row[k];
+  }
+  return out;
+}
+
 const DB = {
-  _get(key, fallback = []) {
-    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-    catch { return fallback; }
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
+  _syncQueued: {},
+
+  get techs()       { return this._cache.techs; },
+  set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
+  get clients()     { return this._cache.clients; },
+  set clients(v)    { this._cache.clients = v;    this._queue('clients'); },
+  get rapports()    { return this._cache.rapports; },
+  set rapports(v)   { this._cache.rapports = v;   this._queue('rapports'); },
+  get intervs()     { return this._cache.intervs; },
+  set intervs(v)    { this._cache.intervs = v;    this._queue('intervs'); },
+  get locataires()  { return this._cache.locataires; },
+  set locataires(v) { this._cache.locataires = v; this._queue('locataires'); },
+  get bons()        { return this._cache.bons; },
+  set bons(v)       { this._cache.bons = v;       this._queue('bons'); },
+
+  _queue(table) {
+    if (this._syncQueued[table]) return;
+    this._syncQueued[table] = true;
+    setTimeout(() => {
+      this._syncQueued[table] = false;
+      this._sync(table).catch(e => console.warn('Sync', table, e));
+    }, 100);
   },
-  _set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
-    catch (e) {
-      console.warn('Storage full, trimming...', key);
-      if (Array.isArray(val)) {
-        try { localStorage.setItem(key, JSON.stringify(val.slice(-20))); return true; }
-        catch { return false; }
-      }
-      return false;
+
+  async loadAll() {
+    if (!sb) return;
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs'];
+    for (const t of tables) {
+      try {
+        const { data, error } = await sb.from(t).select('*');
+        if (error) { console.warn('Load', t, error); continue; }
+        if (t === 'techs') {
+          this._cache.techs = (data || []).map(r => r.nom).filter(Boolean);
+        } else {
+          this._cache[t] = (data || []).map(r => toJs(t, r));
+        }
+        this._lastSync[t] = JSON.parse(JSON.stringify(this._cache[t]));
+      } catch (err) { console.warn('Load error', t, err); }
     }
   },
-  get techs()    { return this._get('drt_techs',   []); },
-  set techs(v)   { this._set('drt_techs', v); },
-  get clients()  { return this._get('drt_clients', []); },
-  set clients(v) { this._set('drt_clients', v); },
-  get rapports() { return this._get('drt_rapports', []); },
-  set rapports(v){ this._set('drt_rapports', v); },
-  get intervs()  { return this._get('drt_intervs', []); },
-  set intervs(v) { this._set('drt_intervs', v); },
-  get locataires()  { return this._get('drt_locataires', []); },
-  set locataires(v) { this._set('drt_locataires', v); },
-  get bons()        { return this._get('drt_bons', []); },
-  set bons(v)       { this._set('drt_bons', v); }
+
+  async _sync(table) {
+    if (!sb) return;
+    const oldArr = this._lastSync[table] || [];
+    const newArr = this._cache[table] || [];
+
+    if (table === 'techs') {
+      const oldSet = new Set(oldArr);
+      const newSet = new Set(newArr);
+      const toAdd    = [...newSet].filter(x => !oldSet.has(x));
+      const toRemove = [...oldSet].filter(x => !newSet.has(x));
+      if (toRemove.length) {
+        const { error } = await sb.from('techs').delete().in('nom', toRemove);
+        if (error) console.warn('Techs delete', error);
+      }
+      if (toAdd.length) {
+        const { error } = await sb.from('techs').insert(toAdd.map(nom => ({ id: newId(), nom })));
+        if (error) console.warn('Techs insert', error);
+      }
+      this._lastSync.techs = newArr.slice();
+      return;
+    }
+
+    const oldById = {};
+    oldArr.forEach(x => { if (x && x.id) oldById[x.id] = x; });
+    const oldIds = new Set(Object.keys(oldById));
+    const newIds = new Set(newArr.filter(x => x && x.id).map(x => x.id));
+    const toDelete = [...oldIds].filter(id => !newIds.has(id));
+    const toUpsert = newArr.filter(x => {
+      if (!x || !x.id) return false;
+      if (!oldIds.has(x.id)) return true;
+      return JSON.stringify(x) !== JSON.stringify(oldById[x.id]);
+    });
+
+    if (toDelete.length) {
+      const { error } = await sb.from(table).delete().in('id', toDelete);
+      if (error) console.warn(table, 'delete', error);
+    }
+    if (toUpsert.length) {
+      const rows = toUpsert.map(o => toDb(table, o));
+      const { error } = await sb.from(table).upsert(rows);
+      if (error) {
+        console.warn(table, 'upsert', error);
+        if (typeof toast === 'function') toast('Erreur de sauvegarde Supabase : ' + error.message, '#e63946');
+      }
+    }
+    this._lastSync[table] = JSON.parse(JSON.stringify(newArr));
+  },
+
+  _resetCache() {
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
+  }
 };
 
-// ============================================================
-// SEED DATA
-// ============================================================
-function seedData() {
-  if (!DB.techs.length)
-    DB.techs = ['Marc Dubois', 'Sophie Martin', 'Jean-Pierre Favre'];
-  if (!DB.clients.length)
-    DB.clients = [
-      { id:'cl1', nom:'Régie Naef SA', type:'Gérance', contact:'M. Naef', tel:'+41 21 320 45 00', email:'naef@naef.ch', adresse:'Av. de la Gare 22', npa:'1003', ville:'Lausanne', notes:'Client VIP', tarif:'150', num:'CLI-001' },
-      { id:'cl2', nom:'Mme Véronique Roche', type:'Particulier', contact:'Mme Roche', tel:'+41 79 234 56 78', email:'v.roche@bluewin.ch', adresse:'Rue du Mont-Blanc 14', npa:'1201', ville:'Genève', notes:'', tarif:'120', num:'CLI-002' },
-      { id:'cl3', nom:'Commune de Nyon', type:'Commune', contact:'M. Blanc', tel:'+41 22 365 80 00', email:'info@nyon.ch', adresse:'Rue de Rive 9', npa:'1260', ville:'Nyon', notes:'', tarif:'130', num:'CLI-003' },
-    ];
-  if (!DB.rapports.length)
-    DB.rapports = [
-      { id:'R-2026-0419', clientId:'cl2', clientNom:'Mme Véronique Roche', clientEmail:'v.roche@bluewin.ch', date:'2026-05-13', tech:'Marc Dubois', adresse:'Rue du Mont-Blanc 14', npa:'1201', ville:'Genève', localisation:'3ème étage', batiment:'Appartement', contact:'Mme Roche', tel:'+41 79 234 56 78', email:'v.roche@bluewin.ch', nuisibles:['Punaises de lit'], description:'Présence de punaises de lit dans la chambre principale.', niveau:'Important', superficie:'35', pieces:'2', zones:'Chambre, couloir', origine:'Bagage récent', contraintes:'Allergie produits chimiques', traitement:['t-pulv','t-vapeur'], produits:[{nom:'Alon Wax Block',dosage:'10g/m²',zone:'Chambre'},{nom:'Erpex',dosage:'5ml/L',zone:'Couloir'}], precautions:'Ne pas réintégrer 4h. Laver literie 60°C.', duree:'2', montant:'380', resultat:'Traitement effectué — Suivi nécessaire', recommandations:'Contrôle dans 3 semaines.', rdv:'2026-06-03', garantie:'3 mois', statut:'Envoyé' },
-    ];
-}
+// Plus de seed (Supabase = compte vide au début, utilisateur ajoute ses propres données)
+function seedData() { /* no-op en mode Supabase */ }
 
 // ============================================================
 // STATE
@@ -122,24 +236,55 @@ function setFilter(sc, val, el) {
 // ============================================================
 // LOGIN
 // ============================================================
-function doLogin() {
-  const pwd = $('login-pwd').value;
-  if (pwd === DERATEK_CONFIG.password) {
+async function doLogin() {
+  const emailEl = $('login-email');
+  const pwdEl   = $('login-pwd');
+  const errEl   = $('login-error');
+  const btn     = $('login-btn');
+  const email = emailEl ? emailEl.value.trim() : '';
+  const pwd   = pwdEl ? pwdEl.value : '';
+  if (!email || !pwd) {
+    if (errEl) { errEl.textContent = 'Email et mot de passe requis'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (!sb && !initSupabase()) {
+    if (errEl) { errEl.textContent = 'Impossible de se connecter à Supabase'; errEl.style.display = 'block'; }
+    return;
+  }
+  const origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Connexion…'; btn.disabled = true; }
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+    if (error) {
+      if (errEl) {
+        errEl.textContent = (/invalid|credentials/i).test(error.message) ? 'Email ou mot de passe incorrect' : ('Erreur : ' + error.message);
+        errEl.style.display = 'block';
+      }
+      return;
+    }
+    if (btn) btn.textContent = 'Chargement des données…';
+    await DB.loadAll();
     $('login-screen').style.display = 'none';
     $('app').style.display = 'block';
-    emailjs.init(DERATEK_CONFIG.emailjs.publicKey);
+    if (typeof emailjs !== 'undefined' && emailjs.init) {
+      try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
+    }
     renderDashboard();
-  } else {
-    $('login-error').style.display = 'block';
-    $('login-pwd').value = '';
-    $('login-pwd').focus();
+  } catch (err) {
+    if (errEl) { errEl.textContent = 'Erreur : ' + err.message; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.textContent = origLabel || 'Se connecter'; btn.disabled = false; }
   }
 }
-function doLogout() {
+
+async function doLogout() {
+  try { if (sb) await sb.auth.signOut(); } catch (e) {}
+  DB._resetCache();
   $('app').style.display = 'none';
   $('login-screen').style.display = 'flex';
-  $('login-pwd').value = '';
-  $('login-error').style.display = 'none';
+  const e = $('login-email'); if (e) e.value = '';
+  const p = $('login-pwd');   if (p) p.value = '';
+  const er = $('login-error'); if (er) er.style.display = 'none';
 }
 
 // ============================================================
@@ -368,7 +513,7 @@ function saveInterv() {
   const clientId = $('iv-client').value;
   const client = DB.clients.find(c => c.id === clientId);
   const iv = {
-    id: state.editingIntervId || ('iv' + Date.now()),
+    id: state.editingIntervId || newId(),
     date: $('iv-date').value, heure: $('iv-heure').value,
     clientId, clientNom: client ? client.nom : '',
     adresse: $('iv-adresse').value, nuisible: $('iv-nuisible').value,
@@ -477,7 +622,7 @@ function saveClient() {
     if (i >= 0) list[i] = { ...list[i], ...data };
     toast('Client mis à jour ✓', '#2d9e6b');
   } else {
-    data.id = 'cl' + Date.now();
+    data.id = newId();
     list.push(data);
     toast('Client ajouté ✓', '#2d9e6b');
   }
@@ -766,7 +911,7 @@ function saveLocataire() {
     if (i >= 0) list[i] = { ...list[i], ...data };
     toast('Locataire mis à jour ✓', '#2d9e6b');
   } else {
-    data.id = 'loc' + Date.now();
+    data.id = newId();
     list.push(data);
     toast('Locataire ajouté ✓', '#2d9e6b');
   }
@@ -1031,11 +1176,33 @@ function deleteTech(el) {
 // ============================================================
 // INIT
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  seedData();
+document.addEventListener('DOMContentLoaded', async () => {
   initSig();
-  const pwdInput = $('login-pwd');
-  if (pwdInput) pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  // Init Supabase (lib chargée via CDN)
+  initSupabase();
+
+  // Touche Entrée sur les champs de login
+  ['login-email', 'login-pwd'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  });
+
+  // Auto-login si une session Supabase existe déjà
+  if (sb) {
+    try {
+      const { data } = await sb.auth.getSession();
+      if (data && data.session) {
+        await DB.loadAll();
+        $('login-screen').style.display = 'none';
+        $('app').style.display = 'block';
+        if (typeof emailjs !== 'undefined' && emailjs.init) {
+          try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
+        }
+        renderDashboard();
+      }
+    } catch (err) { console.warn('Auto-login', err); }
+  }
 });
 
 // ============================================================
@@ -1439,7 +1606,7 @@ function _findOrCreateGerance(infos) {
     return existing;
   }
   const newClient = {
-    id: 'cl' + Date.now(),
+    id: newId(),
     nom: nom,
     type: 'Gérance',
     contact: infos.gerant_nom || '',
@@ -1477,7 +1644,7 @@ function _findOrCreateLocataire(infos, geranceId) {
     return existing;
   }
   const newLoc = {
-    id: 'loc' + Date.now(),
+    id: newId(),
     nom: nom,
     tel:     infos.locataire_tel || '',
     email:   infos.locataire_email || '',
@@ -1524,7 +1691,7 @@ function bonConfirmSave() {
 
   const bons = DB.bons;
   const bon = {
-    id: 'bon' + Date.now(),
+    id: newId(),
     numero:       infos.numero_bon,
     date:         infos.date_bon,
     geranceId:    gerance   ? gerance.id   : '',
@@ -1779,15 +1946,23 @@ function importData(event) {
         event.target.value = '';
         return;
       }
-      const keys = ['drt_techs','drt_clients','drt_rapports','drt_intervs','drt_locataires','drt_bons'];
+      // Mapping clé export → propriété DB
+      const map = {
+        drt_techs:      'techs',
+        drt_clients:    'clients',
+        drt_rapports:   'rapports',
+        drt_intervs:    'intervs',
+        drt_locataires: 'locataires',
+        drt_bons:       'bons',
+      };
       let n = 0;
-      keys.forEach(k => {
+      Object.keys(map).forEach(k => {
         if (Array.isArray(data[k])) {
-          localStorage.setItem(k, JSON.stringify(data[k]));
+          DB[map[k]] = data[k]; // déclenche le sync Supabase
           n++;
         }
       });
-      toast(`✓ ${n} collection(s) restaurée(s)`, '#2d9e6b');
+      toast(`✓ ${n} collection(s) restaurée(s) — synchronisation Supabase en cours…`, '#2d9e6b');
       if (typeof renderDashboard === 'function')  renderDashboard();
       if (typeof renderClients === 'function')    renderClients();
       if (typeof renderLocataires === 'function') renderLocataires();

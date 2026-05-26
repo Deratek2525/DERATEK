@@ -2,7 +2,10 @@
 // DERATEK — Configuration
 // ============================================================
 const DERATEK_CONFIG = {
-  password: 'deratek2026',
+  supabase: {
+    url:     'https://orhgyizvoudikkrfwdtt.supabase.co',
+    anonKey: 'sb_publishable_iwk-ReoFQev9PtI504IaMQ_WRl8bqVg'
+  },
   emailjs: {
     serviceId:  'service_vrngrk7',
     templateId: 'template_1mz9kem',
@@ -17,7 +20,7 @@ const DERATEK_CONFIG = {
   },
   app: {
     name: 'DERATEK',
-    version: '2.0',
+    version: '3.0',
     maxRapports: 50
   }
 };
