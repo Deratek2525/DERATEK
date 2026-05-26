@@ -34,6 +34,7 @@ const TABLE_FIELDS = {
     locataireId: 'locataire_id', locataireNom: 'locataire_nom',
     contactSurPlace: 'contact_sur_place',
     createdAt: 'created_at',
+    pdfPath: 'pdf_path',
   } },
   rapports:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
@@ -1453,12 +1454,18 @@ function bonHandleInput(e) {
   if (f) bonProcessFile(f);
 }
 
+// Référence au fichier PDF en cours de traitement (pour l'uploader à la validation)
+let _pendingBonPdf = null;
+
 // Traite le PDF : extraction texte -> IA -> récap
 async function bonProcessFile(file) {
   const status = $('bon-status');
   const confirm = $('bon-confirm');
   if (confirm) { confirm.style.display = 'none'; confirm.innerHTML = ''; }
   if (file.type !== 'application/pdf') { toast('Merci de déposer un fichier PDF', '#e63946'); return; }
+
+  // Mémorise le fichier pour l'upload à la validation
+  _pendingBonPdf = file;
 
   const setStatus = (msg) => { if (status) { status.style.display = 'block'; status.innerHTML = msg; } };
   try {
@@ -1478,6 +1485,48 @@ async function bonProcessFile(file) {
     console.error('Bon error:', err);
     toast('Erreur : ' + err.message, '#e63946');
   }
+}
+
+// Upload du PDF dans Supabase Storage. Retourne le chemin stocké (ou '' en cas d'échec)
+async function _uploadBonPdf(bonId, file) {
+  if (!sb || !file) return '';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return '';
+    const userId = session.user.id;
+    const safeName = file.name.replace(/[^\w.-]+/g, '_');
+    const path = `${userId}/${bonId}-${safeName}`;
+    const { error } = await sb.storage.from('bons-pdfs').upload(path, file, {
+      contentType: 'application/pdf',
+      upsert: true
+    });
+    if (error) { console.warn('Upload PDF', error); toast('PDF non uploadé : ' + error.message, '#e63946'); return ''; }
+    return path;
+  } catch (e) {
+    console.warn('Upload PDF exception', e);
+    return '';
+  }
+}
+
+// Génère une URL signée (1h) et ouvre le PDF dans un nouvel onglet
+async function viewBonPdf(bonId) {
+  const bon = (DB.bons || []).find(b => b.id === bonId);
+  if (!bon || !bon.pdfPath) { toast('Aucun PDF associé à ce bon', '#e63946'); return; }
+  if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
+  try {
+    const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(bon.pdfPath, 3600);
+    if (error || !data || !data.signedUrl) { toast('Erreur génération du lien : ' + (error?.message||'?'), '#e63946'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) {
+    toast('Erreur : ' + e.message, '#e63946');
+  }
+}
+
+// Supprime le PDF du Storage (en silence si échec — la suppression du bon prime)
+async function _deleteBonPdf(pdfPath) {
+  if (!sb || !pdfPath) return;
+  try { await sb.storage.from('bons-pdfs').remove([pdfPath]); }
+  catch (e) { console.warn('Delete PDF', e); }
 }
 
 // Appelle Mistral pour extraire les infos structurées du bon
@@ -1601,6 +1650,7 @@ function bonCancel() {
   const box = $('bon-confirm');
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   const fi = $('bon-file-input'); if (fi) fi.value = '';
+  _pendingBonPdf = null;
 }
 
 // Récupère la valeur d'un input du récap (ou chaîne vide)
@@ -1679,8 +1729,8 @@ function _findOrCreateLocataire(infos, geranceId) {
   return newLoc;
 }
 
-// Validation : crée la Gérance (Client), le Locataire et le Bon, puis rafraîchit l'UI
-function bonConfirmSave() {
+// Validation : crée la Gérance (Client), le Locataire et le Bon, uploade le PDF, rafraîchit l'UI
+async function bonConfirmSave() {
   const infos = {
     gerance_nom:       _bonVal('gerance_nom'),
     gerant_nom:        _bonVal('gerant_nom'),
@@ -1710,9 +1760,19 @@ function bonConfirmSave() {
   const gerance   = _findOrCreateGerance(infos);
   const locataire = _findOrCreateLocataire(infos, gerance ? gerance.id : '');
 
+  // 1. Upload du PDF d'abord (si présent) — on attend la fin pour récupérer le chemin
+  const bonId = newId();
+  let pdfPath = '';
+  const pdfFile = _pendingBonPdf;
+  if (pdfFile) {
+    toast('Upload du PDF en cours…', '#1a2744');
+    pdfPath = await _uploadBonPdf(bonId, pdfFile);
+  }
+
+  // 2. Création du bon avec le chemin du PDF
   const bons = DB.bons;
   const bon = {
-    id: newId(),
+    id: bonId,
     numero:       infos.numero_bon,
     date:         infos.date_bon,
     geranceId:    gerance   ? gerance.id   : '',
@@ -1724,6 +1784,7 @@ function bonConfirmSave() {
     probleme:        infos.probleme,
     contactSurPlace: infos.contact_sur_place,
     concierge:       infos.concierge,
+    pdfPath:         pdfPath,
     createdAt: new Date().toISOString()
   };
   bons.push(bon);
@@ -1733,8 +1794,10 @@ function bonConfirmSave() {
   if (gerance)   parts.push('Gérance');
   if (locataire) parts.push('Locataire');
   parts.push('Bon');
+  if (pdfPath)   parts.push('PDF');
   toast('✓ Enregistré : ' + parts.join(' + '), '#2d9e6b');
 
+  _pendingBonPdf = null;
   bonCancel();
   if (typeof renderClients === 'function')    renderClients();
   if (typeof renderLocataires === 'function') renderLocataires();
@@ -1892,10 +1955,12 @@ function renderBons() {
                 <div class="av av-md" style="background:#0d1b3e">📄</div>
                 <div class="client-info">
                   <div class="client-name">Bon ${b.numero || '(sans n°)'}</div>
-                  <div style="display:flex;gap:6px;align-items:center;">
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                     <span class="badge b-gray">${fmtDate(b.date) || '—'}</span>
+                    ${b.pdfPath ? `<span style="font-size:10px;color:#2d9e6b;">📎 PDF</span>` : ''}
                   </div>
                 </div>
+                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 Voir PDF</button>` : ''}
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')">🗑</button>
               </div>
               ${b.locataireNom ? `<div class="client-contact-row">🏠 ${b.locataireNom}</div>` : ''}
@@ -1911,11 +1976,17 @@ function renderBons() {
 
 function confirmDeleteBon(id, label) {
   $('confirm-msg').textContent = `Supprimer le bon "${label}" ? Cette action est irréversible.`;
-  $('confirm-btn').onclick = () => {
+  $('confirm-btn').onclick = async () => {
+    // 1. Récupérer le chemin du PDF avant suppression du bon
+    const bon = (DB.bons || []).find(b => b.id === id);
+    const pdfPath = bon ? bon.pdfPath : '';
+    // 2. Retirer le bon du cache (déclenche la suppression Supabase)
     DB.bons = DB.bons.filter(b => b.id !== id);
     closeModal('modal-confirm');
     renderBons();
     toast('Bon supprimé', '#e63946');
+    // 3. Supprimer le PDF du Storage en arrière-plan
+    if (pdfPath) _deleteBonPdf(pdfPath);
   };
   openModal('modal-confirm');
 }
