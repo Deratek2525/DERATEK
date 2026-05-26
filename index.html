@@ -228,6 +228,9 @@
     <div class="nav-right">
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
+        <button class="nav-action-btn no-print" onclick="exportData()" title="Télécharger une sauvegarde JSON de toutes mes données">💾 Exporter</button>
+        <button class="nav-action-btn no-print" onclick="document.getElementById('import-file-input').click()" title="Restaurer une sauvegarde JSON">📥 Importer</button>
+        <input type="file" id="import-file-input" accept=".json,application/json" style="display:none" onchange="importData(event)">
         <button class="nav-action-btn no-print" onclick="openTechModal()">⚙️ Techniciens</button>
         <button class="nav-action-btn no-print" onclick="doLogout()">Déconnexion</button>
       </div>

@@ -1731,3 +1731,74 @@ function confirmDeleteBon(id, label) {
   };
   openModal('modal-confirm');
 }
+
+// ============================================================
+// EXPORT / IMPORT DES DONNÉES (sauvegarde JSON)
+// ============================================================
+function exportData() {
+  const data = {
+    _meta: {
+      app: 'DERATEK',
+      version: (typeof DERATEK_CONFIG !== 'undefined' && DERATEK_CONFIG.app) ? DERATEK_CONFIG.app.version : '2.0',
+      exportedAt: new Date().toISOString()
+    },
+    drt_techs:      DB.techs,
+    drt_clients:    DB.clients,
+    drt_rapports:   DB.rapports,
+    drt_intervs:    DB.intervs,
+    drt_locataires: DB.locataires,
+    drt_bons:       DB.bons
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const date = new Date().toISOString().split('T')[0];
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `deratek-backup-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('✓ Sauvegarde téléchargée', '#2d9e6b');
+}
+
+function importData(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data._meta || data._meta.app !== 'DERATEK') {
+        if (!confirm('Ce fichier ne semble pas être une sauvegarde DERATEK officielle.\n\nImporter quand même ? (Toutes les données actuelles seront écrasées.)')) {
+          event.target.value = '';
+          return;
+        }
+      } else if (!confirm('Restaurer cette sauvegarde ?\n\n⚠️ Toutes les données actuelles seront écrasées.\nSauvegarde du : ' + (data._meta.exportedAt || '?'))) {
+        event.target.value = '';
+        return;
+      }
+      const keys = ['drt_techs','drt_clients','drt_rapports','drt_intervs','drt_locataires','drt_bons'];
+      let n = 0;
+      keys.forEach(k => {
+        if (Array.isArray(data[k])) {
+          localStorage.setItem(k, JSON.stringify(data[k]));
+          n++;
+        }
+      });
+      toast(`✓ ${n} collection(s) restaurée(s)`, '#2d9e6b');
+      if (typeof renderDashboard === 'function')  renderDashboard();
+      if (typeof renderClients === 'function')    renderClients();
+      if (typeof renderLocataires === 'function') renderLocataires();
+      if (typeof renderBons === 'function')       renderBons();
+      if (typeof renderRapports === 'function')   renderRapports();
+    } catch (err) {
+      toast("Erreur d'import : " + err.message, '#e63946');
+    } finally {
+      event.target.value = '';
+    }
+  };
+  reader.onerror = () => toast('Erreur de lecture du fichier', '#e63946');
+  reader.readAsText(file);
+}
