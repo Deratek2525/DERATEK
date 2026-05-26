@@ -69,7 +69,12 @@ function toJs(table, row) {
 const DB = {
   _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
   _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
-  _syncQueued: {},
+  _pending:    new Set(),
+  _processing: false,
+  // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
+  // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
+  // bons (qui dépendent de clients ET de locataires)
+  _syncOrder:  ['techs', 'clients', 'locataires', 'rapports', 'intervs', 'bons'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -85,12 +90,26 @@ const DB = {
   set bons(v)       { this._cache.bons = v;       this._queue('bons'); },
 
   _queue(table) {
-    if (this._syncQueued[table]) return;
-    this._syncQueued[table] = true;
-    setTimeout(() => {
-      this._syncQueued[table] = false;
-      this._sync(table).catch(e => console.warn('Sync', table, e));
-    }, 100);
+    this._pending.add(table);
+    if (this._processing) return;
+    this._processing = true;
+    setTimeout(() => this._processQueue(), 80);
+  },
+
+  async _processQueue() {
+    // Traite les tables EN SÉQUENCE selon l'ordre des dépendances FK
+    for (const t of this._syncOrder) {
+      if (this._pending.has(t)) {
+        this._pending.delete(t);
+        try { await this._sync(t); } catch (e) { console.warn('Sync', t, e); }
+      }
+    }
+    this._processing = false;
+    // Si des écritures sont arrivées pendant le traitement, on relance
+    if (this._pending.size > 0) {
+      this._processing = true;
+      setTimeout(() => this._processQueue(), 80);
+    }
   },
 
   async loadAll() {
@@ -161,6 +180,8 @@ const DB = {
   _resetCache() {
     this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
     this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
+    this._pending  = new Set();
+    this._processing = false;
   }
 };
 
