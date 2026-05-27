@@ -1943,11 +1943,15 @@ function renderBons() {
     if (!groups[key]) groups[key] = [];
     groups[key].push(b);
   });
-  // Index locataires pour lookup rapide
+  // Index locataires et clients pour lookup rapide
   const locById = {};
   (DB.locataires || []).forEach(l => { if (l && l.id) locById[l.id] = l; });
   const locByName = {};
   (DB.locataires || []).forEach(l => { if (l && l.nom) locByName[l.nom.toLowerCase()] = l; });
+  const clientById = {};
+  (DB.clients || []).forEach(c => { if (c && c.id) clientById[c.id] = c; });
+  const clientByName = {};
+  (DB.clients || []).forEach(c => { if (c && c.nom) clientByName[c.nom.toLowerCase()] = c; });
 
   list.innerHTML = Object.keys(groups).sort().map(g => {
     const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
@@ -1959,6 +1963,9 @@ function renderBons() {
             const loc = (b.locataireId && locById[b.locataireId]) || (b.locataireNom && locByName[b.locataireNom.toLowerCase()]) || null;
             const locTel     = loc ? (loc.tel || '')     : '';
             const locAdresse = loc ? (loc.adresse || '') : (b.immeuble || '');
+            const cli = (b.geranceId && clientById[b.geranceId]) || (b.geranceNom && clientByName[b.geranceNom.toLowerCase()]) || null;
+            const gerantNom = cli ? (cli.contact || '') : '';
+            const gerantTel = cli ? (cli.tel || '')     : '';
             const statut = b.statut || '';
             // Couleur de fond du select selon le statut
             const statutStyles = {
@@ -1980,6 +1987,11 @@ function renderBons() {
               <div style="flex:1;min-width:130px;">
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏢 Gérance</div>
                 <div style="font-size:12px;font-weight:600;color:var(--navy);">${g}</div>
+              </div>
+              <div style="flex:1;min-width:130px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 Gérant</div>
+                <div style="font-size:12px;">${gerantNom || '—'}</div>
+                ${gerantTel ? `<div style="font-size:11px;color:var(--g600);">📞 ${gerantTel}</div>` : ''}
               </div>
               <div style="flex:1.2;min-width:150px;">
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏠 Locataire</div>
