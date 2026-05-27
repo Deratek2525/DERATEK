@@ -2056,6 +2056,67 @@ function renderBons() {
   }).join('');
 }
 
+// Auto-remplit le locataire et la gérance dans le formulaire de rapport
+// à partir d'un numéro de bon de commande saisi
+function autoFillFromBonNumero(numero) {
+  if (!numero) return;
+  const n = String(numero).trim();
+  if (!n) return;
+  // Cherche le bon par numéro (insensible aux espaces et à la casse)
+  const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+  const target = norm(n);
+  const bon = (DB.bons || []).find(b => norm(b.numero) === target);
+  if (!bon) {
+    // Pas de toast si l'utilisateur tape progressivement — on reste silencieux
+    return;
+  }
+
+  // 1. Auto-fill du locataire
+  let locataire = null;
+  if (bon.locataireId) locataire = (DB.locataires || []).find(l => l.id === bon.locataireId);
+  if (!locataire && bon.locataireNom) {
+    const ln = bon.locataireNom.toLowerCase();
+    locataire = (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === ln);
+  }
+
+  const setVal = (id, v) => { const el = $(id); if (el && !el.value.trim()) el.value = v || ''; };
+  const setValForce = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+
+  if (locataire) {
+    // Coche la case "avec locataire" si elle existe et révèle le bloc
+    const cb = $('r-avec-locataire'); if (cb && !cb.checked) { cb.checked = true; if (typeof toggleLocataire === 'function') toggleLocataire(); }
+    const details = $('r-locataire-details'); if (details) details.style.display = 'block';
+    // Remplit les champs (force pour ne pas garder de valeurs résiduelles)
+    setValForce('r-locataire',         locataire.nom);
+    setValForce('r-locataire-tel',     locataire.tel);
+    setValForce('r-locataire-email',   locataire.email);
+    setValForce('r-locataire-adresse', locataire.adresse);
+    const hid = $('r-locataire-id'); if (hid) hid.value = locataire.id;
+  } else if (bon.locataireNom) {
+    // Pas de fiche locataire en base mais le bon a un nom — on remplit quand même le nom
+    setValForce('r-locataire', bon.locataireNom);
+  }
+
+  // 2. Auto-sélection du client (gérance) dans le select
+  if (bon.geranceId) {
+    const sel = $('r-client');
+    if (sel) {
+      const opt = Array.from(sel.options).find(o => o.value === bon.geranceId);
+      if (opt) {
+        sel.value = bon.geranceId;
+        if (typeof onClientChange === 'function') onClientChange();
+        else sel.dispatchEvent(new Event('change'));
+      }
+    }
+  }
+
+  // 3. Si le bon a un immeuble et que l'adresse du rapport est vide, on la pré-remplit
+  if (bon.immeuble) setVal('r-adresse', bon.immeuble);
+
+  toast('✓ Locataire et gérance auto-remplis depuis le bon ' + bon.numero, '#2d9e6b');
+  if (typeof updatePDF === 'function') updatePDF();
+}
+
 // Met à jour le statut d'un bon (transmis / en-cours / termine / vide)
 function updateBonStatut(id, value) {
   const bons = DB.bons;

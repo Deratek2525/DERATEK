@@ -387,7 +387,7 @@
             </div>
             <div class="form-group"><label class="form-label">Email client (pour envoi du rapport)</label><input class="form-input" id="r-email"></div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label">N° bon de commande</label><input class="form-input" id="r-bon-commande" placeholder="BC-2026-001" oninput="updatePDF()"></div>
+              <div class="form-group"><label class="form-label">N° bon de commande</label><input class="form-input" id="r-bon-commande" placeholder="BC-2026-001" oninput="updatePDF()" onchange="autoFillFromBonNumero(this.value)" onblur="autoFillFromBonNumero(this.value)"></div>
             </div>
           </div>
 
