@@ -1967,12 +1967,15 @@ function renderBons() {
             const gerantNom = cli ? (cli.contact || '') : '';
             const gerantTel = cli ? (cli.tel || '')     : '';
             const statut = b.statut || '';
-            // Couleur de fond du select selon le statut
+            // Couleur de fond du select selon le statut (ordre du workflow)
             const statutStyles = {
-              '':          { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
-              'transmis':  { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' },
-              'en-cours':  { bg: '#fed7aa', color: '#9a3412', border: '#f97316' },
-              'termine':   { bg: '#bbf7d0', color: '#166534', border: '#22c55e' },
+              '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' }, // gris
+              'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' }, // bleu
+              'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6' }, // violet
+              'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6' }, // teal
+              'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316' }, // orange
+              'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e' }, // vert
+              'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444' }, // rouge
             };
             const stStyle = statutStyles[statut] || statutStyles[''];
             return `
@@ -2009,9 +2012,12 @@ function renderBons() {
               <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                 <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
                   <option value="">— Statut —</option>
-                  <option value="transmis" ${statut === 'transmis' ? 'selected' : ''}>📨 Rapport transmis</option>
-                  <option value="en-cours" ${statut === 'en-cours' ? 'selected' : ''}>⏳ En cours de traitement</option>
-                  <option value="termine"  ${statut === 'termine'  ? 'selected' : ''}>✅ Travail terminé</option>
+                  <option value="transmis"      ${statut === 'transmis'      ? 'selected' : ''}>📨 Rapport transmis</option>
+                  <option value="attente-devis" ${statut === 'attente-devis' ? 'selected' : ''}>⏸️ Attente de devis</option>
+                  <option value="devis-valide"  ${statut === 'devis-valide'  ? 'selected' : ''}>✍️ Devis validé</option>
+                  <option value="en-cours"      ${statut === 'en-cours'      ? 'selected' : ''}>⏳ En cours de traitement</option>
+                  <option value="termine"       ${statut === 'termine'       ? 'selected' : ''}>✅ Travail terminé</option>
+                  <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
@@ -2032,10 +2038,13 @@ function updateBonStatut(id, value) {
   b.statut = value;
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
-    '':          'Statut effacé',
-    'transmis':  '📨 Statut : Rapport transmis',
-    'en-cours':  '⏳ Statut : En cours de traitement',
-    'termine':   '✅ Statut : Travail terminé',
+    '':              'Statut effacé',
+    'transmis':      '📨 Statut : Rapport transmis',
+    'attente-devis': '⏸️ Statut : Attente de devis',
+    'devis-valide':  '✍️ Statut : Devis validé',
+    'en-cours':      '⏳ Statut : En cours de traitement',
+    'termine':       '✅ Statut : Travail terminé',
+    'a-facturer':    '🧾 Statut : À facturer',
   };
   toast(labels[value] || 'Statut mis à jour', '#2d9e6b');
   renderBons();
