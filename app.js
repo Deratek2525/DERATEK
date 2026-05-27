@@ -1948,24 +1948,32 @@ function renderBons() {
     return `
       <div style="margin-top:14px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid var(--red);padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
-        <div class="clients-grid">
+        <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(b => `
-            <div class="client-card">
-              <div class="client-hd">
-                <div class="av av-md" style="background:#0d1b3e">📄</div>
-                <div class="client-info">
-                  <div class="client-name">Bon ${b.numero || '(sans n°)'}</div>
-                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <span class="badge b-gray">${fmtDate(b.date) || '—'}</span>
-                    ${b.pdfPath ? `<span style="font-size:10px;color:#2d9e6b;">📎 PDF</span>` : ''}
-                  </div>
+            <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:10px;min-width:140px;">
+                <div style="width:32px;height:32px;border-radius:50%;background:#0d1b3e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📄</div>
+                <div>
+                  <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
+                  <div style="font-size:11px;color:var(--g600);">${fmtDate(b.date) || '—'}</div>
                 </div>
-                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 Voir PDF</button>` : ''}
-                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')">🗑</button>
               </div>
-              ${b.locataireNom ? `<div class="client-contact-row">🏠 ${b.locataireNom}</div>` : ''}
-              ${b.immeuble ? `<div class="client-contact-row">📍 ${b.immeuble}</div>` : ''}
-              ${b.probleme ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${b.probleme}</div>` : ''}
+              <div style="flex:1;min-width:140px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏢 Gérance</div>
+                <div style="font-size:12px;font-weight:600;color:var(--navy);">${g}</div>
+              </div>
+              <div style="flex:1;min-width:140px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏠 Locataire</div>
+                <div style="font-size:12px;">${b.locataireNom || '—'}</div>
+              </div>
+              <div style="flex:2;min-width:200px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
+                <div style="font-size:12px;color:var(--g600);">${b.probleme || '—'}</div>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+              </div>
             </div>
           `).join('')}
         </div>
