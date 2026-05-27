@@ -1871,27 +1871,31 @@ function renderLocataires() {
         <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;border-bottom:2px solid var(--red);padding-bottom:5px;">
           🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length} locataire${items.length !== 1 ? 's' : ''})</span>
         </div>
-        <div class="clients-grid">
+        <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(({ l, dateFmt }) => `
-            <div class="client-card">
-              <div class="client-hd">
-                <div class="av av-md" style="background:#7c3aed">${initials(l.nom||'')}</div>
-                <div class="client-info">
-                  <div class="client-name">${l.nom||''}</div>
-                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <span class="badge b-gray">Locataire</span>
-                    ${dateFmt ? `<span style="font-size:10px;color:var(--g600);">📅 ${dateFmt}</span>` : ''}
-                  </div>
+            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid #7c3aed;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:10px;min-width:200px;flex:1.5;">
+                <div style="width:34px;height:34px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(l.nom||'')}</div>
+                <div>
+                  <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">${l.nom||'—'}</div>
+                  ${dateFmt ? `<div style="font-size:11px;color:var(--g600);">📅 ${dateFmt}</div>` : ''}
                 </div>
-                <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')">✏️ Modifier</button>
               </div>
-              ${l.tel ? `<div class="client-contact-row">📞 ${l.tel}</div>` : ''}
-              ${l.email ? `<div class="client-contact-row">✉️ ${l.email}</div>` : ''}
-              ${l.adresse ? `<div class="client-contact-row">📍 ${l.adresse}</div>` : ''}
-              ${(l.npa || l.ville) ? `<div class="client-contact-row">📍 ${l.npa||''} ${l.ville||''}</div>` : ''}
-              ${l.notes ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${l.notes}</div>` : ''}
-              <div class="client-actions">
-                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}')">🗑</button>
+              <div style="flex:1;min-width:140px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📞 Téléphone</div>
+                <div style="font-size:12px;">${l.tel || '—'}</div>
+              </div>
+              <div style="flex:1.2;min-width:170px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">✉️ Email</div>
+                <div style="font-size:12px;color:var(--g600);word-break:break-all;">${l.email || '—'}</div>
+              </div>
+              <div style="flex:1.8;min-width:200px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
+                <div style="font-size:12px;color:var(--g600);">${l.adresse || '—'}${(l.npa || l.ville) ? `, ${l.npa||''} ${l.ville||''}` : ''}</div>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                <button class="btn btn-ghost btn-sm" onclick="editLocataire('${l.id}')" title="Modifier">✏️ Modifier</button>
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteLocataire('${l.id}')" title="Supprimer">🗑</button>
               </div>
             </div>
           `).join('')}
