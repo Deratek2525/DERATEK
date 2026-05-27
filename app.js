@@ -1959,6 +1959,15 @@ function renderBons() {
             const loc = (b.locataireId && locById[b.locataireId]) || (b.locataireNom && locByName[b.locataireNom.toLowerCase()]) || null;
             const locTel     = loc ? (loc.tel || '')     : '';
             const locAdresse = loc ? (loc.adresse || '') : (b.immeuble || '');
+            const statut = b.statut || '';
+            // Couleur de fond du select selon le statut
+            const statutStyles = {
+              '':          { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
+              'transmis':  { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' },
+              'en-cours':  { bg: '#fed7aa', color: '#9a3412', border: '#f97316' },
+              'termine':   { bg: '#bbf7d0', color: '#166534', border: '#22c55e' },
+            };
+            const stStyle = statutStyles[statut] || statutStyles[''];
             return `
             <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
@@ -1985,7 +1994,13 @@ function renderBons() {
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
                 <div style="font-size:12px;color:var(--g600);">${b.probleme || '—'}</div>
               </div>
-              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
+                  <option value="">— Statut —</option>
+                  <option value="transmis" ${statut === 'transmis' ? 'selected' : ''}>📨 Rapport transmis</option>
+                  <option value="en-cours" ${statut === 'en-cours' ? 'selected' : ''}>⏳ En cours de traitement</option>
+                  <option value="termine"  ${statut === 'termine'  ? 'selected' : ''}>✅ Travail terminé</option>
+                </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
               </div>
@@ -1995,6 +2010,23 @@ function renderBons() {
       </div>
     `;
   }).join('');
+}
+
+// Met à jour le statut d'un bon (transmis / en-cours / termine / vide)
+function updateBonStatut(id, value) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id);
+  if (!b) return;
+  b.statut = value;
+  DB.bons = bons; // déclenche le sync Supabase
+  const labels = {
+    '':          'Statut effacé',
+    'transmis':  '📨 Statut : Rapport transmis',
+    'en-cours':  '⏳ Statut : En cours de traitement',
+    'termine':   '✅ Statut : Travail terminé',
+  };
+  toast(labels[value] || 'Statut mis à jour', '#2d9e6b');
+  renderBons();
 }
 
 function confirmDeleteBon(id, label) {
