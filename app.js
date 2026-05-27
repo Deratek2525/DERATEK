@@ -764,9 +764,11 @@ function resetRapportForm() {
   $('edit-id').textContent = newId;
   $('edit-status').className = 'badge b-gray'; $('edit-status').textContent = 'Brouillon';
   $('edit-meta').textContent = '';
-  if ($('r-avec-locataire')) $('r-avec-locataire').checked = false;
+  // Par défaut, on garde le bloc Locataire ouvert (l'utilisateur peut le fermer manuellement)
+  if ($('r-avec-locataire')) $('r-avec-locataire').checked = true;
   clearLocataireSelection();
-  if ($('bloc-locataire')) $('bloc-locataire').style.display = 'none';
+  if ($('bloc-locataire')) $('bloc-locataire').style.display = 'block';
+  const d = $('r-locataire-details'); if (d) d.style.display = 'block';
   showTab('infos'); updatePDF();
 }
 function openNewRapport() { state.editingRapportId = null; resetRapportForm(); showScreen('rapport-edit'); }

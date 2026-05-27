@@ -393,10 +393,10 @@
 
           <div class="form-block">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-              <input type="checkbox" id="r-avec-locataire" onchange="toggleLocataire()" style="width:18px;height:18px;accent-color:var(--navy);cursor:pointer;">
+              <input type="checkbox" id="r-avec-locataire" onchange="toggleLocataire()" checked style="width:18px;height:18px;accent-color:var(--navy);cursor:pointer;">
               <label for="r-avec-locataire" style="font-weight:700;font-size:14px;cursor:pointer;color:var(--navy);">Intervention avec locataire</label>
             </div>
-            <div id="bloc-locataire" style="display:none;">
+            <div id="bloc-locataire" style="display:block;">
               <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
                 <span>Locataire</span>
                 <button class="btn btn-ghost btn-xs" onclick="openNewLocataire()" type="button">+ Nouveau</button>
@@ -407,7 +407,7 @@
                 <div id="r-locataire-results" style="display:none;position:absolute;z-index:999;background:#fff;border:1.5px solid var(--navy);border-radius:8px;width:100%;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12);top:100%;left:0;"></div>
                 <input type="hidden" id="r-locataire-id">
               </div>
-              <div id="r-locataire-details" style="display:none;">
+              <div id="r-locataire-details" style="display:block;">
                 <div class="form-row">
                   <div class="form-group"><label class="form-label">Prénom Nom</label><input class="form-input" id="r-locataire" placeholder="Marie Dupont" oninput="updatePDF()"></div>
                   <div class="form-group"><label class="form-label">Téléphone locataire</label><input class="form-input" id="r-locataire-tel" placeholder="+41 79 000 00 00"></div>
