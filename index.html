@@ -347,16 +347,16 @@
         <button class="btn btn-green btn-sm" onclick="saveRapport(&#39;Envoyé&#39;)">✉️ Envoyer</button>
       </div>
     </div>
+    <div class="tabs no-print" id="rapport-tabs-bar">
+      <div class="tab active" onclick="showTab(&#39;infos&#39;)">1. Infos</div>
+      <div class="tab" onclick="showTab(&#39;nuisibles&#39;)">2. Nuisibles</div>
+      <div class="tab" onclick="showTab(&#39;observations&#39;)">3. Observations</div>
+      <div class="tab" onclick="showTab(&#39;traitement&#39;)">4. Traitement</div>
+      <div class="tab" onclick="showTab(&#39;photos&#39;)">5. Photos</div>
+      <div class="tab" onclick="showTab(&#39;conclusion&#39;)">6. Conclusion</div>
+    </div>
     <div class="rapport-shell">
       <div class="rapport-form">
-        <div class="tabs no-print">
-          <div class="tab active" onclick="showTab(&#39;infos&#39;)">1. Infos</div>
-          <div class="tab" onclick="showTab(&#39;nuisibles&#39;)">2. Nuisibles</div>
-          <div class="tab" onclick="showTab(&#39;observations&#39;)">3. Observations</div>
-          <div class="tab" onclick="showTab(&#39;traitement&#39;)">4. Traitement</div>
-          <div class="tab" onclick="showTab(&#39;photos&#39;)">5. Photos</div>
-          <div class="tab" onclick="showTab(&#39;conclusion&#39;)">6. Conclusion</div>
-        </div>
 
         <!-- TAB 1: INFOS -->
         <div id="tab-infos" class="tab-content active">
