@@ -576,34 +576,56 @@ function renderClients() {
     return;
   }
   const rapports = DB.rapports;
+  // L'élément #clients-grid a la classe CSS .clients-grid : on l'annule pour empiler les rubans
+  grid.style.display = 'block';
   grid.innerHTML = list.map(c => {
     const nb = rapports.filter(r => r.clientId === c.id).length;
     const totalCA = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
-    return `<div class="client-card">
-      <div class="client-hd">
-        <div class="av av-md" style="background:${colorType(c.type)}">${initials(c.nom)}</div>
-        <div class="client-info">
-          <div class="client-name">${c.nom}</div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <span class="badge b-gray">${c.type}</span>
+    const typeColor = colorType(c.type);
+    const adresseFmt = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return `
+    <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${typeColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;min-width:200px;flex:1.5;">
+        <div style="width:34px;height:34px;border-radius:50%;background:${typeColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(c.nom)}</div>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">${c.nom}</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px;">
+            <span class="badge b-gray" style="background:${typeColor}22;color:${typeColor};">${c.type}</span>
             ${c.num ? `<span style="font-size:10px;color:var(--g400);">${c.num}</span>` : ''}
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')">✏️ Modifier</button>
       </div>
-      ${c.contact ? `<div class="client-contact-row" style="font-weight:700;color:var(--navy);">👤 ${c.contact}</div>` : ''}
-      ${c.tel ? `<div class="client-contact-row">📞 ${c.tel}</div>` : ''}
-      ${c.email ? `<div class="client-contact-row">✉️ ${c.email}</div>` : ''}
-      ${c.ville ? `<div class="client-contact-row">📍 ${c.npa||''} ${c.ville}</div>` : ''}
-      ${c.notes ? `<div style="font-size:11px;color:var(--g600);background:var(--g50);padding:7px 9px;border-radius:6px;margin:8px 0;">${c.notes}</div>` : ''}
-      <div class="client-stats">
-        <div class="cs-box"><div class="cs-val">${nb}</div><div class="cs-lbl">Rapports</div></div>
-        <div class="cs-box"><div class="cs-val" style="color:var(--green);font-size:14px;">${totalCA.toFixed(0)}</div><div class="cs-lbl">CHF facturés</div></div>
-        <div class="cs-box"><div class="cs-val">${c.tarif||'—'}</div><div class="cs-lbl">CHF/h</div></div>
+      <div style="flex:1.2;min-width:140px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 Contact</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);">${c.contact || '—'}</div>
+        ${c.tel ? `<div style="font-size:11px;color:var(--g600);">📞 ${c.tel}</div>` : ''}
       </div>
-      <div class="client-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openNewRapportForClient('${c.id}')">+ Rapport</button>
-        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteClient('${c.id}','${c.nom.replace(/'/g,"\\'")}')">🗑</button>
+      <div style="flex:1.2;min-width:170px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">✉️ Email</div>
+        <div style="font-size:12px;color:var(--g600);word-break:break-all;">${c.email || '—'}</div>
+      </div>
+      <div style="flex:1.5;min-width:180px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
+        <div style="font-size:12px;color:var(--g600);">${adresseFmt || '—'}</div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;min-width:170px;border-left:1px solid #f0f0f0;padding-left:12px;">
+        <div style="text-align:center;">
+          <div style="font-size:16px;font-weight:800;color:var(--navy);line-height:1;">${nb}</div>
+          <div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.3px;">Rapports</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:14px;font-weight:800;color:#2d9e6b;line-height:1;">${totalCA.toFixed(0)}</div>
+          <div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.3px;">CHF facturés</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:14px;font-weight:800;color:var(--navy);line-height:1;">${c.tarif||'—'}</div>
+          <div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.3px;">CHF/h</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="openNewRapportForClient('${c.id}')" title="Nouveau rapport">+ Rapport</button>
+        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteClient('${c.id}','${c.nom.replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
       </div>
     </div>`;
   }).join('');
