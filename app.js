@@ -2094,6 +2094,7 @@ function renderBons() {
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
+                <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
               </div>
             </div>
@@ -2369,15 +2370,16 @@ function _calcTotaux(lignes, tvaTaux) {
 // --- État de l'éditeur de devis en cours ---
 let _editingDoc = null;
 
-// Crée un devis pré-rempli depuis un bon « à facturer »
-function createDevisFromBon(bonId) {
+// Crée un devis OU une facture pré-rempli depuis un bon
+function createDocFromBon(bonId, type) {
+  type = type || 'devis';
   const bon = (DB.bons || []).find(b => b.id === bonId);
   if (!bon) { toast('Bon introuvable', '#e63946'); return; }
   const cli = bon.geranceId ? (DB.clients || []).find(c => c.id === bon.geranceId) : null;
   _editingDoc = {
     id: newId(),
-    type: 'devis',
-    numero: _nextDocNumero('devis'),
+    type: type,
+    numero: _nextDocNumero(type),
     dateDoc: today(),
     clientId: bon.geranceId || '',
     clientNom: bon.geranceNom || (cli ? cli.nom : ''),
@@ -2395,16 +2397,35 @@ function createDevisFromBon(bonId) {
   };
   openDocEditor();
 }
+// Raccourcis depuis un bon
+function createDevisFromBon(bonId)   { createDocFromBon(bonId, 'devis'); }
+function createFactureFromBon(bonId) { createDocFromBon(bonId, 'facture'); }
 
-// Nouveau devis vierge
-function openNewDevis() {
+// Nouveau document vierge (devis ou facture)
+function openNewDoc(type) {
+  type = type || 'devis';
   _editingDoc = {
-    id: newId(), type: 'devis', numero: _nextDocNumero('devis'),
+    id: newId(), type: type, numero: _nextDocNumero(type),
     dateDoc: today(), clientId: '', clientNom: '', clientAdresse: '', clientNpa: '', clientVille: '',
     locataireNom: '', bonId: '', lignes: [{ desc: '', qte: 1, prix: 0 }],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, statut: 'brouillon', notes: ''
   };
   openDocEditor();
+}
+function openNewDevis()   { openNewDoc('devis'); }
+function openNewFacture() { openNewDoc('facture'); }
+
+// Sélection d'un client dans le dropdown de l'éditeur → pré-remplit les coordonnées
+function onDocClientSelect(clientId) {
+  if (!_editingDoc) return;
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) { _editingDoc.clientId = ''; return; }
+  _editingDoc.clientId = c.id;
+  _editingDoc.clientNom = c.nom || '';
+  _editingDoc.clientAdresse = c.adresse || '';
+  _editingDoc.clientNpa = c.npa || '';
+  _editingDoc.clientVille = c.ville || '';
+  renderDocEditor();
 }
 
 // Édite un document existant
@@ -2441,7 +2462,13 @@ function renderDocEditor() {
   if (!box) return;
   box.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div class="form-group"><label class="form-label">Client (gérance)</label><input class="form-input" id="doc-client" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Client (gérance)</label>
+        <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
+          <option value="">-- Choisir un client --</option>
+          ${(DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}${c.type?' ('+c.type+')':''}</option>`).join('')}
+        </select>
+        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou saisir un nom manuellement" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">
+      </div>
       <div class="form-group"><label class="form-label">Locataire concerné</label><input class="form-input" id="doc-loc" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireNom=this.value"></div>
       <div class="form-group"><label class="form-label">Adresse client</label><input class="form-input" value="${(d.clientAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientAdresse=this.value"></div>
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
