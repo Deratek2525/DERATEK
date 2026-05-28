@@ -2420,6 +2420,30 @@ function openNewDoc(type) {
 function openNewDevis()   { openNewDoc('devis'); }
 function openNewFacture() { openNewDoc('facture'); }
 
+// Remplit le document à partir d'un n° de bon saisi dans l'éditeur
+function autoFillDocFromBon(numero) {
+  if (!_editingDoc || !numero) return;
+  const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+  const target = norm(numero);
+  const bon = (DB.bons || []).find(b => norm(b.numero) === target);
+  _editingDoc._bonNumeroSaisi = numero;
+  if (!bon) { toast('Aucun bon trouvé avec ce numéro', '#e63946'); return; }
+  const cli = bon.geranceId ? (DB.clients || []).find(c => c.id === bon.geranceId) : null;
+  _editingDoc.bonId = bon.id;
+  _editingDoc.clientId = bon.geranceId || '';
+  _editingDoc.clientNom = bon.geranceNom || (cli ? cli.nom : '');
+  _editingDoc.clientAdresse = cli ? (cli.adresse || '') : '';
+  _editingDoc.clientNpa = cli ? (cli.npa || '') : '';
+  _editingDoc.clientVille = cli ? (cli.ville || '') : '';
+  _editingDoc.locataireNom = bon.locataireNom || '';
+  // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
+  if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
+    _editingDoc.lignes[0].desc = bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles';
+  }
+  toast('✓ Rempli depuis le bon ' + bon.numero + ' (' + (_editingDoc.clientNom||'') + ')', '#2d9e6b');
+  renderDocEditor();
+}
+
 // Sélection d'un client dans le dropdown de l'éditeur → pré-remplit les coordonnées
 function onDocClientSelect(clientId) {
   if (!_editingDoc) return;
@@ -2480,6 +2504,7 @@ function renderDocEditor() {
         <div class="form-group"><label class="form-label">NPA</label><input class="form-input" value="${(d.clientNpa||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNpa=this.value"></div>
         <div class="form-group"><label class="form-label">Ville</label><input class="form-input" value="${(d.clientVille||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientVille=this.value"></div>
       </div>
+      <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" id="doc-bon-numero" value="${(d._bonNumeroSaisi||'').replace(/"/g,'&quot;')}" placeholder="Tape le n° du bon puis Entrée" onchange="autoFillDocFromBon(this.value)" onblur="autoFillDocFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDoc.dateDoc=this.value"></div>
       <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="_editingDoc.tvaTaux=parseFloat(this.value)||0;renderDocEditor()"></div>
     </div>
@@ -2545,9 +2570,12 @@ function saveDoc() {
   _editingDoc.sousTotal = t.sousTotal;
   _editingDoc.tvaMontant = t.tvaMontant;
   _editingDoc.total = t.total;
+  // Retire les champs transitoires d'UI avant sauvegarde
+  const toSave = JSON.parse(JSON.stringify(_editingDoc));
+  delete toSave._bonNumeroSaisi;
   const docs = DB.documents;
-  const i = docs.findIndex(x => x.id === _editingDoc.id);
-  if (i >= 0) docs[i] = _editingDoc; else docs.push(_editingDoc);
+  const i = docs.findIndex(x => x.id === toSave.id);
+  if (i >= 0) docs[i] = toSave; else docs.push(toSave);
   DB.documents = docs;
   toast('✓ ' + (_editingDoc.type === 'facture' ? 'Facture' : 'Devis') + ' enregistré', '#2d9e6b');
   closeModal('modal-doc');
@@ -2731,6 +2759,13 @@ function downloadDocPDF(id) {
     const debtLines = (d.clientNom || '').trim()
       ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
       : null;
+
+    // Conditions de paiement, juste au-dessus de la ligne pointillée
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
+    doc.text('Condition de paiement : 30 jours net.', 20, billTop - 11);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+    doc.text('Veuillez utiliser le bulletin de versement ci-dessous pour le paiement.', 20, billTop - 6);
+    doc.setTextColor(0);
 
     // Lignes de découpe
     doc.setLineWidth(0.2); doc.setDrawColor(120); doc.setLineDashPattern([1.4, 1], 0);
