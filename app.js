@@ -42,6 +42,7 @@ const TABLE_FIELDS = {
     bonCommande: 'bon_commande', rdvHeure: 'rdv_heure',
   } },
   techs:      { js2db: {} },
+  prestations:{ js2db: {} },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
@@ -77,14 +78,14 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] },
   _pending:    new Set(),
   _processing: false,
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
   // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
-  _syncOrder:  ['techs', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents'],
+  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -100,6 +101,8 @@ const DB = {
   set bons(v)       { this._cache.bons = v;       this._queue('bons'); },
   get documents()   { return this._cache.documents; },
   set documents(v)  { this._cache.documents = v;  this._queue('documents'); },
+  get prestations() { return this._cache.prestations; },
+  set prestations(v){ this._cache.prestations = v; this._queue('prestations'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -126,7 +129,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -190,8 +193,8 @@ const DB = {
   },
 
   _resetCache() {
-    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] };
-    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] };
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] };
     this._pending  = new Set();
     this._processing = false;
   }
@@ -2492,19 +2495,76 @@ function openDocEditor() {
   openModal('modal-doc');
 }
 
+// Prestations par défaut (toujours proposées dans le menu déroulant)
+const DEFAULT_PRESTATIONS = [
+  { libelle: 'Main-d\'œuvre', prix: 0 },
+  { libelle: 'Matériel', prix: 0 },
+  { libelle: 'Traitement d\'un nid de guêpes dans un caisson de store', prix: 0 },
+  { libelle: 'Traitement d\'un nid de guêpes en toiture', prix: 0 },
+  { libelle: 'Traitement contre les fouines', prix: 0 },
+  { libelle: 'Traitement dératisation', prix: 0 },
+];
+// Liste fusionnée : défauts + prestations ajoutées par l'utilisateur (sans doublon)
+function getAllPrestations() {
+  const custom = DB.prestations || [];
+  const seen = new Set();
+  const out = [];
+  custom.concat(DEFAULT_PRESTATIONS).forEach(p => {
+    const key = (p.libelle || '').toLowerCase().trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
+  });
+  return out.sort((a, b) => (a.libelle||'').localeCompare(b.libelle||''));
+}
+// Sélection d'une prestation modèle → remplit la description (et le prix si défini)
+function onLignePresta(i, libelle) {
+  if (!libelle || !_editingDoc || !_editingDoc.lignes[i]) return;
+  _editingDoc.lignes[i].desc = libelle;
+  const p = getAllPrestations().find(x => x.libelle === libelle);
+  if (p && parseFloat(p.prix) > 0) _editingDoc.lignes[i].prix = parseFloat(p.prix);
+  renderDocEditor();
+}
+// Enregistre la description (et le prix) d'une ligne comme nouvelle prestation modèle
+function addPrestaModel(i) {
+  if (!_editingDoc || !_editingDoc.lignes[i]) return;
+  const desc = (_editingDoc.lignes[i].desc || '').trim();
+  if (!desc) { toast('Écris d\'abord une description', '#e63946'); return; }
+  const prix = parseFloat(_editingDoc.lignes[i].prix) || 0;
+  const all = getAllPrestations();
+  if (all.some(p => (p.libelle||'').toLowerCase() === desc.toLowerCase())) {
+    toast('Cette prestation existe déjà dans les modèles', '#f4a623'); return;
+  }
+  const list = DB.prestations;
+  list.push({ id: newId(), libelle: desc, prix: prix });
+  DB.prestations = list;
+  toast('✓ Prestation ajoutée aux modèles', '#2d9e6b');
+  renderDocEditor();
+}
+
 // Rendu de l'éditeur (lignes + totaux)
 function renderDocEditor() {
   const d = _editingDoc;
   if (!d) return;
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
   const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
+  const prestaOpts = getAllPrestations().map(p => `<option value="${(p.libelle||'').replace(/"/g,'&quot;')}">${(p.libelle||'').replace(/</g,'&lt;')}</option>`).join('');
   const lignesHtml = d.lignes.map((l, i) => `
     <tr>
-      <td style="padding:3px;"><input class="form-input" style="font-size:12px;" value="${(l.desc||'').replace(/"/g,'&quot;')}" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description"></td>
-      <td style="padding:3px;width:70px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
-      <td style="padding:3px;width:100px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
-      <td id="lt-${i}" style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
-      <td style="padding:3px;width:32px;text-align:center;"><button class="btn btn-red btn-xs" onclick="removeDocLigne(${i})" title="Supprimer la ligne">✕</button></td>
+      <td style="padding:3px;">
+        <select onchange="onLignePresta(${i}, this.value)" style="font-size:11px;width:100%;margin-bottom:3px;border-radius:4px;border:1px solid #ddd;padding:3px;color:var(--g600);">
+          <option value="">＋ Choisir une prestation modèle…</option>
+          ${prestaOpts}
+        </select>
+        <input class="form-input" style="font-size:12px;" value="${(l.desc||'').replace(/"/g,'&quot;')}" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description libre">
+      </td>
+      <td style="padding:3px;width:70px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
+      <td style="padding:3px;width:100px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
+      <td id="lt-${i}" style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;vertical-align:top;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
+      <td style="padding:3px;width:54px;text-align:center;vertical-align:top;">
+        <button class="btn btn-ghost btn-xs" onclick="addPrestaModel(${i})" title="Enregistrer cette description comme modèle">💾</button>
+        <button class="btn btn-red btn-xs" onclick="removeDocLigne(${i})" title="Supprimer la ligne">✕</button>
+      </td>
     </tr>
   `).join('');
   const box = $('modal-doc-body');
