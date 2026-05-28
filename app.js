@@ -2717,12 +2717,16 @@ function downloadDocPDF(id) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(13, 27, 62);
   doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 92);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(80);
-  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, 99);
-  if (d.locataireNom) doc.text('Concerne : ' + d.locataireNom, 20, 104);
+  let infoY = 99;
+  // N° de bon de travail lié (sous le titre), si dispo
+  const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+  if (bonLie && bonLie.numero) { doc.text('Bon de travail N° ' + bonLie.numero, 20, infoY); infoY += 5; }
+  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, infoY); infoY += 5;
+  if (d.locataireNom) { doc.text('Concerne : ' + d.locataireNom, 20, infoY); infoY += 5; }
   doc.setTextColor(0);
 
   // Tableau des lignes
-  let ty = 116;
+  let ty = Math.max(116, infoY + 8);
   doc.setFillColor(13, 27, 62); doc.rect(20, ty - 5, 170, 7, 'F');
   doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
   doc.text('Description', 22, ty); doc.text('Qté', 130, ty, {align:'right'}); doc.text('Prix', 155, ty, {align:'right'}); doc.text('Total', 188, ty, {align:'right'});
