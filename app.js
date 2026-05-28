@@ -2405,6 +2405,7 @@ function createDocFromBon(bonId, type) {
     clientVille: cli ? (cli.ville || '') : '',
     locataireNom: bon.locataireNom || '',
     locataireAdresse: loc ? (loc.adresse || '') : '',
+    proprietaire: bon.proprietaire || '',
     bonId: bon.id,
     lignes: [
       { desc: bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles', qte: 1, prix: 0 }
@@ -2453,6 +2454,7 @@ function autoFillDocFromBon(numero) {
   const locAf = bon.locataireId ? (DB.locataires || []).find(l => l.id === bon.locataireId)
             : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
   _editingDoc.locataireAdresse = locAf ? (locAf.adresse || '') : '';
+  _editingDoc.proprietaire = bon.proprietaire || '';
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
     _editingDoc.lignes[0].desc = bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles';
@@ -2517,6 +2519,7 @@ function renderDocEditor() {
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou saisir un nom manuellement" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">
       </div>
       <div class="form-group"><label class="form-label">Locataire concerné</label><input class="form-input" id="doc-loc" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Propriétaire (destinataire)</label><input class="form-input" value="${(d.proprietaire||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.proprietaire=this.value" placeholder="Ex. Monsieur Aldo Brauen"></div>
       <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Adresse du locataire</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireAdresse=this.value" placeholder="Rue, étage, NPA ville"></div>
       <div class="form-group"><label class="form-label">Adresse client</label><input class="form-input" value="${(d.clientAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientAdresse=this.value"></div>
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
@@ -2731,10 +2734,16 @@ function downloadDocPDF(id) {
   doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
+  // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11.5);
   let dy = 62;
-  const destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
-  destLines.forEach(l => { doc.text(String(l), 120, dy); dy += 5.2; });
+  let destLines;
+  if ((d.proprietaire || '').trim()) {
+    destLines = [d.proprietaire, 'p.a. ' + (d.clientNom || ''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
+  } else {
+    destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
+  }
+  destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
   // Titre du document
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(13, 27, 62);
@@ -2787,12 +2796,14 @@ function downloadDocPDF(id) {
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
-    const debtor = { nom: d.clientNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
+    // Débiteur du QR : propriétaire si présent, payable à l'adresse de la gérance
+    const debtorNom = (d.proprietaire || '').trim() ? d.proprietaire : d.clientNom;
+    const debtor = { nom: debtorNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
     const payload = _buildSpcPayload(t.total, message, debtor);
     const qrUrl = _makeQrDataUrl(payload);
-    const debtLines = (d.clientNom || '').trim()
-      ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
-      : null;
+    const debtLines = (d.proprietaire || '').trim()
+      ? [d.proprietaire, 'p.a. ' + (d.clientNom||''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
+      : ((d.clientNom || '').trim() ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean) : null);
 
     // Conditions de paiement, juste au-dessus de la ligne pointillée
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
