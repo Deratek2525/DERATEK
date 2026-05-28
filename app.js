@@ -32,6 +32,7 @@ const TABLE_FIELDS = {
     date: 'date_bon',
     geranceId: 'gerance_id', geranceNom: 'gerance_nom',
     locataireId: 'locataire_id', locataireNom: 'locataire_nom',
+    gerantNom: 'gerant_nom', gerantTel: 'gerant_tel', gerantEmail: 'gerant_email',
     contactSurPlace: 'contact_sur_place',
     createdAt: 'created_at',
     pdfPath: 'pdf_path',
@@ -1830,6 +1831,9 @@ async function bonConfirmSave() {
     date:         infos.date_bon,
     geranceId:    gerance   ? gerance.id   : '',
     geranceNom:   gerance   ? gerance.nom  : infos.gerance_nom,
+    gerantNom:    infos.gerant_nom   || '',
+    gerantTel:    infos.gerant_tel   || '',
+    gerantEmail:  infos.gerant_email || '',
     locataireId:  locataire ? locataire.id : '',
     locataireNom: locataire ? locataire.nom : infos.locataire_nom,
     immeuble:        infos.immeuble,
@@ -2021,8 +2025,10 @@ function renderBons() {
             const locTel     = loc ? (loc.tel || '')     : '';
             const locAdresse = loc ? (loc.adresse || '') : (b.immeuble || '');
             const cli = (b.geranceId && clientById[b.geranceId]) || (b.geranceNom && clientByName[b.geranceNom.toLowerCase()]) || null;
-            const gerantNom = cli ? (cli.contact || '') : '';
-            const gerantTel = cli ? (cli.tel || '')     : '';
+            // Priorité aux infos gérant stockées sur le bon (chaque bon peut avoir son propre gérant)
+            // Fallback sur les infos du client si le bon ne les a pas
+            const gerantNom = b.gerantNom || (cli ? (cli.contact || '') : '');
+            const gerantTel = b.gerantTel || (cli ? (cli.tel || '')     : '');
             const statut = b.statut || '';
             // Couleur de fond du select selon le statut (ordre du workflow)
             const statutStyles = {
