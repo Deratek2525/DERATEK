@@ -2503,7 +2503,7 @@ function renderDocEditor() {
       <td style="padding:3px;"><input class="form-input" style="font-size:12px;" value="${(l.desc||'').replace(/"/g,'&quot;')}" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description"></td>
       <td style="padding:3px;width:70px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
       <td style="padding:3px;width:100px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
-      <td style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
+      <td id="lt-${i}" style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
       <td style="padding:3px;width:32px;text-align:center;"><button class="btn btn-red btn-xs" onclick="removeDocLigne(${i})" title="Supprimer la ligne">✕</button></td>
     </tr>
   `).join('');
@@ -2539,13 +2539,7 @@ function renderDocEditor() {
       <tbody>${lignesHtml}</tbody>
     </table>
     <button class="btn btn-ghost btn-sm" onclick="addDocLigne()" style="margin-top:8px;">+ Ajouter une ligne</button>
-    <div style="margin-top:14px;margin-left:auto;width:280px;font-size:13px;">
-      <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Sous-total HT</span><b>${_displayMontant(t.sousTotal)} CHF</b></div>
-      ${(d.rabais||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Rabais ${d.rabais}%</span><span>− ${_displayMontant(t.rabaisMontant)} CHF</span></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Net HT</span><b>${_displayMontant(t.net)} CHF</b></div>` : ''}
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--g600);"><span>TVA ${d.tvaTaux}%</span><span>${_displayMontant(t.tvaMontant)} CHF</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>
-    </div>
+    <div id="doc-summary" style="margin-top:14px;margin-left:auto;width:280px;font-size:13px;">${_docSummaryHtml(t, d)}</div>
     <div class="form-group" style="margin-top:10px;"><label class="form-label">Notes / conditions</label><textarea class="form-input" rows="2" oninput="_editingDoc.notes=this.value">${d.notes||''}</textarea></div>
     ${d.type === 'facture' ? `
       <div style="margin-top:14px;border-top:1px dashed #ccc;padding-top:12px;">
@@ -2576,14 +2570,39 @@ function renderDocEditor() {
   }
 }
 
+// HTML du bloc récapitulatif des totaux
+function _docSummaryHtml(t, d) {
+  return `
+    <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Sous-total HT</span><b>${_displayMontant(t.sousTotal)} CHF</b></div>
+    ${(d.rabais||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Rabais ${d.rabais}%</span><span>− ${_displayMontant(t.rabaisMontant)} CHF</span></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Net HT</span><b>${_displayMontant(t.net)} CHF</b></div>` : ''}
+    <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--g600);"><span>TVA ${d.tvaTaux}%</span><span>${_displayMontant(t.tvaMontant)} CHF</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>`;
+}
+
+// Mise à jour d'une ligne SANS re-render complet (évite la perte de focus à la frappe)
 function updateDocLigne(i, field, val) {
   if (!_editingDoc || !_editingDoc.lignes[i]) return;
   _editingDoc.lignes[i][field] = (field === 'desc') ? val : (parseFloat(val) || 0);
-  // Recalcul des totaux uniquement (pas de re-render complet pour ne pas perdre le focus)
-  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux);
-  // Mise à jour légère via re-render différé
-  clearTimeout(window._docCalcTimer);
-  window._docCalcTimer = setTimeout(renderDocEditor, 600);
+  // La description n'affecte pas les montants → rien d'autre à faire
+  if (field === 'desc') return;
+  // Pour qté/prix : mettre à jour uniquement la cellule total de la ligne + le récapitulatif
+  const l = _editingDoc.lignes[i];
+  const cell = $('lt-' + i);
+  if (cell) cell.textContent = _displayMontant((parseFloat(l.qte)||0) * (parseFloat(l.prix)||0));
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais);
+  const sum = $('doc-summary');
+  if (sum) sum.innerHTML = _docSummaryHtml(t, _editingDoc);
+  // Met à jour aussi l'aperçu QR (facture) sans reconstruire les champs
+  if (_editingDoc.type === 'facture') {
+    try {
+      const debtorNom = (_editingDoc.proprietaire||'').trim() ? _editingDoc.proprietaire : _editingDoc.clientNom;
+      const payload = _buildSpcPayload(t.total, 'Facture ' + (_editingDoc.numero||''), { nom: debtorNom, rue: _editingDoc.clientAdresse, npa: _editingDoc.clientNpa, ville: _editingDoc.clientVille });
+      const url = _makeQrDataUrl(payload);
+      const prev = $('doc-qr-preview');
+      if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
+    } catch (e) {}
+  }
 }
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
