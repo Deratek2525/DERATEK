@@ -42,7 +42,7 @@ const TABLE_FIELDS = {
     bonCommande: 'bon_commande', rdvHeure: 'rdv_heure',
   } },
   techs:      { js2db: {} },
-  intervs:    { js2db: {} },
+  intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
