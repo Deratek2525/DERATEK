@@ -216,6 +216,35 @@ const fmtDate = d => { if (!d) return '—'; try { const [y,m,dd] = d.split('-')
 const today = () => new Date().toISOString().split('T')[0];
 const genId = () => `R-${new Date().getFullYear()}-${String(DB.rapports.length + 420).padStart(4,'0')}`;
 const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Entreprise:'#e63946'}[t] || '#6b7280');
+// Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
+const GERANCE_PALETTE = [
+  '#3b82f6', // bleu
+  '#ef4444', // rouge
+  '#10b981', // vert
+  '#f59e0b', // ambre
+  '#8b5cf6', // violet
+  '#ec4899', // rose
+  '#14b8a6', // teal
+  '#f97316', // orange
+  '#6366f1', // indigo
+  '#84cc16', // lime
+  '#0ea5e9', // ciel
+  '#d946ef'  // magenta
+];
+function colorForClient(c) {
+  if (!c) return '#6b7280';
+  // Les non-gérances gardent la couleur définie par leur type
+  if (c.type !== 'Gérance') return colorType(c.type);
+  // Pour les gérances : couleur déterministe basée sur le nom (chaque gérance a SA couleur)
+  // Hash FNV-1a 32-bit pour une meilleure distribution
+  const key = String(c.nom || c.id || '').toLowerCase();
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return GERANCE_PALETTE[hash % GERANCE_PALETTE.length];
+}
 const badgeCls = s => ({Brouillon:'b-gray',Envoyé:'b-green',Finalisé:'b-blue',Terminée:'b-green','En cours':'b-blue',Planifiée:'b-gray',Urgent:'b-red',Annulée:'b-gray'}[s] || 'b-gray');
 const initials = nom => nom.split(' ').filter(w => w.length > 1).slice(0,2).map(w => w[0].toUpperCase()).join('') || nom.slice(0,2).toUpperCase();
 
@@ -581,7 +610,7 @@ function renderClients() {
   grid.innerHTML = list.map(c => {
     const nb = rapports.filter(r => r.clientId === c.id).length;
     const totalCA = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
-    const typeColor = colorType(c.type);
+    const typeColor = colorForClient(c);
     const adresseFmt = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     return `
     <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${typeColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
