@@ -2301,7 +2301,8 @@ function _displayMontant(a) {
 }
 
 // Construit le payload SPC 0200 (Swiss QR Code), refType NON (IBAN classique)
-function _buildSpcPayload(montant, message) {
+// debtor = { nom, rue, npa, ville } (le client payeur) — optionnel
+function _buildSpcPayload(montant, message, debtor) {
   const co = DERATEK_CONFIG.company;
   const lines = [];
   lines.push('SPC');                 // QRType
@@ -2315,8 +2316,12 @@ function _buildSpcPayload(montant, message) {
   // Montant + devise
   lines.push(_fmtMontant(montant));
   lines.push(co.devise || 'CHF');
-  // Débiteur (vide — on laisse le client le remplir, ou on pourrait mettre le destinataire)
-  lines.push('', '', '', '', '', '', '');
+  // Débiteur (le client payeur) — type structuré si présent
+  if (debtor && (debtor.nom || '').trim()) {
+    lines.push('S', debtor.nom || '', debtor.rue || '', '', debtor.npa || '', debtor.ville || '', 'CH');
+  } else {
+    lines.push('', '', '', '', '', '', '');
+  }
   // Référence
   lines.push('NON');                 // pas de référence structurée
   lines.push('');
@@ -2492,8 +2497,33 @@ function renderDocEditor() {
       <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>
     </div>
     <div class="form-group" style="margin-top:10px;"><label class="form-label">Notes / conditions</label><textarea class="form-input" rows="2" oninput="_editingDoc.notes=this.value">${d.notes||''}</textarea></div>
+    ${d.type === 'facture' ? `
+      <div style="margin-top:14px;border-top:1px dashed #ccc;padding-top:12px;">
+        <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🇨🇭 Aperçu QR-facture</div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+          <div id="doc-qr-preview" style="width:120px;height:120px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;display:flex;align-items:center;justify-content:center;"></div>
+          <div style="font-size:11px;color:var(--g600);line-height:1.6;">
+            <div><b>Créancier :</b> ${DERATEK_CONFIG.company.nom} — ${_displayIban(DERATEK_CONFIG.company.iban)}</div>
+            <div><b>Payable par :</b> ${d.clientNom || '(client non défini)'}</div>
+            <div><b>Montant :</b> ${_displayMontant(t.total)} CHF</div>
+            <div><b>Communication :</b> Facture ${d.numero || ''}</div>
+            <div style="color:var(--g400);margin-top:4px;">Le QR-bill complet sera dans le PDF (bouton « 📥 PDF »).</div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
   `;
   const title = $('modal-doc-title'); if (title) title.textContent = titre;
+  // Génère l'aperçu QR pour les factures
+  if (d.type === 'facture') {
+    try {
+      const debtor = { nom: d.clientNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
+      const payload = _buildSpcPayload(t.total, 'Facture ' + (d.numero || ''), debtor);
+      const url = _makeQrDataUrl(payload);
+      const prev = $('doc-qr-preview');
+      if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
+    } catch (e) { console.warn('QR preview', e); }
+  }
 }
 
 function updateDocLigne(i, field, val) {
@@ -2687,8 +2717,12 @@ function downloadDocPDF(id) {
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
-    const payload = _buildSpcPayload(t.total, message);
+    const debtor = { nom: d.clientNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
+    const payload = _buildSpcPayload(t.total, message, debtor);
     const qrUrl = _makeQrDataUrl(payload);
+    const debtLines = (d.clientNom || '').trim()
+      ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
+      : null;
 
     // Lignes de découpe
     doc.setLineWidth(0.2); doc.setDrawColor(120); doc.setLineDashPattern([1.4, 1], 0);
@@ -2710,7 +2744,8 @@ function downloadDocPDF(id) {
     let y = billTop + 7;
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Récépissé', padX, y); y += 8;
     y = L('Compte / Payable à', padX, y); y = V(credLines, padX, y, 7, recW-padX-4) + 1.5;
-    y = L('Payable par', padX, y); y += 6;
+    y = L('Payable par', padX, y);
+    if (debtLines) y = V(debtLines, padX, y, 7, recW-padX-4) + 1.5; else y += 6;
     const amountY = 255;
     L('Monnaie', padX, amountY); L('Montant', padX+18, amountY);
     V([co.devise||'CHF'], padX, amountY+3.6, 8); V([amountDisp], padX+18, amountY+3.6, 8);
@@ -2733,6 +2768,7 @@ function downloadDocPDF(id) {
     iy = L('Compte / Payable à', ix, iy); iy = V(credLines, ix, iy, 9, infoW) + 2;
     iy += 2.5; iy = L('Informations supplémentaires', ix, iy); iy = V([message], ix, iy, 9, infoW) + 2;
     iy += 2.5; iy = L('Payable par', ix, iy);
+    if (debtLines) iy = V(debtLines, ix, iy, 9, infoW) + 2;
   }
 
   const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
