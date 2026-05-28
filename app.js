@@ -46,7 +46,7 @@ const TABLE_FIELDS = {
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
-    locataireNom: 'locataire_nom', bonId: 'bon_id',
+    locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse', bonId: 'bon_id',
     sousTotal: 'sous_total', tvaTaux: 'tva_taux', tvaMontant: 'tva_montant',
     rabaisMontant: 'rabais_montant',
     devisId: 'devis_id',
@@ -2391,6 +2391,8 @@ function createDocFromBon(bonId, type) {
   const bon = (DB.bons || []).find(b => b.id === bonId);
   if (!bon) { toast('Bon introuvable', '#e63946'); return; }
   const cli = bon.geranceId ? (DB.clients || []).find(c => c.id === bon.geranceId) : null;
+  const loc = bon.locataireId ? (DB.locataires || []).find(l => l.id === bon.locataireId)
+            : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
   _editingDoc = {
     id: newId(),
     type: type,
@@ -2402,6 +2404,7 @@ function createDocFromBon(bonId, type) {
     clientNpa: cli ? (cli.npa || '') : '',
     clientVille: cli ? (cli.ville || '') : '',
     locataireNom: bon.locataireNom || '',
+    locataireAdresse: loc ? (loc.adresse || '') : '',
     bonId: bon.id,
     lignes: [
       { desc: bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles', qte: 1, prix: 0 }
@@ -2447,6 +2450,9 @@ function autoFillDocFromBon(numero) {
   _editingDoc.clientNpa = cli ? (cli.npa || '') : '';
   _editingDoc.clientVille = cli ? (cli.ville || '') : '';
   _editingDoc.locataireNom = bon.locataireNom || '';
+  const locAf = bon.locataireId ? (DB.locataires || []).find(l => l.id === bon.locataireId)
+            : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
+  _editingDoc.locataireAdresse = locAf ? (locAf.adresse || '') : '';
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
     _editingDoc.lignes[0].desc = bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles';
@@ -2511,6 +2517,7 @@ function renderDocEditor() {
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou saisir un nom manuellement" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">
       </div>
       <div class="form-group"><label class="form-label">Locataire concerné</label><input class="form-input" id="doc-loc" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireNom=this.value"></div>
+      <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Adresse du locataire</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireAdresse=this.value" placeholder="Rue, étage, NPA ville"></div>
       <div class="form-group"><label class="form-label">Adresse client</label><input class="form-input" value="${(d.clientAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientAdresse=this.value"></div>
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
         <div class="form-group"><label class="form-label">NPA</label><input class="form-input" value="${(d.clientNpa||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNpa=this.value"></div>
@@ -2739,6 +2746,7 @@ function downloadDocPDF(id) {
   if (bonLie && bonLie.numero) { doc.text('Bon de travail N° ' + bonLie.numero, 20, infoY); infoY += 5; }
   doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, infoY); infoY += 5;
   if (d.locataireNom) { doc.text('Concerne : ' + d.locataireNom, 20, infoY); infoY += 5; }
+  if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
   // Tableau des lignes
