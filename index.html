@@ -227,6 +227,7 @@
     <button id="nb-clients" class="nav-btn" onclick="showScreen(&#39;clients&#39;)">👥 <span>Clients</span></button>
     <button id="nb-locataires" class="nav-btn" onclick="showScreen(&#39;locataires&#39;)">🏠 <span>Locataires</span></button>
     <button id="nb-bons" class="nav-btn" onclick="showScreen(&#39;bons&#39;)">📄 <span>Bons</span></button>
+    <button id="nb-devis" class="nav-btn" onclick="showScreen(&#39;devis&#39;)">🧾 <span>Devis / Factures</span></button>
     <div class="nav-right">
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
@@ -927,11 +928,46 @@
     </div>
   </div>
 
+  <!-- DEVIS / FACTURES -->
+  <div id="screen-devis" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">Devis / Factures</div>
+        <div class="page-sub" id="documents-count"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="search-wrap" style="min-width:180px;">
+          <input type="text" placeholder="Rechercher..." id="doc-search" oninput="renderDocuments()">
+        </div>
+        <button class="btn btn-red btn-sm" onclick="openNewDevis()">+ Nouveau devis</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div id="documents-list"></div>
+    </div>
+  </div>
+
 </div><!-- end #app -->
+
+<!-- Modale éditeur devis/facture -->
+<div class="modal-bg" id="modal-doc">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-hd">
+      <span class="modal-title" id="modal-doc-title">Devis</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-doc')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-doc-body"></div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
+      <button class="btn btn-navy" onclick="saveDoc()">✓ Enregistrer</button>
+    </div>
+  </div>
+</div>
 
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./config.js"></script>
 <script src="./app.js"></script>

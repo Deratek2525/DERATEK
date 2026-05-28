@@ -43,6 +43,13 @@ const TABLE_FIELDS = {
   } },
   techs:      { js2db: {} },
   intervs:    { js2db: {} },
+  documents:  { js2db: {
+    dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
+    clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
+    locataireNom: 'locataire_nom', bonId: 'bon_id',
+    sousTotal: 'sous_total', tvaTaux: 'tva_taux', tvaMontant: 'tva_montant',
+    devisId: 'devis_id',
+  } },
 };
 const META_COLS = new Set(['user_id', 'created_at']);
 
@@ -69,14 +76,14 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] },
   _pending:    new Set(),
   _processing: false,
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
-  // bons (qui dépendent de clients ET de locataires)
-  _syncOrder:  ['techs', 'clients', 'locataires', 'rapports', 'intervs', 'bons'],
+  // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
+  _syncOrder:  ['techs', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -90,6 +97,8 @@ const DB = {
   set locataires(v) { this._cache.locataires = v; this._queue('locataires'); },
   get bons()        { return this._cache.bons; },
   set bons(v)       { this._cache.bons = v;       this._queue('bons'); },
+  get documents()   { return this._cache.documents; },
+  set documents(v)  { this._cache.documents = v;  this._queue('documents'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -116,7 +125,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -180,8 +189,8 @@ const DB = {
   },
 
   _resetCache() {
-    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
-    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [] };
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [] };
     this._pending  = new Set();
     this._processing = false;
   }
@@ -262,6 +271,7 @@ function showScreen(name) {
   if (name === 'agenda')       renderAgenda();
   if (name === 'locataires')   renderLocataires();
   if (name === 'bons')         renderBons();
+  if (name === 'devis')        renderDocuments();
   window.scrollTo(0, 0);
 }
 
@@ -2083,6 +2093,7 @@ function renderBons() {
                   <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
+                <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
               </div>
             </div>
@@ -2268,4 +2279,436 @@ function importData(event) {
   };
   reader.onerror = () => toast('Erreur de lecture du fichier', '#e63946');
   reader.readAsText(file);
+}
+
+// ============================================================
+// DEVIS / FACTURES — logique QR-bill suisse + éditeur
+// (logique QR portée du générateur DERATEK existant)
+// ============================================================
+
+// --- Helpers QR-bill ---
+function _cleanIban(v) { return (v || '').replace(/\s+/g, '').toUpperCase(); }
+function _displayIban(iban) { return _cleanIban(iban).replace(/(.{4})/g, '$1 ').trim(); }
+function _fmtMontant(n) {
+  const v = (typeof n === 'number') ? n : parseFloat(String(n || '0').replace(/'/g, '').replace(',', '.'));
+  return (isNaN(v) ? 0 : v).toFixed(2);
+}
+function _displayMontant(a) {
+  const s = _fmtMontant(a);
+  const [int, dec] = s.split('.');
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + dec;
+}
+
+// Construit le payload SPC 0200 (Swiss QR Code), refType NON (IBAN classique)
+function _buildSpcPayload(montant, message) {
+  const co = DERATEK_CONFIG.company;
+  const lines = [];
+  lines.push('SPC');                 // QRType
+  lines.push('0200');                // Version
+  lines.push('1');                   // Coding UTF-8
+  lines.push(_cleanIban(co.iban));   // IBAN
+  // Créancier (structuré)
+  lines.push('S', co.nom || '', co.rue || '', '', co.npa || '', co.ville || '', (co.pays || 'CH').toUpperCase());
+  // Ultimate creditor (vide)
+  lines.push('', '', '', '', '', '', '');
+  // Montant + devise
+  lines.push(_fmtMontant(montant));
+  lines.push(co.devise || 'CHF');
+  // Débiteur (vide — on laisse le client le remplir, ou on pourrait mettre le destinataire)
+  lines.push('', '', '', '', '', '', '');
+  // Référence
+  lines.push('NON');                 // pas de référence structurée
+  lines.push('');
+  // Message libre (n° de facture)
+  lines.push(message || '');
+  lines.push('EPD');                 // Trailer
+  lines.push('');                    // Bill information
+  return lines.join('\r\n');
+}
+
+// Génère le QR (dataURL PNG) à partir du payload, avec qrcode-generator
+function _makeQrDataUrl(payload) {
+  if (typeof qrcode === 'undefined') { console.warn('lib qrcode absente'); return null; }
+  const qr = qrcode(0, 'M');
+  qr.addData(payload, 'Byte');
+  qr.make();
+  const count = qr.getModuleCount();
+  const quiet = 4, px = 10;
+  const total = (count + quiet * 2) * px;
+  const canvas = document.createElement('canvas');
+  canvas.width = total; canvas.height = total;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, total, total);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < count; r++)
+    for (let c = 0; c < count; c++)
+      if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * px, (r + quiet) * px, px, px);
+  return canvas.toDataURL('image/png');
+}
+
+// --- Numérotation auto ---
+function _nextDocNumero(type) {
+  const year = new Date().getFullYear();
+  const prefix = type === 'facture' ? 'F' : 'D';
+  const docs = (DB.documents || []).filter(d => d.type === type && (d.numero || '').includes('-' + year + '-'));
+  let max = 0;
+  docs.forEach(d => {
+    const m = (d.numero || '').match(/-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return `${prefix}-${year}-${String(max + 1).padStart(3, '0')}`;
+}
+
+// --- Calcul des totaux à partir des lignes ---
+function _calcTotaux(lignes, tvaTaux) {
+  const sousTotal = (lignes || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0), 0);
+  const tva = sousTotal * ((parseFloat(tvaTaux) || 0) / 100);
+  return { sousTotal: Math.round(sousTotal * 100) / 100, tvaMontant: Math.round(tva * 100) / 100, total: Math.round((sousTotal + tva) * 100) / 100 };
+}
+
+// --- État de l'éditeur de devis en cours ---
+let _editingDoc = null;
+
+// Crée un devis pré-rempli depuis un bon « à facturer »
+function createDevisFromBon(bonId) {
+  const bon = (DB.bons || []).find(b => b.id === bonId);
+  if (!bon) { toast('Bon introuvable', '#e63946'); return; }
+  const cli = bon.geranceId ? (DB.clients || []).find(c => c.id === bon.geranceId) : null;
+  _editingDoc = {
+    id: newId(),
+    type: 'devis',
+    numero: _nextDocNumero('devis'),
+    dateDoc: today(),
+    clientId: bon.geranceId || '',
+    clientNom: bon.geranceNom || (cli ? cli.nom : ''),
+    clientAdresse: cli ? (cli.adresse || '') : '',
+    clientNpa: cli ? (cli.npa || '') : '',
+    clientVille: cli ? (cli.ville || '') : '',
+    locataireNom: bon.locataireNom || '',
+    bonId: bon.id,
+    lignes: [
+      { desc: bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles', qte: 1, prix: 0 }
+    ],
+    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
+    statut: 'brouillon',
+    notes: ''
+  };
+  openDocEditor();
+}
+
+// Nouveau devis vierge
+function openNewDevis() {
+  _editingDoc = {
+    id: newId(), type: 'devis', numero: _nextDocNumero('devis'),
+    dateDoc: today(), clientId: '', clientNom: '', clientAdresse: '', clientNpa: '', clientVille: '',
+    locataireNom: '', bonId: '', lignes: [{ desc: '', qte: 1, prix: 0 }],
+    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, statut: 'brouillon', notes: ''
+  };
+  openDocEditor();
+}
+
+// Édite un document existant
+function editDoc(id) {
+  const d = (DB.documents || []).find(x => x.id === id);
+  if (!d) return;
+  _editingDoc = JSON.parse(JSON.stringify(d));
+  if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
+  openDocEditor();
+}
+
+// Ouvre la modale d'édition
+function openDocEditor() {
+  renderDocEditor();
+  openModal('modal-doc');
+}
+
+// Rendu de l'éditeur (lignes + totaux)
+function renderDocEditor() {
+  const d = _editingDoc;
+  if (!d) return;
+  const t = _calcTotaux(d.lignes, d.tvaTaux);
+  const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
+  const lignesHtml = d.lignes.map((l, i) => `
+    <tr>
+      <td style="padding:3px;"><input class="form-input" style="font-size:12px;" value="${(l.desc||'').replace(/"/g,'&quot;')}" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description"></td>
+      <td style="padding:3px;width:70px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
+      <td style="padding:3px;width:100px;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
+      <td style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
+      <td style="padding:3px;width:32px;text-align:center;"><button class="btn btn-red btn-xs" onclick="removeDocLigne(${i})" title="Supprimer la ligne">✕</button></td>
+    </tr>
+  `).join('');
+  const box = $('modal-doc-body');
+  if (!box) return;
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">Client (gérance)</label><input class="form-input" id="doc-client" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Locataire concerné</label><input class="form-input" id="doc-loc" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Adresse client</label><input class="form-input" value="${(d.clientAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientAdresse=this.value"></div>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+        <div class="form-group"><label class="form-label">NPA</label><input class="form-input" value="${(d.clientNpa||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNpa=this.value"></div>
+        <div class="form-group"><label class="form-label">Ville</label><input class="form-input" value="${(d.clientVille||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientVille=this.value"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDoc.dateDoc=this.value"></div>
+      <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="_editingDoc.tvaTaux=parseFloat(this.value)||0;renderDocEditor()"></div>
+    </div>
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="font-size:10px;color:var(--g400);text-transform:uppercase;text-align:left;">
+        <th style="padding:3px;">Description</th><th style="padding:3px;text-align:right;">Qté</th><th style="padding:3px;text-align:right;">Prix unit.</th><th style="padding:3px;text-align:right;">Total</th><th></th>
+      </tr></thead>
+      <tbody>${lignesHtml}</tbody>
+    </table>
+    <button class="btn btn-ghost btn-sm" onclick="addDocLigne()" style="margin-top:8px;">+ Ajouter une ligne</button>
+    <div style="margin-top:14px;margin-left:auto;width:260px;font-size:13px;">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Sous-total HT</span><b>${_displayMontant(t.sousTotal)} CHF</b></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--g600);"><span>TVA ${d.tvaTaux}%</span><span>${_displayMontant(t.tvaMontant)} CHF</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>
+    </div>
+    <div class="form-group" style="margin-top:10px;"><label class="form-label">Notes / conditions</label><textarea class="form-input" rows="2" oninput="_editingDoc.notes=this.value">${d.notes||''}</textarea></div>
+  `;
+  const title = $('modal-doc-title'); if (title) title.textContent = titre;
+}
+
+function updateDocLigne(i, field, val) {
+  if (!_editingDoc || !_editingDoc.lignes[i]) return;
+  _editingDoc.lignes[i][field] = (field === 'desc') ? val : (parseFloat(val) || 0);
+  // Recalcul des totaux uniquement (pas de re-render complet pour ne pas perdre le focus)
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux);
+  // Mise à jour légère via re-render différé
+  clearTimeout(window._docCalcTimer);
+  window._docCalcTimer = setTimeout(renderDocEditor, 600);
+}
+function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
+function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
+
+// Enregistre le document (devis/facture)
+function saveDoc() {
+  if (!_editingDoc) return;
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux);
+  _editingDoc.sousTotal = t.sousTotal;
+  _editingDoc.tvaMontant = t.tvaMontant;
+  _editingDoc.total = t.total;
+  const docs = DB.documents;
+  const i = docs.findIndex(x => x.id === _editingDoc.id);
+  if (i >= 0) docs[i] = _editingDoc; else docs.push(_editingDoc);
+  DB.documents = docs;
+  toast('✓ ' + (_editingDoc.type === 'facture' ? 'Facture' : 'Devis') + ' enregistré', '#2d9e6b');
+  closeModal('modal-doc');
+  renderDocuments();
+}
+
+// Change le statut d'un document
+function updateDocStatut(id, value) {
+  const docs = DB.documents;
+  const d = docs.find(x => x.id === id);
+  if (!d) return;
+  d.statut = value;
+  DB.documents = docs;
+  toast('Statut mis à jour ✓', '#2d9e6b');
+  renderDocuments();
+}
+
+// Convertit un devis accepté en facture
+function convertDevisToFacture(id) {
+  const devis = (DB.documents || []).find(x => x.id === id);
+  if (!devis) return;
+  const facture = JSON.parse(JSON.stringify(devis));
+  facture.id = newId();
+  facture.type = 'facture';
+  facture.numero = _nextDocNumero('facture');
+  facture.dateDoc = today();
+  facture.statut = 'brouillon';
+  facture.devisId = devis.id;
+  const docs = DB.documents;
+  docs.push(facture);
+  DB.documents = docs;
+  // Marque le devis comme accepté s'il ne l'est pas
+  if (devis.statut !== 'accepte') { devis.statut = 'accepte'; DB.documents = docs; }
+  toast('✓ Facture ' + facture.numero + ' créée depuis le devis', '#2d9e6b');
+  renderDocuments();
+}
+
+function confirmDeleteDoc(id, label) {
+  $('confirm-msg').textContent = `Supprimer "${label}" ? Cette action est irréversible.`;
+  $('confirm-btn').onclick = () => {
+    DB.documents = DB.documents.filter(d => d.id !== id);
+    closeModal('modal-confirm');
+    renderDocuments();
+    toast('Document supprimé', '#e63946');
+  };
+  openModal('modal-confirm');
+}
+
+// Liste des devis/factures
+function renderDocuments() {
+  const list = $('documents-list');
+  const count = $('documents-count');
+  const q = (($('doc-search') || {}).value || '').toLowerCase();
+  let docs = (DB.documents || []).slice();
+  if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
+  docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  if (count) count.textContent = docs.length ? docs.length + ' document(s)' : '';
+  if (!list) return;
+  if (!docs.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Aucun devis ni facture.<br>Crée un devis depuis un bon « à facturer » ou avec « + Nouveau devis ».</div></div>';
+    return;
+  }
+  const statutColors = {
+    'brouillon': { bg:'#f3f4f6', color:'#6b7280' },
+    'envoye':    { bg:'#dbeafe', color:'#1d4ed8' },
+    'accepte':   { bg:'#bbf7d0', color:'#166534' },
+    'refuse':    { bg:'#fecaca', color:'#991b1b' },
+    'envoyee':   { bg:'#dbeafe', color:'#1d4ed8' },
+    'payee':     { bg:'#bbf7d0', color:'#166534' },
+  };
+  const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
+  list.innerHTML = docs.map(d => {
+    const isDevis = d.type === 'devis';
+    const accent = isDevis ? '#8b5cf6' : '#2d9e6b';
+    const st = statutColors[d.statut] || statutColors.brouillon;
+    const opts = isDevis
+      ? ['brouillon','envoye','accepte','refuse']
+      : ['brouillon','envoyee','payee'];
+    return `
+    <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+      <div style="min-width:130px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}</div>
+        <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+      </div>
+      <div style="flex:1.4;min-width:160px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
+        ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
+      </div>
+      <div style="min-width:110px;text-align:right;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Total TTC</div>
+        <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total||0)} CHF</div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+        <select onchange="updateDocStatut('${d.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${st.color};background:${st.bg};color:${st.color};cursor:pointer;">
+          ${opts.map(o=>`<option value="${o}" ${d.statut===o?'selected':''}>${statutLabel[o]}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="editDoc('${d.id}')" title="Modifier">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
+        ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
+        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Génère le PDF (devis ou facture) — facture inclut le QR-bill
+function downloadDocPDF(id) {
+  const d = (DB.documents || []).find(x => x.id === id);
+  if (!d) { toast('Document introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297;
+  const isFacture = d.type === 'facture';
+  const t = _calcTotaux(d.lignes, d.tvaTaux);
+
+  // En-tête : coordonnées DERATEK
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(13, 27, 62);
+  doc.text('DERATEK', 20, 22);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(60);
+  let hy = 28;
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel, co.tva, co.email].forEach(l => { doc.text(l, 20, hy); hy += 4.5; });
+
+  // Destinataire (client) à droite
+  doc.setTextColor(0); doc.setFontSize(11);
+  let dy = 32;
+  [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`].filter(Boolean).forEach(l => { doc.text(String(l), 120, dy); dy += 5.2; });
+
+  // Titre du document
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(13, 27, 62);
+  doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 70);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(80);
+  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, 76);
+  if (d.locataireNom) doc.text('Concerne : ' + d.locataireNom, 20, 81);
+
+  // Tableau des lignes
+  let ty = 92;
+  doc.setFillColor(13, 27, 62); doc.rect(20, ty - 5, 170, 7, 'F');
+  doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text('Description', 22, ty); doc.text('Qté', 130, ty, {align:'right'}); doc.text('Prix', 155, ty, {align:'right'}); doc.text('Total', 188, ty, {align:'right'});
+  ty += 6;
+  doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+  (d.lignes || []).forEach(l => {
+    const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
+    const descLines = doc.splitTextToSize(l.desc || '', 100);
+    doc.text(descLines, 22, ty);
+    doc.text(String(l.qte||0), 130, ty, {align:'right'});
+    doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
+    doc.text(_displayMontant(lt), 188, ty, {align:'right'});
+    ty += Math.max(descLines.length * 4.5, 6);
+  });
+
+  // Totaux
+  ty += 4;
+  doc.line(120, ty, 190, ty); ty += 5;
+  doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+  doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
+
+  if (d.notes) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80); doc.text(doc.splitTextToSize(d.notes, 170), 20, ty + 10); doc.setTextColor(0); }
+
+  // Pour les factures : QR-bill suisse en bas
+  if (isFacture) {
+    const billTop = H - 105;
+    const recW = 62, payX = recW, padX = 5;
+    const message = 'Facture ' + (d.numero || '');
+    const payload = _buildSpcPayload(t.total, message);
+    const qrUrl = _makeQrDataUrl(payload);
+
+    // Lignes de découpe
+    doc.setLineWidth(0.2); doc.setDrawColor(120); doc.setLineDashPattern([1.4, 1], 0);
+    doc.line(0, billTop, W, billTop); doc.line(payX, billTop, payX, H);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(8); doc.setTextColor(110); doc.text('✂', 3, billTop + 1.2); doc.setTextColor(0);
+
+    const L = (txt, x, y) => { doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.text(txt, x, y); return y + 3.4; };
+    const V = (arr, x, y, size, maxW) => {
+      doc.setFont('helvetica','normal'); doc.setFontSize(size||8);
+      const lh = (size||8)*0.40; let cy = y;
+      (Array.isArray(arr)?arr:[arr]).forEach(ln => { if(!ln) return; (maxW?doc.splitTextToSize(String(ln),maxW):[String(ln)]).forEach(p=>{doc.text(p,x,cy);cy+=lh;}); });
+      return cy;
+    };
+    const credLines = [_displayIban(co.iban), co.nom, co.rue, `${co.npa} ${co.ville}`].filter(Boolean);
+    const amountDisp = _displayMontant(t.total);
+
+    // Récépissé
+    let y = billTop + 7;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Récépissé', padX, y); y += 8;
+    y = L('Compte / Payable à', padX, y); y = V(credLines, padX, y, 7, recW-padX-4) + 1.5;
+    y = L('Payable par', padX, y); y += 6;
+    const amountY = 255;
+    L('Monnaie', padX, amountY); L('Montant', padX+18, amountY);
+    V([co.devise||'CHF'], padX, amountY+3.6, 8); V([amountDisp], padX+18, amountY+3.6, 8);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.text('Point de dépôt', recW-5, H-8, {align:'right'});
+
+    // Section paiement
+    const px2 = payX + 5; let py = billTop + 7;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Section paiement', px2, py);
+    const qrSize = 46, qrX = px2, qrY = py + 4;
+    if (qrUrl) doc.addImage(qrUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+    // Croix suisse au centre
+    const cx = qrX+qrSize/2, cyc = qrY+qrSize/2;
+    doc.setFillColor(0,0,0); doc.rect(cx-3.5,cyc-3.5,7,7,'F');
+    doc.setFillColor(255,255,255); doc.rect(cx-3.0,cyc-3.0,6,6,'F');
+    doc.setFillColor(0,0,0); doc.rect(cx-2.05,cyc-0.65,4.1,1.3,'F'); doc.rect(cx-0.65,cyc-2.05,1.3,4.1,'F');
+    const may = amountY;
+    L('Monnaie', px2, may); L('Montant', px2+18, may);
+    V([co.devise||'CHF'], px2, may+3.6, 9); V([amountDisp], px2+18, may+3.6, 9);
+    const ix = qrX+qrSize+8, infoW = W-ix-6; let iy = billTop+7;
+    iy = L('Compte / Payable à', ix, iy); iy = V(credLines, ix, iy, 9, infoW) + 2;
+    iy += 2.5; iy = L('Informations supplémentaires', ix, iy); iy = V([message], ix, iy, 9, infoW) + 2;
+    iy += 2.5; iy = L('Payable par', ix, iy);
+  }
+
+  const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
+  doc.save(fname);
+  toast('✓ PDF téléchargé', '#2d9e6b');
 }
