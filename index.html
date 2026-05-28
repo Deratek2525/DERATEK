@@ -939,6 +939,7 @@
         <div class="search-wrap" style="min-width:180px;">
           <input type="text" placeholder="Rechercher..." id="doc-search" oninput="renderDocuments()">
         </div>
+        <button class="btn btn-ghost btn-sm" onclick="openPrestationsModal()">⚙️ Prestations</button>
         <button class="btn btn-navy btn-sm" onclick="openNewDevis()">+ Nouveau devis</button>
         <button class="btn btn-green btn-sm" onclick="openNewFacture()">+ Nouvelle facture</button>
       </div>
@@ -949,6 +950,27 @@
   </div>
 
 </div><!-- end #app -->
+
+<!-- Modale gestion des prestations -->
+<div class="modal-bg" id="modal-prestations">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-hd">
+      <span class="modal-title">Mes prestations modèles</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-prestations')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px;">
+        <div class="form-group" style="flex:2;margin:0;"><label class="form-label">Nouvelle prestation</label><input class="form-input" id="presta-libelle" placeholder="Ex. Traitement contre les rats"></div>
+        <div class="form-group" style="flex:1;margin:0;"><label class="form-label">Prix (CHF)</label><input class="form-input" id="presta-prix" type="number" step="0.01" placeholder="0.00"></div>
+        <button class="btn btn-navy" onclick="addPrestationFromModal()">+ Ajouter</button>
+      </div>
+      <div id="prestations-list"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-navy" onclick="closeModal('modal-prestations')">Fermer</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modale éditeur devis/facture -->
 <div class="modal-bg" id="modal-doc">

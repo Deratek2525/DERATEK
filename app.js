@@ -2542,6 +2542,52 @@ function addPrestaModel(i) {
   renderDocEditor();
 }
 
+// --- Gestionnaire de prestations (catalogue) ---
+function openPrestationsModal() {
+  renderPrestationsList();
+  openModal('modal-prestations');
+}
+function renderPrestationsList() {
+  const box = $('prestations-list');
+  if (!box) return;
+  const custom = DB.prestations || [];
+  const defauts = DEFAULT_PRESTATIONS;
+  const row = (libelle, prix, id) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid #eee;border-radius:6px;margin-bottom:5px;">
+      <div style="flex:1;font-size:13px;">${(libelle||'').replace(/</g,'&lt;')}</div>
+      <div style="font-size:12px;color:var(--g600);width:90px;text-align:right;">${parseFloat(prix)>0 ? _displayMontant(prix)+' CHF' : '—'}</div>
+      ${id ? `<button class="btn btn-red btn-xs" onclick="deletePrestation('${id}')" title="Supprimer">🗑</button>` : '<span style="font-size:10px;color:var(--g400);width:24px;text-align:center;" title="Prestation par défaut">🔒</span>'}
+    </div>`;
+  let html = '';
+  if (custom.length) {
+    html += '<div style="font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:4px 0 6px;">Mes prestations</div>';
+    html += custom.slice().sort((a,b)=>(a.libelle||'').localeCompare(b.libelle||'')).map(p => row(p.libelle, p.prix, p.id)).join('');
+  }
+  html += '<div style="font-size:11px;font-weight:800;color:var(--g400);text-transform:uppercase;margin:12px 0 6px;">Prestations par défaut</div>';
+  html += defauts.map(p => row(p.libelle, p.prix, null)).join('');
+  box.innerHTML = html;
+}
+function addPrestationFromModal() {
+  const libelle = ($('presta-libelle').value || '').trim();
+  const prix = parseFloat($('presta-prix').value) || 0;
+  if (!libelle) { toast('Indique un libellé', '#e63946'); return; }
+  const all = getAllPrestations();
+  if (all.some(p => (p.libelle||'').toLowerCase() === libelle.toLowerCase())) {
+    toast('Cette prestation existe déjà', '#f4a623'); return;
+  }
+  const list = DB.prestations;
+  list.push({ id: newId(), libelle: libelle, prix: prix });
+  DB.prestations = list;
+  $('presta-libelle').value = ''; $('presta-prix').value = '';
+  toast('✓ Prestation ajoutée', '#2d9e6b');
+  renderPrestationsList();
+}
+function deletePrestation(id) {
+  DB.prestations = (DB.prestations || []).filter(p => p.id !== id);
+  toast('Prestation supprimée', '#e63946');
+  renderPrestationsList();
+}
+
 // Rendu de l'éditeur (lignes + totaux)
 function renderDocEditor() {
   const d = _editingDoc;
