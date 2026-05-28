@@ -2666,27 +2666,35 @@ function downloadDocPDF(id) {
   const isFacture = d.type === 'facture';
   const t = _calcTotaux(d.lignes, d.tvaTaux);
 
-  // En-tête : coordonnées DERATEK
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(13, 27, 62);
-  doc.text('DERATEK', 20, 22);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(60);
-  let hy = 28;
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel, co.tva, co.email].forEach(l => { doc.text(l, 20, hy); hy += 4.5; });
+  // --- En-tête identique au générateur QR-facture : LOGO + coordonnées ---
+  const logoW = 60, logoH = logoW * 199 / 900;   // ratio d'origine du logo
+  if (typeof LOGO_B64 !== 'undefined') {
+    try { doc.addImage(LOGO_B64, 'PNG', 20, 15, logoW, logoH); }
+    catch (e) { console.warn('logo', e); }
+  } else {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 22);
+  }
+  let hy = 15 + logoH + 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel, co.tva, co.email].forEach(l => { doc.text(l, 20, hy); hy += 4.6; });
+  doc.setTextColor(0);
 
-  // Destinataire (client) à droite
-  doc.setTextColor(0); doc.setFontSize(11);
-  let dy = 32;
-  [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`].filter(Boolean).forEach(l => { doc.text(String(l), 120, dy); dy += 5.2; });
+  // Destinataire (client) à droite — même position que le générateur
+  doc.setFontSize(11.5);
+  let dy = 62;
+  const destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
+  destLines.forEach(l => { doc.text(String(l), 120, dy); dy += 5.2; });
 
   // Titre du document
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(13, 27, 62);
-  doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 70);
+  doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 92);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(80);
-  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, 76);
-  if (d.locataireNom) doc.text('Concerne : ' + d.locataireNom, 20, 81);
+  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, 99);
+  if (d.locataireNom) doc.text('Concerne : ' + d.locataireNom, 20, 104);
+  doc.setTextColor(0);
 
   // Tableau des lignes
-  let ty = 92;
+  let ty = 116;
   doc.setFillColor(13, 27, 62); doc.rect(20, ty - 5, 170, 7, 'F');
   doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
   doc.text('Description', 22, ty); doc.text('Qté', 130, ty, {align:'right'}); doc.text('Prix', 155, ty, {align:'right'}); doc.text('Total', 188, ty, {align:'right'});
