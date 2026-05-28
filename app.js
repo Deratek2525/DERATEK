@@ -1269,6 +1269,12 @@ function deleteTech(el) {
 document.addEventListener('DOMContentLoaded', async () => {
   initSig();
 
+  // Logo de connexion en version foncée (le PNG blanc d'origine est invisible sur fond blanc)
+  if (typeof LOGO_B64 !== 'undefined') {
+    const loginLogo = $('login-logo-img');
+    if (loginLogo) loginLogo.src = LOGO_B64;
+  }
+
   // Init Supabase (lib chargée via CDN)
   initSupabase();
 
