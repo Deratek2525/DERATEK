@@ -48,6 +48,7 @@ const TABLE_FIELDS = {
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
     locataireNom: 'locataire_nom', bonId: 'bon_id',
     sousTotal: 'sous_total', tvaTaux: 'tva_taux', tvaMontant: 'tva_montant',
+    rabaisMontant: 'rabais_montant',
     devisId: 'devis_id',
   } },
 };
@@ -2365,11 +2366,20 @@ function _nextDocNumero(type) {
   return `${prefix}-${year}-${String(max + 1).padStart(3, '0')}`;
 }
 
-// --- Calcul des totaux à partir des lignes ---
-function _calcTotaux(lignes, tvaTaux) {
+// --- Calcul des totaux à partir des lignes (avec rabais avant TVA) ---
+function _calcTotaux(lignes, tvaTaux, rabaisTaux) {
+  const r2 = n => Math.round(n * 100) / 100;
   const sousTotal = (lignes || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0), 0);
-  const tva = sousTotal * ((parseFloat(tvaTaux) || 0) / 100);
-  return { sousTotal: Math.round(sousTotal * 100) / 100, tvaMontant: Math.round(tva * 100) / 100, total: Math.round((sousTotal + tva) * 100) / 100 };
+  const rabaisMontant = sousTotal * ((parseFloat(rabaisTaux) || 0) / 100);
+  const net = sousTotal - rabaisMontant;
+  const tva = net * ((parseFloat(tvaTaux) || 0) / 100);
+  return {
+    sousTotal: r2(sousTotal),
+    rabaisMontant: r2(rabaisMontant),
+    net: r2(net),
+    tvaMontant: r2(tva),
+    total: r2(net + tva)
+  };
 }
 
 // --- État de l'éditeur de devis en cours ---
@@ -2397,6 +2407,7 @@ function createDocFromBon(bonId, type) {
       { desc: bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles', qte: 1, prix: 0 }
     ],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
+    rabais: 5,
     statut: 'brouillon',
     notes: ''
   };
@@ -2413,7 +2424,7 @@ function openNewDoc(type) {
     id: newId(), type: type, numero: _nextDocNumero(type),
     dateDoc: today(), clientId: '', clientNom: '', clientAdresse: '', clientNpa: '', clientVille: '',
     locataireNom: '', bonId: '', lignes: [{ desc: '', qte: 1, prix: 0 }],
-    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, statut: 'brouillon', notes: ''
+    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
   };
   openDocEditor();
 }
@@ -2463,6 +2474,7 @@ function editDoc(id) {
   if (!d) return;
   _editingDoc = JSON.parse(JSON.stringify(d));
   if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
+  if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
   openDocEditor();
 }
 
@@ -2476,7 +2488,7 @@ function openDocEditor() {
 function renderDocEditor() {
   const d = _editingDoc;
   if (!d) return;
-  const t = _calcTotaux(d.lignes, d.tvaTaux);
+  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
   const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
   const lignesHtml = d.lignes.map((l, i) => `
     <tr>
@@ -2506,6 +2518,7 @@ function renderDocEditor() {
       </div>
       <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" id="doc-bon-numero" value="${(d._bonNumeroSaisi||'').replace(/"/g,'&quot;')}" placeholder="Tape le n° du bon puis Entrée" onchange="autoFillDocFromBon(this.value)" onblur="autoFillDocFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDoc.dateDoc=this.value"></div>
+      <div class="form-group"><label class="form-label">Rabais (%)</label><input class="form-input" type="number" step="0.1" value="${d.rabais||0}" oninput="_editingDoc.rabais=parseFloat(this.value)||0;renderDocEditor()"></div>
       <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="_editingDoc.tvaTaux=parseFloat(this.value)||0;renderDocEditor()"></div>
     </div>
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
@@ -2516,8 +2529,10 @@ function renderDocEditor() {
       <tbody>${lignesHtml}</tbody>
     </table>
     <button class="btn btn-ghost btn-sm" onclick="addDocLigne()" style="margin-top:8px;">+ Ajouter une ligne</button>
-    <div style="margin-top:14px;margin-left:auto;width:260px;font-size:13px;">
+    <div style="margin-top:14px;margin-left:auto;width:280px;font-size:13px;">
       <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Sous-total HT</span><b>${_displayMontant(t.sousTotal)} CHF</b></div>
+      ${(d.rabais||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Rabais ${d.rabais}%</span><span>− ${_displayMontant(t.rabaisMontant)} CHF</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Net HT</span><b>${_displayMontant(t.net)} CHF</b></div>` : ''}
       <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--g600);"><span>TVA ${d.tvaTaux}%</span><span>${_displayMontant(t.tvaMontant)} CHF</span></div>
       <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>
     </div>
@@ -2566,8 +2581,9 @@ function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.l
 // Enregistre le document (devis/facture)
 function saveDoc() {
   if (!_editingDoc) return;
-  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux);
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais);
   _editingDoc.sousTotal = t.sousTotal;
+  _editingDoc.rabaisMontant = t.rabaisMontant;
   _editingDoc.tvaMontant = t.tvaMontant;
   _editingDoc.total = t.total;
   // Retire les champs transitoires d'UI avant sauvegarde
@@ -2692,7 +2708,7 @@ function downloadDocPDF(id) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
   const isFacture = d.type === 'facture';
-  const t = _calcTotaux(d.lignes, d.tvaTaux);
+  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
 
   // --- En-tête identique au générateur QR-facture : LOGO + coordonnées ---
   const logoW = 60, logoH = logoW * 199 / 900;   // ratio d'origine du logo
@@ -2746,6 +2762,12 @@ function downloadDocPDF(id) {
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
   doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+  if ((d.rabais || 0) > 0) {
+    doc.setTextColor(180, 40, 40);
+    doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+    doc.setTextColor(0);
+    doc.text('Net HT', 130, ty); doc.text(_displayMontant(t.net) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+  }
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 6;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
