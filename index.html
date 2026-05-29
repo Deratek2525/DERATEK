@@ -317,9 +317,11 @@
           <div class="pill" onclick="setFilter(&#39;rapports&#39;,&#39;Envoyé&#39;,this)">Envoyés</div>
         </div>
         <button class="btn btn-red btn-sm" onclick="openNewRapport()">+ Nouveau</button>
+        <button class="btn btn-navy btn-sm" onclick="openNewDiagnostic()">🪵 + Diagnostic bois</button>
       </div>
     </div>
     <div style="padding:16px 20px;overflow-y:auto;flex:1;">
+      <div id="diagnostics-section" style="margin-bottom:18px;"></div>
       <div class="card">
         <table class="tbl">
           <thead><tr><th>N° Rapport</th><th>Client</th><th>N° BC</th><th>Nuisible</th><th>Date</th><th>Technicien</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
@@ -968,6 +970,21 @@
     </div>
     <div class="modal-ft">
       <button class="btn btn-navy" onclick="closeModal('modal-prestations')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale éditeur diagnostic bois -->
+<div class="modal-bg" id="modal-diag">
+  <div class="modal" style="max-width:740px;">
+    <div class="modal-hd">
+      <span class="modal-title" id="modal-diag-title">Diagnostic bois</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-diag')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-diag-body"></div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('modal-diag')">Annuler</button>
+      <button class="btn btn-navy" onclick="saveDiag()">✓ Enregistrer</button>
     </div>
   </div>
 </div>

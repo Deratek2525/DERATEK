@@ -43,6 +43,11 @@ const TABLE_FIELDS = {
   } },
   techs:      { js2db: {} },
   prestations:{ js2db: {} },
+  diagnostics:{ js2db: {
+    dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
+    locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
+    elementsTouches: 'elements_touches', bonId: 'bon_id',
+  } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
@@ -78,14 +83,14 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] },
   _pending:    new Set(),
   _processing: false,
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
   // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
-  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents'],
+  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents', 'diagnostics'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -103,6 +108,8 @@ const DB = {
   set documents(v)  { this._cache.documents = v;  this._queue('documents'); },
   get prestations() { return this._cache.prestations; },
   set prestations(v){ this._cache.prestations = v; this._queue('prestations'); },
+  get diagnostics() { return this._cache.diagnostics; },
+  set diagnostics(v){ this._cache.diagnostics = v; this._queue('diagnostics'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -129,7 +136,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -193,8 +200,8 @@ const DB = {
   },
 
   _resetCache() {
-    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] };
-    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [] };
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] };
     this._pending  = new Set();
     this._processing = false;
   }
@@ -275,7 +282,7 @@ function showScreen(name) {
   if (nb) nb.classList.add('active');
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
-  if (name === 'rapports')     renderRapports();
+  if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
   if (name === 'agenda')       renderAgenda();
   if (name === 'locataires')   renderLocataires();
   if (name === 'bons')         renderBons();
@@ -2999,4 +3006,215 @@ function downloadDocPDF(id) {
   const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
   doc.save(fname);
   toast('✓ PDF téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// RAPPORT DIAGNOSTIC INSECTES DU BOIS
+// ============================================================
+const INSECTES_BOIS = ['Capricornes des maisons', 'Vrillettes (petite/grosse)', 'Lyctus', 'Termites', 'Fourmis charpentières', 'Sirex', 'Hespérophanes'];
+let _editingDiag = null;
+
+function _nextDiagNumero() {
+  const year = new Date().getFullYear();
+  const list = (DB.diagnostics || []).filter(d => (d.numero||'').includes('-' + year + '-'));
+  let max = 0;
+  list.forEach(d => { const m = (d.numero||'').match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
+  return `DG-${year}-${String(max+1).padStart(3,'0')}`;
+}
+
+function openNewDiagnostic() {
+  _editingDiag = {
+    id: newId(), numero: _nextDiagNumero(), dateDoc: today(), tech: '',
+    clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
+    batiment: '', bonId: '', insectes: [], elementsTouches: '',
+    activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: ''
+  };
+  renderDiagEditor(); openModal('modal-diag');
+}
+function editDiag(id) {
+  const d = (DB.diagnostics || []).find(x => x.id === id); if (!d) return;
+  _editingDiag = JSON.parse(JSON.stringify(d));
+  if (!Array.isArray(_editingDiag.insectes)) _editingDiag.insectes = [];
+  renderDiagEditor(); openModal('modal-diag');
+}
+function toggleDiagInsecte(nom, checked) {
+  if (!_editingDiag) return;
+  const set = new Set(_editingDiag.insectes || []);
+  if (checked) set.add(nom); else set.delete(nom);
+  _editingDiag.insectes = [...set];
+}
+function renderDiagEditor() {
+  const d = _editingDiag; if (!d) return;
+  const box = $('modal-diag-body'); if (!box) return;
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const insectesHtml = INSECTES_BOIS.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.insectes||[]).includes(n)?'checked':''} onchange="toggleDiagInsecte('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  box.innerHTML = `
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🪵 Identification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      <div class="form-group"><label class="form-label">Client (gérance)</label>
+        <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
+        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
+      </div>
+      <div class="form-group"><label class="form-label">Technicien</label><input class="form-input" value="${(d.tech||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.tech=this.value"></div>
+      <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Bâtiment / charpente concernée</label><input class="form-input" value="${(d.batiment||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. charpente combles, villa"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐛 Insectes détectés & éléments touchés</div>
+    <div style="margin-bottom:8px;">${insectesHtml}</div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Éléments / bois touchés</label><textarea class="form-input" rows="2" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. poutres, solives, chevrons, lambris...">${d.elementsTouches||''}</textarea></div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔬 Diagnostic</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+      <div class="form-group"><label class="form-label">Activité de l'infestation</label>
+        <select class="form-input" oninput="_editingDiag.activite=this.value">
+          <option value="" ${!d.activite?'selected':''}>-- Choisir --</option>
+          <option ${d.activite==='Active'?'selected':''}>Active</option>
+          <option ${d.activite==='Ancienne'?'selected':''}>Ancienne</option>
+          <option ${d.activite==='Mixte (active + ancienne)'?'selected':''}>Mixte (active + ancienne)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Gravité</label>
+        <select class="form-input" oninput="_editingDiag.gravite=this.value">
+          <option value="" ${!d.gravite?'selected':''}>-- Choisir --</option>
+          <option ${d.gravite==='Faible'?'selected':''}>Faible</option>
+          <option ${d.gravite==='Modérée'?'selected':''}>Modérée</option>
+          <option ${d.gravite==='Importante'?'selected':''}>Importante</option>
+          <option ${d.gravite==='Critique (structure menacée)'?'selected':''}>Critique (structure menacée)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Étendue / surface concernée</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
+      <div class="form-group"><label class="form-label">Taux d'humidité du bois</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Observations / diagnostic détaillé</label><textarea class="form-input" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea></div>
+    <div class="form-group"><label class="form-label">Conclusion / recommandations</label><textarea class="form-input" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea></div>
+  `;
+  const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
+}
+function onDiagClientSelect(id) {
+  const c = (DB.clients||[]).find(x => x.id === id);
+  if (!c) { _editingDiag.clientId=''; return; }
+  _editingDiag.clientId = c.id; _editingDiag.clientNom = c.nom || '';
+  renderDiagEditor();
+}
+function autoFillDiagFromBon(numero) {
+  if (!_editingDiag || !numero) return;
+  const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+  const bon = (DB.bons||[]).find(b => norm(b.numero) === norm(numero));
+  if (!bon) { toast('Aucun bon trouvé', '#e63946'); return; }
+  const cli = bon.geranceId ? (DB.clients||[]).find(c=>c.id===bon.geranceId) : null;
+  const loc = bon.locataireId ? (DB.locataires||[]).find(l=>l.id===bon.locataireId) : null;
+  _editingDiag.clientId = bon.geranceId || '';
+  _editingDiag.clientNom = bon.geranceNom || (cli?cli.nom:'');
+  _editingDiag.locataireNom = bon.locataireNom || '';
+  _editingDiag.locataireAdresse = loc ? (loc.adresse||'') : (bon.immeuble||'');
+  _editingDiag.batiment = bon.immeuble || _editingDiag.batiment;
+  _editingDiag.bonId = bon.id;
+  toast('✓ Rempli depuis le bon ' + bon.numero, '#2d9e6b');
+  renderDiagEditor();
+}
+function saveDiag() {
+  if (!_editingDiag) return;
+  const list = DB.diagnostics;
+  const i = list.findIndex(x => x.id === _editingDiag.id);
+  if (i >= 0) list[i] = _editingDiag; else list.push(_editingDiag);
+  DB.diagnostics = list;
+  toast('✓ Diagnostic enregistré', '#2d9e6b');
+  closeModal('modal-diag');
+  renderDiagnostics();
+}
+function confirmDeleteDiag(id, label) {
+  $('confirm-msg').textContent = `Supprimer le diagnostic "${label}" ?`;
+  $('confirm-btn').onclick = () => {
+    DB.diagnostics = DB.diagnostics.filter(d => d.id !== id);
+    closeModal('modal-confirm'); renderDiagnostics(); toast('Diagnostic supprimé', '#e63946');
+  };
+  openModal('modal-confirm');
+}
+function renderDiagnostics() {
+  const box = $('diagnostics-section'); if (!box) return;
+  const list = (DB.diagnostics || []).slice().sort((a,b)=>(b.dateDoc||'').localeCompare(a.dateDoc||''));
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🪵 Diagnostics bois (${list.length})</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${list.map(d => `
+        <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid #8b4513;border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+          <div style="min-width:130px;">
+            <div style="font-size:13px;font-weight:800;color:var(--navy);">🪵 ${d.numero||''}</div>
+            <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+          </div>
+          <div style="flex:1.4;min-width:150px;">
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
+            <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
+            ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
+          </div>
+          <div style="flex:1.6;min-width:170px;">
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Insectes</div>
+            <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+            <button class="btn btn-ghost btn-sm" onclick="editDiag('${d.id}')" title="Modifier">✏️</button>
+            <button class="btn btn-ghost btn-sm" onclick="downloadDiagPDF('${d.id}')" title="PDF">📥 PDF</button>
+            <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+function downloadDiagPDF(id) {
+  const d = (DB.diagnostics||[]).find(x => x.id === id);
+  if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  // En-tête logo + coordonnées
+  const logoW = 60, logoH = logoW*199/900;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,15,logoW,logoH); } catch(e){} }
+  let hy = 15+logoH+6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40);
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,20,hy); hy+=4.6; });
+  doc.setTextColor(0);
+  // Destinataire
+  doc.setFontSize(11.5); let dy=62;
+  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+  // Titre
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(13,27,62);
+  doc.text('RAPPORT DIAGNOSTIC — INSECTES DU BOIS', 20, 92);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(80);
+  let y = 99;
+  doc.text('N° ' + (d.numero||'') + '   •   Date : ' + (fmtDate(d.dateDoc)||''), 20, y); y+=5;
+  if (d.tech) { doc.text('Technicien : ' + d.tech, 20, y); y+=5; }
+  if (d.batiment) { doc.text('Bâtiment / charpente : ' + d.batiment, 20, y); y+=5; }
+  doc.setTextColor(0);
+  y += 4;
+  const section = (titre) => { doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(13,27,62); doc.text(titre, 20, y); doc.setDrawColor(139,69,19); doc.setLineWidth(0.4); doc.line(20, y+1.5, 190, y+1.5); y+=7; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10); };
+  const field = (lbl, val) => { if(!val) return; doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text(lbl+' :', 20, y); doc.setFont('helvetica','normal'); const lines = doc.splitTextToSize(String(val), 145); doc.text(lines, 62, y); y += Math.max(lines.length*4.8, 5.5); };
+
+  section('Insectes détectés & éléments touchés');
+  field('Insectes', (d.insectes||[]).join(', '));
+  field('Éléments / bois', d.elementsTouches);
+  y += 3;
+  section('Diagnostic');
+  field('Activité', d.activite);
+  field('Gravité', d.gravite);
+  field('Étendue', d.etendue);
+  field('Humidité du bois', d.humidite);
+  if (d.diagnostic) { y+=1; doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text('Observations :',20,y);y+=5; doc.setFont('helvetica','normal'); doc.splitTextToSize(d.diagnostic,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
+  if (d.conclusion) { y+=4; section('Conclusion / recommandations'); doc.splitTextToSize(d.conclusion,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
+
+  // Signature
+  y = Math.max(y+14, 250);
+  doc.setFontSize(9); doc.setTextColor(80);
+  doc.text('DERATEK Professional Pest Control', 20, y);
+  doc.text('Signature : ______________________', 120, y);
+  doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
+  toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
 }
