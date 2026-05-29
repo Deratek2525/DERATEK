@@ -50,6 +50,7 @@ const TABLE_FIELDS = {
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
+  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path' } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
@@ -85,14 +86,14 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] },
   _pending:    new Set(),
   _processing: false,
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
   // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
-  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents', 'diagnostics'],
+  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents', 'diagnostics', 'fournisseurs'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -112,6 +113,8 @@ const DB = {
   set prestations(v){ this._cache.prestations = v; this._queue('prestations'); },
   get diagnostics() { return this._cache.diagnostics; },
   set diagnostics(v){ this._cache.diagnostics = v; this._queue('diagnostics'); },
+  get fournisseurs() { return this._cache.fournisseurs; },
+  set fournisseurs(v){ this._cache.fournisseurs = v; this._queue('fournisseurs'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -138,7 +141,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics', 'fournisseurs'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -202,8 +205,8 @@ const DB = {
   },
 
   _resetCache() {
-    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] };
-    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [] };
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] };
     this._pending  = new Set();
     this._processing = false;
   }
@@ -291,6 +294,7 @@ function showScreen(name) {
   if (name === 'locataires')   renderLocataires();
   if (name === 'bons')         renderBons();
   if (name === 'devis')        renderDocuments();
+  if (name === 'fournisseurs') renderFournisseurs();
   window.scrollTo(0, 0);
 }
 
@@ -3530,4 +3534,212 @@ function _genDiagPDF(d) {
   doc.text('Signature : ______________________', 120, y);
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// FOURNISSEURS — lecture IA du PDF + classement par secteur
+// ============================================================
+const SECTEURS_FOURN = ['Matériel', 'Informatique', 'Garage / véhicules', 'Communication / marketing', 'Administratif', 'Carburant', 'Assurances', 'Produits / consommables', 'Autre'];
+const SECTEUR_COLORS = {
+  'Matériel': '#f97316', 'Informatique': '#3b82f6', 'Garage / véhicules': '#6b7280',
+  'Communication / marketing': '#ec4899', 'Administratif': '#8b5cf6', 'Carburant': '#ef4444',
+  'Assurances': '#14b8a6', 'Produits / consommables': '#10b981', 'Autre': '#64748b'
+};
+let _pendingFournPdf = null;
+
+function fournHandleDrop(e) {
+  e.preventDefault();
+  const dz = $('fourn-dropzone'); if (dz) dz.classList.remove('drag');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) fournProcessFile(f);
+}
+function fournHandleInput(e) { const f = e.target.files && e.target.files[0]; if (f) fournProcessFile(f); }
+
+async function fournProcessFile(file) {
+  const status = $('fourn-status'); const confirm = $('fourn-confirm');
+  if (confirm) { confirm.style.display = 'none'; confirm.innerHTML = ''; }
+  if (file.type !== 'application/pdf') { toast('Merci de déposer un fichier PDF', '#e63946'); return; }
+  _pendingFournPdf = file;
+  const setStatus = m => { if (status) { status.style.display = 'block'; status.innerHTML = m; } };
+  try {
+    setStatus('⏳ Lecture du PDF en cours…');
+    const texte = await bonExtractText(file);
+    if (!texte || texte.length < 20) { setStatus(''); toast('Ce PDF ne contient pas de texte lisible.', '#e63946'); return; }
+    setStatus('🤖 Analyse du document par l\'IA…');
+    const infos = await fournExtractInfosIA(texte);
+    setStatus('');
+    fournShowConfirm(infos, file.name);
+  } catch (err) { setStatus(''); console.error('Fourn error:', err); toast('Erreur : ' + err.message, '#e63946'); }
+}
+
+async function fournExtractInfosIA(texte) {
+  const systemPrompt =
+    'Tu extrais les informations d\'une FACTURE FOURNISSEUR. Réponds UNIQUEMENT par un objet JSON valide, ' +
+    'sans texte ni balises Markdown. Utilise exactement ces clés (chaîne vide si absent) :\n' +
+    '{\n"fournisseur":"nom du fournisseur / entreprise émettrice",\n' +
+    '"numero":"numéro de facture",\n' +
+    '"date":"date de la facture au format AAAA-MM-JJ",\n' +
+    '"montant":"montant total TTC, chiffres uniquement (ex 1234.50)",\n' +
+    '"description":"objet ou résumé court des articles/prestations"\n}';
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({
+      model: DERATEK_CONFIG.mistral.model, max_tokens: 700, temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte }]
+    })
+  });
+  if (!response.ok) { let m = 'API ' + response.status; try { const e = await response.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(m); }
+  const data = await response.json();
+  const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!raw) throw new Error('Réponse IA vide');
+  return JSON.parse(raw.replace(/```json/gi, '').replace(/```/g, '').trim());
+}
+
+function fournShowConfirm(infos, fileName) {
+  const box = $('fourn-confirm'); if (!box) return;
+  const champ = (label, key, val) =>
+    `<div style="margin-bottom:8px;">
+       <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
+       <input class="form-input" id="fournf-${key}" value="${(val||'').replace(/"/g,'&quot;')}" style="font-size:13px;">
+     </div>`;
+  box.innerHTML = `
+    <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">✅ Document fournisseur analysé</div>
+      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifie, choisis le secteur, puis valide. Fichier : <b>${fileName||''}</b></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
+        ${champ('Fournisseur', 'fournisseur', infos.fournisseur)}
+        ${champ('N° de facture', 'numero', infos.numero)}
+        ${champ('Date (AAAA-MM-JJ)', 'date', infos.date)}
+        ${champ('Montant (CHF)', 'montant', infos.montant)}
+      </div>
+      <div style="margin-bottom:8px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Secteur</label>
+        <select class="form-input" id="fournf-secteur" style="font-size:13px;">
+          ${SECTEURS_FOURN.map(s => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Description</label>
+        <textarea class="form-input" id="fournf-description" rows="2" style="font-size:13px;">${(infos.description||'')}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button class="btn btn-ghost" onclick="fournCancel()">Annuler</button>
+        <button class="btn btn-navy" onclick="fournConfirmSave()">✓ Enregistrer le fournisseur</button>
+      </div>
+    </div>`;
+  box.style.display = 'block';
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function fournCancel() {
+  const box = $('fourn-confirm'); if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  const fi = $('fourn-file-input'); if (fi) fi.value = '';
+  _pendingFournPdf = null;
+}
+
+async function _uploadFournPdf(fId, file) {
+  if (!sb || !file) return '';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return '';
+    const path = `${session.user.id}/${fId}-${file.name.replace(/[^\w.-]+/g, '_')}`;
+    const { error } = await sb.storage.from('fournisseurs-pdfs').upload(path, file, { contentType: 'application/pdf', upsert: true });
+    if (error) { console.warn('Upload fourn pdf', error); toast('PDF non uploadé : ' + error.message, '#e63946'); return ''; }
+    return path;
+  } catch (e) { console.warn(e); return ''; }
+}
+
+async function fournConfirmSave() {
+  const v = id => { const el = $('fournf-' + id); return el ? el.value.trim() : ''; };
+  const fId = newId();
+  let pdfPath = '';
+  if (_pendingFournPdf) { toast('Upload du PDF…', '#1a2744'); pdfPath = await _uploadFournPdf(fId, _pendingFournPdf); }
+  const fourn = {
+    id: fId,
+    nom: v('fournisseur'),
+    numero: v('numero'),
+    dateDoc: v('date'),
+    montant: parseFloat(v('montant')) || 0,
+    secteur: v('secteur') || 'Autre',
+    description: v('description'),
+    pdfPath: pdfPath
+  };
+  if (!fourn.nom && !fourn.numero) { toast('Rien à enregistrer (fournisseur vide)', '#e63946'); return; }
+  const list = DB.fournisseurs;
+  list.push(fourn);
+  DB.fournisseurs = list;
+  toast('✓ Fournisseur enregistré' + (pdfPath ? ' + PDF' : ''), '#2d9e6b');
+  _pendingFournPdf = null;
+  fournCancel();
+  renderFournisseurs();
+}
+
+async function viewFournPdf(id) {
+  const f = (DB.fournisseurs || []).find(x => x.id === id);
+  if (!f || !f.pdfPath) { toast('Aucun PDF associé', '#e63946'); return; }
+  try {
+    const { data, error } = await sb.storage.from('fournisseurs-pdfs').createSignedUrl(f.pdfPath, 3600);
+    if (error || !data) { toast('Erreur lien PDF', '#e63946'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
+}
+
+function confirmDeleteFourn(id, label) {
+  $('confirm-msg').textContent = `Supprimer le fournisseur "${label}" ?`;
+  $('confirm-btn').onclick = async () => {
+    const f = (DB.fournisseurs || []).find(x => x.id === id);
+    const pdfPath = f ? f.pdfPath : '';
+    DB.fournisseurs = DB.fournisseurs.filter(x => x.id !== id);
+    closeModal('modal-confirm');
+    renderFournisseurs();
+    toast('Fournisseur supprimé', '#e63946');
+    if (pdfPath) { try { await sb.storage.from('fournisseurs-pdfs').remove([pdfPath]); } catch (e) {} }
+  };
+  openModal('modal-confirm');
+}
+
+function renderFournisseurs() {
+  const list = $('fournisseurs-list');
+  const count = $('fournisseurs-count');
+  const q = (($('fourn-search') || {}).value || '').toLowerCase();
+  let items = (DB.fournisseurs || []).slice();
+  if (q) items = items.filter(f => ((f.nom||'')+' '+(f.numero||'')+' '+(f.description||'')+' '+(f.secteur||'')).toLowerCase().includes(q));
+  if (count) count.textContent = items.length ? items.length + ' facture(s) fournisseur' : '';
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Aucune facture fournisseur.<br>Glisse un PDF ci-dessus pour commencer.</div></div>';
+    return;
+  }
+  const groups = {};
+  items.forEach(f => { const k = f.secteur || 'Autre'; (groups[k] = groups[k] || []).push(f); });
+  list.innerHTML = Object.keys(groups).sort().map(sec => {
+    const arr = groups[sec].sort((a, b) => (b.dateDoc||'').localeCompare(a.dateDoc||''));
+    const col = SECTEUR_COLORS[sec] || '#64748b';
+    const totalSec = arr.reduce((s, f) => s + (parseFloat(f.montant)||0), 0);
+    return `
+      <div style="margin-top:14px;">
+        <div style="font-size:13px;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${col};padding-bottom:4px;">
+          📦 ${sec} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(totalSec)} CHF)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${arr.map(f => `
+            <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${col};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+              <div style="min-width:150px;">
+                <div style="font-size:13px;font-weight:800;color:var(--navy);">${f.nom||'—'}</div>
+                <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(f.dateDoc)||'—'}${f.numero?' · N° '+f.numero:''}</div>
+              </div>
+              <div style="flex:2;min-width:200px;font-size:12px;color:var(--g600);">${f.description||''}</div>
+              <div style="min-width:100px;text-align:right;">
+                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant||0)} CHF</div>
+              </div>
+              <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+                ${f.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewFournPdf('${f.id}')" title="Voir le PDF">📎 PDF</button>` : ''}
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteFourn('${f.id}','${(f.nom||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
 }

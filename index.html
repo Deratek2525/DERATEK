@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601f">
+<link rel="stylesheet" href="./style.css?v=20260601g">
 </head>
 <body>
 
@@ -229,6 +229,7 @@
     <button id="nb-locataires" class="nav-btn" onclick="showScreen(&#39;locataires&#39;)">🏠 <span>Locataires</span></button>
     <button id="nb-bons" class="nav-btn" onclick="showScreen(&#39;bons&#39;)">📄 <span>Bons</span></button>
     <button id="nb-devis" class="nav-btn" onclick="showScreen(&#39;devis&#39;)">🧾 <span>Devis / Factures</span></button>
+    <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span></button>
     <div class="nav-right">
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
@@ -931,6 +932,36 @@
     </div>
   </div>
 
+  <!-- FOURNISSEURS -->
+  <div id="screen-fournisseurs" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">Fournisseurs</div>
+        <div class="page-sub" id="fournisseurs-count"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="search-wrap" style="min-width:180px;">
+          <input type="text" placeholder="Rechercher..." id="fourn-search" oninput="renderFournisseurs()">
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div id="fourn-dropzone" class="bon-dropzone"
+           onclick="document.getElementById('fourn-file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="fournHandleDrop(event)">
+        <div class="bon-dropzone-icon">📦⬇️</div>
+        <div class="bon-dropzone-title">Glissez une facture fournisseur (PDF) ici</div>
+        <div class="bon-dropzone-sub">ou cliquez pour choisir un fichier — l'IA lit le document et remplit tout automatiquement</div>
+        <input type="file" id="fourn-file-input" accept="application/pdf" style="display:none" onchange="fournHandleInput(event)">
+      </div>
+      <div id="fourn-status" style="display:none;margin:14px 0;text-align:center;font-size:13px;color:var(--navy);"></div>
+      <div id="fourn-confirm" style="display:none;"></div>
+      <div id="fournisseurs-list" style="margin-top:18px;"></div>
+    </div>
+  </div>
+
   <!-- DEVIS / FACTURES -->
   <div id="screen-devis" class="screen">
     <div class="page-hd">
@@ -1011,9 +1042,9 @@
 <script src="./jspdf_umd_min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601f"></script>
-<script src="./config.js?v=20260601f"></script>
-<script src="./app.js?v=20260601f"></script>
-<script src="./pdf.js?v=20260601f"></script>
+<script src="./logo.js?v=20260601g"></script>
+<script src="./config.js?v=20260601g"></script>
+<script src="./app.js?v=20260601g"></script>
+<script src="./pdf.js?v=20260601g"></script>
 
 </body></html>
