@@ -586,6 +586,41 @@ function populateClientSelectInterv(selectedId) {
   $('iv-client').innerHTML = '<option value="">-- Sélectionner --</option>' +
     DB.clients.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom}</option>`).join('');
 }
+// Construit un lien "Ajouter à Google Agenda" (événement pré-rempli)
+function _googleCalUrl({ titre, date, heure, dureeMin, details, lieu }) {
+  // Format des dates Google : YYYYMMDDTHHMMSS (heure locale)
+  const pad = n => String(n).padStart(2, '0');
+  const [Y, M, D] = (date || today()).split('-').map(x => parseInt(x, 10));
+  let [h, mi] = (heure || '08:00').split(':').map(x => parseInt(x, 10));
+  if (isNaN(h)) h = 8; if (isNaN(mi)) mi = 0;
+  const start = new Date(Y, (M || 1) - 1, D || 1, h, mi);
+  const end = new Date(start.getTime() + (dureeMin || 60) * 60000);
+  const fmt = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: titre || 'Intervention DERATEK',
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: details || '',
+    location: lieu || ''
+  });
+  return 'https://calendar.google.com/calendar/render?' + params.toString();
+}
+// Ouvre Google Agenda pré-rempli depuis les champs de la modale intervention
+function addCurrentIntervToGoogle() {
+  const v = id => { const el = $(id); return el ? el.value : ''; };
+  const clientNom = (() => { const c = (DB.clients||[]).find(x => x.id === v('iv-client')); return c ? c.nom : ''; })();
+  const nuisible = v('iv-nuisible');
+  const titre = 'DERATEK' + (nuisible ? ' — ' + nuisible : '') + (clientNom ? ' (' + clientNom + ')' : '');
+  const details = [
+    clientNom ? 'Client : ' + clientNom : '',
+    nuisible ? 'Nuisible : ' + nuisible : '',
+    v('iv-tech') ? 'Technicien : ' + v('iv-tech') : '',
+    v('iv-notes') ? 'Notes : ' + v('iv-notes') : ''
+  ].filter(Boolean).join('\n');
+  const url = _googleCalUrl({ titre, date: v('iv-date'), heure: v('iv-heure'), dureeMin: 60, details, lieu: v('iv-adresse') });
+  window.open(url, '_blank');
+}
+
 function saveInterv() {
   const clientId = $('iv-client').value;
   const client = DB.clients.find(c => c.id === clientId);
