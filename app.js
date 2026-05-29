@@ -3070,6 +3070,15 @@ function renderDiagEditor() {
     <div style="margin-bottom:8px;">${insectesHtml}</div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Éléments / bois touchés</label><textarea class="form-input" rows="2" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. poutres, solives, chevrons, lambris...">${d.elementsTouches||''}</textarea></div>
 
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">✏️ Schéma de la charpente (entoure les zones touchées)</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Réinitialiser le schéma</button>
+        <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine à la souris ou au doigt pour entourer les zones infestées.</span>
+      </div>
+    </div>
+
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔬 Diagnostic</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
       <div class="form-group"><label class="form-label">Activité de l'infestation</label>
@@ -3096,7 +3105,62 @@ function renderDiagEditor() {
     <div class="form-group"><label class="form-label">Conclusion / recommandations</label><textarea class="form-input" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea></div>
   `;
   const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
+  initDiagSchema();
 }
+
+// --- Schéma de charpente annotable ---
+let _diagDrawing = false;
+function _drawSchemaBase(ctx, W, H) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#7a4a1e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  const baseY = H*0.60, topY = H*0.16, leftX = W*0.12, rightX = W*0.88, midX = W*0.5;
+  // Arbalétriers (triangle)
+  ctx.beginPath(); ctx.moveTo(leftX, baseY); ctx.lineTo(midX, topY); ctx.lineTo(rightX, baseY); ctx.stroke();
+  // Entrait / poutre
+  ctx.beginPath(); ctx.moveTo(leftX, baseY); ctx.lineTo(rightX, baseY); ctx.stroke();
+  // Poinçon
+  ctx.beginPath(); ctx.moveTo(midX, topY); ctx.lineTo(midX, baseY); ctx.stroke();
+  // Jambes de force
+  const midPost = (topY + baseY) / 2;
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(midX, midPost); ctx.lineTo(W*0.30, baseY); ctx.moveTo(midX, midPost); ctx.lineTo(W*0.70, baseY); ctx.stroke();
+  // Solives sous l'entrait
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 7; i++) { const x = leftX + (rightX-leftX)*(i+0.5)/7; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + H*0.18); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(leftX, baseY + H*0.18); ctx.lineTo(rightX, baseY + H*0.18); ctx.stroke();
+  // Labels
+  ctx.fillStyle = '#0d1b3e'; ctx.font = 'bold 13px Arial';
+  ctx.fillText('Faîtière', midX - 22, topY - 6);
+  ctx.fillText('Arbalétrier', W*0.18, midPost - 26);
+  ctx.fillText('Poinçon', midX + 6, midPost - 4);
+  ctx.fillText('Jambe de force', W*0.55, baseY - 10);
+  ctx.fillText('Entrait / Poutre', midX - 38, baseY - 7);
+  ctx.fillText('Solives', leftX, baseY + H*0.18 + 16);
+}
+function initDiagSchema() {
+  const c = $('diag-schema-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  if (_editingDiag && _editingDiag.schema) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
+    img.src = _editingDiag.schema;
+  } else {
+    _drawSchemaBase(ctx, c.width, c.height);
+  }
+  const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
+  const start = e => { _diagDrawing = true; const p = pos(e); ctx.strokeStyle = '#e63946'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
+  const move = e => { if (!_diagDrawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
+  const end = () => { if (!_diagDrawing) return; _diagDrawing = false; if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); };
+  c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
+  c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
+}
+function clearDiagSchema() {
+  const c = $('diag-schema-canvas'); if (!c) return;
+  _drawSchemaBase(c.getContext('2d'), c.width, c.height);
+  if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+}
+
 function onDiagClientSelect(id) {
   const c = (DB.clients||[]).find(x => x.id === id);
   if (!c) { _editingDiag.clientId=''; return; }
@@ -3121,6 +3185,9 @@ function autoFillDiagFromBon(numero) {
 }
 function saveDiag() {
   if (!_editingDiag) return;
+  // Capture le schéma (même non annoté) pour l'inclure dans le PDF
+  const c = $('diag-schema-canvas');
+  if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
   const list = DB.diagnostics;
   const i = list.findIndex(x => x.id === _editingDiag.id);
   if (i >= 0) list[i] = _editingDiag; else list.push(_editingDiag);
@@ -3208,6 +3275,14 @@ function downloadDiagPDF(id) {
   field('Étendue', d.etendue);
   field('Humidité du bois', d.humidite);
   if (d.diagnostic) { y+=1; doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text('Observations :',20,y);y+=5; doc.setFont('helvetica','normal'); doc.splitTextToSize(d.diagnostic,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
+
+  // Schéma de la charpente (image annotée)
+  if (d.schema) {
+    if (y > 200) { doc.addPage(); y = 20; }
+    y += 4; section('Schéma de la charpente');
+    try { doc.addImage(d.schema, 'PNG', 20, y, 170, 100); y += 104; } catch (e) {}
+  }
+
   if (d.conclusion) { y+=4; section('Conclusion / recommandations'); doc.splitTextToSize(d.conclusion,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
 
   // Signature
