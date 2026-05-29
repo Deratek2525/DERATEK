@@ -50,7 +50,7 @@ const TABLE_FIELDS = {
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
-  intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom' } },
+  intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
