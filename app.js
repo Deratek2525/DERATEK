@@ -50,7 +50,7 @@ const TABLE_FIELDS = {
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
-  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path' } },
+  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht' } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
@@ -3579,6 +3579,8 @@ async function fournExtractInfosIA(texte) {
     '{\n"fournisseur":"nom du fournisseur / entreprise émettrice",\n' +
     '"numero":"numéro de facture",\n' +
     '"date":"date de la facture au format AAAA-MM-JJ",\n' +
+    '"montant_ht":"montant hors taxe (HT), chiffres uniquement",\n' +
+    '"tva":"montant de la TVA, chiffres uniquement",\n' +
     '"montant":"montant total TTC, chiffres uniquement (ex 1234.50)",\n' +
     '"description":"objet ou résumé court des articles/prestations"\n}';
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
@@ -3612,7 +3614,9 @@ function fournShowConfirm(infos, fileName) {
         ${champ('Fournisseur', 'fournisseur', infos.fournisseur)}
         ${champ('N° de facture', 'numero', infos.numero)}
         ${champ('Date (AAAA-MM-JJ)', 'date', infos.date)}
-        ${champ('Montant (CHF)', 'montant', infos.montant)}
+        ${champ('Montant HT (CHF)', 'montant_ht', infos.montant_ht)}
+        ${champ('TVA (CHF)', 'tva', infos.tva)}
+        ${champ('Montant TTC (CHF)', 'montant', infos.montant)}
       </div>
       <div style="margin-bottom:8px;">
         <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Secteur</label>
@@ -3660,6 +3664,8 @@ async function fournConfirmSave() {
     nom: v('fournisseur'),
     numero: v('numero'),
     dateDoc: v('date'),
+    montantHt: parseFloat(v('montant_ht')) || 0,
+    tva: parseFloat(v('tva')) || 0,
     montant: parseFloat(v('montant')) || 0,
     secteur: v('secteur') || 'Autre',
     description: v('description'),
@@ -3729,9 +3735,10 @@ function renderFournisseurs() {
                 <div style="font-size:13px;font-weight:800;color:var(--navy);">${f.nom||'—'}</div>
                 <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(f.dateDoc)||'—'}${f.numero?' · N° '+f.numero:''}</div>
               </div>
-              <div style="flex:2;min-width:200px;font-size:12px;color:var(--g600);">${f.description||''}</div>
-              <div style="min-width:100px;text-align:right;">
-                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant||0)} CHF</div>
+              <div style="flex:2;min-width:160px;font-size:12px;color:var(--g600);">${f.description||''}</div>
+              <div style="min-width:140px;text-align:right;">
+                ${(f.montantHt||f.tva) ? `<div style="font-size:11px;color:var(--g600);">HT ${_displayMontant(f.montantHt||0)} · TVA ${_displayMontant(f.tva||0)}</div>` : ''}
+                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant||0)} CHF <span style="font-size:9px;color:var(--g400);">TTC</span></div>
               </div>
               <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
                 ${f.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewFournPdf('${f.id}')" title="Voir le PDF">📎 PDF</button>` : ''}
