@@ -498,7 +498,7 @@ function renderSemaine() {
       const cellIvs = DB.intervs.filter(iv => iv.date === dateStr && iv.heure && iv.heure.substring(0,2) === h.substring(0,2));
       html += `<div class="ag-day-cell" data-date="${dateStr}" data-heure="${h}" onclick="handleAgCell(this)">`;
       cellIvs.forEach(iv => {
-        html += `<div class="ag-event" style="background:${iv.couleur}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.clientNom} — ${iv.nuisible}">${iv.heure} ${iv.clientNom}</div>`;
+        html += `<div class="ag-event" style="background:${iv.couleur}${iv.bonId?';cursor:pointer;text-decoration:underline':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Cliquer pour ouvrir le bon — ':''}${iv.clientNom} — ${iv.nuisible}">${iv.heure} ${iv.bonNumero?'🔖'+iv.bonNumero+' ':''}${iv.clientNom}</div>`;
       });
       html += '</div>';
     });
@@ -529,7 +529,7 @@ function renderMois() {
     html += `<div class="cal-day${isToday?' today':''}" data-date="${dateStr}" data-heure="09:00" onclick="handleAgCell(this)">`;
     html += `<div class="cal-day-num">${day}</div>`;
     dayIvs.slice(0,3).forEach(iv => {
-      html += `<div class="cal-ev" style="background:${iv.couleur}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)">${iv.heure} ${iv.clientNom}</div>`;
+      html += `<div class="cal-ev" style="background:${iv.couleur}${iv.bonId?';cursor:pointer':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Ouvrir le bon':''}">${iv.heure} ${iv.bonNumero?'🔖'+iv.bonNumero+' ':''}${iv.clientNom}</div>`;
     });
     if (dayIvs.length > 3) html += `<div style="font-size:9px;color:var(--g400);">+${dayIvs.length-3} autres</div>`;
     html += '</div>';
@@ -542,7 +542,25 @@ function renderMois() {
   mv.innerHTML = html;
 }
 function handleAgCell(el) { openNewIntervDate(el.dataset.date || today(), el.dataset.heure || '08:00'); }
-function handleAgEvent(el) { if (el.dataset.id) openEditInterv(el.dataset.id); }
+function handleAgEvent(el) {
+  const id = el.dataset.id; if (!id) return;
+  const iv = (DB.intervs || []).find(x => x.id === id);
+  if (iv && iv.bonId) { goToBon(iv.bonId); return; }
+  openEditInterv(id);
+}
+// Va à l'onglet Bons et met en évidence le bon ciblé
+function goToBon(bonId) {
+  showScreen('bons');
+  setTimeout(() => {
+    const el = document.getElementById('bonrow-' + bonId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const prev = el.style.boxShadow;
+      el.style.boxShadow = '0 0 0 3px #e63946';
+      setTimeout(() => { el.style.boxShadow = prev; }, 2200);
+    }
+  }, 200);
+}
 
 // ============================================================
 // INTERVENTIONS
@@ -2112,7 +2130,7 @@ function renderBons() {
             };
             const stStyle = statutStyles[statut] || statutStyles[''];
             return `
-            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
                 <div style="width:34px;height:34px;border-radius:50%;background:${gColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
                 <div>
@@ -2255,6 +2273,8 @@ function _syncBonIntervention(b) {
       statut: 'Planifiée',
       couleur: colorForGeranceName(b.geranceNom || ''),
       notes: 'Bon ' + (b.numero || '') + (b.locataireNom ? ' — ' + b.locataireNom : ''),
+      bonId: b.id,
+      bonNumero: b.numero || '',
     });
   }
   DB.intervs = ivs;
