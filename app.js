@@ -36,6 +36,7 @@ const TABLE_FIELDS = {
     contactSurPlace: 'contact_sur_place',
     createdAt: 'created_at',
     pdfPath: 'pdf_path',
+    dateIntervention: 'date_intervention',
   } },
   rapports:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
@@ -2140,6 +2141,13 @@ function renderBons() {
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
                 <div style="font-size:12px;color:var(--g600);">${b.probleme || '—'}</div>
               </div>
+              <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:150px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid #ccc;">
+                  <button class="btn btn-ghost btn-xs" onclick="addBonToGoogle('${b.id}')" title="Ajouter à Google Agenda">📅</button>
+                </div>
+              </div>
               <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                 <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
                   <option value="">— Statut —</option>
@@ -2222,6 +2230,30 @@ function autoFillFromBonNumero(numero) {
 
   toast('✓ Locataire et gérance auto-remplis depuis le bon ' + bon.numero, '#2d9e6b');
   if (typeof updatePDF === 'function') updatePDF();
+}
+
+// Enregistre la date de prochaine intervention sur un bon
+function updateBonDateInterv(id, value) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id);
+  if (!b) return;
+  b.dateIntervention = value;
+  DB.bons = bons;
+  toast(value ? ('📅 Intervention prévue le ' + fmtDate(value)) : 'Date effacée', '#2d9e6b');
+}
+// Ajoute le bon à Google Agenda à la date de prochaine intervention
+function addBonToGoogle(id) {
+  const b = (DB.bons || []).find(x => x.id === id);
+  if (!b) return;
+  if (!b.dateIntervention) { toast('Choisis d\'abord une date de prochaine intervention', '#e63946'); return; }
+  const titre = 'DERATEK — Bon ' + (b.numero || '') + (b.geranceNom ? ' (' + b.geranceNom + ')' : '');
+  const details = [
+    b.geranceNom ? 'Gérance : ' + b.geranceNom : '',
+    b.locataireNom ? 'Locataire : ' + b.locataireNom : '',
+    b.probleme ? 'Problème : ' + b.probleme : ''
+  ].filter(Boolean).join('\n');
+  const url = _googleCalUrl({ titre, date: b.dateIntervention, heure: '08:00', dureeMin: 60, details, lieu: b.immeuble || '' });
+  window.open(url, '_blank');
 }
 
 // Met à jour le statut d'un bon (transmis / en-cours / termine / vide)
