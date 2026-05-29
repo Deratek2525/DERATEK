@@ -500,7 +500,7 @@ function renderSemaine() {
       const cellIvs = DB.intervs.filter(iv => iv.date === dateStr && iv.heure && iv.heure.substring(0,2) === h.substring(0,2));
       html += `<div class="ag-day-cell" data-date="${dateStr}" data-heure="${h}" onclick="handleAgCell(this)">`;
       cellIvs.forEach(iv => {
-        html += `<div class="ag-event" style="background:${iv.couleur}${iv.bonId?';cursor:pointer;text-decoration:underline':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Cliquer pour ouvrir le bon — ':''}${iv.clientNom} — ${iv.nuisible}">${iv.heure} ${iv.bonNumero?'🔖'+iv.bonNumero+' ':''}${iv.clientNom}</div>`;
+        html += `<div class="ag-event" style="background:${iv.couleur}${iv.bonId?';cursor:pointer;text-decoration:underline':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Cliquer pour ouvrir le bon — ':''}${iv.nuisible} — ${iv.clientNom}${iv.bonNumero?' — Bon '+iv.bonNumero:''}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
       });
       html += '</div>';
     });
@@ -531,7 +531,7 @@ function renderMois() {
     html += `<div class="cal-day${isToday?' today':''}" data-date="${dateStr}" data-heure="09:00" onclick="handleAgCell(this)">`;
     html += `<div class="cal-day-num">${day}</div>`;
     dayIvs.slice(0,3).forEach(iv => {
-      html += `<div class="cal-ev" style="background:${iv.couleur}${iv.bonId?';cursor:pointer':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Ouvrir le bon':''}">${iv.heure} ${iv.bonNumero?'🔖'+iv.bonNumero+' ':''}${iv.clientNom}</div>`;
+      html += `<div class="cal-ev" style="background:${iv.couleur}${iv.bonId?';cursor:pointer':''}" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Ouvrir le bon — ':''}${iv.nuisible} — ${iv.clientNom}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
     });
     if (dayIvs.length > 3) html += `<div style="font-size:9px;color:var(--g400);">+${dayIvs.length-3} autres</div>`;
     html += '</div>';
@@ -2254,6 +2254,17 @@ function autoFillFromBonNumero(numero) {
   if (typeof updatePDF === 'function') updatePDF();
 }
 
+// Détermine le type de nuisible + sa couleur à partir du texte du problème
+function _nuisibleInfo(txt) {
+  const t = (txt || '').toLowerCase();
+  if (/gu[eê]pe|frelon/.test(t))                 return { label: 'Guêpes',         color: '#f4a623' }; // jaune
+  if (/punaise/.test(t))                          return { label: 'Punaises de lit', color: '#e63946' }; // rouge
+  if (/\brat|souris|rongeur|d[ée]ratis|mulot/.test(t)) return { label: 'Rats / souris', color: '#2563eb' }; // bleu
+  if (/blatte|cafard|cancrelat/.test(t))          return { label: 'Blattes',        color: '#2d9e6b' }; // vert
+  if (/pigeon|oiseau|volatile|fiente/.test(t))    return { label: 'Pigeons',        color: '#7c3aed' }; // violet
+  return { label: (txt ? txt.slice(0, 40) : 'Intervention'), color: '#6b7280' }; // gris (autre)
+}
+
 // Crée / met à jour / supprime l'intervention liée à un bon dans l'agenda interne
 function _syncBonIntervention(b) {
   if (!b) return;
@@ -2270,10 +2281,10 @@ function _syncBonIntervention(b) {
       clientId: b.geranceId || '',
       clientNom: b.geranceNom || '',
       adresse: adresse,
-      nuisible: b.probleme ? b.probleme.slice(0, 80) : '',
+      nuisible: _nuisibleInfo(b.probleme).label,
       tech: '',
       statut: 'Planifiée',
-      couleur: colorForGeranceName(b.geranceNom || ''),
+      couleur: _nuisibleInfo(b.probleme).color,
       notes: 'Bon ' + (b.numero || '') + (b.locataireNom ? ' — ' + b.locataireNom : ''),
       bonId: b.id,
       bonNumero: b.numero || '',
@@ -2308,9 +2319,9 @@ function addBonToGoogle(id) {
   const b = (DB.bons || []).find(x => x.id === id);
   if (!b) return;
   if (!b.dateIntervention) { toast('Choisis d\'abord une date de prochaine intervention', '#e63946'); return; }
-  // Titre : Nuisible / problème — Gérance — Locataire
-  const nuisible = b.probleme ? b.probleme.slice(0, 50) : 'Intervention';
-  const titre = [nuisible, b.geranceNom, b.locataireNom].filter(Boolean).join(' — ');
+  // Titre : Nuisible — Gérance
+  const nuisible = _nuisibleInfo(b.probleme).label;
+  const titre = [nuisible, b.geranceNom].filter(Boolean).join(' — ');
   const details = [
     'Bon ' + (b.numero || ''),
     b.geranceNom ? 'Gérance : ' + b.geranceNom : '',
