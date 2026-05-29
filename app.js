@@ -3073,9 +3073,12 @@ function renderDiagEditor() {
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">✏️ Schéma de la charpente (entoure les zones touchées)</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
       <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
-      <div style="display:flex;gap:6px;margin-top:6px;">
-        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Réinitialiser le schéma</button>
-        <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine à la souris ou au doigt pour entourer les zones infestées.</span>
+      <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">🪵 Schéma 3D par défaut</button>
+        <span style="font-size:11px;color:var(--g400);align-self:center;">Importe une photo de la charpente, puis dessine pour entourer les zones touchées.</span>
       </div>
     </div>
 
@@ -3175,15 +3178,19 @@ function _drawSchemaBase(ctx, W, H) {
   ctx.fillText('Pannes', (Rf.x+Rb.x)/2 - 6, (Rf.y+Rb.y)/2 - 6);
   ctx.fillText('Solives', Lf2.x + 4, (Lf2.y+Lb2.y)/2 + 16);
 }
+let _diagBgDataUrl = null;  // fond propre (schéma 3D ou photo importée), pour effacer les annotations
 function initDiagSchema() {
   const c = $('diag-schema-canvas'); if (!c) return;
   const ctx = c.getContext('2d');
   if (_editingDiag && _editingDiag.schema) {
+    _diagBgDataUrl = _editingDiag.schema;
     const img = new Image();
     img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
     img.src = _editingDiag.schema;
   } else {
     _drawSchemaBase(ctx, c.width, c.height);
+    _diagBgDataUrl = c.toDataURL('image/png');
+    if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
   }
   const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
   const start = e => { _diagDrawing = true; const p = pos(e); ctx.strokeStyle = '#e63946'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
@@ -3192,10 +3199,49 @@ function initDiagSchema() {
   c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
   c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
 }
+// Importe une photo/image comme fond du schéma
+function loadSchemaImage(ev) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  const c = $('diag-schema-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      const r = Math.min(c.width / img.width, c.height / img.height);
+      const w = img.width * r, h = img.height * r;
+      ctx.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
+      _diagBgDataUrl = c.toDataURL('image/png');
+      if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
+      toast('✓ Image chargée — dessine pour entourer les zones', '#2d9e6b');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
+}
+// Efface uniquement les annotations (revient au fond propre)
 function clearDiagSchema() {
   const c = $('diag-schema-canvas'); if (!c) return;
-  _drawSchemaBase(c.getContext('2d'), c.width, c.height);
-  if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+  const ctx = c.getContext('2d');
+  if (_diagBgDataUrl) {
+    const img = new Image();
+    img.onload = () => { ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height); if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); };
+    img.src = _diagBgDataUrl;
+  } else {
+    _drawSchemaBase(ctx, c.width, c.height);
+    if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+  }
+}
+// Revient au schéma 3D dessiné par défaut
+function resetToDefaultSchema() {
+  const c = $('diag-schema-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  _drawSchemaBase(ctx, c.width, c.height);
+  _diagBgDataUrl = c.toDataURL('image/png');
+  if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
 }
 
 function onDiagClientSelect(id) {
