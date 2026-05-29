@@ -245,19 +245,23 @@ const GERANCE_PALETTE = [
   '#0ea5e9', // ciel
   '#d946ef'  // magenta
 ];
-function colorForClient(c) {
-  if (!c) return '#6b7280';
-  // Les non-gérances gardent la couleur définie par leur type
-  if (c.type !== 'Gérance') return colorType(c.type);
-  // Pour les gérances : couleur déterministe basée sur le nom (chaque gérance a SA couleur)
-  // Hash FNV-1a 32-bit pour une meilleure distribution
-  const key = String(c.nom || c.id || '').toLowerCase();
+// Couleur déterministe à partir d'un nom (hash FNV-1a 32-bit)
+function colorForGeranceName(nom) {
+  const key = String(nom || '').toLowerCase().trim();
+  if (!key) return '#6b7280';
   let hash = 0x811c9dc5;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
     hash = (hash * 0x01000193) >>> 0;
   }
   return GERANCE_PALETTE[hash % GERANCE_PALETTE.length];
+}
+function colorForClient(c) {
+  if (!c) return '#6b7280';
+  // Les non-gérances gardent la couleur définie par leur type
+  if (c.type !== 'Gérance') return colorType(c.type);
+  // Pour les gérances : couleur déterministe basée sur le nom (chaque gérance a SA couleur)
+  return colorForGeranceName(c.nom || c.id);
 }
 const badgeCls = s => ({Brouillon:'b-gray',Envoyé:'b-green',Finalisé:'b-blue',Terminée:'b-green','En cours':'b-blue',Planifiée:'b-gray',Urgent:'b-red',Annulée:'b-gray'}[s] || 'b-gray');
 const initials = nom => nom.split(' ').filter(w => w.length > 1).slice(0,2).map(w => w[0].toUpperCase()).join('') || nom.slice(0,2).toUpperCase();
@@ -1943,16 +1947,17 @@ function renderLocataires() {
 
   grid.innerHTML = keys.map(g => {
     const items = groups[g].sort((a, b) => (b.dateEnreg || '').localeCompare(a.dateEnreg || ''));
+    const gColorL = colorForGeranceName(g);
     return `
       <div style="margin-top:14px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;border-bottom:2px solid var(--red);padding-bottom:5px;">
+        <div style="font-size:13px;font-weight:800;color:${gColorL};text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;border-bottom:2px solid ${gColorL};padding-bottom:5px;">
           🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length} locataire${items.length !== 1 ? 's' : ''})</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(({ l, dateFmt }) => `
-            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid #7c3aed;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColorL};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:10px;min-width:200px;flex:1.5;">
-                <div style="width:34px;height:34px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(l.nom||'')}</div>
+                <div style="width:34px;height:34px;border-radius:50%;background:${gColorL};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(l.nom||'')}</div>
                 <div>
                   <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">${l.nom||'—'}</div>
                   ${dateFmt ? `<div style="font-size:11px;color:var(--g600);">📅 ${dateFmt}</div>` : ''}
@@ -2036,9 +2041,10 @@ function renderBons() {
 
   list.innerHTML = Object.keys(groups).sort().map(g => {
     const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    const gColor = colorForGeranceName(g);
     return `
       <div style="margin-top:14px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid var(--red);padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
+        <div style="font-size:13px;font-weight:800;color:${gColor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${gColor};padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(b => {
             const loc = (b.locataireId && locById[b.locataireId]) || (b.locataireNom && locByName[b.locataireNom.toLowerCase()]) || null;
@@ -2062,9 +2068,9 @@ function renderBons() {
             };
             const stStyle = statutStyles[statut] || statutStyles[''];
             return `
-            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
-                <div style="width:34px;height:34px;border-radius:50%;background:#0d1b3e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
+                <div style="width:34px;height:34px;border-radius:50%;background:${gColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
                 <div>
                   <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
                   <div style="font-size:12px;color:var(--red);font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
