@@ -236,7 +236,9 @@ let state = {
 // ============================================================
 const $ = id => document.getElementById(id);
 const fmtDate = d => { if (!d) return '—'; try { const [y,m,dd] = d.split('-'); return `${dd}.${m}.${y}`; } catch { return d; } };
-const today = () => new Date().toISOString().split('T')[0];
+// Date locale au format YYYY-MM-DD (évite le décalage de fuseau de toISOString)
+const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = () => localDateStr(new Date());
 const genId = () => `R-${new Date().getFullYear()}-${String(DB.rapports.length + 420).padStart(4,'0')}`;
 const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Entreprise:'#e63946'}[t] || '#6b7280');
 // Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
@@ -481,7 +483,7 @@ function renderSemaine() {
   const dayNames = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const monthNames = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
   const weekDates = Array.from({length:7}, (_,i) => new Date(ws.getTime() + i*86400000));
-  $('agenda-period').textContent = `${fmtDate(weekDates[0].toISOString().split('T')[0])} — ${fmtDate(weekDates[6].toISOString().split('T')[0])}`;
+  $('agenda-period').textContent = `${fmtDate(localDateStr(weekDates[0]))} — ${fmtDate(localDateStr(weekDates[6]))}`;
   const hours = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
   let html = '<div class="agenda-wrap">';
   html += '<div class="ag-header-row"><div class="ag-header-cell"></div>';
@@ -494,7 +496,7 @@ function renderSemaine() {
     html += '<div class="ag-body-row">';
     html += `<div class="ag-time-cell">${h}</div>`;
     weekDates.forEach(d => {
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = localDateStr(d);
       const cellIvs = DB.intervs.filter(iv => iv.date === dateStr && iv.heure && iv.heure.substring(0,2) === h.substring(0,2));
       html += `<div class="ag-day-cell" data-date="${dateStr}" data-heure="${h}" onclick="handleAgCell(this)">`;
       cellIvs.forEach(iv => {
@@ -516,7 +518,7 @@ function renderMois() {
   let firstDay = new Date(year, month, 1).getDay(); firstDay = firstDay === 0 ? 6 : firstDay - 1;
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const daysInPrev  = new Date(year, month, 0).getDate();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = today();
   let html = '<div class="cal-header">';
   ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].forEach(d => html += `<div class="cal-day-hd">${d}</div>`);
   html += '</div><div class="cal-grid">';
