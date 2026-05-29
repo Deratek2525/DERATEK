@@ -2308,8 +2308,11 @@ function addBonToGoogle(id) {
   const b = (DB.bons || []).find(x => x.id === id);
   if (!b) return;
   if (!b.dateIntervention) { toast('Choisis d\'abord une date de prochaine intervention', '#e63946'); return; }
-  const titre = 'DERATEK — Bon ' + (b.numero || '') + (b.geranceNom ? ' (' + b.geranceNom + ')' : '');
+  // Titre : Nuisible / problème — Gérance — Locataire
+  const nuisible = b.probleme ? b.probleme.slice(0, 50) : 'Intervention';
+  const titre = [nuisible, b.geranceNom, b.locataireNom].filter(Boolean).join(' — ');
   const details = [
+    'Bon ' + (b.numero || ''),
     b.geranceNom ? 'Gérance : ' + b.geranceNom : '',
     b.locataireNom ? 'Locataire : ' + b.locataireNom : '',
     b.probleme ? 'Problème : ' + b.probleme : ''
