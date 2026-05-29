@@ -3113,30 +3113,67 @@ let _diagDrawing = false;
 function _drawSchemaBase(ctx, W, H) {
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#7a4a1e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  const baseY = H*0.60, topY = H*0.16, leftX = W*0.12, rightX = W*0.88, midX = W*0.5;
-  // Arbalétriers (triangle)
-  ctx.beginPath(); ctx.moveTo(leftX, baseY); ctx.lineTo(midX, topY); ctx.lineTo(rightX, baseY); ctx.stroke();
-  // Entrait / poutre
-  ctx.beginPath(); ctx.moveTo(leftX, baseY); ctx.lineTo(rightX, baseY); ctx.stroke();
-  // Poinçon
-  ctx.beginPath(); ctx.moveTo(midX, topY); ctx.lineTo(midX, baseY); ctx.stroke();
-  // Jambes de force
-  const midPost = (topY + baseY) / 2;
-  ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(midX, midPost); ctx.lineTo(W*0.30, baseY); ctx.moveTo(midX, midPost); ctx.lineTo(W*0.70, baseY); ctx.stroke();
-  // Solives sous l'entrait
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 7; i++) { const x = leftX + (rightX-leftX)*(i+0.5)/7; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + H*0.18); ctx.stroke(); }
-  ctx.beginPath(); ctx.moveTo(leftX, baseY + H*0.18); ctx.lineTo(rightX, baseY + H*0.18); ctx.stroke();
-  // Labels
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // Décalage de profondeur (effet isométrique)
+  const dx = W * 0.26, dy = -H * 0.16;
+  const wood = '#8a5a28', woodDark = '#5e3c16';
+  const L = (x1,y1,x2,y2,col,lw) => { ctx.strokeStyle=col; ctx.lineWidth=lw; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
+  const off = (p) => ({ x: p.x + dx, y: p.y + dy });
+
+  // Ferme avant (king-post truss)
+  const Lf = { x: W*0.10, y: H*0.66 };           // base gauche
+  const Rf = { x: W*0.62, y: H*0.66 };           // base droite
+  const Af = { x: (Lf.x+Rf.x)/2, y: H*0.30 };    // faîte (apex)
+  const Mf = { x: (Lf.x+Rf.x)/2, y: Lf.y };      // pied du poinçon
+  // Ferme arrière (décalée)
+  const Lb = off(Lf), Rb = off(Rf), Ab = off(Af), Mb = off(Mf);
+
+  // Pans de toiture (faces) légèrement teintés pour le volume
+  ctx.fillStyle = 'rgba(180,130,70,0.12)';
+  ctx.beginPath(); ctx.moveTo(Lf.x,Lf.y); ctx.lineTo(Af.x,Af.y); ctx.lineTo(Ab.x,Ab.y); ctx.lineTo(Lb.x,Lb.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(150,100,50,0.18)';
+  ctx.beginPath(); ctx.moveTo(Rf.x,Rf.y); ctx.lineTo(Af.x,Af.y); ctx.lineTo(Ab.x,Ab.y); ctx.lineTo(Rb.x,Rb.y); ctx.closePath(); ctx.fill();
+
+  // Pannes (lignes de liaison avant→arrière) : faîtière + sablières + arbalétriers
+  L(Af.x,Af.y, Ab.x,Ab.y, woodDark, 4);          // faîtière
+  L(Lf.x,Lf.y, Lb.x,Lb.y, wood, 3.5);            // sablière gauche
+  L(Rf.x,Rf.y, Rb.x,Rb.y, wood, 3.5);            // sablière droite
+  L(Mf.x,Mf.y, Mb.x,Mb.y, wood, 3);              // entrait liaison
+
+  // Ferme arrière
+  L(Lb.x,Lb.y, Ab.x,Ab.y, wood, 3); L(Ab.x,Ab.y, Rb.x,Rb.y, wood, 3); L(Lb.x,Lb.y, Rb.x,Rb.y, wood, 3);
+  L(Ab.x,Ab.y, Mb.x,Mb.y, wood, 2.5);
+
+  // Ferme avant (par-dessus)
+  L(Lf.x,Lf.y, Af.x,Af.y, woodDark, 4.5);        // arbalétrier gauche
+  L(Af.x,Af.y, Rf.x,Rf.y, woodDark, 4.5);        // arbalétrier droit
+  L(Lf.x,Lf.y, Rf.x,Rf.y, woodDark, 5);          // entrait / poutre
+  L(Af.x,Af.y, Mf.x,Mf.y, woodDark, 3.5);        // poinçon
+  // Jambes de force avant
+  const midPost = { x: Af.x, y: (Af.y+Mf.y)/2 };
+  L(midPost.x,midPost.y, Lf.x+(Rf.x-Lf.x)*0.22, Lf.y, woodDark, 3);
+  L(midPost.x,midPost.y, Lf.x+(Rf.x-Lf.x)*0.78, Rf.y, woodDark, 3);
+
+  // Solives : grille de plancher sous l'entrait (profondeur)
+  ctx.strokeStyle = wood; ctx.lineWidth = 2;
+  const floorDrop = H*0.16;
+  const Lf2 = {x:Lf.x, y:Lf.y+floorDrop}, Rf2 = {x:Rf.x, y:Rf.y+floorDrop};
+  const Lb2 = off(Lf2), Rb2 = off(Rf2);
+  // contour du plancher
+  ctx.beginPath(); ctx.moveTo(Lf2.x,Lf2.y); ctx.lineTo(Rf2.x,Rf2.y); ctx.lineTo(Rb2.x,Rb2.y); ctx.lineTo(Lb2.x,Lb2.y); ctx.closePath(); ctx.stroke();
+  // solives transversales
+  for (let i=1;i<6;i++){ const tx=i/6; const a={x:Lf2.x+(Rf2.x-Lf2.x)*tx,y:Lf2.y+(Rf2.y-Lf2.y)*tx}; const b=off(a); L(a.x,a.y,b.x,b.y,wood,1.8); }
+  // poutres avant/arrière du plancher
+  L(Lf2.x,Lf2.y, Lf.x,Lf.y, wood,2); L(Rf2.x,Rf2.y, Rf.x,Rf.y, wood,2);
+
+  // Étiquettes
   ctx.fillStyle = '#0d1b3e'; ctx.font = 'bold 13px Arial';
-  ctx.fillText('Faîtière', midX - 22, topY - 6);
-  ctx.fillText('Arbalétrier', W*0.18, midPost - 26);
-  ctx.fillText('Poinçon', midX + 6, midPost - 4);
-  ctx.fillText('Jambe de force', W*0.55, baseY - 10);
-  ctx.fillText('Entrait / Poutre', midX - 38, baseY - 7);
-  ctx.fillText('Solives', leftX, baseY + H*0.18 + 16);
+  ctx.fillText('Faîtière', (Af.x+Ab.x)/2 - 18, (Af.y+Ab.y)/2 - 8);
+  ctx.fillText('Arbalétrier', Lf.x + 6, (Lf.y+Af.y)/2 - 8);
+  ctx.fillText('Poinçon', Af.x + 6, midPost.y);
+  ctx.fillText('Entrait / Poutre', (Lf.x+Rf.x)/2 - 40, Lf.y + 16);
+  ctx.fillText('Pannes', (Rf.x+Rb.x)/2 - 6, (Rf.y+Rb.y)/2 - 6);
+  ctx.fillText('Solives', Lf2.x + 4, (Lf2.y+Lb2.y)/2 + 16);
 }
 function initDiagSchema() {
   const c = $('diag-schema-canvas'); if (!c) return;
