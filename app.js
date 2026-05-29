@@ -2234,23 +2234,52 @@ function autoFillFromBonNumero(numero) {
   if (typeof updatePDF === 'function') updatePDF();
 }
 
-// Enregistre la date de prochaine intervention sur un bon
+// Crée / met à jour / supprime l'intervention liée à un bon dans l'agenda interne
+function _syncBonIntervention(b) {
+  if (!b) return;
+  const ivId = 'bon-iv-' + b.id;
+  let ivs = (DB.intervs || []).filter(x => x.id !== ivId);
+  if (b.dateIntervention) {
+    let adresse = '';
+    if (b.locataireId) { const l = (DB.locataires||[]).find(x=>x.id===b.locataireId); if (l) adresse = l.adresse || ''; }
+    if (!adresse) adresse = b.immeuble || '';
+    ivs.push({
+      id: ivId,
+      date: b.dateIntervention,
+      heure: b.heureIntervention || '08:00',
+      clientId: b.geranceId || '',
+      clientNom: b.geranceNom || '',
+      adresse: adresse,
+      nuisible: b.probleme ? b.probleme.slice(0, 80) : '',
+      tech: '',
+      statut: 'Planifiée',
+      couleur: colorForGeranceName(b.geranceNom || ''),
+      notes: 'Bon ' + (b.numero || '') + (b.locataireNom ? ' — ' + b.locataireNom : ''),
+    });
+  }
+  DB.intervs = ivs;
+  if (typeof renderAgenda === 'function') renderAgenda();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+// Enregistre la date de prochaine intervention sur un bon + planifie dans l'agenda
 function updateBonDateInterv(id, value) {
   const bons = DB.bons;
   const b = bons.find(x => x.id === id);
   if (!b) return;
   b.dateIntervention = value;
   DB.bons = bons;
-  toast(value ? ('📅 Intervention prévue le ' + fmtDate(value)) : 'Date effacée', '#2d9e6b');
+  _syncBonIntervention(b);
+  toast(value ? ('📅 Planifié dans l\'agenda le ' + fmtDate(value)) : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
 }
-// Enregistre l'heure de prochaine intervention sur un bon
+// Enregistre l'heure de prochaine intervention sur un bon + met à jour l'agenda
 function updateBonHeureInterv(id, value) {
   const bons = DB.bons;
   const b = bons.find(x => x.id === id);
   if (!b) return;
   b.heureIntervention = value;
   DB.bons = bons;
-  toast(value ? ('🕒 Heure : ' + value) : 'Heure effacée', '#2d9e6b');
+  _syncBonIntervention(b);
+  toast(value ? ('🕒 Heure : ' + value + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
 }
 // Ajoute le bon à Google Agenda à la date/heure de prochaine intervention
 function addBonToGoogle(id) {
