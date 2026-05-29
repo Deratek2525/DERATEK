@@ -3268,16 +3268,24 @@ function autoFillDiagFromBon(numero) {
 }
 function saveDiag() {
   if (!_editingDiag) return;
-  // Capture le schéma (même non annoté) pour l'inclure dans le PDF
-  const c = $('diag-schema-canvas');
-  if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
+  // L'image du schéma n'est PAS stockée en base (pour économiser l'espace) :
+  // le PDF généré + envoyé par mail tient lieu d'archive de l'image.
+  const toSave = JSON.parse(JSON.stringify(_editingDiag));
+  delete toSave.schema;
   const list = DB.diagnostics;
-  const i = list.findIndex(x => x.id === _editingDiag.id);
-  if (i >= 0) list[i] = _editingDiag; else list.push(_editingDiag);
+  const i = list.findIndex(x => x.id === toSave.id);
+  if (i >= 0) list[i] = toSave; else list.push(toSave);
   DB.diagnostics = list;
-  toast('✓ Diagnostic enregistré', '#2d9e6b');
+  toast('✓ Diagnostic enregistré (texte). Pense à télécharger le PDF pour garder le schéma.', '#2d9e6b');
   closeModal('modal-diag');
   renderDiagnostics();
+}
+// Génère le PDF depuis l'éditeur ouvert (avec l'image du schéma en mémoire)
+function downloadCurrentDiagPDF() {
+  if (!_editingDiag) return;
+  const c = $('diag-schema-canvas');
+  if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
+  _genDiagPDF(_editingDiag);
 }
 function confirmDeleteDiag(id, label) {
   $('confirm-msg').textContent = `Supprimer le diagnostic "${label}" ?`;
@@ -3320,6 +3328,10 @@ function renderDiagnostics() {
 }
 function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
+  if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
+  _genDiagPDF(d);
+}
+function _genDiagPDF(d) {
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   const co = DERATEK_CONFIG.company;
