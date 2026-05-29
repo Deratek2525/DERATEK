@@ -37,6 +37,7 @@ const TABLE_FIELDS = {
     createdAt: 'created_at',
     pdfPath: 'pdf_path',
     dateIntervention: 'date_intervention',
+    heureIntervention: 'heure_intervention',
   } },
   rapports:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
@@ -2141,10 +2142,11 @@ function renderBons() {
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
                 <div style="font-size:12px;color:var(--g600);">${b.probleme || '—'}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:150px;">
+              <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:170px;">
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
-                <div style="display:flex;gap:4px;align-items:center;">
-                  <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid #ccc;">
+                <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                  <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;">
+                  <input type="time" value="${b.heureIntervention||''}" onchange="updateBonHeureInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;width:78px;">
                   <button class="btn btn-ghost btn-xs" onclick="addBonToGoogle('${b.id}')" title="Ajouter à Google Agenda">📅</button>
                 </div>
               </div>
@@ -2241,7 +2243,16 @@ function updateBonDateInterv(id, value) {
   DB.bons = bons;
   toast(value ? ('📅 Intervention prévue le ' + fmtDate(value)) : 'Date effacée', '#2d9e6b');
 }
-// Ajoute le bon à Google Agenda à la date de prochaine intervention
+// Enregistre l'heure de prochaine intervention sur un bon
+function updateBonHeureInterv(id, value) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id);
+  if (!b) return;
+  b.heureIntervention = value;
+  DB.bons = bons;
+  toast(value ? ('🕒 Heure : ' + value) : 'Heure effacée', '#2d9e6b');
+}
+// Ajoute le bon à Google Agenda à la date/heure de prochaine intervention
 function addBonToGoogle(id) {
   const b = (DB.bons || []).find(x => x.id === id);
   if (!b) return;
@@ -2252,7 +2263,7 @@ function addBonToGoogle(id) {
     b.locataireNom ? 'Locataire : ' + b.locataireNom : '',
     b.probleme ? 'Problème : ' + b.probleme : ''
   ].filter(Boolean).join('\n');
-  const url = _googleCalUrl({ titre, date: b.dateIntervention, heure: '08:00', dureeMin: 60, details, lieu: b.immeuble || '' });
+  const url = _googleCalUrl({ titre, date: b.dateIntervention, heure: b.heureIntervention || '08:00', dureeMin: 60, details, lieu: b.immeuble || '' });
   window.open(url, '_blank');
 }
 
