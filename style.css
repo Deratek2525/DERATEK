@@ -418,6 +418,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .ag-day-cell {
   border-right: 1px solid var(--g100); border-bottom: 1px solid var(--g100);
   min-height: 44px; padding: 2px; cursor: pointer; transition: background .1s;
+  min-width: 0; overflow: hidden;
 }
 .ag-day-cell:last-child { border-right: none; }
 .ag-day-cell:hover { background: var(--g50); }
