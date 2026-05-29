@@ -413,11 +413,11 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   text-align: right; border-right: 1px solid var(--g200);
   border-bottom: 1px solid var(--g100); background: var(--g50);
   display: flex; align-items: flex-start; justify-content: flex-end;
-  min-height: 44px;
+  min-height: 72px;
 }
 .ag-day-cell {
   border-right: 1px solid var(--g100); border-bottom: 1px solid var(--g100);
-  min-height: 44px; padding: 2px; cursor: pointer; transition: background .1s;
+  min-height: 72px; padding: 3px; cursor: pointer; transition: background .1s;
   min-width: 0; overflow: hidden;
 }
 .ag-day-cell:last-child { border-right: none; }
