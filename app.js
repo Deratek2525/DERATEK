@@ -3547,6 +3547,41 @@ function _genDiagPDF(d) {
 // STATISTIQUES
 // ============================================================
 let _statCharts = {};
+// Plugin Chart.js : dessine la valeur + pourcentage sur chaque part / barre
+const _statDataLabelsPlugin = {
+  id: 'statDataLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, data, chartArea } = chart;
+    const ds = data.datasets[0]; if (!ds) return;
+    const total = ds.data.reduce((s, v) => s + (parseFloat(v) || 0), 0) || 1;
+    const meta = chart.getDatasetMeta(0);
+    const isDonut = chart.config.type === 'doughnut';
+    const isMoney = chart.options._isMoney;
+    ctx.save();
+    ctx.font = 'bold 11px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    meta.data.forEach((el, i) => {
+      const v = ds.data[i]; if (!v) return;
+      const pct = (v / total * 100).toFixed(0) + '%';
+      let x, y, drawWhite = true;
+      if (isDonut) {
+        const pos = el.tooltipPosition();
+        x = pos.x; y = pos.y;
+        // Affiche pourcentage seulement si la part est assez grande (>5%)
+        if (v / total < 0.05) return;
+      } else {
+        x = el.x; y = el.y - 12;
+        ctx.fillStyle = '#0d1b3e'; drawWhite = false;
+      }
+      if (drawWhite) ctx.fillStyle = '#fff';
+      const label = isDonut ? pct : ((isMoney ? _displayMontant(v) : v) + ' (' + pct + ')');
+      ctx.fillText(label, x, y);
+    });
+    ctx.restore();
+  }
+};
 function _makeChart(id, type, labels, data, colors, isMoney) {
   const cv = $(id);
   if (!cv || typeof Chart === 'undefined') return;
@@ -3558,6 +3593,7 @@ function _makeChart(id, type, labels, data, colors, isMoney) {
     return;
   }
   const isDonut = (type === 'doughnut');
+  const total = data.reduce((s, v) => s + (parseFloat(v) || 0), 0) || 1;
   _statCharts[id] = new Chart(cv, {
     type,
     data: { labels, datasets: [{
@@ -3567,11 +3603,13 @@ function _makeChart(id, type, labels, data, colors, isMoney) {
     }] },
     options: {
       responsive: true, maintainAspectRatio: false,
+      _isMoney: !!isMoney,
       plugins: {
         legend: { display: isDonut, position: 'right', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
         tooltip: { callbacks: { label: c => {
           const v = c.parsed.y !== undefined ? c.parsed.y : c.parsed;
-          return ' ' + (isMoney ? _displayMontant(v) + ' CHF' : v);
+          const pct = (v / total * 100).toFixed(1) + '%';
+          return ' ' + (isMoney ? _displayMontant(v) + ' CHF' : v) + ' · ' + pct;
         } } }
       },
       cutout: isDonut ? '55%' : undefined,
@@ -3579,7 +3617,8 @@ function _makeChart(id, type, labels, data, colors, isMoney) {
         x: { grid: { display: false }, ticks: { font: { size: 10 } } },
         y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: isMoney ? undefined : 0 }, grid: { color: '#f0f0f0' } }
       }
-    }
+    },
+    plugins: [_statDataLabelsPlugin]
   });
 }
 function renderStats() {
