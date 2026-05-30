@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601h">
+<link rel="stylesheet" href="./style.css?v=20260601i">
 </head>
 <body>
 
@@ -230,6 +230,7 @@
     <button id="nb-bons" class="nav-btn" onclick="showScreen(&#39;bons&#39;)">📄 <span>Bons</span></button>
     <button id="nb-devis" class="nav-btn" onclick="showScreen(&#39;devis&#39;)">🧾 <span>Devis / Factures</span></button>
     <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span></button>
+    <button id="nb-tva" class="nav-btn" onclick="showScreen(&#39;tva&#39;)">％ <span>TVA</span></button>
     <div class="nav-right">
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
@@ -932,6 +933,44 @@
     </div>
   </div>
 
+  <!-- TVA -->
+  <div id="screen-tva" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">Décompte TVA</div>
+        <div class="page-sub">TVA collectée (factures) − TVA déductible (fournisseurs)</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <select class="form-input" id="tva-annee" style="width:auto;" onchange="renderTVA()"></select>
+        <select class="form-input" id="tva-periode" style="width:auto;" onchange="renderTVA()">
+          <option value="annee">Année entière</option>
+          <option value="s1">1er semestre</option>
+          <option value="s2">2e semestre</option>
+          <option value="t1">1er trimestre</option>
+          <option value="t2">2e trimestre</option>
+          <option value="t3">3e trimestre</option>
+          <option value="t4">4e trimestre</option>
+        </select>
+      </div>
+    </div>
+    <div class="page-body">
+      <div style="background:#fff7e6;border:1px solid #f4d488;border-radius:8px;padding:10px 14px;font-size:12px;color:#8a6d1a;margin-bottom:16px;">
+        ⚠️ Ce décompte est un outil d'aide. Faites valider votre méthode (effective / forfaitaire) et vos chiffres par votre fiduciaire.
+      </div>
+      <div id="tva-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="card" style="padding:14px;">
+          <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:10px;">TVA collectée (ventes / factures)</div>
+          <div id="tva-ventes"></div>
+        </div>
+        <div class="card" style="padding:14px;">
+          <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:10px;">TVA déductible (achats / fournisseurs)</div>
+          <div id="tva-achats"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- FOURNISSEURS -->
   <div id="screen-fournisseurs" class="screen">
     <div class="page-hd">
@@ -1042,9 +1081,9 @@
 <script src="./jspdf_umd_min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601h"></script>
-<script src="./config.js?v=20260601h"></script>
-<script src="./app.js?v=20260601h"></script>
-<script src="./pdf.js?v=20260601h"></script>
+<script src="./logo.js?v=20260601i"></script>
+<script src="./config.js?v=20260601i"></script>
+<script src="./app.js?v=20260601i"></script>
+<script src="./pdf.js?v=20260601i"></script>
 
 </body></html>

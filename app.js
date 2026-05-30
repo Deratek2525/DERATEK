@@ -295,6 +295,7 @@ function showScreen(name) {
   if (name === 'bons')         renderBons();
   if (name === 'devis')        renderDocuments();
   if (name === 'fournisseurs') renderFournisseurs();
+  if (name === 'tva')          renderTVA();
   window.scrollTo(0, 0);
 }
 
@@ -3534,6 +3535,99 @@ function _genDiagPDF(d) {
   doc.text('Signature : ______________________', 120, y);
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// DÉCOMPTE TVA
+// ============================================================
+function _tvaPeriode(annee, periode) {
+  const ranges = {
+    annee: [`${annee}-01-01`, `${annee}-12-31`],
+    s1:    [`${annee}-01-01`, `${annee}-06-30`],
+    s2:    [`${annee}-07-01`, `${annee}-12-31`],
+    t1:    [`${annee}-01-01`, `${annee}-03-31`],
+    t2:    [`${annee}-04-01`, `${annee}-06-30`],
+    t3:    [`${annee}-07-01`, `${annee}-09-30`],
+    t4:    [`${annee}-10-01`, `${annee}-12-31`],
+  };
+  return ranges[periode] || ranges.annee;
+}
+function renderTVA() {
+  // Remplir le sélecteur d'années (à partir des données + année courante)
+  const selA = $('tva-annee');
+  if (selA && !selA.options.length) {
+    const annees = new Set([new Date().getFullYear()]);
+    (DB.documents || []).forEach(d => { if (d.dateDoc) annees.add(parseInt(d.dateDoc.slice(0,4),10)); });
+    (DB.fournisseurs || []).forEach(f => { if (f.dateDoc) annees.add(parseInt(f.dateDoc.slice(0,4),10)); });
+    selA.innerHTML = [...annees].filter(Boolean).sort((a,b)=>b-a).map(a=>`<option value="${a}">${a}</option>`).join('');
+  }
+  const annee = (selA && selA.value) || new Date().getFullYear();
+  const periode = ($('tva-periode') && $('tva-periode').value) || 'annee';
+  const [d1, d2] = _tvaPeriode(annee, periode);
+  const inRange = d => d && d >= d1 && d <= d2;
+
+  // VENTES (factures) → TVA collectée, groupé par taux
+  const ventes = {};
+  (DB.documents || []).filter(x => x.type === 'facture' && inRange(x.dateDoc)).forEach(f => {
+    const taux = parseFloat(f.tvaTaux) || 0;
+    const baseHt = (parseFloat(f.sousTotal)||0) - (parseFloat(f.rabaisMontant)||0);
+    const tva = parseFloat(f.tvaMontant) || 0;
+    if (!ventes[taux]) ventes[taux] = { base: 0, tva: 0 };
+    ventes[taux].base += baseHt; ventes[taux].tva += tva;
+  });
+  // ACHATS (fournisseurs) → TVA déductible, groupé par taux calculé
+  const achats = {};
+  (DB.fournisseurs || []).filter(x => inRange(x.dateDoc)).forEach(f => {
+    const ht = parseFloat(f.montantHt) || 0;
+    const tva = parseFloat(f.tva) || 0;
+    let taux = ht > 0 ? Math.round((tva / ht) * 1000) / 10 : 0;
+    if (!achats[taux]) achats[taux] = { base: 0, tva: 0 };
+    achats[taux].base += ht; achats[taux].tva += tva;
+  });
+
+  const sumTva = obj => Object.values(obj).reduce((s, x) => s + x.tva, 0);
+  const totCollectee = sumTva(ventes);
+  const totDeductible = sumTva(achats);
+  const aPayer = totCollectee - totDeductible;
+
+  // Cartes
+  const card = (titre, montant, color) => `
+    <div class="card" style="padding:16px;">
+      <div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;">${titre}</div>
+      <div style="font-size:24px;font-weight:800;color:${color};margin-top:4px;">${_displayMontant(montant)} CHF</div>
+    </div>`;
+  const cards = $('tva-cards');
+  if (cards) cards.innerHTML =
+    card('TVA collectée', totCollectee, 'var(--navy)') +
+    card('TVA déductible', totDeductible, 'var(--navy)') +
+    card('TVA à payer', aPayer, aPayer >= 0 ? '#e63946' : '#2d9e6b');
+
+  // Tables
+  const tableHtml = (obj) => {
+    const taux = Object.keys(obj).map(Number).sort((a,b)=>b-a);
+    if (!taux.length) return '<div style="text-align:center;color:var(--g400);font-size:13px;padding:14px;">Aucune donnée</div>';
+    let h = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="color:var(--g400);text-transform:uppercase;font-size:10px;text-align:right;">
+        <th style="text-align:left;padding:4px;">Taux</th><th style="padding:4px;">Base HT</th><th style="padding:4px;">TVA</th>
+      </tr></thead><tbody>`;
+    taux.forEach(t => {
+      h += `<tr style="border-top:1px solid #f0f0f0;">
+        <td style="text-align:left;padding:6px 4px;font-weight:700;">${t}%</td>
+        <td style="text-align:right;padding:6px 4px;">${_displayMontant(obj[t].base)}</td>
+        <td style="text-align:right;padding:6px 4px;font-weight:700;color:var(--navy);">${_displayMontant(obj[t].tva)}</td>
+      </tr>`;
+    });
+    const totBase = Object.values(obj).reduce((s,x)=>s+x.base,0);
+    const totTva = Object.values(obj).reduce((s,x)=>s+x.tva,0);
+    h += `<tr style="border-top:2px solid var(--navy);font-weight:800;">
+      <td style="text-align:left;padding:6px 4px;">Total</td>
+      <td style="text-align:right;padding:6px 4px;">${_displayMontant(totBase)}</td>
+      <td style="text-align:right;padding:6px 4px;color:var(--navy);">${_displayMontant(totTva)}</td>
+    </tr></tbody></table>`;
+    return h;
+  };
+  if ($('tva-ventes')) $('tva-ventes').innerHTML = tableHtml(ventes);
+  if ($('tva-achats')) $('tva-achats').innerHTML = tableHtml(achats);
 }
 
 // ============================================================
