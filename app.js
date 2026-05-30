@@ -296,6 +296,7 @@ function showScreen(name) {
   if (name === 'devis')        renderDocuments();
   if (name === 'fournisseurs') renderFournisseurs();
   if (name === 'tva')          renderTVA();
+  if (name === 'stats')        renderStats();
   window.scrollTo(0, 0);
 }
 
@@ -3535,6 +3536,74 @@ function _genDiagPDF(d) {
   doc.text('Signature : ______________________', 120, y);
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// STATISTIQUES
+// ============================================================
+function _statBars(rows) {
+  // rows: [{label, value, color, suffix}]
+  if (!rows.length) return '<div style="text-align:center;color:var(--g400);font-size:13px;padding:14px;">Aucune donnée</div>';
+  const max = Math.max(1, ...rows.map(r => r.value));
+  return rows.map(r => `
+    <div style="margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+        <span style="font-weight:600;color:var(--navy);">${r.label}</span>
+        <span style="color:var(--g600);font-weight:700;">${r.suffix || r.value}</span>
+      </div>
+      <div style="height:12px;background:#f0f0f0;border-radius:6px;overflow:hidden;">
+        <div style="height:100%;width:${Math.max(3, r.value/max*100)}%;background:${r.color||'var(--navy)'};border-radius:6px;transition:width .4s;"></div>
+      </div>
+    </div>`).join('');
+}
+function renderStats() {
+  const bons = DB.bons || [], docs = DB.documents || [], fourn = DB.fournisseurs || [];
+  const factures = docs.filter(d => d.type === 'facture');
+  const devis = docs.filter(d => d.type === 'devis');
+  const caFactures = factures.reduce((s, f) => s + (parseFloat(f.total)||0), 0);
+  const depenses = fourn.reduce((s, f) => s + (parseFloat(f.montant)||0), 0);
+
+  // Cartes chiffres clés
+  const card = (val, label, color) => `
+    <div class="card" style="padding:14px;text-align:center;">
+      <div style="font-size:26px;font-weight:800;color:${color||'var(--navy)'};">${val}</div>
+      <div style="font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;">${label}</div>
+    </div>`;
+  const cards = $('stats-cards');
+  if (cards) cards.innerHTML =
+    card(bons.length, 'Bons') +
+    card((DB.clients||[]).length, 'Clients') +
+    card((DB.locataires||[]).length, 'Locataires') +
+    card(devis.length, 'Devis') +
+    card(factures.length, 'Factures') +
+    card(_displayMontant(caFactures), 'CA facturé (CHF)', '#2d9e6b') +
+    card(_displayMontant(depenses), 'Dépenses fourn. (CHF)', '#e63946');
+
+  // Bons par nuisible
+  const nuis = {};
+  bons.forEach(b => { const info = _nuisibleInfo(b.probleme); (nuis[info.label] = nuis[info.label] || { n: 0, color: info.color }).n++; });
+  const nuisRows = Object.keys(nuis).map(k => ({ label: k, value: nuis[k].n, color: nuis[k].color })).sort((a,b)=>b.value-a.value);
+  if ($('stats-nuisibles')) $('stats-nuisibles').innerHTML = _statBars(nuisRows);
+
+  // Bons par gérance
+  const ger = {};
+  bons.forEach(b => { const g = b.geranceNom || '(Sans gérance)'; ger[g] = (ger[g]||0)+1; });
+  const gerRows = Object.keys(ger).map(k => ({ label: k, value: ger[k], color: colorForGeranceName(k) })).sort((a,b)=>b.value-a.value);
+  if ($('stats-gerances')) $('stats-gerances').innerHTML = _statBars(gerRows);
+
+  // Bons par statut
+  const statutLabels = { '':'Non défini', 'transmis':'Rapport transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
+  const statutCol = { '':'#9ca3af','transmis':'#3b82f6','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
+  const st = {};
+  bons.forEach(b => { const s = b.statut || ''; st[s] = (st[s]||0)+1; });
+  const stRows = Object.keys(st).map(k => ({ label: statutLabels[k]||k, value: st[k], color: statutCol[k]||'#6b7280' })).sort((a,b)=>b.value-a.value);
+  if ($('stats-statuts')) $('stats-statuts').innerHTML = _statBars(stRows);
+
+  // Dépenses par secteur
+  const sec = {};
+  fourn.forEach(f => { const s = f.secteur || 'Autre'; sec[s] = (sec[s]||0) + (parseFloat(f.montant)||0); });
+  const secRows = Object.keys(sec).map(k => ({ label: k, value: sec[k], color: SECTEUR_COLORS[k]||'#64748b', suffix: _displayMontant(sec[k])+' CHF' })).sort((a,b)=>b.value-a.value);
+  if ($('stats-secteurs')) $('stats-secteurs').innerHTML = _statBars(secRows);
 }
 
 // ============================================================

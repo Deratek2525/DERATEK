@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601i">
+<link rel="stylesheet" href="./style.css?v=20260601j">
 </head>
 <body>
 
@@ -231,6 +231,7 @@
     <button id="nb-devis" class="nav-btn" onclick="showScreen(&#39;devis&#39;)">🧾 <span>Devis / Factures</span></button>
     <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span></button>
     <button id="nb-tva" class="nav-btn" onclick="showScreen(&#39;tva&#39;)">％ <span>TVA</span></button>
+    <button id="nb-stats" class="nav-btn" onclick="showScreen(&#39;stats&#39;)">📈 <span>Statistiques</span></button>
     <div class="nav-right">
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
@@ -933,6 +934,23 @@
     </div>
   </div>
 
+  <!-- STATISTIQUES -->
+  <div id="screen-stats" class="screen">
+    <div class="page-hd">
+      <div class="page-title">Statistiques</div>
+      <div class="page-sub">Vue d'ensemble de l'activité</div>
+    </div>
+    <div class="page-body">
+      <div id="stats-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🐛 Bons par type de nuisible</div><div id="stats-nuisibles"></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🏢 Bons par gérance</div><div id="stats-gerances"></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📊 Bons par statut</div><div id="stats-statuts"></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📦 Dépenses fournisseurs par secteur</div><div id="stats-secteurs"></div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- TVA -->
   <div id="screen-tva" class="screen">
     <div class="page-hd">
@@ -1081,9 +1099,9 @@
 <script src="./jspdf_umd_min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601i"></script>
-<script src="./config.js?v=20260601i"></script>
-<script src="./app.js?v=20260601i"></script>
-<script src="./pdf.js?v=20260601i"></script>
+<script src="./logo.js?v=20260601j"></script>
+<script src="./config.js?v=20260601j"></script>
+<script src="./app.js?v=20260601j"></script>
+<script src="./pdf.js?v=20260601j"></script>
 
 </body></html>
