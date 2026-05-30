@@ -2263,12 +2263,17 @@ function autoFillFromBonNumero(numero) {
 // Détermine le type de nuisible + sa couleur à partir du texte du problème
 function _nuisibleInfo(txt) {
   const t = (txt || '').toLowerCase();
-  if (/gu[eê]pe|frelon/.test(t))                 return { label: 'Guêpes',         color: '#f4a623' }; // jaune
+  if (/gu[eê]pe|frelon|abeille/.test(t))          return { label: 'Guêpes',         color: '#f4a623' }; // jaune
   if (/punaise/.test(t))                          return { label: 'Punaises de lit', color: '#e63946' }; // rouge
   if (/\brat|souris|rongeur|d[ée]ratis|mulot/.test(t)) return { label: 'Rats / souris', color: '#2563eb' }; // bleu
   if (/blatte|cafard|cancrelat/.test(t))          return { label: 'Blattes',        color: '#2d9e6b' }; // vert
   if (/pigeon|oiseau|volatile|fiente/.test(t))    return { label: 'Pigeons',        color: '#7c3aed' }; // violet
-  return { label: (txt ? txt.slice(0, 40) : 'Intervention'), color: '#6b7280' }; // gris (autre)
+  if (/fourmi/.test(t))                           return { label: 'Fourmis',        color: '#b45309' }; // brun
+  if (/mouche|moucheron/.test(t))                 return { label: 'Mouches',        color: '#65a30d' }; // vert olive
+  if (/capricorne|vrillette|termite|xylophage|vers? ?à ?bois|insecte.*bois|poutre/.test(t)) return { label: 'Insectes du bois', color: '#8b4513' };
+  if (/puce/.test(t))                             return { label: 'Puces',          color: '#db2777' };
+  if (/araign/.test(t))                           return { label: 'Araignées',      color: '#0891b2' };
+  return { label: 'Autre', color: '#6b7280' }; // gris (non classé)
 }
 
 // Crée / met à jour / supprime l'intervention liée à un bon dans l'agenda interne
@@ -3541,20 +3546,41 @@ function _genDiagPDF(d) {
 // ============================================================
 // STATISTIQUES
 // ============================================================
-function _statBars(rows) {
-  // rows: [{label, value, color, suffix}]
-  if (!rows.length) return '<div style="text-align:center;color:var(--g400);font-size:13px;padding:14px;">Aucune donnée</div>';
-  const max = Math.max(1, ...rows.map(r => r.value));
-  return rows.map(r => `
-    <div style="margin-bottom:9px;">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
-        <span style="font-weight:600;color:var(--navy);">${r.label}</span>
-        <span style="color:var(--g600);font-weight:700;">${r.suffix || r.value}</span>
-      </div>
-      <div style="height:12px;background:#f0f0f0;border-radius:6px;overflow:hidden;">
-        <div style="height:100%;width:${Math.max(3, r.value/max*100)}%;background:${r.color||'var(--navy)'};border-radius:6px;transition:width .4s;"></div>
-      </div>
-    </div>`).join('');
+let _statCharts = {};
+function _makeChart(id, type, labels, data, colors, isMoney) {
+  const cv = $(id);
+  if (!cv || typeof Chart === 'undefined') return;
+  if (_statCharts[id]) { try { _statCharts[id].destroy(); } catch (e) {} }
+  if (!labels.length) {
+    const ctx = cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '13px Arial'; ctx.textAlign = 'center';
+    ctx.fillText('Aucune donnée', cv.width/2, cv.height/2);
+    return;
+  }
+  const isDonut = (type === 'doughnut');
+  _statCharts[id] = new Chart(cv, {
+    type,
+    data: { labels, datasets: [{
+      data, backgroundColor: colors,
+      borderColor: '#fff', borderWidth: isDonut ? 2 : 0,
+      borderRadius: isDonut ? 0 : 6, maxBarThickness: 56
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: isDonut, position: 'right', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: c => {
+          const v = c.parsed.y !== undefined ? c.parsed.y : c.parsed;
+          return ' ' + (isMoney ? _displayMontant(v) + ' CHF' : v);
+        } } }
+      },
+      cutout: isDonut ? '55%' : undefined,
+      scales: isDonut ? {} : {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: isMoney ? undefined : 0 }, grid: { color: '#f0f0f0' } }
+      }
+    }
+  });
 }
 function renderStats() {
   const bons = DB.bons || [], docs = DB.documents || [], fourn = DB.fournisseurs || [];
@@ -3563,7 +3589,6 @@ function renderStats() {
   const caFactures = factures.reduce((s, f) => s + (parseFloat(f.total)||0), 0);
   const depenses = fourn.reduce((s, f) => s + (parseFloat(f.montant)||0), 0);
 
-  // Cartes chiffres clés
   const card = (val, label, color) => `
     <div class="card" style="padding:14px;text-align:center;">
       <div style="font-size:26px;font-weight:800;color:${color||'var(--navy)'};">${val}</div>
@@ -3579,31 +3604,31 @@ function renderStats() {
     card(_displayMontant(caFactures), 'CA facturé (CHF)', '#2d9e6b') +
     card(_displayMontant(depenses), 'Dépenses fourn. (CHF)', '#e63946');
 
-  // Bons par nuisible
+  // Nuisibles → camembert (donut)
   const nuis = {};
   bons.forEach(b => { const info = _nuisibleInfo(b.probleme); (nuis[info.label] = nuis[info.label] || { n: 0, color: info.color }).n++; });
-  const nuisRows = Object.keys(nuis).map(k => ({ label: k, value: nuis[k].n, color: nuis[k].color })).sort((a,b)=>b.value-a.value);
-  if ($('stats-nuisibles')) $('stats-nuisibles').innerHTML = _statBars(nuisRows);
+  let nk = Object.keys(nuis).sort((a,b)=>nuis[b].n-nuis[a].n);
+  _makeChart('chart-nuisibles', 'doughnut', nk, nk.map(k=>nuis[k].n), nk.map(k=>nuis[k].color), false);
 
-  // Bons par gérance
+  // Gérances → camembert (donut)
   const ger = {};
   bons.forEach(b => { const g = b.geranceNom || '(Sans gérance)'; ger[g] = (ger[g]||0)+1; });
-  const gerRows = Object.keys(ger).map(k => ({ label: k, value: ger[k], color: colorForGeranceName(k) })).sort((a,b)=>b.value-a.value);
-  if ($('stats-gerances')) $('stats-gerances').innerHTML = _statBars(gerRows);
+  let gk = Object.keys(ger).sort((a,b)=>ger[b]-ger[a]);
+  _makeChart('chart-gerances', 'doughnut', gk, gk.map(k=>ger[k]), gk.map(k=>colorForGeranceName(k)), false);
 
-  // Bons par statut
-  const statutLabels = { '':'Non défini', 'transmis':'Rapport transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
+  // Statuts → barres verticales
+  const statutLabels = { '':'Non défini', 'transmis':'Transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
   const statutCol = { '':'#9ca3af','transmis':'#3b82f6','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
   const st = {};
   bons.forEach(b => { const s = b.statut || ''; st[s] = (st[s]||0)+1; });
-  const stRows = Object.keys(st).map(k => ({ label: statutLabels[k]||k, value: st[k], color: statutCol[k]||'#6b7280' })).sort((a,b)=>b.value-a.value);
-  if ($('stats-statuts')) $('stats-statuts').innerHTML = _statBars(stRows);
+  let sk = Object.keys(st).sort((a,b)=>st[b]-st[a]);
+  _makeChart('chart-statuts', 'bar', sk.map(k=>statutLabels[k]||k), sk.map(k=>st[k]), sk.map(k=>statutCol[k]||'#6b7280'), false);
 
-  // Dépenses par secteur
+  // Dépenses par secteur → barres verticales (CHF)
   const sec = {};
   fourn.forEach(f => { const s = f.secteur || 'Autre'; sec[s] = (sec[s]||0) + (parseFloat(f.montant)||0); });
-  const secRows = Object.keys(sec).map(k => ({ label: k, value: sec[k], color: SECTEUR_COLORS[k]||'#64748b', suffix: _displayMontant(sec[k])+' CHF' })).sort((a,b)=>b.value-a.value);
-  if ($('stats-secteurs')) $('stats-secteurs').innerHTML = _statBars(secRows);
+  let sek = Object.keys(sec).sort((a,b)=>sec[b]-sec[a]);
+  _makeChart('chart-secteurs', 'bar', sek, sek.map(k=>Math.round(sec[k]*100)/100), sek.map(k=>SECTEUR_COLORS[k]||'#64748b'), true);
 }
 
 // ============================================================

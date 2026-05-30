@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601j">
+<link rel="stylesheet" href="./style.css?v=20260601k">
 </head>
 <body>
 
@@ -943,10 +943,10 @@
     <div class="page-body">
       <div id="stats-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🐛 Bons par type de nuisible</div><div id="stats-nuisibles"></div></div>
-        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🏢 Bons par gérance</div><div id="stats-gerances"></div></div>
-        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📊 Bons par statut</div><div id="stats-statuts"></div></div>
-        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📦 Dépenses fournisseurs par secteur</div><div id="stats-secteurs"></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🐛 Bons par type de nuisible</div><div style="height:280px;position:relative;"><canvas id="chart-nuisibles"></canvas></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">🏢 Bons par gérance</div><div style="height:280px;position:relative;"><canvas id="chart-gerances"></canvas></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📊 Bons par statut</div><div style="height:280px;position:relative;"><canvas id="chart-statuts"></canvas></div></div>
+        <div class="card" style="padding:16px;"><div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:12px;">📦 Dépenses fournisseurs par secteur</div><div style="height:280px;position:relative;"><canvas id="chart-secteurs"></canvas></div></div>
       </div>
     </div>
   </div>
@@ -1098,10 +1098,11 @@
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601j"></script>
-<script src="./config.js?v=20260601j"></script>
-<script src="./app.js?v=20260601j"></script>
-<script src="./pdf.js?v=20260601j"></script>
+<script src="./logo.js?v=20260601k"></script>
+<script src="./config.js?v=20260601k"></script>
+<script src="./app.js?v=20260601k"></script>
+<script src="./pdf.js?v=20260601k"></script>
 
 </body></html>
