@@ -3081,19 +3081,20 @@ async function docExtractFromAI(texte) {
     '"proprietaire":"propriétaire si mentionné (souvent précédé de p.a. ou p/a)",\n' +
     '"sous_total":"montant HT total avant rabais et TVA (chiffres uniquement, point décimal)",\n' +
     '"rabais":"taux du rabais en % s\'il est mentionné (chiffres, ex 5 pour 5%)",\n' +
+    '"rabais_montant":"MONTANT du rabais en CHF tel qu\'écrit dans le document (chiffres uniquement, point décimal). Ex pour \\"Rabais 5 % ... 302.52 CHF\\" mets 302.52. Vide si aucun rabais.",\n' +
     '"tva_taux":"taux TVA en % (8.1 par défaut)",\n' +
     '"tva_montant":"montant TVA (chiffres)",\n' +
     '"total":"montant TOTAL TTC final (chiffres uniquement, point décimal)",\n' +
     '"lignes":[{"desc":"description précise de la prestation/article","qte":1,"prix":0}],\n' +
     '"notes":"notes / conditions de paiement / mentions diverses si présentes"\n}\n\n' +
     'RÈGLES IMPORTANTES pour le tableau "lignes" :\n' +
-    '- Tu DOIS extraire CHAQUE ligne du tableau de prestations séparément (une entrée JSON par ligne du PDF).\n' +
-    '- N\'INVENTE PAS un "forfait global" — extrait chaque prestation, déplacement, location matériel (nacelle, échafaudage), traitement, fourniture, frais annexes, etc. AVEC son prix unitaire et sa quantité.\n' +
+    '- Tu DOIS extraire CHAQUE ligne du tableau de prestations séparément (une entrée JSON par ligne du PDF), avec sa description complète.\n' +
+    '- RÈGLE ABSOLUE SUR LES PRIX : n\'attribue un "prix" à une ligne QUE si un montant chiffré est EXPLICITEMENT écrit en face de cette ligne dans le PDF (colonne MONTANT ou TOTAL). N\'INVENTE JAMAIS un prix. NE RÉPARTIS JAMAIS un total global entre les lignes. Si la case montant de la ligne est vide, mets prix=0.\n' +
+    '- Beaucoup de devis DERATEK sont FORFAITAIRES : les prestations sont décrites SANS prix individuel, et un seul montant global apparaît sur une ligne du type "Matériel et main d\'œuvre — Forfait : 6050.30 CHF". Dans ce cas : garde toutes les descriptions avec prix=0, et mets le montant uniquement sur la ligne forfait (et sur les rares lignes qui ont un vrai prix, ex location de nacelle).\n' +
     '- Si une ligne n\'a pas de quantité explicite, mets qte=1.\n' +
-    '- Si une ligne montre un montant total sans quantité (ex "Forfait main d\'œuvre : 1\'200 CHF"), mets qte=1 et prix=1200.\n' +
+    '- Si une ligne montre un montant (ex "Location nacelle : 1\'210 CHF" ou "Forfait main d\'œuvre : 6050.30"), mets qte=1 et prix=ce montant.\n' +
     '- Les prix doivent être des nombres (pas de CHF, pas d\'apostrophe de milliers).\n' +
-    '- La somme (qte × prix) de toutes les lignes DOIT être égale au sous_total HT.\n' +
-    '- Si tu trouves des frais en dehors du tableau (déplacement, location, supplément), AJOUTE-les comme lignes supplémentaires.';
+    '- NE FORCE PAS la somme des lignes à égaler le sous_total : reporte les montants tels qu\'ils sont écrits, rien de plus.';
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
@@ -3181,6 +3182,8 @@ function docShowImportConfirm(infos, fileName) {
         ${champ('TVA (%)', 'tva_taux', infos.tva_taux || '8.1')}
         ${champ('Total TTC', 'total', infos.total)}
       </div>
+      <input type="hidden" id="docimp-rabais_montant" value="${(infos.rabais_montant==null?'':String(infos.rabais_montant)).replace(/"/g,'&quot;')}">
+      <div style="font-size:11px;color:var(--g600);margin:-4px 0 8px;">💡 Les lignes sans prix dans le PDF restent à 0 — le montant réel est porté par la ligne « forfait ». Le rabais exact du document est conservé.</div>
       <div class="form-group"><label class="form-label">Statut</label>
         <select class="form-input" id="docimp-statut">
           ${statutOpts.map(o => `<option value="${o}">${statutLabels[o]||o}</option>`).join('')}
@@ -3251,37 +3254,52 @@ function docImportSave() {
   const type = v('type') || 'devis';
   const numero = v('numero') || _nextDocNumero(type);
   let sousTotal = parseFloat(v('sous_total')) || 0;
-  const rabais = parseFloat(v('rabais')) || 0;
+  let rabais = parseFloat(v('rabais')) || 0;              // taux % saisi/extrait
+  const rabaisMontantPdf = parseFloat(v('rabais_montant')) || 0; // montant exact lu sur le PDF
   const tvaTaux = parseFloat(v('tva_taux')) || 8.1;
   let total = parseFloat(v('total')) || 0;
-  // Priorité au Total TTC : si on l'a, on recalcule le sous-total HT à rebours pour cohérence
-  // (souvent l'IA extrait un sous-total HT incomplet mais lit bien le total TTC)
-  if (total > 0) {
-    const facteur = (1 - rabais/100) * (1 + tvaTaux/100);
-    const sousTotalCible = total / facteur;
-    if (sousTotal === 0 || Math.abs(sousTotalCible - sousTotal) > 1) {
-      sousTotal = Math.round(sousTotalCible * 100) / 100;
-    }
-  }
-  const rabaisMontant = sousTotal * (rabais / 100);
-  let tvaMontant = (sousTotal - rabaisMontant) * (tvaTaux / 100);
-  // Si l'IA n'a pas extrait le total, on le calcule
-  if (!total) total = sousTotal - rabaisMontant + tvaMontant;
+
   // Lit les lignes telles qu'éditées par l'utilisateur dans le formulaire d'import
   let lignes = _docImpReadLines();
-  // Cohérence : si la somme des lignes ne correspond pas au sous-total, on ajuste
   const sommeLignes = lignes.reduce((s, l) => s + (l.qte || 0) * (l.prix || 0), 0);
-  if (sousTotal > 0 && Math.abs(sommeLignes - sousTotal) > 0.5) {
-    if (sommeLignes === 0 && lignes.length > 0) {
-      // Aucun prix trouvé → on met le sous-total sur une ligne forfait
+
+  // ── Détermination du sous-total HT ────────────────────────────────────────
+  if (sommeLignes > 0.5) {
+    // Des lignes portent de vrais prix (forfait + nacelle, etc.) → on leur fait
+    // confiance et le sous-total HT = somme des lignes. On NE répartit RIEN et on
+    // ne réécrit PAS le sous-total depuis le TTC (ça fausserait les vraies lignes).
+    sousTotal = Math.round(sommeLignes * 100) / 100;
+  } else {
+    // Aucune ligne chiffrée (que des descriptions) → forfait global, comme avant :
+    // on déduit le sous-total HT depuis le Total TTC si possible.
+    if (total > 0) {
+      const facteur = (1 - rabais/100) * (1 + tvaTaux/100);
+      const sousTotalCible = total / facteur;
+      if (sousTotal === 0 || Math.abs(sousTotalCible - sousTotal) > 1) {
+        sousTotal = Math.round(sousTotalCible * 100) / 100;
+      }
+    }
+    if (sousTotal > 0) {
       lignes.push({ desc: 'Forfait global (selon devis/facture original)', qte: 1, prix: sousTotal });
-    } else if (sommeLignes === 0 && lignes.length === 0) {
-      lignes.push({ desc: 'Forfait global (selon devis/facture original)', qte: 1, prix: sousTotal });
-    } else {
-      // Différence partielle → ligne d'ajustement
-      lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((sousTotal - sommeLignes) * 100) / 100 });
     }
   }
+
+  // ── Rabais : on reproduit le MONTANT exact du PDF si l'IA l'a lu ───────────
+  // (utile quand le rabais ne porte que sur une partie, ex le forfait seul).
+  // On stocke un taux % "effectif" pour que tous les calculs en aval (éditeur,
+  // PDF, stats) retombent sur le même montant.
+  let rabaisMontant;
+  if (rabaisMontantPdf > 0 && sousTotal > 0) {
+    rabaisMontant = Math.round(rabaisMontantPdf * 100) / 100;
+    rabais = Math.round((rabaisMontant / sousTotal) * 10000) / 100; // % effectif, 2 déc.
+  } else {
+    rabaisMontant = Math.round(sousTotal * (rabais / 100) * 100) / 100;
+  }
+  let tvaMontant = Math.round((sousTotal - rabaisMontant) * (tvaTaux / 100) * 100) / 100;
+  // Total : on garde le Total TTC lu sur le PDF s'il existe (reproduction fidèle,
+  // certains documents ont 1-2 ct d'écart d'arrondi) ; sinon on le recalcule.
+  const totalCalc = Math.round((sousTotal - rabaisMontant + tvaMontant) * 100) / 100;
+  if (!(total > 0)) total = totalCalc;
   // Liaison avec un bon de travaux existant si le numéro extrait correspond
   const bonNumeroSaisi = v('bon_numero');
   let bonIdLie = '';
