@@ -3086,7 +3086,7 @@ async function docExtractFromAI(texte) {
     '"tva_montant":"montant TVA (chiffres)",\n' +
     '"total":"montant TOTAL TTC final (chiffres uniquement, point décimal)",\n' +
     '"lignes":[{"desc":"description précise de la prestation/article","qte":1,"prix":0}],\n' +
-    '"notes":"notes / conditions de paiement / mentions diverses si présentes"\n}\n\n' +
+    '"notes":"notes / conditions de paiement / mentions diverses si présentes. N\'INCLUS PAS la mention \\"Payable par ...\\" ni le destinataire/propriétaire : ils sont gérés ailleurs."\n}\n\n' +
     'RÈGLES IMPORTANTES pour le tableau "lignes" :\n' +
     '- Tu DOIS extraire CHAQUE ligne du tableau de prestations séparément (une entrée JSON par ligne du PDF), avec sa description complète.\n' +
     '- RÈGLE ABSOLUE SUR LES PRIX : n\'attribue un "prix" à une ligne QUE si un montant chiffré est EXPLICITEMENT écrit en face de cette ligne dans le PDF (colonne MONTANT ou TOTAL). N\'INVENTE JAMAIS un prix. NE RÉPARTIS JAMAIS un total global entre les lignes. Si la case montant de la ligne est vide, mets prix=0.\n' +
@@ -3370,8 +3370,14 @@ function docImportSave() {
   // L'objet et le n° de bon sont reportés comme LIGNES de la prestation
   // (et non plus dans les notes). Les notes ne gardent que ce que l'utilisateur saisit.
   const objet = v('objet');
-  const notesUser = v('notes');
-  const notesFinales = notesUser;
+  // Les notes ne gardent que ce que l'utilisateur saisit, MAIS on retire les lignes
+  // "Payable par ..." : le propriétaire/destinataire est déjà géré dans l'adresse du document.
+  const notesFinales = (v('notes') || '')
+    .split('\n')
+    .filter(l => !/^\s*payable\s+par\b/i.test(l))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   {
     const norm = s => String(s||'')
       .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
