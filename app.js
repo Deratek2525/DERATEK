@@ -3236,26 +3236,37 @@ function downloadDocPDF(id) {
   if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
-  // Tableau des lignes
+  // Tableau des lignes (avec saut de page automatique)
+  // Limite basse : laisse de la place pour les totaux ET le QR-bill (factures uniquement)
+  const maxYContent = isFacture ? (H - 105 - 50) : (H - 35);
+  const drawLignesHeader = (y) => {
+    doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
+    doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text('Description', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix', 155, y, {align:'right'}); doc.text('Total', 188, y, {align:'right'});
+    doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+    return y + 6;
+  };
   let ty = Math.max(116, infoY + 8);
-  doc.setFillColor(13, 27, 62); doc.rect(20, ty - 5, 170, 7, 'F');
-  doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-  doc.text('Description', 22, ty); doc.text('Qté', 130, ty, {align:'right'}); doc.text('Prix', 155, ty, {align:'right'}); doc.text('Total', 188, ty, {align:'right'});
-  ty += 6;
-  doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+  ty = drawLignesHeader(ty);
   (d.lignes || []).forEach(l => {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
+    const lineH = Math.max(descLines.length * 4.5, 6);
+    // Saut de page si pas la place pour cette ligne
+    if (ty + lineH > maxYContent) { doc.addPage(); ty = 25; ty = drawLignesHeader(ty); }
     doc.text(descLines, 22, ty);
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
     doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
-    ty += Math.max(descLines.length * 4.5, 6);
+    ty += lineH;
   });
 
-  // Totaux
+  // Totaux : besoin d'environ 30 mm — saut de page si nécessaire
+  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
+  if (ty + totalsH > maxYContent) { doc.addPage(); ty = 25; }
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
+  doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
   doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 5;
   if ((d.rabais || 0) > 0) {
     doc.setTextColor(180, 40, 40);
@@ -3267,7 +3278,13 @@ function downloadDocPDF(id) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
 
-  if (d.notes) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80); doc.text(doc.splitTextToSize(d.notes, 170), 20, ty + 10); doc.setTextColor(0); }
+  if (d.notes) {
+    const noteLines = doc.splitTextToSize(d.notes, 170);
+    const notesH = noteLines.length * 4.5 + 8;
+    if (ty + notesH > maxYContent) { doc.addPage(); ty = 25; }
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.text(noteLines, 20, ty + 10); doc.setTextColor(0);
+  }
 
   // Pour les factures : QR-bill suisse en bas
   if (isFacture) {
