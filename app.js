@@ -3518,9 +3518,9 @@ function downloadDocPDF(id) {
     // Tout tient sur 1 page avec QR → pas d'étalement (compact en haut, QR en bas)
     padding = 0;
   } else if (lignes.length > 0) {
-    // Multi-pages : étale les lignes pour remplir page 1 (sans dépasser le bas)
+    // Multi-pages : léger étalement seulement (lignes resserrées, pas trop d'air)
     const slack = fullPageSpace - minContentH;
-    if (slack > 0) padding = Math.min(10, slack / lignes.length);
+    if (slack > 0) padding = Math.min(2.5, slack / lignes.length);
   }
 
   // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
