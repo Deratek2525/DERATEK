@@ -3366,14 +3366,40 @@ function docImportSave() {
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
-  // L'objet et le n° de bon (si non lié à un vrai bon) sont préfixés dans les notes pour traçabilité
+  // L'objet et le n° de bon sont reportés dans la DESCRIPTION de la ligne
+  // (et non plus dans les notes). Les notes ne gardent que ce que l'utilisateur saisit.
   const objet = v('objet');
   const notesUser = v('notes');
-  let notesFinales = '';
-  if (objet) notesFinales += 'Objet : ' + objet + '\n';
-  if (bonNumeroSaisi && !bonIdLie) notesFinales += 'N° bon de travaux : ' + bonNumeroSaisi + '\n';
-  if (notesFinales && notesUser) notesFinales += '\n';
-  notesFinales += notesUser;
+  const notesFinales = notesUser;
+  {
+    // Normalise pour détecter si l'objet fait déjà doublon avec une description existante
+    const norm = s => String(s||'')
+      .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const objetN = norm(objet);
+    // S'assure qu'il y a au moins une ligne support pour accueillir l'objet/le n° de bon
+    if (lignes.length === 0) lignes.push({ desc: objet || 'Prestation', qte: 1, prix: 0 });
+    // 1) Objet → préfixe la 1ère ligne, sauf s'il y est déjà (en tenant compte des fautes de frappe)
+    if (objet) {
+      const dejaPresent = lignes.some(l => {
+        const dN = norm(l.desc);
+        if (!objetN) return false;
+        if (dN.includes(objetN)) return true;
+        // recouvrement de mots (>=70%) → considéré comme le même objet (ex closions/cloisons)
+        const mots = objetN.split(' ').filter(w => w.length > 3);
+        if (!mots.length) return false;
+        const ok = mots.filter(w => dN.includes(w)).length;
+        return ok / mots.length >= 0.7;
+      });
+      if (!dejaPresent) {
+        lignes[0].desc = objet + (lignes[0].desc ? ' — ' + lignes[0].desc : '');
+      }
+    }
+    // 2) N° de bon de travaux → ajouté à la fin de la 1ère ligne (s'il n'y est pas déjà)
+    if (bonNumeroSaisi && norm(lignes[0].desc).indexOf(norm(bonNumeroSaisi)) === -1) {
+      lignes[0].desc = (lignes[0].desc || '') + ' (N° bon de travaux : ' + bonNumeroSaisi + ')';
+    }
+  }
 
   const doc = {
     id: newId(),
