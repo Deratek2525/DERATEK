@@ -3094,7 +3094,8 @@ async function docExtractFromAI(texte) {
     '- Si une ligne n\'a pas de quantité explicite, mets qte=1.\n' +
     '- Si une ligne montre un montant (ex "Location nacelle : 1\'210 CHF" ou "Forfait main d\'œuvre : 6050.30"), mets qte=1 et prix=ce montant.\n' +
     '- Les prix doivent être des nombres (pas de CHF, pas d\'apostrophe de milliers).\n' +
-    '- DATES D\'INTERVENTION : si une ou plusieurs dates d\'intervention/de passage apparaissent en face d\'une prestation (ex "Intervention du 12.03.2026" ou "Passages : 12.03 et 19.03.2026"), garde-les DANS la description de la ligne concernée (champ "desc"), telles qu\'écrites. Ne les mets PAS dans le champ "date" du document (qui est la date d\'émission), ni dans l\'objet.\n' +
+    '- DATES D\'INTERVENTION : si une ou plusieurs dates d\'intervention/de passage apparaissent (ex "Intervention du 12.03.2026" ou "Passages : 12.03 et 19.03.2026"), crée une LIGNE SÉPARÉE dédiée, de la forme {"desc":"Dates d\'interventions : 30.01.2026","qte":1,"prix":0}. Ne les mets PAS dans le champ "date" du document (qui est la date d\'émission), ni dans l\'objet, ni collées à une autre prestation.\n' +
+    '- STRUCTURE DES LIGNES souhaitée (une entrée JSON par ligne, dans cet ordre quand les éléments existent) : 1) la prestation/description principale (prix 0 si pas de montant en face), 2) une ligne "Dates d\'interventions : ..." si des dates figurent, 3) la ligne "Matériel et main d\'œuvre" (ou le forfait) qui porte le montant. N\'ajoute PAS toi-même de ligne pour le n° de bon de travaux (elle est gérée séparément).\n' +
     '- NE FORCE PAS la somme des lignes à égaler le sous_total : reporte les montants tels qu\'ils sont écrits, rien de plus.';
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
@@ -3366,38 +3367,34 @@ function docImportSave() {
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
-  // L'objet et le n° de bon sont reportés dans la DESCRIPTION de la ligne
+  // L'objet et le n° de bon sont reportés comme LIGNES de la prestation
   // (et non plus dans les notes). Les notes ne gardent que ce que l'utilisateur saisit.
   const objet = v('objet');
   const notesUser = v('notes');
   const notesFinales = notesUser;
   {
-    // Normalise pour détecter si l'objet fait déjà doublon avec une description existante
     const norm = s => String(s||'')
       .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
       .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
     const objetN = norm(objet);
-    // S'assure qu'il y a au moins une ligne support pour accueillir l'objet/le n° de bon
-    if (lignes.length === 0) lignes.push({ desc: objet || 'Prestation', qte: 1, prix: 0 });
-    // 1) Objet → préfixe la 1ère ligne, sauf s'il y est déjà (en tenant compte des fautes de frappe)
+    // S'assure qu'il y a au moins une ligne support
+    if (lignes.length === 0 && objet) lignes.push({ desc: objet, qte: 1, prix: 0 });
+    // 1) Objet → ligne dédiée en tête, sauf s'il est déjà présent dans une ligne
     if (objet) {
       const dejaPresent = lignes.some(l => {
         const dN = norm(l.desc);
         if (!objetN) return false;
         if (dN.includes(objetN)) return true;
-        // recouvrement de mots (>=70%) → considéré comme le même objet (ex closions/cloisons)
         const mots = objetN.split(' ').filter(w => w.length > 3);
         if (!mots.length) return false;
-        const ok = mots.filter(w => dN.includes(w)).length;
-        return ok / mots.length >= 0.7;
+        return mots.filter(w => dN.includes(w)).length / mots.length >= 0.7;
       });
-      if (!dejaPresent) {
-        lignes[0].desc = objet + (lignes[0].desc ? ' — ' + lignes[0].desc : '');
-      }
+      if (!dejaPresent) lignes.unshift({ desc: objet, qte: 1, prix: 0 });
     }
-    // 2) N° de bon de travaux → ajouté à la fin de la 1ère ligne (s'il n'y est pas déjà)
-    if (bonNumeroSaisi && norm(lignes[0].desc).indexOf(norm(bonNumeroSaisi)) === -1) {
-      lignes[0].desc = (lignes[0].desc || '') + ' (N° bon de travaux : ' + bonNumeroSaisi + ')';
+    // 2) N° de bon de travaux → ligne séparée tout en haut (s'il n'y est pas déjà)
+    if (bonNumeroSaisi) {
+      const dejaBon = lignes.some(l => norm(l.desc).indexOf(norm(bonNumeroSaisi)) !== -1);
+      if (!dejaBon) lignes.unshift({ desc: 'N° bon de travaux : ' + bonNumeroSaisi, qte: 1, prix: 0 });
     }
   }
 
