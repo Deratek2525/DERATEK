@@ -3290,7 +3290,7 @@ function downloadDocPDF(id) {
   if (d.notes) {
     const noteLines = doc.splitTextToSize(d.notes, 170);
     const notesH = noteLines.length * 4.5 + 8;
-    if (ty + notesH > maxYContent) { doc.addPage(); ty = 25; }
+    if (ty + notesH > limit) { doc.addPage(); ty = 25; }
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
     doc.text(noteLines, 20, ty + 10); doc.setTextColor(0);
   }
