@@ -3435,6 +3435,15 @@ function docImportSave() {
   if (typeof renderDashboard === 'function') renderDashboard();
 }
 
+// Rétablit l'espacement autour de "p.a." / "p/a" (ex "PREVHORp.a. Naef" → "PREVHOR p.a. Naef")
+// et nettoie les espaces multiples. Sert pour l'affichage du destinataire et du débiteur QR.
+function _fixPa(txt) {
+  return String(txt || '')
+    .replace(/\s*p\s*[\.\/]\s*a\.?\s*/gi, ' p.a. ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
 function downloadDocPDF(id) {
   const d = (DB.documents || []).find(x => x.id === id);
@@ -3476,6 +3485,7 @@ function downloadDocPDF(id) {
   } else {
     destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
   }
+  destLines = destLines.map(l => _fixPa(l));
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
   // Titre du document
@@ -3594,9 +3604,10 @@ function downloadDocPDF(id) {
     const debtor = { nom: debtorNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
     const payload = _buildSpcPayload(t.total, message, debtor);
     const qrUrl = _makeQrDataUrl(payload);
-    const debtLines = (d.proprietaire || '').trim()
+    const debtLines = ((d.proprietaire || '').trim()
       ? [d.proprietaire, 'p.a. ' + (d.clientNom||''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
-      : ((d.clientNom || '').trim() ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean) : null);
+      : ((d.clientNom || '').trim() ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean) : null));
+    const debtLinesClean = debtLines ? debtLines.map(l => _fixPa(l)) : null;
 
     // Conditions de paiement, juste au-dessus de la ligne pointillée
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
@@ -3626,7 +3637,7 @@ function downloadDocPDF(id) {
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Récépissé', padX, y); y += 8;
     y = L('Compte / Payable à', padX, y); y = V(credLines, padX, y, 7, recW-padX-4) + 1.5;
     y = L('Payable par', padX, y);
-    if (debtLines) y = V(debtLines, padX, y, 7, recW-padX-4) + 1.5; else y += 6;
+    if (debtLinesClean) y = V(debtLinesClean, padX, y, 7, recW-padX-4) + 1.5; else y += 6;
     const amountY = 255;
     L('Monnaie', padX, amountY); L('Montant', padX+18, amountY);
     V([co.devise||'CHF'], padX, amountY+3.6, 8); V([amountDisp], padX+18, amountY+3.6, 8);
@@ -3649,7 +3660,7 @@ function downloadDocPDF(id) {
     iy = L('Compte / Payable à', ix, iy); iy = V(credLines, ix, iy, 9, infoW) + 2;
     iy += 2.5; iy = L('Informations supplémentaires', ix, iy); iy = V([message], ix, iy, 9, infoW) + 2;
     iy += 2.5; iy = L('Payable par', ix, iy);
-    if (debtLines) iy = V(debtLines, ix, iy, 9, infoW) + 2;
+    if (debtLinesClean) iy = V(debtLinesClean, ix, iy, 9, infoW) + 2;
   }
 
   const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
