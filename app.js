@@ -3236,10 +3236,7 @@ function downloadDocPDF(id) {
   if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
-  // Tableau des lignes (avec saut de page automatique)
-  // 1ʳᵉ stratégie : on calcule à l'avance si TOUT tient sur 1 page (lignes + totaux + zone QR).
-  // Si oui → 1 seule page (pas de saut inutile).
-  // Sinon → on rempli la page 1 jusqu'à 5 mm du bas, et on met totaux + QR-bill sur la page 2.
+  // Tableau des lignes (avec saut de page intelligent)
   const drawLignesHeader = (y) => {
     doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
     doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
@@ -3248,21 +3245,9 @@ function downloadDocPDF(id) {
     return y + 6;
   };
 
-  // Calcul prévisionnel de la hauteur totale des lignes
-  let predictedH = 0;
-  (d.lignes || []).forEach(l => {
-    const dl = doc.splitTextToSize(l.desc || '', 100);
-    predictedH += Math.max(dl.length * 4.5, 6);
-  });
-  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
   const startY = Math.max(116, infoY + 8);
-  // Limite "souple" page 1 :
-  //   - sur facture : avant la zone QR-bill (192mm) si tout tient ; sinon presque le bas (290mm) pour remplir
-  //   - sur devis : avant le bas de page (262mm)
-  const tightLimit = isFacture ? (H - 105 - 18) : (H - 35); // 192mm ou 262mm
-  const fitsOnePage = (startY + 8 + predictedH + totalsH) <= tightLimit;
-  const maxYContent = fitsOnePage ? tightLimit : (H - 12); // page1 sans QR : utilise presque tout
-  const maxYNextPage = tightLimit;                          // pages suivantes : réservent la place pour les totaux/QR
+  // Limite : avant zone QR-bill pour les factures (192mm), avant pied de page pour les devis
+  const limit = isFacture ? (H - 105 - 14) : (H - 30);
 
   let pageIdx = 0;
   let ty = startY;
@@ -3271,7 +3256,6 @@ function downloadDocPDF(id) {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
     const lineH = Math.max(descLines.length * 4.5, 6);
-    const limit = pageIdx === 0 ? maxYContent : maxYNextPage;
     if (ty + lineH > limit) { doc.addPage(); pageIdx++; ty = 25; ty = drawLignesHeader(ty); }
     doc.text(descLines, 22, ty);
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
@@ -3280,8 +3264,9 @@ function downloadDocPDF(id) {
     ty += lineH;
   });
 
-  // Si totaux ne rentrent pas après les lignes, saut vers nouvelle page
-  if (ty + totalsH > maxYNextPage) { doc.addPage(); pageIdx++; ty = 25; }
+  // Totaux : besoin d'environ 30 mm
+  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
+  if (ty + totalsH > limit) { doc.addPage(); pageIdx++; ty = 25; }
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
