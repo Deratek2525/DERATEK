@@ -3237,8 +3237,9 @@ function downloadDocPDF(id) {
   doc.setTextColor(0);
 
   // Tableau des lignes (avec saut de page automatique)
-  // Limite basse : laisse de la place pour les totaux ET le QR-bill (factures uniquement)
-  const maxYContent = isFacture ? (H - 105 - 50) : (H - 35);
+  // Limite basse : pour les factures, on s'arrête juste au-dessus de la zone QR-bill (105mm en bas)
+  // moins une petite marge pour les conditions de paiement (~16mm). Les totaux peuvent passer en page 2.
+  const maxYContent = isFacture ? (H - 105 - 18) : (H - 35);
   const drawLignesHeader = (y) => {
     doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
     doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
