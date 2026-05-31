@@ -3501,7 +3501,8 @@ function downloadDocPDF(id) {
   };
 
   const startY = Math.max(116, infoY + 8);
-  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
+  // Hauteur réelle du bloc totaux (sous-total + [rabais+net] + tva + total), marge incluse
+  const totalsH = (d.rabais || 0) > 0 ? 32 : 22;
   const lignes = d.lignes || [];
   const qrZoneStart = H - 105;
 
@@ -3512,16 +3513,16 @@ function downloadDocPDF(id) {
     return Math.max(dl.length * 4.5, 6);
   });
   const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
-  const minContentH = 6 + totalLinesH + 4 + totalsH; // header + lignes + gap + totaux
+  // Hauteur du contenu en mode COMPACT (header + lignes + totaux), tel qu'il sera vraiment dessiné
+  const minContentH = 6 + totalLinesH + totalsH;
 
-  // Calcul du padding pour étaler les lignes et remplir la page 1
-  // - Si tout tient dans la zone "avant QR" (192-14=178), on garde compact (QR sur la même page)
-  // - Sinon, on étale les lignes pour remplir la page 1 (QR sur page 2 ensuite)
-  const onePageSpace = (qrZoneStart - 14) - startY;
+  // Décision : si le contenu compact tient au-dessus de la zone QR (avec une petite marge),
+  // on reste compact et le QR-bill va sur la MÊME page. Sinon on étale légèrement et le QR
+  // passe sur sa propre page.
+  const onePageSpace = (qrZoneStart - 3) - startY; // marge réduite : on privilégie le QR sur la même page
   const fullPageSpace = (H - 25) - startY;
   let padding = 0;
   if (minContentH <= onePageSpace) {
-    // Tout tient sur 1 page avec QR → pas d'étalement (compact en haut, QR en bas)
     padding = 0;
   } else if (lignes.length > 0) {
     // Multi-pages : léger étalement seulement (lignes resserrées, pas trop d'air)
