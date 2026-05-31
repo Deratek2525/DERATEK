@@ -3094,6 +3094,7 @@ async function docExtractFromAI(texte) {
     '- Si une ligne n\'a pas de quantité explicite, mets qte=1.\n' +
     '- Si une ligne montre un montant (ex "Location nacelle : 1\'210 CHF" ou "Forfait main d\'œuvre : 6050.30"), mets qte=1 et prix=ce montant.\n' +
     '- Les prix doivent être des nombres (pas de CHF, pas d\'apostrophe de milliers).\n' +
+    '- DATES D\'INTERVENTION : si une ou plusieurs dates d\'intervention/de passage apparaissent en face d\'une prestation (ex "Intervention du 12.03.2026" ou "Passages : 12.03 et 19.03.2026"), garde-les DANS la description de la ligne concernée (champ "desc"), telles qu\'écrites. Ne les mets PAS dans le champ "date" du document (qui est la date d\'émission), ni dans l\'objet.\n' +
     '- NE FORCE PAS la somme des lignes à égaler le sous_total : reporte les montants tels qu\'ils sont écrits, rien de plus.';
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
