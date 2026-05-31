@@ -3257,28 +3257,27 @@ function downloadDocPDF(id) {
   const limit = isFacture ? (H - 105 - 14) : (H - 30);
   const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
 
-  // Calcul de l'espace nécessaire en taille normale
+  // Calcul de l'espace nécessaire en taille normale (lignes + totaux + petite marge)
   const lignes = d.lignes || [];
-  const computeHeight = (sc) => {
-    let h = 6 * sc; // header
+  const computeHeight = () => {
+    let h = 6; // header
     lignes.forEach(l => {
       const dl = doc.splitTextToSize(l.desc || '', 100);
-      h += Math.max(dl.length * 4.5 * sc, 6 * sc);
+      h += Math.max(dl.length * 4.5, 6);
     });
-    h += 4 + totalsH; // espace + totaux
+    h += 4 + totalsH;
     return h;
   };
   const availableH = limit - startY;
+  // Compactage UNIQUEMENT si vraiment nécessaire (ça ne tient pas en taille normale)
   let scale = 1;
-  // Si ça ne tient pas en taille normale, on compresse jusqu'à 75% pour éviter le saut de page
-  if (computeHeight(1) > availableH) {
-    scale = Math.max(0.78, availableH / computeHeight(1));
+  if (computeHeight() > availableH) {
+    scale = Math.max(0.78, availableH / computeHeight());
   }
   const lineFont = 9.5 * scale;
   const lineGap = 4.5 * scale;
   const minLineH = 6 * scale;
 
-  let pageIdx = 0;
   let ty = startY;
   ty = drawLignesHeader(ty, scale);
   doc.setFontSize(lineFont);
@@ -3286,18 +3285,22 @@ function downloadDocPDF(id) {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
     const lineH = Math.max(descLines.length * lineGap, minLineH);
-    // Saut de page seulement si vraiment trop bas (même avec compactage)
-    if (ty + lineH > limit) { doc.addPage(); pageIdx++; ty = 25; ty = drawLignesHeader(ty, 1); scale = 1; doc.setFontSize(9.5); }
+    // Saut de page seulement si on dépasse vraiment la limite
+    if (ty + lineH > limit) {
+      doc.addPage(); ty = 25;
+      scale = 1; doc.setFontSize(9.5);
+      ty = drawLignesHeader(ty, 1);
+    }
     doc.text(descLines, 22, ty);
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
     doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
     ty += lineH;
   });
-  doc.setFontSize(9.5); // reset
+  doc.setFontSize(9.5);
 
-  // Totaux : saut de page si pas la place
-  if (ty + totalsH > limit) { doc.addPage(); pageIdx++; ty = 25; }
+  // Totaux : saut de page UNIQUEMENT si pas la place réelle
+  if (ty + totalsH > limit) { doc.addPage(); ty = 25; }
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
