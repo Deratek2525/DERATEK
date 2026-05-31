@@ -3242,8 +3242,7 @@ function downloadDocPDF(id) {
   if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
-  // Tableau des lignes — taille normale, saut de page automatique
-  // Le QR-bill (factures) reste ancré en bas de la dernière page (à H-105 mm)
+  // Tableau des lignes — taille normale, lignes étalées pour remplir la page si nécessaire
   const drawLignesHeader = (y) => {
     doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
     doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
@@ -3253,19 +3252,43 @@ function downloadDocPDF(id) {
   };
 
   const startY = Math.max(116, infoY + 8);
-  // Limite haute du contenu : pour les factures, on s'arrête à 14 mm au-dessus de la zone QR-bill ;
-  // pour les devis, on s'arrête à 30 mm du bas.
-  const limit = isFacture ? (H - 105 - 14) : (H - 30);
   const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
   const lignes = d.lignes || [];
+  const qrZoneStart = H - 105;
 
+  // Calcul des hauteurs naturelles des lignes
   doc.setFontSize(9.5);
+  const lineHeights = lignes.map(l => {
+    const dl = doc.splitTextToSize(l.desc || '', 100);
+    return Math.max(dl.length * 4.5, 6);
+  });
+  const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
+  const minContentH = 6 + totalLinesH + 4 + totalsH; // header + lignes + gap + totaux
+
+  // Calcul du padding pour étaler les lignes et remplir la page 1
+  // - Si tout tient dans la zone "avant QR" (192-14=178), on garde compact (QR sur la même page)
+  // - Sinon, on étale les lignes pour remplir la page 1 (QR sur page 2 ensuite)
+  const onePageSpace = (qrZoneStart - 14) - startY;
+  const fullPageSpace = (H - 25) - startY;
+  let padding = 0;
+  if (minContentH <= onePageSpace) {
+    // Tout tient sur 1 page avec QR → pas d'étalement (compact en haut, QR en bas)
+    padding = 0;
+  } else if (lignes.length > 0) {
+    // Multi-pages : étale les lignes pour remplir page 1 (sans dépasser le bas)
+    const slack = fullPageSpace - minContentH;
+    if (slack > 0) padding = Math.min(10, slack / lignes.length);
+  }
+
+  // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
+  const limit = isFacture ? (H - 25) : (H - 30);
+
   let ty = startY;
   ty = drawLignesHeader(ty);
-  lignes.forEach(l => {
+  lignes.forEach((l, i) => {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
-    const lineH = Math.max(descLines.length * 4.5, 6);
+    const lineH = lineHeights[i];
     if (ty + lineH > limit) {
       doc.addPage(); ty = 25;
       ty = drawLignesHeader(ty);
@@ -3274,10 +3297,10 @@ function downloadDocPDF(id) {
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
     doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
-    ty += lineH;
+    ty += lineH + padding;
   });
 
-  // Totaux : saut de page seulement si pas la place
+  // Totaux : suivent directement les lignes (sauf si vraiment pas la place)
   if (ty + totalsH > limit) { doc.addPage(); ty = 25; }
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
@@ -3301,8 +3324,10 @@ function downloadDocPDF(id) {
     doc.text(noteLines, 20, ty + 10); doc.setTextColor(0);
   }
 
-  // Pour les factures : QR-bill suisse en bas
+  // Pour les factures : QR-bill suisse en bas (ancré à H-105)
+  // Si le contenu précédent (ty) dépasse la zone QR, on ajoute une nouvelle page dédiée au QR.
   if (isFacture) {
+    if (ty > H - 105 - 5) { doc.addPage(); }
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
