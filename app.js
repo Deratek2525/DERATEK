@@ -2659,15 +2659,28 @@ function editDoc(id) {
   _editingDoc = JSON.parse(JSON.stringify(d));
   if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
   if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
-  // Réparation : si le document a un sousTotal/total stocké mais que les lignes ne s'y additionnent pas
-  // (cas des documents importés où l'IA n'a pas trouvé les prix individuels)
+  // Réparation : on prend comme cible le sous-total recalculé depuis le TOTAL TTC stocké
+  // (plus fiable que le sous-total HT que l'IA peut avoir mal extrait)
   const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0), 0);
+  const totalStocke = parseFloat(_editingDoc.total) || 0;
   const sousTotalStocke = parseFloat(_editingDoc.sousTotal) || 0;
-  if (sousTotalStocke > 0 && Math.abs(sommeLignes - sousTotalStocke) > 0.5) {
+  const rabaisTaux = parseFloat(_editingDoc.rabais) || 0;
+  const tvaTauxDoc = parseFloat(_editingDoc.tvaTaux) || 8.1;
+  let cibleSousTotal = sousTotalStocke;
+  if (totalStocke > 0) {
+    const facteur = (1 - rabaisTaux/100) * (1 + tvaTauxDoc/100);
+    const sousTotalDepuisTtc = totalStocke / facteur;
+    // Si la somme actuelle ne s'aligne ni au sous-total stocké ni à celui calculé depuis le TTC,
+    // on privilégie le TTC qui est l'info la plus fiable du PDF
+    if (Math.abs(sommeLignes - sousTotalDepuisTtc) > 1) {
+      cibleSousTotal = Math.round(sousTotalDepuisTtc * 100) / 100;
+    }
+  }
+  if (cibleSousTotal > 0 && Math.abs(sommeLignes - cibleSousTotal) > 0.5) {
     if (sommeLignes === 0) {
-      _editingDoc.lignes.push({ desc: 'Forfait global (selon document original)', qte: 1, prix: sousTotalStocke });
+      _editingDoc.lignes.push({ desc: 'Forfait global (selon document original)', qte: 1, prix: cibleSousTotal });
     } else {
-      _editingDoc.lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((sousTotalStocke - sommeLignes) * 100) / 100 });
+      _editingDoc.lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((cibleSousTotal - sommeLignes) * 100) / 100 });
     }
   }
   openDocEditor();
@@ -3047,30 +3060,45 @@ async function docProcessImportFile(file) {
 
 async function docExtractFromAI(texte) {
   const systemPrompt =
-    'Tu extrais les informations d\'un DEVIS ou d\'une FACTURE émis par l\'entreprise DERATEK (Suisse, CHF, TVA 8.1%). ' +
-    'Réponds UNIQUEMENT par un objet JSON valide, sans texte ni balises. Clés (chaîne vide si absent) :\n' +
+    'Tu extrais EXHAUSTIVEMENT les informations d\'un DEVIS ou d\'une FACTURE émis par l\'entreprise DERATEK (Suisse, CHF, TVA 8.1%). ' +
+    'Réponds UNIQUEMENT par un objet JSON valide, sans texte ni balises. Clés (chaîne vide ou tableau vide si absent) :\n' +
     '{\n"type":"devis ou facture (devine d\'après le PDF)",\n' +
     '"numero":"numéro du document (ex D-2026-001 ou F-2026-001)",\n' +
-    '"date":"date du document au format AAAA-MM-JJ",\n' +
-    '"client_nom":"nom du destinataire / gérance / client",\n' +
-    '"client_adresse":"rue et numéro",\n' +
-    '"client_npa":"NPA",\n' +
-    '"client_ville":"ville",\n' +
-    '"locataire_nom":"locataire concerné si mentionné",\n' +
-    '"locataire_adresse":"adresse du locataire si mentionné",\n' +
-    '"proprietaire":"propriétaire si mentionné (souvent précédé de p.a.)",\n' +
-    '"sous_total":"montant HT total (chiffres uniquement)",\n' +
-    '"rabais":"taux du rabais en % s\'il est mentionné (chiffres)",\n' +
+    '"date":"date d\'émission du document au format AAAA-MM-JJ",\n' +
+    '"bon_numero":"numéro du bon de travaux / bon d\'intervention / bon de commande s\'il est mentionné. ATTENTION : DERATEK utilise souvent le libellé \\"BON POUR TRAVAUX N° xxxx xxx xxx\\" (3 groupes de chiffres séparés par des espaces, ex \\"2026 041 211\\"). Cherche aussi : BT-xxxx, BC-xxxxx, N° de commande, Réf. travaux, Ordre de travaux. Conserve les espaces du numéro tel qu\'écrit.",\n' +
+    '"objet":"objet / sujet / description courte du document (ex : Traitement contre les rats — appartement 3e étage)",\n' +
+    '"client_nom":"nom du destinataire / gérance / client (à qui est adressé le document)",\n' +
+    '"client_adresse":"rue et numéro du destinataire",\n' +
+    '"client_npa":"NPA du destinataire",\n' +
+    '"client_ville":"ville du destinataire",\n' +
+    '"locataire_nom":"NOM ou raison sociale du locataire / occupant concerné par l\'intervention. ATTENTION : sur les factures DERATEK il apparaît juste APRÈS le n° de bon pour travaux, sous la forme \\"<Société ou nom> / <type de local>\\" (ex \\"Société Royal Panini\'s Sàrl / Commerce rez-de-chaussée\\"). Souvent précédé de \\"locataire :\\" ou \\"chez :\\" sur d\'autres documents. Garde le nom complet AVANT le slash (et sans le type de local).",\n' +
+    '"locataire_prenom":"prénom du locataire s\'il est mentionné séparément (ne pas remplir si c\'est une société)",\n' +
+    '"locataire_adresse":"rue et numéro du logement du locataire / lieu d\'intervention. Sur les factures DERATEK c\'est l\'adresse qui suit le bloc locataire (ex \\"Rue des Envers 39\\")",\n' +
+    '"locataire_npa":"code postal NPA du locataire si mentionné",\n' +
+    '"locataire_ville":"ville du locataire si mentionnée",\n' +
+    '"locataire_tel":"téléphone du locataire si mentionné (formats CH : 079..., 0XX..., +41...)",\n' +
+    '"locataire_email":"email du locataire si mentionné",\n' +
+    '"proprietaire":"propriétaire si mentionné (souvent précédé de p.a. ou p/a)",\n' +
+    '"sous_total":"montant HT total avant rabais et TVA (chiffres uniquement, point décimal)",\n' +
+    '"rabais":"taux du rabais en % s\'il est mentionné (chiffres, ex 5 pour 5%)",\n' +
     '"tva_taux":"taux TVA en % (8.1 par défaut)",\n' +
     '"tva_montant":"montant TVA (chiffres)",\n' +
-    '"total":"montant total TTC (chiffres)",\n' +
-    '"lignes":[{"desc":"description","qte":1,"prix":0}],\n' +
-    '"notes":"notes/conditions si présentes"\n}';
+    '"total":"montant TOTAL TTC final (chiffres uniquement, point décimal)",\n' +
+    '"lignes":[{"desc":"description précise de la prestation/article","qte":1,"prix":0}],\n' +
+    '"notes":"notes / conditions de paiement / mentions diverses si présentes"\n}\n\n' +
+    'RÈGLES IMPORTANTES pour le tableau "lignes" :\n' +
+    '- Tu DOIS extraire CHAQUE ligne du tableau de prestations séparément (une entrée JSON par ligne du PDF).\n' +
+    '- N\'INVENTE PAS un "forfait global" — extrait chaque prestation, déplacement, location matériel (nacelle, échafaudage), traitement, fourniture, frais annexes, etc. AVEC son prix unitaire et sa quantité.\n' +
+    '- Si une ligne n\'a pas de quantité explicite, mets qte=1.\n' +
+    '- Si une ligne montre un montant total sans quantité (ex "Forfait main d\'œuvre : 1\'200 CHF"), mets qte=1 et prix=1200.\n' +
+    '- Les prix doivent être des nombres (pas de CHF, pas d\'apostrophe de milliers).\n' +
+    '- La somme (qte × prix) de toutes les lignes DOIT être égale au sous_total HT.\n' +
+    '- Si tu trouves des frais en dehors du tableau (déplacement, location, supplément), AJOUTE-les comme lignes supplémentaires.';
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({
-      model: DERATEK_CONFIG.mistral.model, max_tokens: 1200, temperature: 0,
+      model: DERATEK_CONFIG.mistral.model, max_tokens: 4000, temperature: 0,
       response_format: { type: 'json_object' },
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte }]
     })
@@ -3099,26 +3127,53 @@ function docShowImportConfirm(infos, fileName) {
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
       <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">✅ Document analysé — type détecté : <span id="docimp-type-disp" style="color:var(--red);">${type === 'facture' ? 'FACTURE' : 'DEVIS'}</span></div>
       <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifie les champs, choisis le statut, puis enregistre. Fichier : <b>${fileName||''}</b></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 14px;">
         <div class="form-group"><label class="form-label">Type</label>
           <select class="form-input" id="docimp-type" onchange="docImportTypeChange(this.value)">
             <option value="devis" ${type==='devis'?'selected':''}>Devis</option>
             <option value="facture" ${type==='facture'?'selected':''}>Facture</option>
           </select>
         </div>
-        ${champ('N°', 'numero', infos.numero)}
-        ${champ('Date (AAAA-MM-JJ)', 'date', infos.date)}
+        ${champ('N° document', 'numero', infos.numero)}
+        ${champ('Date émise (AAAA-MM-JJ)', 'date', infos.date)}
+        ${champ('N° bon travaux/intervention', 'bon_numero', infos.bon_numero)}
+      </div>
+      <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Objet / Description courte</label>
+        <input class="form-input" id="docimp-objet" value="${(infos.objet||'').replace(/"/g,'&quot;')}" placeholder="Ex : Traitement contre cafards — appartement 3ème">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
-        ${champ('Client (gérance)', 'client_nom', infos.client_nom)}
-        ${champ('Locataire', 'locataire_nom', infos.locataire_nom)}
-        ${champ('Adresse client', 'client_adresse', infos.client_adresse)}
-        ${champ('Adresse locataire', 'locataire_adresse', infos.locataire_adresse)}
-        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
-          ${champ('NPA', 'client_npa', infos.client_npa)}
-          ${champ('Ville', 'client_ville', infos.client_ville)}
+        <div style="border-right:1px dashed var(--g300);padding-right:10px;">
+          <div style="font-size:11px;font-weight:800;color:var(--navy);margin-bottom:4px;text-transform:uppercase;">🏢 Client / Gérance (destinataire)</div>
+          ${champ('Client (gérance)', 'client_nom', infos.client_nom)}
+          ${champ('Adresse client', 'client_adresse', infos.client_adresse)}
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+            ${champ('NPA', 'client_npa', infos.client_npa)}
+            ${champ('Ville', 'client_ville', infos.client_ville)}
+          </div>
+          ${champ('Propriétaire (p.a.)', 'proprietaire', infos.proprietaire)}
         </div>
-        ${champ('Propriétaire (p.a.)', 'proprietaire', infos.proprietaire)}
+        <div style="padding-left:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div style="font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;">🏠 Locataire (lieu d'intervention)</div>
+            <label style="font-size:11px;font-weight:700;color:var(--g600);display:flex;align-items:center;gap:4px;cursor:pointer;">
+              <input type="checkbox" id="docimp-creer-locataire" ${(infos.locataire_nom||'').trim()?'checked':''} style="margin:0;">
+              Créer dans Locataires
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 8px;">
+            ${champ('Prénom', 'locataire_prenom', infos.locataire_prenom)}
+            ${champ('Nom', 'locataire_nom', infos.locataire_nom)}
+          </div>
+          ${champ('Adresse / rue', 'locataire_adresse', infos.locataire_adresse)}
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+            ${champ('NPA', 'locataire_npa', infos.locataire_npa)}
+            ${champ('Ville', 'locataire_ville', infos.locataire_ville)}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 8px;">
+            ${champ('Téléphone', 'locataire_tel', infos.locataire_tel)}
+            ${champ('Email', 'locataire_email', infos.locataire_email)}
+          </div>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0 14px;">
         ${champ('Sous-total HT', 'sous_total', infos.sous_total)}
@@ -3132,7 +3187,21 @@ function docShowImportConfirm(infos, fileName) {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Notes / conditions</label><textarea class="form-input" id="docimp-notes" rows="2">${infos.notes||''}</textarea></div>
-      <div style="font-size:11px;color:var(--g400);margin-top:6px;">${lignesArr.length} ligne(s) détectée(s) par l'IA — elles seront enregistrées telles quelles.</div>
+      <div style="margin-top:10px;border-top:1px dashed var(--g300);padding-top:10px;">
+        <div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:6px;">📋 Lignes détectées par l'IA (${lignesArr.length}) — vérifie / corrige :</div>
+        <div id="docimp-lignes-wrap" style="max-height:240px;overflow-y:auto;border:1px solid var(--g200);border-radius:8px;padding:6px;background:#fafbfc;">
+          ${lignesArr.length === 0
+            ? '<div style="font-size:12px;color:#b00;padding:8px;">⚠️ L\'IA n\'a détecté aucune ligne détaillée. Tu peux en ajouter ci-dessous ou laisser un forfait sera calculé automatiquement à l\'enregistrement.</div>'
+            : lignesArr.map((l,i)=>`
+            <div style="display:grid;grid-template-columns:1fr 60px 90px 30px;gap:6px;margin-bottom:4px;align-items:center;" data-li="${i}">
+              <input class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Description" value="${(l.desc||l.description||'').replace(/"/g,'&quot;')}" data-fk="desc">
+              <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:center;" type="number" step="0.01" placeholder="Qté" value="${l.qte||l.quantite||1}" data-fk="qte">
+              <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" type="number" step="0.01" placeholder="Prix" value="${l.prix||l.prix_unitaire||0}" data-fk="prix">
+              <button class="btn btn-ghost" style="padding:2px 6px;font-size:12px;color:#b00;" onclick="this.parentElement.remove()" title="Supprimer">✕</button>
+            </div>`).join('')}
+        </div>
+        <button class="btn btn-ghost" style="font-size:12px;margin-top:6px;" onclick="docImpAddLine()">+ Ajouter une ligne</button>
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button class="btn btn-ghost" onclick="docImportCancel()">Annuler</button>
         <button class="btn btn-navy" onclick="docImportSave()">✓ Enregistrer</button>
@@ -3150,6 +3219,28 @@ function docImportTypeChange(v) {
   const labels = { brouillon:'Brouillon', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
   sel.innerHTML = opts.map(o => `<option value="${o}">${labels[o]||o}</option>`).join('');
 }
+function docImpAddLine() {
+  const wrap = $('docimp-lignes-wrap'); if (!wrap) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 60px 90px 30px;gap:6px;margin-bottom:4px;align-items:center;';
+  div.innerHTML = `
+    <input class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Description" value="" data-fk="desc">
+    <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:center;" type="number" step="0.01" placeholder="Qté" value="1" data-fk="qte">
+    <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" type="number" step="0.01" placeholder="Prix" value="0" data-fk="prix">
+    <button class="btn btn-ghost" style="padding:2px 6px;font-size:12px;color:#b00;" onclick="this.parentElement.remove()" title="Supprimer">✕</button>`;
+  wrap.appendChild(div);
+}
+function _docImpReadLines() {
+  const wrap = $('docimp-lignes-wrap'); if (!wrap) return [];
+  return Array.from(wrap.querySelectorAll('[data-li],div')).map(row => {
+    const get = k => { const i = row.querySelector('[data-fk="'+k+'"]'); return i ? i.value : ''; };
+    const desc = (get('desc')||'').trim();
+    const qte = parseFloat(get('qte'))||0;
+    const prix = parseFloat(get('prix'))||0;
+    if (!desc && qte === 0 && prix === 0) return null;
+    return { desc, qte: qte||1, prix };
+  }).filter(Boolean);
+}
 function docImportCancel() {
   const box = $('doc-import-confirm'); if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   const fi = $('doc-file-input'); if (fi) fi.value = '';
@@ -3159,38 +3250,118 @@ function docImportSave() {
   const v = id => { const el = $('docimp-' + id); return el ? el.value.trim() : ''; };
   const type = v('type') || 'devis';
   const numero = v('numero') || _nextDocNumero(type);
-  const sousTotal = parseFloat(v('sous_total')) || 0;
+  let sousTotal = parseFloat(v('sous_total')) || 0;
   const rabais = parseFloat(v('rabais')) || 0;
   const tvaTaux = parseFloat(v('tva_taux')) || 8.1;
   let total = parseFloat(v('total')) || 0;
+  // Priorité au Total TTC : si on l'a, on recalcule le sous-total HT à rebours pour cohérence
+  // (souvent l'IA extrait un sous-total HT incomplet mais lit bien le total TTC)
+  if (total > 0) {
+    const facteur = (1 - rabais/100) * (1 + tvaTaux/100);
+    const sousTotalCible = total / facteur;
+    if (sousTotal === 0 || Math.abs(sousTotalCible - sousTotal) > 1) {
+      sousTotal = Math.round(sousTotalCible * 100) / 100;
+    }
+  }
   const rabaisMontant = sousTotal * (rabais / 100);
   let tvaMontant = (sousTotal - rabaisMontant) * (tvaTaux / 100);
   // Si l'IA n'a pas extrait le total, on le calcule
   if (!total) total = sousTotal - rabaisMontant + tvaMontant;
-  let lignesRaw = [];
-  try { lignesRaw = JSON.parse(box.dataset.lignes || '[]'); } catch (e) {}
-  let lignes = lignesRaw.map(l => ({
-    desc: l.desc||l.description||'',
-    qte: parseFloat(l.qte||l.quantite||1)||1,
-    prix: parseFloat(l.prix||l.prix_unitaire||0)||0
-  }));
-  // Cohérence : si l'IA n'a pas trouvé les prix individuels (souvent le cas dans les anciens devis),
-  // on s'assure que la somme des lignes = sous-total HT en ajustant ou en ajoutant une ligne forfait.
+  // Lit les lignes telles qu'éditées par l'utilisateur dans le formulaire d'import
+  let lignes = _docImpReadLines();
+  // Cohérence : si la somme des lignes ne correspond pas au sous-total, on ajuste
   const sommeLignes = lignes.reduce((s, l) => s + (l.qte || 0) * (l.prix || 0), 0);
   if (sousTotal > 0 && Math.abs(sommeLignes - sousTotal) > 0.5) {
     if (sommeLignes === 0 && lignes.length > 0) {
-      // Aucun prix trouvé → on met le sous-total sur la dernière ligne (ou ajout d'une ligne forfait)
+      // Aucun prix trouvé → on met le sous-total sur une ligne forfait
+      lignes.push({ desc: 'Forfait global (selon devis/facture original)', qte: 1, prix: sousTotal });
+    } else if (sommeLignes === 0 && lignes.length === 0) {
       lignes.push({ desc: 'Forfait global (selon devis/facture original)', qte: 1, prix: sousTotal });
     } else {
       // Différence partielle → ligne d'ajustement
       lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((sousTotal - sommeLignes) * 100) / 100 });
     }
   }
+  // Liaison avec un bon de travaux existant si le numéro extrait correspond
+  const bonNumeroSaisi = v('bon_numero');
+  let bonIdLie = '';
+  if (bonNumeroSaisi) {
+    const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+    const target = norm(bonNumeroSaisi);
+    const bonTrouve = (DB.bons || []).find(b => norm(b.numero) === target);
+    if (bonTrouve) bonIdLie = bonTrouve.id;
+  }
+
+  // ── Création / liaison du locataire dans la rubrique Locataires ───────────
+  const locPrenom = v('locataire_prenom');
+  const locNomFam = v('locataire_nom');
+  const locNomComplet = (locPrenom && locNomFam) ? (locPrenom + ' ' + locNomFam) : (locNomFam || locPrenom);
+  const locAdr  = v('locataire_adresse');
+  const locNpa  = v('locataire_npa');
+  const locVille= v('locataire_ville');
+  const locTel  = v('locataire_tel');
+  const locMail = v('locataire_email');
+  const creerLocataire = !!($('docimp-creer-locataire') && $('docimp-creer-locataire').checked);
+  let locataireMessage = '';
+  if (creerLocataire && locNomComplet) {
+    const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+    // Cherche un client (gérance) existant pour rattacher le locataire
+    const clientNomImp = v('client_nom');
+    let clientIdLie = '';
+    if (clientNomImp) {
+      const ciCible = norm(clientNomImp);
+      const cTrouve = (DB.clients || []).find(c => norm(c.nom) === ciCible);
+      if (cTrouve) clientIdLie = cTrouve.id;
+    }
+    // Cherche un locataire existant (même nom + même adresse ou même nom + même client)
+    const cibleNom = norm(locNomComplet);
+    const cibleAdr = norm(locAdr);
+    const dejaExiste = (DB.locataires || []).find(l => {
+      if (norm(l.nom) !== cibleNom) return false;
+      if (cibleAdr && norm(l.adresse) === cibleAdr) return true;
+      if (clientIdLie && l.clientId === clientIdLie) return true;
+      return !cibleAdr && !clientIdLie; // même nom et pas d'adresse → considère identique
+    });
+    if (dejaExiste) {
+      // Complète éventuellement les champs manquants
+      let modifie = false;
+      const enrichir = (k, val) => { if (val && !dejaExiste[k]) { dejaExiste[k] = val; modifie = true; } };
+      enrichir('adresse', locAdr); enrichir('npa', locNpa); enrichir('ville', locVille);
+      enrichir('tel', locTel); enrichir('email', locMail);
+      enrichir('prenom', locPrenom);
+      if (clientIdLie) enrichir('clientId', clientIdLie);
+      if (modifie) { const ll = DB.locataires; DB.locataires = ll; }
+      locataireMessage = ' (locataire « ' + locNomComplet + ' » déjà existant — coordonnées complétées)';
+    } else {
+      const nouveau = {
+        id: newId(),
+        nom: locNomComplet,
+        prenom: locPrenom,
+        tel: locTel, email: locMail,
+        adresse: locAdr, npa: locNpa, ville: locVille,
+        clientId: clientIdLie,
+        notes: 'Créé automatiquement depuis l\'import ' + (type === 'facture' ? 'de la facture' : 'du devis') + ' ' + numero
+      };
+      const ll = DB.locataires; ll.push(nouveau); DB.locataires = ll;
+      locataireMessage = ' + locataire « ' + locNomComplet + ' » créé';
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+  // L'objet et le n° de bon (si non lié à un vrai bon) sont préfixés dans les notes pour traçabilité
+  const objet = v('objet');
+  const notesUser = v('notes');
+  let notesFinales = '';
+  if (objet) notesFinales += 'Objet : ' + objet + '\n';
+  if (bonNumeroSaisi && !bonIdLie) notesFinales += 'N° bon de travaux : ' + bonNumeroSaisi + '\n';
+  if (notesFinales && notesUser) notesFinales += '\n';
+  notesFinales += notesUser;
+
   const doc = {
     id: newId(),
     type: type,
     numero: numero,
     dateDoc: v('date') || today(),
+    bonId: bonIdLie,
     clientNom: v('client_nom'),
     clientAdresse: v('client_adresse'),
     clientNpa: v('client_npa'),
@@ -3206,12 +3377,14 @@ function docImportSave() {
     tvaMontant: Math.round(tvaMontant*100)/100,
     total: Math.round(total*100)/100,
     statut: v('statut') || 'brouillon',
-    notes: v('notes')
+    notes: notesFinales
   };
   const list = DB.documents; list.push(doc); DB.documents = list;
-  toast('✓ ' + (type==='facture'?'Facture':'Devis') + ' ' + doc.numero + ' importé', '#2d9e6b');
+  toast('✓ ' + (type==='facture'?'Facture':'Devis') + ' ' + doc.numero + ' importé' + locataireMessage, '#2d9e6b');
   docImportCancel();
   renderDocuments();
+  if (typeof renderLocataires === 'function') renderLocataires();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
