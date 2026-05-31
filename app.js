@@ -3242,36 +3242,61 @@ function downloadDocPDF(id) {
   if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
-  // Tableau des lignes (avec saut de page intelligent)
-  const drawLignesHeader = (y) => {
-    doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
-    doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  // Tableau des lignes (compactage adaptatif pour tenir sur 1 page si possible)
+  const drawLignesHeader = (y, scale) => {
+    const headerH = 7 * (scale || 1);
+    doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, headerH, 'F');
+    doc.setTextColor(255); doc.setFontSize(9 * (scale || 1)); doc.setFont('helvetica', 'bold');
     doc.text('Description', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix', 155, y, {align:'right'}); doc.text('Total', 188, y, {align:'right'});
     doc.setTextColor(0); doc.setFont('helvetica', 'normal');
-    return y + 6;
+    return y + 6 * (scale || 1);
   };
 
   const startY = Math.max(116, infoY + 8);
   // Limite : avant zone QR-bill pour les factures (192mm), avant pied de page pour les devis
   const limit = isFacture ? (H - 105 - 14) : (H - 30);
+  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
+
+  // Calcul de l'espace nécessaire en taille normale
+  const lignes = d.lignes || [];
+  const computeHeight = (sc) => {
+    let h = 6 * sc; // header
+    lignes.forEach(l => {
+      const dl = doc.splitTextToSize(l.desc || '', 100);
+      h += Math.max(dl.length * 4.5 * sc, 6 * sc);
+    });
+    h += 4 + totalsH; // espace + totaux
+    return h;
+  };
+  const availableH = limit - startY;
+  let scale = 1;
+  // Si ça ne tient pas en taille normale, on compresse jusqu'à 75% pour éviter le saut de page
+  if (computeHeight(1) > availableH) {
+    scale = Math.max(0.78, availableH / computeHeight(1));
+  }
+  const lineFont = 9.5 * scale;
+  const lineGap = 4.5 * scale;
+  const minLineH = 6 * scale;
 
   let pageIdx = 0;
   let ty = startY;
-  ty = drawLignesHeader(ty);
-  (d.lignes || []).forEach(l => {
+  ty = drawLignesHeader(ty, scale);
+  doc.setFontSize(lineFont);
+  lignes.forEach(l => {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
-    const lineH = Math.max(descLines.length * 4.5, 6);
-    if (ty + lineH > limit) { doc.addPage(); pageIdx++; ty = 25; ty = drawLignesHeader(ty); }
+    const lineH = Math.max(descLines.length * lineGap, minLineH);
+    // Saut de page seulement si vraiment trop bas (même avec compactage)
+    if (ty + lineH > limit) { doc.addPage(); pageIdx++; ty = 25; ty = drawLignesHeader(ty, 1); scale = 1; doc.setFontSize(9.5); }
     doc.text(descLines, 22, ty);
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
     doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
     ty += lineH;
   });
+  doc.setFontSize(9.5); // reset
 
-  // Totaux : besoin d'environ 30 mm
-  const totalsH = (d.rabais || 0) > 0 ? 36 : 26;
+  // Totaux : saut de page si pas la place
   if (ty + totalsH > limit) { doc.addPage(); pageIdx++; ty = 25; }
   ty += 4;
   doc.line(120, ty, 190, ty); ty += 5;
