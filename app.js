@@ -2659,6 +2659,17 @@ function editDoc(id) {
   _editingDoc = JSON.parse(JSON.stringify(d));
   if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
   if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
+  // Réparation : si le document a un sousTotal/total stocké mais que les lignes ne s'y additionnent pas
+  // (cas des documents importés où l'IA n'a pas trouvé les prix individuels)
+  const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0), 0);
+  const sousTotalStocke = parseFloat(_editingDoc.sousTotal) || 0;
+  if (sousTotalStocke > 0 && Math.abs(sommeLignes - sousTotalStocke) > 0.5) {
+    if (sommeLignes === 0) {
+      _editingDoc.lignes.push({ desc: 'Forfait global (selon document original)', qte: 1, prix: sousTotalStocke });
+    } else {
+      _editingDoc.lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((sousTotalStocke - sommeLignes) * 100) / 100 });
+    }
+  }
   openDocEditor();
 }
 
@@ -3156,8 +3167,25 @@ function docImportSave() {
   let tvaMontant = (sousTotal - rabaisMontant) * (tvaTaux / 100);
   // Si l'IA n'a pas extrait le total, on le calcule
   if (!total) total = sousTotal - rabaisMontant + tvaMontant;
-  let lignes = [];
-  try { lignes = JSON.parse(box.dataset.lignes || '[]'); } catch (e) {}
+  let lignesRaw = [];
+  try { lignesRaw = JSON.parse(box.dataset.lignes || '[]'); } catch (e) {}
+  let lignes = lignesRaw.map(l => ({
+    desc: l.desc||l.description||'',
+    qte: parseFloat(l.qte||l.quantite||1)||1,
+    prix: parseFloat(l.prix||l.prix_unitaire||0)||0
+  }));
+  // Cohérence : si l'IA n'a pas trouvé les prix individuels (souvent le cas dans les anciens devis),
+  // on s'assure que la somme des lignes = sous-total HT en ajustant ou en ajoutant une ligne forfait.
+  const sommeLignes = lignes.reduce((s, l) => s + (l.qte || 0) * (l.prix || 0), 0);
+  if (sousTotal > 0 && Math.abs(sommeLignes - sousTotal) > 0.5) {
+    if (sommeLignes === 0 && lignes.length > 0) {
+      // Aucun prix trouvé → on met le sous-total sur la dernière ligne (ou ajout d'une ligne forfait)
+      lignes.push({ desc: 'Forfait global (selon devis/facture original)', qte: 1, prix: sousTotal });
+    } else {
+      // Différence partielle → ligne d'ajustement
+      lignes.push({ desc: 'Ajustement / complément', qte: 1, prix: Math.round((sousTotal - sommeLignes) * 100) / 100 });
+    }
+  }
   const doc = {
     id: newId(),
     type: type,
@@ -3170,7 +3198,7 @@ function docImportSave() {
     locataireNom: v('locataire_nom'),
     locataireAdresse: v('locataire_adresse'),
     proprietaire: v('proprietaire'),
-    lignes: lignes.map(l => ({ desc: l.desc||l.description||'', qte: parseFloat(l.qte||l.quantite||1)||1, prix: parseFloat(l.prix||l.prix_unitaire||0)||0 })),
+    lignes: lignes,
     sousTotal: Math.round(sousTotal*100)/100,
     rabais: rabais,
     rabaisMontant: Math.round(rabaisMontant*100)/100,
