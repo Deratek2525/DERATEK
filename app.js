@@ -3191,6 +3191,12 @@ function downloadDocPDF(id) {
   const d = (DB.documents || []).find(x => x.id === id);
   if (!d) { toast('Document introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  // Sécurisation : lignes peut arriver comme string JSON depuis Supabase, ou être absent
+  if (typeof d.lignes === 'string') { try { d.lignes = JSON.parse(d.lignes); } catch (e) { d.lignes = []; } }
+  if (!Array.isArray(d.lignes)) d.lignes = [];
+  if (d.rabais === undefined || d.rabais === null) d.rabais = 0;
+  if (d.tvaTaux === undefined || d.tvaTaux === null) d.tvaTaux = 8.1;
+  try {
   const co = DERATEK_CONFIG.company;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -3360,6 +3366,10 @@ function downloadDocPDF(id) {
   const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
   doc.save(fname);
   toast('✓ PDF téléchargé', '#2d9e6b');
+  } catch (err) {
+    console.error('PDF error', err);
+    toast('Erreur PDF : ' + (err.message || 'voir console'), '#e63946');
+  }
 }
 
 // ============================================================
