@@ -3523,7 +3523,15 @@ function downloadDocPDF(id) {
   const fullPageSpace = (H - 25) - startY;
   let padding = 0;
   if (minContentH <= onePageSpace) {
-    padding = 0;
+    // 1 page avec QR : on répartit doucement les lignes vers le bas pour que le bloc
+    // totaux + condition de paiement arrive juste au-dessus de la ligne de découpe,
+    // ce qui supprime le grand vide entre le tableau et le bulletin QR.
+    // Cible : le contenu se termine ~14 mm au-dessus du bulletin (place pour la condition de paiement).
+    if (lignes.length > 0) {
+      const cibleBas = qrZoneStart - 14;
+      const slack = (cibleBas - startY) - minContentH;
+      if (slack > 0) padding = Math.min(11, slack / lignes.length);
+    }
   } else if (lignes.length > 0) {
     // Multi-pages : léger étalement seulement (lignes resserrées, pas trop d'air)
     const slack = fullPageSpace - minContentH;
