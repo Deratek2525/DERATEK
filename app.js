@@ -3006,6 +3006,186 @@ function renderDocuments() {
   }).join('');
 }
 
+// ============================================================
+// IMPORT IA — glisser un PDF de devis/facture existant
+// ============================================================
+function docHandleDrop(e) {
+  e.preventDefault();
+  const dz = $('doc-dropzone'); if (dz) dz.classList.remove('drag');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) docProcessImportFile(f);
+}
+function docHandleInput(e) { const f = e.target.files && e.target.files[0]; if (f) docProcessImportFile(f); }
+
+async function docProcessImportFile(file) {
+  const st = $('doc-import-status');
+  const cf = $('doc-import-confirm');
+  if (cf) { cf.style.display = 'none'; cf.innerHTML = ''; }
+  if (file.type !== 'application/pdf') { toast('Merci de déposer un fichier PDF', '#e63946'); return; }
+  const setSt = m => { if (st) { st.style.display = 'block'; st.innerHTML = m; } };
+  try {
+    setSt('⏳ Lecture du PDF…');
+    const texte = await bonExtractText(file);
+    if (!texte || texte.length < 20) { setSt(''); toast('PDF non lisible.', '#e63946'); return; }
+    setSt('🤖 Analyse du document par l\'IA…');
+    const infos = await docExtractFromAI(texte);
+    setSt('');
+    docShowImportConfirm(infos, file.name);
+  } catch (err) { setSt(''); console.error(err); toast('Erreur : ' + err.message, '#e63946'); }
+}
+
+async function docExtractFromAI(texte) {
+  const systemPrompt =
+    'Tu extrais les informations d\'un DEVIS ou d\'une FACTURE émis par l\'entreprise DERATEK (Suisse, CHF, TVA 8.1%). ' +
+    'Réponds UNIQUEMENT par un objet JSON valide, sans texte ni balises. Clés (chaîne vide si absent) :\n' +
+    '{\n"type":"devis ou facture (devine d\'après le PDF)",\n' +
+    '"numero":"numéro du document (ex D-2026-001 ou F-2026-001)",\n' +
+    '"date":"date du document au format AAAA-MM-JJ",\n' +
+    '"client_nom":"nom du destinataire / gérance / client",\n' +
+    '"client_adresse":"rue et numéro",\n' +
+    '"client_npa":"NPA",\n' +
+    '"client_ville":"ville",\n' +
+    '"locataire_nom":"locataire concerné si mentionné",\n' +
+    '"locataire_adresse":"adresse du locataire si mentionné",\n' +
+    '"proprietaire":"propriétaire si mentionné (souvent précédé de p.a.)",\n' +
+    '"sous_total":"montant HT total (chiffres uniquement)",\n' +
+    '"rabais":"taux du rabais en % s\'il est mentionné (chiffres)",\n' +
+    '"tva_taux":"taux TVA en % (8.1 par défaut)",\n' +
+    '"tva_montant":"montant TVA (chiffres)",\n' +
+    '"total":"montant total TTC (chiffres)",\n' +
+    '"lignes":[{"desc":"description","qte":1,"prix":0}],\n' +
+    '"notes":"notes/conditions si présentes"\n}';
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({
+      model: DERATEK_CONFIG.mistral.model, max_tokens: 1200, temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte }]
+    })
+  });
+  if (!response.ok) { let m='API '+response.status; try{const e=await response.json();m=(e.error&&e.error.message)||m;}catch(e){} throw new Error(m); }
+  const data = await response.json();
+  const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!raw) throw new Error('Réponse IA vide');
+  return JSON.parse(raw.replace(/```json/gi,'').replace(/```/g,'').trim());
+}
+
+function docShowImportConfirm(infos, fileName) {
+  const box = $('doc-import-confirm'); if (!box) return;
+  const type = (infos.type||'').toLowerCase().includes('factur') ? 'facture' : 'devis';
+  const statutOpts = type === 'facture'
+    ? ['brouillon','envoyee','payee']
+    : ['brouillon','envoye','accepte','refuse'];
+  const statutLabels = { brouillon:'Brouillon', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
+  const champ = (label, key, val) =>
+    `<div style="margin-bottom:6px;">
+       <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
+       <input class="form-input" id="docimp-${key}" value="${(val==null?'':String(val)).replace(/"/g,'&quot;')}" style="font-size:13px;">
+     </div>`;
+  const lignesArr = Array.isArray(infos.lignes) ? infos.lignes : [];
+  box.innerHTML = `
+    <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">✅ Document analysé — type détecté : <span id="docimp-type-disp" style="color:var(--red);">${type === 'facture' ? 'FACTURE' : 'DEVIS'}</span></div>
+      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifie les champs, choisis le statut, puis enregistre. Fichier : <b>${fileName||''}</b></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;">
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-input" id="docimp-type" onchange="docImportTypeChange(this.value)">
+            <option value="devis" ${type==='devis'?'selected':''}>Devis</option>
+            <option value="facture" ${type==='facture'?'selected':''}>Facture</option>
+          </select>
+        </div>
+        ${champ('N°', 'numero', infos.numero)}
+        ${champ('Date (AAAA-MM-JJ)', 'date', infos.date)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
+        ${champ('Client (gérance)', 'client_nom', infos.client_nom)}
+        ${champ('Locataire', 'locataire_nom', infos.locataire_nom)}
+        ${champ('Adresse client', 'client_adresse', infos.client_adresse)}
+        ${champ('Adresse locataire', 'locataire_adresse', infos.locataire_adresse)}
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+          ${champ('NPA', 'client_npa', infos.client_npa)}
+          ${champ('Ville', 'client_ville', infos.client_ville)}
+        </div>
+        ${champ('Propriétaire (p.a.)', 'proprietaire', infos.proprietaire)}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0 14px;">
+        ${champ('Sous-total HT', 'sous_total', infos.sous_total)}
+        ${champ('Rabais (%)', 'rabais', infos.rabais)}
+        ${champ('TVA (%)', 'tva_taux', infos.tva_taux || '8.1')}
+        ${champ('Total TTC', 'total', infos.total)}
+      </div>
+      <div class="form-group"><label class="form-label">Statut</label>
+        <select class="form-input" id="docimp-statut">
+          ${statutOpts.map(o => `<option value="${o}">${statutLabels[o]||o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes / conditions</label><textarea class="form-input" id="docimp-notes" rows="2">${infos.notes||''}</textarea></div>
+      <div style="font-size:11px;color:var(--g400);margin-top:6px;">${lignesArr.length} ligne(s) détectée(s) par l'IA — elles seront enregistrées telles quelles.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="btn btn-ghost" onclick="docImportCancel()">Annuler</button>
+        <button class="btn btn-navy" onclick="docImportSave()">✓ Enregistrer</button>
+      </div>
+    </div>`;
+  box.style.display = 'block';
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Mémorise les lignes IA pour la sauvegarde
+  box.dataset.lignes = JSON.stringify(lignesArr);
+}
+function docImportTypeChange(v) {
+  const disp = $('docimp-type-disp'); if (disp) disp.textContent = v === 'facture' ? 'FACTURE' : 'DEVIS';
+  const sel = $('docimp-statut'); if (!sel) return;
+  const opts = v === 'facture' ? ['brouillon','envoyee','payee'] : ['brouillon','envoye','accepte','refuse'];
+  const labels = { brouillon:'Brouillon', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
+  sel.innerHTML = opts.map(o => `<option value="${o}">${labels[o]||o}</option>`).join('');
+}
+function docImportCancel() {
+  const box = $('doc-import-confirm'); if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  const fi = $('doc-file-input'); if (fi) fi.value = '';
+}
+function docImportSave() {
+  const box = $('doc-import-confirm');
+  const v = id => { const el = $('docimp-' + id); return el ? el.value.trim() : ''; };
+  const type = v('type') || 'devis';
+  const numero = v('numero') || _nextDocNumero(type);
+  const sousTotal = parseFloat(v('sous_total')) || 0;
+  const rabais = parseFloat(v('rabais')) || 0;
+  const tvaTaux = parseFloat(v('tva_taux')) || 8.1;
+  let total = parseFloat(v('total')) || 0;
+  const rabaisMontant = sousTotal * (rabais / 100);
+  let tvaMontant = (sousTotal - rabaisMontant) * (tvaTaux / 100);
+  // Si l'IA n'a pas extrait le total, on le calcule
+  if (!total) total = sousTotal - rabaisMontant + tvaMontant;
+  let lignes = [];
+  try { lignes = JSON.parse(box.dataset.lignes || '[]'); } catch (e) {}
+  const doc = {
+    id: newId(),
+    type: type,
+    numero: numero,
+    dateDoc: v('date') || today(),
+    clientNom: v('client_nom'),
+    clientAdresse: v('client_adresse'),
+    clientNpa: v('client_npa'),
+    clientVille: v('client_ville'),
+    locataireNom: v('locataire_nom'),
+    locataireAdresse: v('locataire_adresse'),
+    proprietaire: v('proprietaire'),
+    lignes: lignes.map(l => ({ desc: l.desc||l.description||'', qte: parseFloat(l.qte||l.quantite||1)||1, prix: parseFloat(l.prix||l.prix_unitaire||0)||0 })),
+    sousTotal: Math.round(sousTotal*100)/100,
+    rabais: rabais,
+    rabaisMontant: Math.round(rabaisMontant*100)/100,
+    tvaTaux: tvaTaux,
+    tvaMontant: Math.round(tvaMontant*100)/100,
+    total: Math.round(total*100)/100,
+    statut: v('statut') || 'brouillon',
+    notes: v('notes')
+  };
+  const list = DB.documents; list.push(doc); DB.documents = list;
+  toast('✓ ' + (type==='facture'?'Facture':'Devis') + ' ' + doc.numero + ' importé', '#2d9e6b');
+  docImportCancel();
+  renderDocuments();
+}
+
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
 function downloadDocPDF(id) {
   const d = (DB.documents || []).find(x => x.id === id);
