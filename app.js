@@ -293,7 +293,7 @@ function showScreen(name) {
   if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
   if (name === 'agenda')       renderAgenda();
   if (name === 'locataires')   renderLocataires();
-  if (name === 'bons')         renderBons();
+  if (name === 'bons')         { renderBons(); setTimeout(adjustStickyOffsets, 0); }
   if (name === 'devis')        renderDocuments();
   if (name === 'fournisseurs') renderFournisseurs();
   if (name === 'tva')          renderTVA();
@@ -1544,9 +1544,14 @@ function adjustStickyOffsets() {
   const actionH = actionBar ? actionBar.getBoundingClientRect().height : 60;
   const tabs = document.querySelector('.tabs');
   if (tabs) tabs.style.top = (navH + actionH) + 'px';
-  // En-tête de l'écran Bons (boutons Actifs / Terminés) : reste collé sous la barre de nav
-  const bonsHd = document.getElementById('bons-page-hd');
-  if (bonsHd) bonsHd.style.top = navH + 'px';
+  // Écran Bons : on borne sa hauteur sous la barre de nav pour que SEULE la liste
+  // défile à l'intérieur (.page-body) et que l'en-tête (boutons Actifs/Terminés)
+  // reste figé au-dessus.
+  const screenBons = document.getElementById('screen-bons');
+  if (screenBons) {
+    screenBons.style.height = (window.innerHeight - navH) + 'px';
+    screenBons.style.minHeight = '0';
+  }
 }
 window.addEventListener('load', adjustStickyOffsets);
 window.addEventListener('resize', adjustStickyOffsets);
