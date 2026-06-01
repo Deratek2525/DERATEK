@@ -507,7 +507,7 @@ function renderSemaine() {
       const cellIvs = DB.intervs.filter(iv => iv.date === dateStr && iv.heure && iv.heure.substring(0,2) === h.substring(0,2));
       html += `<div class="ag-day-cell" data-date="${dateStr}" data-heure="${h}" onclick="handleAgCell(this)">`;
       cellIvs.forEach(iv => {
-        html += `<div class="ag-event" style="background:${iv.couleur}${iv.bonId?';cursor:pointer':''};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;box-sizing:border-box;" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Cliquer pour ouvrir le bon — ':''}${iv.nuisible} — ${iv.clientNom}${iv.bonNumero?' — Bon '+iv.bonNumero:''}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
+        html += `<div class="ag-event" style="background:${iv.couleur};cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;box-sizing:border-box;" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="Cliquer pour modifier — ${iv.nuisible} — ${iv.clientNom}${iv.bonNumero?' — Bon '+iv.bonNumero:''}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
       });
       html += '</div>';
     });
@@ -538,7 +538,7 @@ function renderMois() {
     html += `<div class="cal-day${isToday?' today':''}" data-date="${dateStr}" data-heure="09:00" onclick="handleAgCell(this)">`;
     html += `<div class="cal-day-num">${day}</div>`;
     dayIvs.slice(0,3).forEach(iv => {
-      html += `<div class="cal-ev" style="background:${iv.couleur}${iv.bonId?';cursor:pointer':''};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;box-sizing:border-box;" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="${iv.bonId?'Ouvrir le bon — ':''}${iv.nuisible} — ${iv.clientNom}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
+      html += `<div class="cal-ev" style="background:${iv.couleur};cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;box-sizing:border-box;" data-id="${iv.id}" onclick="event.stopPropagation();handleAgEvent(this)" title="Cliquer pour modifier — ${iv.nuisible} — ${iv.clientNom}">${iv.heure} ${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom}</div>`;
     });
     if (dayIvs.length > 3) html += `<div style="font-size:9px;color:var(--g400);">+${dayIvs.length-3} autres</div>`;
     html += '</div>';
@@ -553,8 +553,8 @@ function renderMois() {
 function handleAgCell(el) { openNewIntervDate(el.dataset.date || today(), el.dataset.heure || '08:00'); }
 function handleAgEvent(el) {
   const id = el.dataset.id; if (!id) return;
-  const iv = (DB.intervs || []).find(x => x.id === id);
-  if (iv && iv.bonId) { goToBon(iv.bonId); return; }
+  // Clic = toujours ouvrir la modale pour modifier l'intervention.
+  // (L'accès au bon lié reste possible via le champ « N° de bon » de la modale.)
   openEditInterv(id);
 }
 // Va à l'onglet Bons et met en évidence le bon ciblé
