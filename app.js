@@ -3498,9 +3498,14 @@ function downloadDocPDF(id) {
   [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel, co.tva, co.email].forEach(l => { doc.text(l, 20, hy); hy += 4.6; });
   doc.setTextColor(0);
 
+  // Date d'émission : en haut à droite, alignée verticalement au logo ("Neuchâtel, le ...")
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
+  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, 22, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
-  doc.setFontSize(11.5);
+  doc.setFontSize(11);
   let dy = 62;
   let destLines;
   if ((d.proprietaire || '').trim()) {
@@ -3511,17 +3516,18 @@ function downloadDocPDF(id) {
   destLines = destLines.map(l => _fixPa(l));
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
-  // Titre du document
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(13, 27, 62);
+  // Titre du document — n° une taille plus petite (15)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(13, 27, 62);
   doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 92);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(80);
   let infoY = 99;
   // N° de bon de travail lié (sous le titre), si dispo
   const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
   if (bonLie && bonLie.numero) { doc.text('Bon de travail N° ' + bonLie.numero, 20, infoY); infoY += 5; }
-  doc.text('Date : ' + (fmtDate(d.dateDoc) || ''), 20, infoY); infoY += 5;
+  // Date affichée en haut à droite (plus ici, pour éviter le doublon)
   if (d.locataireNom) { doc.text('Concerne : ' + d.locataireNom, 20, infoY); infoY += 5; }
-  if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 95).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
+  // Adresse du locataire / lieu d'intervention : sur toute la largeur (évite le retour à la ligne)
+  if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 170).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
   doc.setTextColor(0);
 
   // Tableau des lignes — taille normale, lignes étalées pour remplir la page si nécessaire
