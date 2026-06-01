@@ -2187,6 +2187,7 @@ function renderBons() {
                   <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
+                <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon">📋 Rapport</button>
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
@@ -2596,6 +2597,47 @@ function createDocFromBon(bonId, type) {
 // Raccourcis depuis un bon
 function createDevisFromBon(bonId)   { createDocFromBon(bonId, 'devis'); }
 function createFactureFromBon(bonId) { createDocFromBon(bonId, 'facture'); }
+
+// Ouvre un NOUVEAU rapport d'intervention pré-rempli depuis un bon de travaux
+function createRapportFromBon(bonId) {
+  const bon = (DB.bons || []).find(b => b.id === bonId);
+  if (!bon) { toast('Bon introuvable', '#e63946'); return; }
+  state.editingRapportId = null;
+  resetRapportForm();
+  // Gérance / client
+  const cli = (bon.geranceId ? (DB.clients||[]).find(c => c.id === bon.geranceId) : null)
+           || (bon.geranceNom ? (DB.clients||[]).find(c => (c.nom||'').toLowerCase() === bon.geranceNom.toLowerCase()) : null);
+  if (cli) { populateClientSelectRapport(cli.id); onClientChange(); }
+  else if (bon.geranceNom && $('r-client')) {
+    // Gérance non encore en base : on laisse le select vide mais on remplit le contact
+  }
+  const setVal = (id, v) => { const el = $(id); if (el && v) el.value = v; };
+  // Gérant (contact) — priorité aux infos du bon
+  setVal('r-contact', bon.gerantNom || (cli ? cli.contact : ''));
+  setVal('r-tel',     bon.gerantTel || (cli ? cli.tel : ''));
+  // Date du jour + n° de bon de commande
+  setVal('r-date', today());
+  setVal('r-bon-commande', bon.numero || '');
+  if ($('r-noint')) $('r-noint').value = bon.numero || $('r-noint').value;
+  // Problème → description de l'intervention
+  setVal('r-description', bon.probleme || '');
+  // Locataire (lieu d'intervention)
+  const loc = (bon.locataireId ? (DB.locataires||[]).find(l => l.id === bon.locataireId) : null)
+           || (bon.locataireNom ? (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
+  const locNom = bon.locataireNom || (loc ? loc.nom : '');
+  const locAdr = (loc ? loc.adresse : '') || bon.immeuble || '';
+  if (locNom || locAdr || (loc && (loc.tel || loc.email))) {
+    if ($('r-avec-locataire')) $('r-avec-locataire').checked = true;
+    toggleLocataire();
+    setVal('r-locataire', locNom);
+    setVal('r-locataire-tel', loc ? loc.tel : '');
+    setVal('r-locataire-email', loc ? loc.email : '');
+    setVal('r-locataire-adresse', locAdr);
+  }
+  if (typeof updatePDF === 'function') updatePDF();
+  showScreen('rapport-edit');
+  toast('Rapport pré-rempli depuis le bon ' + (bon.numero || ''), '#2d9e6b');
+}
 
 // Nouveau document vierge (devis ou facture)
 function openNewDoc(type) {
