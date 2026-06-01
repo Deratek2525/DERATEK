@@ -225,6 +225,7 @@ let state = {
   editingLocataireId: null,
   rapportsFilter:   'Tous',
   clientsFilter:    'Tous',
+  bonsFilter:       'actifs',   // 'actifs' (non terminés) ou 'termines'
   agendaView:       'semaine',
   agendaDate:       new Date(),
   photos:           [null, null, null, null, null, null],
@@ -2076,21 +2077,43 @@ function confirmDeleteLocataire(id, nom) {
 }
 
 // Liste des bons enregistrés, regroupés par gérance
+// Bascule entre les bons actifs et les bons terminés
+function setBonsFilter(f) {
+  state.bonsFilter = (f === 'termines') ? 'termines' : 'actifs';
+  const ba = $('bons-filter-actifs'), bt = $('bons-filter-termines');
+  if (ba) ba.className = 'btn ' + (state.bonsFilter === 'actifs' ? 'btn-navy' : 'btn-ghost') + ' btn-sm';
+  if (bt) bt.className = 'btn ' + (state.bonsFilter === 'termines' ? 'btn-green' : 'btn-ghost') + ' btn-sm';
+  renderBons();
+}
+
 function renderBons() {
   const list = $('bons-list');
   const count = $('bons-count');
   const q = (($('bon-search') || {}).value || '').toLowerCase();
   let bons = DB.bons || [];
+  // Filtre actifs / terminés (un bon "terminé" = statut 'termine')
+  const isTermine = b => (b.statut || '') === 'termine';
+  if (state.bonsFilter === 'termines') {
+    bons = bons.filter(isTermine);
+  } else {
+    bons = bons.filter(b => !isTermine(b));
+  }
   if (q) {
     bons = bons.filter(b =>
       ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.probleme||''))
         .toLowerCase().includes(q)
     );
   }
-  if (count) count.textContent = bons.length ? bons.length + ' bon(s)' : '';
+  if (count) {
+    const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
+    count.textContent = bons.length ? bons.length + ' ' + lbl : '';
+  }
   if (!list) return;
   if (!bons.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Aucun bon enregistré pour le moment.<br>Glissez un PDF ci-dessus pour commencer.</div></div>';
+    const msg = state.bonsFilter === 'termines'
+      ? 'Aucun bon terminé pour le moment.<br>Un bon apparaît ici quand son statut passe à « ✅ Travail terminé ».'
+      : 'Aucun bon actif.<br>Glissez un PDF ci-dessus pour commencer, ou consultez les « ✅ Bons terminés ».';
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">' + msg + '</div></div>';
     return;
   }
   const groups = {};
