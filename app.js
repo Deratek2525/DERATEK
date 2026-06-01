@@ -226,6 +226,7 @@ let state = {
   rapportsFilter:   'Tous',
   clientsFilter:    'Tous',
   bonsFilter:       'actifs',   // 'actifs' (non terminés) ou 'termines'
+  docsFilter:       'devis',    // 'devis' ou 'facture' (onglet Devis / Factures séparés)
   agendaView:       'semaine',
   agendaDate:       new Date(),
   photos:           [null, null, null, null, null, null],
@@ -280,6 +281,16 @@ function colorForClient(c) {
 }
 const badgeCls = s => ({Brouillon:'b-gray',Envoyé:'b-green',Finalisé:'b-blue',Terminée:'b-green','En cours':'b-blue',Planifiée:'b-gray',Urgent:'b-red',Annulée:'b-gray'}[s] || 'b-gray');
 const initials = nom => nom.split(' ').filter(w => w.length > 1).slice(0,2).map(w => w[0].toUpperCase()).join('') || nom.slice(0,2).toUpperCase();
+
+// Ouvre l'écran Devis/Factures filtré sur un type ('devis' ou 'facture')
+function showDocsScreen(type) {
+  state.docsFilter = (type === 'facture') ? 'facture' : 'devis';
+  showScreen('devis');
+  // Surligne le bon bouton du menu (devis ou factures)
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = $(state.docsFilter === 'facture' ? 'nb-factures' : 'nb-devis');
+  if (nb) nb.classList.add('active');
+}
 
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -3044,6 +3055,8 @@ function saveDoc() {
   DB.documents = docs;
   toast('✓ ' + (_editingDoc.type === 'facture' ? 'Facture' : 'Devis') + ' enregistré', '#2d9e6b');
   closeModal('modal-doc');
+  // Bascule sur l'onglet correspondant au type enregistré pour qu'il soit visible
+  state.docsFilter = (toSave.type === 'facture') ? 'facture' : 'devis';
   renderDocuments();
 }
 
@@ -3075,6 +3088,7 @@ function convertDevisToFacture(id) {
   // Marque le devis comme accepté s'il ne l'est pas
   if (devis.statut !== 'accepte') { devis.statut = 'accepte'; DB.documents = docs; }
   toast('✓ Facture ' + facture.numero + ' créée depuis le devis', '#2d9e6b');
+  state.docsFilter = 'facture';
   renderDocuments();
 }
 
@@ -3094,13 +3108,20 @@ function renderDocuments() {
   const list = $('documents-list');
   const count = $('documents-count');
   const q = (($('doc-search') || {}).value || '').toLowerCase();
-  let docs = (DB.documents || []).slice();
+  const filtre = state.docsFilter === 'facture' ? 'facture' : 'devis';
+  // Titre de la page selon l'onglet
+  const titleEl = document.querySelector('#screen-devis .page-title');
+  if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre);
   if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
-  if (count) count.textContent = docs.length ? docs.length + ' document(s)' : '';
+  if (count) count.textContent = docs.length ? docs.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
   if (!list) return;
   if (!docs.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Aucun devis ni facture.<br>Crée un devis depuis un bon « à facturer » ou avec « + Nouveau devis ».</div></div>';
+    const msg = (filtre === 'facture')
+      ? 'Aucune facture.<br>Crée une facture avec « + Nouvelle facture » ou convertis un devis accepté.'
+      : 'Aucun devis.<br>Crée un devis depuis un bon « à facturer » ou avec « + Nouveau devis ».';
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">' + msg + '</div></div>';
     return;
   }
   const statutColors = {
@@ -3570,6 +3591,7 @@ function docImportSave() {
   const list = DB.documents; list.push(doc); DB.documents = list;
   toast('✓ ' + (type==='facture'?'Facture':'Devis') + ' ' + doc.numero + ' importé' + locataireMessage, '#2d9e6b');
   docImportCancel();
+  state.docsFilter = (type === 'facture') ? 'facture' : 'devis';
   renderDocuments();
   if (typeof renderLocataires === 'function') renderLocataires();
   if (typeof renderDashboard === 'function') renderDashboard();
