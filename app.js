@@ -3610,7 +3610,7 @@ function downloadDocPDF(id) {
     doc.text('Net HT', 130, ty); doc.text(_displayMontant(t.net) + ' CHF', 188, ty, {align:'right'}); ty += 5;
   }
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 6;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
 
   if (d.notes) {
