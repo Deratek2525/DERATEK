@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601as">
+<link rel="stylesheet" href="./style.css?v=20260601at">
 </head>
 <body>
 
@@ -21,6 +21,9 @@
       <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;modal-interv&#39;)">✕</button>
     </div>
     <div class="modal-body">
+      <div class="form-group"><label class="form-label">N° de bon d'intervention (remplissage auto)</label>
+        <input class="form-input" id="iv-bon-numero" placeholder="Tape le n° du bon puis Entrée — remplit client, locataire, adresse…" onchange="autoFillIntervFromBon(this.value)" onblur="autoFillIntervFromBon(this.value)">
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Date *</label><input class="form-input" id="iv-date" type="date"></div>
         <div class="form-group"><label class="form-label">Heure</label><input class="form-input" id="iv-heure" type="time" value="08:00"></div>
@@ -1114,9 +1117,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601as"></script>
-<script src="./config.js?v=20260601as"></script>
-<script src="./app.js?v=20260601as"></script>
-<script src="./pdf.js?v=20260601as"></script>
+<script src="./logo.js?v=20260601at"></script>
+<script src="./config.js?v=20260601at"></script>
+<script src="./app.js?v=20260601at"></script>
+<script src="./pdf.js?v=20260601at"></script>
 
 </body></html>

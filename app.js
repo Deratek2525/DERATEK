@@ -585,6 +585,8 @@ function openNewIntervDate(date, heure) {
   $('modal-interv-title').textContent = 'Nouvelle intervention';
   $('iv-date').value = date; $('iv-heure').value = heure || '08:00';
   ['iv-adresse','iv-nuisible','iv-notes'].forEach(id => $(id).value = '');
+  if ($('iv-bon-numero')) $('iv-bon-numero').value = '';
+  state._ivBon = null;
   $('iv-statut').value = 'Planifiée';
   $('iv-delete-btn').style.display = 'none';
   state.selectedColor = '#e63946';
@@ -592,6 +594,7 @@ function openNewIntervDate(date, heure) {
   const defColor = document.querySelector('#iv-colors .color-opt[data-color="#e63946"]');
   if (defColor) defColor.classList.add('selected');
   populateClientSelectInterv('');
+  populateLocataireSelectInterv('');
   openModal('modal-interv');
 }
 function openEditInterv(id) {
@@ -603,17 +606,54 @@ function openEditInterv(id) {
   $('iv-adresse').value = iv.adresse || ''; $('iv-nuisible').value = iv.nuisible || '';
   $('iv-notes').value = iv.notes || ''; $('iv-statut').value = iv.statut || 'Planifiée';
   $('iv-tech').value = iv.tech || '';
+  if ($('iv-bon-numero')) $('iv-bon-numero').value = iv.bonNumero || '';
+  state._ivBon = (iv.bonId || iv.bonNumero) ? { id: iv.bonId || '', numero: iv.bonNumero || '' } : null;
   $('iv-delete-btn').style.display = 'inline-flex';
   state.selectedColor = iv.couleur || '#e63946';
   document.querySelectorAll('#iv-colors .color-opt').forEach(c => {
     c.classList.toggle('selected', c.dataset.color === state.selectedColor);
   });
   populateClientSelectInterv(iv.clientId);
+  populateLocataireSelectInterv(iv.clientId, '');
   openModal('modal-interv');
 }
 function populateClientSelectInterv(selectedId) {
   $('iv-client').innerHTML = '<option value="">-- Sélectionner --</option>' +
     DB.clients.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom}</option>`).join('');
+}
+// Remplit le select Locataire selon la gérance choisie (et garde un éventuel locataire pré-sélectionné)
+function populateLocataireSelectInterv(clientId, selectedLocNom) {
+  const sel = $('iv-locataire'); if (!sel) return;
+  const list = (DB.locataires || []).filter(l => !clientId || l.clientId === clientId || !l.clientId);
+  sel.innerHTML = '<option value="">-- Aucun locataire --</option>' +
+    list.map(l => `<option value="${(l.nom||'').replace(/"/g,'&quot;')}"${(selectedLocNom && l.nom === selectedLocNom) ? ' selected' : ''}>${l.nom||''}</option>`).join('');
+}
+// Quand on change de gérance dans la modale intervention : recharge la liste des locataires
+function onIvClientChange() {
+  const c = (DB.clients || []).find(x => x.id === $('iv-client').value);
+  populateLocataireSelectInterv(c ? c.id : '');
+}
+// Remplit automatiquement la modale intervention à partir d'un n° de bon de travaux
+function autoFillIntervFromBon(numero) {
+  if (!numero) return;
+  const norm = s => String(s||'').replace(/\s+/g,'').toLowerCase();
+  const bon = (DB.bons || []).find(b => norm(b.numero) === norm(numero));
+  if (!bon) { toast('Aucun bon trouvé avec ce numéro', '#e63946'); return; }
+  // Gérance / client
+  const cli = (bon.geranceId ? (DB.clients||[]).find(c => c.id === bon.geranceId) : null)
+           || (bon.geranceNom ? (DB.clients||[]).find(c => (c.nom||'').toLowerCase() === bon.geranceNom.toLowerCase()) : null);
+  populateClientSelectInterv(cli ? cli.id : '');
+  // Locataire
+  populateLocataireSelectInterv(cli ? cli.id : '', bon.locataireNom || '');
+  const loc = (bon.locataireId ? (DB.locataires||[]).find(l => l.id === bon.locataireId) : null)
+           || (bon.locataireNom ? (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
+  // Adresse d'intervention + nuisible
+  const adr = (loc ? loc.adresse : '') || bon.immeuble || '';
+  if ($('iv-adresse') && adr) $('iv-adresse').value = adr;
+  if ($('iv-nuisible') && bon.probleme && !$('iv-nuisible').value.trim()) $('iv-nuisible').value = bon.probleme;
+  // Mémorise la liaison au bon pour l'enregistrement
+  state._ivBon = { id: bon.id, numero: bon.numero || numero };
+  toast('Champs remplis depuis le bon ' + (bon.numero || ''), '#2d9e6b');
 }
 // Construit un lien "Ajouter à Google Agenda" (événement pré-rempli)
 function _googleCalUrl({ titre, date, heure, dureeMin, details, lieu }) {
@@ -653,6 +693,8 @@ function addCurrentIntervToGoogle() {
 function saveInterv() {
   const clientId = $('iv-client').value;
   const client = DB.clients.find(c => c.id === clientId);
+  const bonNumSaisi = ($('iv-bon-numero') ? $('iv-bon-numero').value.trim() : '');
+  const ivBon = state._ivBon || {};
   const iv = {
     id: state.editingIntervId || newId(),
     date: $('iv-date').value, heure: $('iv-heure').value,
@@ -660,6 +702,8 @@ function saveInterv() {
     adresse: $('iv-adresse').value, nuisible: $('iv-nuisible').value,
     tech: $('iv-tech').value, statut: $('iv-statut').value,
     couleur: state.selectedColor, notes: $('iv-notes').value,
+    bonNumero: bonNumSaisi || ivBon.numero || '',
+    bonId: ivBon.id || '',
   };
   const list = DB.intervs;
   const i = list.findIndex(x => x.id === state.editingIntervId);
