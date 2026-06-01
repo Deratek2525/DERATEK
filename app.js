@@ -2620,8 +2620,10 @@ function _makeQrDataUrl(payload) {
 function _nextDocNumero(type) {
   const year = new Date().getFullYear();
   const prefix = type === 'facture' ? 'F' : 'D';
+  // Les factures démarrent à 101 (donc 1ère facture = F-AAAA-101).
+  const base = (type === 'facture') ? 100 : 0;
   const docs = (DB.documents || []).filter(d => d.type === type && (d.numero || '').includes('-' + year + '-'));
-  let max = 0;
+  let max = base;
   docs.forEach(d => {
     const m = (d.numero || '').match(/-(\d+)$/);
     if (m) max = Math.max(max, parseInt(m[1], 10));
