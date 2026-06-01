@@ -3198,11 +3198,15 @@ function docShowImportConfirm(infos, fileName) {
           ${lignesArr.length === 0
             ? '<div style="font-size:12px;color:#b00;padding:8px;">⚠️ L\'IA n\'a détecté aucune ligne détaillée. Tu peux en ajouter ci-dessous ou laisser un forfait sera calculé automatiquement à l\'enregistrement.</div>'
             : lignesArr.map((l,i)=>`
-            <div style="display:grid;grid-template-columns:1fr 60px 90px 30px;gap:6px;margin-bottom:4px;align-items:center;" data-li="${i}">
+            <div style="display:grid;grid-template-columns:1fr 60px 90px 64px;gap:6px;margin-bottom:4px;align-items:center;" data-li="${i}">
               <input class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Description" value="${(l.desc||l.description||'').replace(/"/g,'&quot;')}" data-fk="desc">
               <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:center;" type="number" step="0.01" placeholder="Qté" value="${l.qte||l.quantite||1}" data-fk="qte">
               <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" type="number" step="0.01" placeholder="Prix" value="${l.prix||l.prix_unitaire||0}" data-fk="prix">
-              <button class="btn btn-ghost" style="padding:2px 6px;font-size:12px;color:#b00;" onclick="this.parentElement.remove()" title="Supprimer">✕</button>
+              <div style="display:flex;gap:1px;align-items:center;justify-content:flex-end;">
+                <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;line-height:1;" onclick="docImpMoveLine(this,-1)" title="Monter">▲</button>
+                <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;line-height:1;" onclick="docImpMoveLine(this,1)" title="Descendre">▼</button>
+                <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;color:#b00;line-height:1;" onclick="this.closest('[data-li]').remove()" title="Supprimer">✕</button>
+              </div>
             </div>`).join('')}
         </div>
         <button class="btn btn-ghost" style="font-size:12px;margin-top:6px;" onclick="docImpAddLine()">+ Ajouter une ligne</button>
@@ -3227,17 +3231,34 @@ function docImportTypeChange(v) {
 function docImpAddLine() {
   const wrap = $('docimp-lignes-wrap'); if (!wrap) return;
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 60px 90px 30px;gap:6px;margin-bottom:4px;align-items:center;';
+  div.setAttribute('data-li', wrap.querySelectorAll('[data-li]').length);
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 60px 90px 64px;gap:6px;margin-bottom:4px;align-items:center;';
   div.innerHTML = `
     <input class="form-input" style="font-size:12px;padding:4px 8px;" placeholder="Description" value="" data-fk="desc">
     <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:center;" type="number" step="0.01" placeholder="Qté" value="1" data-fk="qte">
     <input class="form-input" style="font-size:12px;padding:4px 8px;text-align:right;" type="number" step="0.01" placeholder="Prix" value="0" data-fk="prix">
-    <button class="btn btn-ghost" style="padding:2px 6px;font-size:12px;color:#b00;" onclick="this.parentElement.remove()" title="Supprimer">✕</button>`;
+    <div style="display:flex;gap:1px;align-items:center;justify-content:flex-end;">
+      <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;line-height:1;" onclick="docImpMoveLine(this,-1)" title="Monter">▲</button>
+      <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;line-height:1;" onclick="docImpMoveLine(this,1)" title="Descendre">▼</button>
+      <button class="btn btn-ghost" style="padding:2px 4px;font-size:12px;color:#b00;line-height:1;" onclick="this.closest('[data-li]').remove()" title="Supprimer">✕</button>
+    </div>`;
   wrap.appendChild(div);
+}
+// Déplace une ligne d'import vers le haut (dir=-1) ou le bas (dir=1)
+function docImpMoveLine(btn, dir) {
+  const row = btn.closest('[data-li]'); if (!row) return;
+  const wrap = row.parentElement; if (!wrap) return;
+  if (dir < 0) {
+    const prev = row.previousElementSibling;
+    if (prev) wrap.insertBefore(row, prev);
+  } else {
+    const next = row.nextElementSibling;
+    if (next) wrap.insertBefore(next, row);
+  }
 }
 function _docImpReadLines() {
   const wrap = $('docimp-lignes-wrap'); if (!wrap) return [];
-  return Array.from(wrap.querySelectorAll('[data-li],div')).map(row => {
+  return Array.from(wrap.querySelectorAll('[data-li]')).map(row => {
     const get = k => { const i = row.querySelector('[data-fk="'+k+'"]'); return i ? i.value : ''; };
     const desc = (get('desc')||'').trim();
     const qte = parseFloat(get('qte'))||0;
