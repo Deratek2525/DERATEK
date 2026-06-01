@@ -272,6 +272,17 @@ function colorForGeranceName(nom) {
   }
   return GERANCE_PALETTE[hash % GERANCE_PALETTE.length];
 }
+// Version très pâle d'une couleur hex (#rrggbb) pour servir de fond léger.
+// alpha 0..1 = quantité de couleur mélangée à du blanc.
+function _hexTint(hex, alpha) {
+  const m = String(hex || '').replace('#','').match(/^([0-9a-f]{6})$/i);
+  if (!m) return '#ffffff';
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const a = (alpha == null) ? 0.10 : alpha;
+  const mix = c => Math.round(c * a + 255 * (1 - a));
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+}
 function colorForClient(c) {
   if (!c) return '#6b7280';
   // Les non-gérances gardent la couleur définie par leur type
@@ -2224,7 +2235,7 @@ function renderBons() {
             };
             const stStyle = statutStyles[statut] || statutStyles[''];
             return `
-            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
+            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${_hexTint(gColor, 0.10)};border:1px solid ${_hexTint(gColor, 0.30)};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
                 <div style="width:34px;height:34px;border-radius:50%;background:${gColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
                 <div>
