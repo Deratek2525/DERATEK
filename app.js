@@ -3061,24 +3061,26 @@ async function docProcessImportFile(file) {
 async function docExtractFromAI(texte) {
   const systemPrompt =
     'Tu extrais EXHAUSTIVEMENT les informations d\'un DEVIS ou d\'une FACTURE émis par l\'entreprise DERATEK (Suisse, CHF, TVA 8.1%). ' +
-    'Réponds UNIQUEMENT par un objet JSON valide, sans texte ni balises. Clés (chaîne vide ou tableau vide si absent) :\n' +
+    'Réponds UNIQUEMENT par un objet JSON valide, sans texte ni balises.\n' +
+    'ATTENTION EXPÉDITEUR (à NE JAMAIS confondre avec le client/locataire) : l\'émetteur est DERATEK, dont l\'adresse est "Rue des Mille-Boilles 2, 2000 Neuchâtel" (ou "Chemin des Pyramides 7, 1007 Lausanne" / "Rue Maillefer 25 Neuchâtel" / "Neufeldstrasse 119 Berne"), tél 032 552 21 72, TVA CHE-276.656.145, info@deratek.ch. N\'utilise JAMAIS ces coordonnées comme adresse du destinataire, du client ou du lieu d\'intervention. Le destinataire est le bloc d\'adresse situé EN HAUT À DROITE.\n' +
+    'Clés (chaîne vide ou tableau vide si absent) :\n' +
     '{\n"type":"devis ou facture (devine d\'après le PDF)",\n' +
     '"numero":"numéro du document (ex D-2026-001 ou F-2026-001)",\n' +
     '"date":"date d\'émission du document au format AAAA-MM-JJ",\n' +
     '"bon_numero":"numéro du bon de travaux / bon d\'intervention / bon de commande s\'il est mentionné. ATTENTION : DERATEK utilise souvent le libellé \\"BON POUR TRAVAUX N° xxxx xxx xxx\\" (3 groupes de chiffres séparés par des espaces, ex \\"2026 041 211\\"). Cherche aussi : BT-xxxx, BC-xxxxx, N° de commande, Réf. travaux, Ordre de travaux. Conserve les espaces du numéro tel qu\'écrit.",\n' +
     '"objet":"objet / sujet / description courte du document (ex : Traitement contre les rats — appartement 3e étage)",\n' +
-    '"client_nom":"nom du destinataire / gérance / client (à qui est adressé le document)",\n' +
-    '"client_adresse":"rue et numéro du destinataire",\n' +
+    '"client_nom":"nom de la GÉRANCE / société destinataire (à qui est adressé le document). Le bloc destinataire est souvent de la forme \\"<Propriétaire> p.a. <Gérance> / <adresse de la gérance>\\". Dans ce cas client_nom = la GÉRANCE (ce qui suit \\"p.a.\\" ou \\"p/a\\"), ex \\"Naef Immobilier La Chaux-de-Fonds SA\\". JAMAIS DERATEK.",\n' +
+    '"client_adresse":"rue et numéro du destinataire (adresse de la gérance, en haut à droite). JAMAIS l\'adresse de DERATEK.",\n' +
     '"client_npa":"NPA du destinataire",\n' +
     '"client_ville":"ville du destinataire",\n' +
     '"locataire_nom":"NOM ou raison sociale du locataire / occupant concerné par l\'intervention. ATTENTION : sur les factures DERATEK il apparaît juste APRÈS le n° de bon pour travaux, sous la forme \\"<Société ou nom> / <type de local>\\" (ex \\"Société Royal Panini\'s Sàrl / Commerce rez-de-chaussée\\"). Souvent précédé de \\"locataire :\\" ou \\"chez :\\" sur d\'autres documents. Garde le nom complet AVANT le slash (et sans le type de local).",\n' +
     '"locataire_prenom":"prénom du locataire s\'il est mentionné séparément (ne pas remplir si c\'est une société)",\n' +
-    '"locataire_adresse":"rue et numéro du logement du locataire / lieu d\'intervention. Sur les factures DERATEK c\'est l\'adresse qui suit le bloc locataire (ex \\"Rue des Envers 39\\")",\n' +
+    '"locataire_adresse":"rue et numéro du LIEU D\'INTERVENTION. ATTENTION : sur les factures DERATEK c\'est l\'adresse écrite JUSTE SOUS la ligne \\"BON POUR TRAVAUX N° ...\\" (ex \\"Rue du Lac 14, 2416 Les Brenets\\"). NE confonds PAS avec l\'adresse de la gérance (en haut à droite) ni avec celle de DERATEK. Extrais la rue+numéro ; mets le NPA et la ville dans locataire_npa / locataire_ville.",\n' +
     '"locataire_npa":"code postal NPA du locataire si mentionné",\n' +
     '"locataire_ville":"ville du locataire si mentionnée",\n' +
     '"locataire_tel":"téléphone du locataire si mentionné (formats CH : 079..., 0XX..., +41...)",\n' +
     '"locataire_email":"email du locataire si mentionné",\n' +
-    '"proprietaire":"propriétaire si mentionné (souvent précédé de p.a. ou p/a)",\n' +
+    '"proprietaire":"NOM du propriétaire = la personne/entité écrite AVANT \\"p.a.\\" (ou \\"p/a\\") dans le bloc destinataire. Ex pour \\"David Wigger p.a. Naef Immobilier La Chaux-de-Fonds SA\\" → proprietaire = \\"David Wigger\\". Vide s\'il n\'y a pas de \\"p.a.\\".",\n' +
     '"sous_total":"montant HT total avant rabais et TVA (chiffres uniquement, point décimal)",\n' +
     '"rabais":"taux du rabais en % s\'il est mentionné (chiffres, ex 5 pour 5%)",\n' +
     '"rabais_montant":"MONTANT du rabais en CHF tel qu\'écrit dans le document (chiffres uniquement, point décimal). Ex pour \\"Rabais 5 % ... 302.52 CHF\\" mets 302.52. Vide si aucun rabais.",\n' +
