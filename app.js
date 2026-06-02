@@ -793,6 +793,12 @@ function renderClients() {
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
         <div style="font-size:12px;color:var(--g600);">${adresseFmt || '—'}</div>
       </div>
+      ${(() => { const m = _clientMeta(c); return (m.nuisible || m.dateInterv) ? `
+      <div style="flex:1.1;min-width:150px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / interv.</div>
+        ${m.nuisible ? `<div style="font-size:12px;font-weight:600;color:var(--navy);">${m.nuisible}</div>` : ''}
+        ${m.dateInterv ? `<div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(m.dateInterv)}</div>` : ''}
+      </div>` : ''; })()}
       <div style="display:flex;gap:14px;align-items:center;min-width:170px;border-left:1px solid #f0f0f0;padding-left:12px;">
         <div style="text-align:center;">
           <div style="font-size:16px;font-weight:800;color:var(--navy);line-height:1;">${nb}</div>
@@ -815,10 +821,25 @@ function renderClients() {
     </div>`;
   }).join('');
 }
+// Nuisible + date d'intervention sont stockés dans le champ "notes" du client
+// via des marqueurs (compatibles Supabase sans nouvelle colonne).
+function _clientMeta(c) {
+  const notes = String((c && c.notes) || '');
+  const nuis = (notes.match(/\[NUISIBLE:([^\]]*)\]/) || [])[1] || '';
+  const di   = (notes.match(/\[DATEINT:([^\]]*)\]/) || [])[1] || '';
+  const clean = notes.replace(/\s*\[NUISIBLE:[^\]]*\]/g, '').replace(/\s*\[DATEINT:[^\]]*\]/g, '').trim();
+  return { nuisible: nuis.trim(), dateInterv: di.trim(), notesClean: clean };
+}
+function _composeClientNotes(notesClean, nuisible, dateInterv) {
+  let out = (notesClean || '').trim();
+  if (nuisible) out += (out ? '\n' : '') + '[NUISIBLE:' + nuisible.trim() + ']';
+  if (dateInterv) out += (out ? '\n' : '') + '[DATEINT:' + dateInterv.trim() + ']';
+  return out;
+}
 function openNewClient() {
   state.editingClientId = null;
   $('modal-client-title').textContent = 'Nouveau client';
-  ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes'].forEach(id => $(id).value = '');
+  ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes','cl-nuisible','cl-date-interv'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   $('cl-type').value = 'Gérance';
   $('cl-delete-btn').style.display = 'none';
   openModal('modal-client');
@@ -832,7 +853,11 @@ function editClient(id) {
   $('cl-email').value = c.email||''; $('cl-web').value = c.web||'';
   $('cl-adresse').value = c.adresse||''; $('cl-npa').value = c.npa||'';
   $('cl-ville').value = c.ville||''; $('cl-num').value = c.num||'';
-  $('cl-tarif').value = c.tarif||''; $('cl-notes').value = c.notes||'';
+  $('cl-tarif').value = c.tarif||'';
+  const meta = _clientMeta(c);
+  $('cl-notes').value = meta.notesClean;
+  if ($('cl-nuisible')) $('cl-nuisible').value = meta.nuisible;
+  if ($('cl-date-interv')) $('cl-date-interv').value = meta.dateInterv;
   $('cl-delete-btn').style.display = 'inline-flex';
   openModal('modal-client');
 }
@@ -843,7 +868,8 @@ function saveClient() {
     nom, type: $('cl-type').value, contact: $('cl-contact').value,
     tel: $('cl-tel').value, email: $('cl-email').value, web: $('cl-web').value,
     adresse: $('cl-adresse').value, npa: $('cl-npa').value, ville: $('cl-ville').value,
-    num: $('cl-num').value, tarif: $('cl-tarif').value, notes: $('cl-notes').value,
+    num: $('cl-num').value, tarif: $('cl-tarif').value,
+    notes: _composeClientNotes($('cl-notes').value, ($('cl-nuisible')||{}).value || '', ($('cl-date-interv')||{}).value || ''),
   };
   const list = DB.clients;
   if (state.editingClientId) {
