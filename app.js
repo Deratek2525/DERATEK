@@ -2941,6 +2941,10 @@ function createRapportFromBon(bonId) {
   if ($('r-noint')) $('r-noint').value = bon.numero || $('r-noint').value;
   // Problème → description de l'intervention
   setVal('r-description', _bonProblemeClean(bon) || '');
+  // Dates d'intervention effectuées du bon → liste de dates du rapport + nombre de passages
+  const datesEff = _bonDatesInterv(bon);
+  if (typeof rSetDates === 'function') rSetDates(datesEff);
+  if (datesEff.length && $('r-nb-passages')) $('r-nb-passages').value = String(datesEff.length);
   // Locataire (lieu d'intervention)
   const loc = (bon.locataireId ? (DB.locataires||[]).find(l => l.id === bon.locataireId) : null)
            || (bon.locataireNom ? (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
