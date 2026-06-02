@@ -1005,8 +1005,10 @@ function resetRapportForm() {
   ['r-niveau','r-resultat','r-batiment','r-garantie'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = '';
   if ($('r-bon-commande')) $('r-bon-commande').value = '';
+  if ($('r-nb-passages')) $('r-nb-passages').value = '';
+  rSetDates([]);
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = false);
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose'].forEach(id => { const el = $(id); if (el) el.checked = false; });
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el) el.checked = false; });
   renderProduits(); resetPhotoGrid(); clearSig();
   $('edit-id').textContent = newId;
   $('edit-status').className = 'badge b-gray'; $('edit-status').textContent = 'Brouillon';
@@ -1041,8 +1043,13 @@ function editRapport(id) {
     const el = $(id); const key = id.replace('r-','');
     if (el) el.value = r[key] || '';
   });
+  // Décode passages + dates d'intervention depuis la description (marqueurs)
+  const rMeta = _rapMeta(r.description);
+  if ($('r-description')) $('r-description').value = rMeta.descClean;
+  if ($('r-nb-passages')) $('r-nb-passages').value = rMeta.nbPassages;
+  rSetDates(rMeta.dates);
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = (r.nuisibles||[]).includes(c.value));
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = r.rdvHeure || '';
   if ($('r-bon-commande')) $('r-bon-commande').value = r.bonCommande || '';
   // Restaurer le locataire
@@ -1217,14 +1224,51 @@ function saveLocataire() {
 }
 
 // ============================================================
+// PASSAGES / DATES D'INTERVENTION DU RAPPORT
+// Stockés via marqueurs dans "description" (pas de nouvelle colonne Supabase).
+// ============================================================
+function _rapMeta(desc) {
+  const s = String(desc || '');
+  const np = (s.match(/\[NBPASS:([^\]]*)\]/) || [])[1] || '';
+  const di = (s.match(/\[DATESINT:([^\]]*)\]/) || [])[1] || '';
+  const clean = s.replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').trim();
+  const dates = di.split(',').map(x => x.trim()).filter(Boolean).sort();
+  return { nbPassages: np.trim(), dates: dates, descClean: clean };
+}
+function _composeRapDesc(descClean, nbPassages, dates) {
+  let out = (descClean || '').trim();
+  const arr = Array.isArray(dates) ? dates.map(x => String(x||'').trim()).filter(Boolean) : [];
+  if (nbPassages) out += (out ? '\n' : '') + '[NBPASS:' + String(nbPassages).trim() + ']';
+  if (arr.length) out += (out ? '\n' : '') + '[DATESINT:' + arr.join(',') + ']';
+  return out;
+}
+function _rDateRow(val) {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:6px;align-items:center;';
+  div.innerHTML = `<input class="form-input" type="date" data-r-date value="${val||''}" style="flex:1;" oninput="updatePDF()">
+    <button type="button" class="btn btn-ghost btn-xs" style="color:#b00;" onclick="this.parentElement.remove();updatePDF()" title="Retirer cette date">✕</button>`;
+  return div;
+}
+function rAddDate(val) { const w = $('r-dates-wrap'); if (w) { w.appendChild(_rDateRow(val||'')); } }
+function rSetDates(dates) {
+  const w = $('r-dates-wrap'); if (!w) return;
+  w.innerHTML = '';
+  (dates && dates.length ? dates : []).forEach(d => w.appendChild(_rDateRow(d)));
+}
+function rReadDates() {
+  const w = $('r-dates-wrap'); if (!w) return [];
+  return Array.from(w.querySelectorAll('[data-r-date]')).map(i => i.value.trim()).filter(Boolean).sort();
+}
+
+// ============================================================
 // SAVE RAPPORT
 // ============================================================
 function saveRapport(statut) {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [], traitementLabels = [];
-  const tLabels = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges mécaniques'};
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose'].forEach(id => { const el = $(id); if (el && el.checked) { traitement.push(id); traitementLabels.push(tLabels[id]); } });
+  const tLabels = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges mécaniques','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection'};
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el && el.checked) { traitement.push(id); traitementLabels.push(tLabels[id]); } });
 
   const clientId  = $('r-client').value;
   const client    = DB.clients.find(c => c.id === clientId);
@@ -1236,7 +1280,7 @@ function saveRapport(statut) {
     adresse: $('r-adresse').value, npa: $('r-npa').value, ville: $('r-ville').value,
     localisation: $('r-localisation').value, batiment: $('r-batiment').value, noint: $('r-noint').value,
     bonCommande: ($('r-bon-commande') ? $('r-bon-commande').value : ''),
-    nuisibles, description: $('r-description').value, niveau: $('r-niveau').value,
+    nuisibles, description: _composeRapDesc($('r-description').value, ($('r-nb-passages')||{}).value || '', rReadDates()), niveau: $('r-niveau').value,
     superficie: $('r-superficie').value, pieces: $('r-pieces').value, zones: $('r-zones').value,
     origine: $('r-origine').value, contraintes: $('r-contraintes').value,
     traitement, produits: JSON.parse(JSON.stringify(state.produits)),
@@ -1325,8 +1369,8 @@ function updatePDF() {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [];
-  const tL = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges'};
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose'].forEach(id => { const el = $(id); if (el && el.checked) traitement.push(tL[id]); });
+  const tL = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection'};
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el && el.checked) traitement.push(tL[id]); });
   const st = (id, val) => { const el = $(id); if (el) el.textContent = val || '—'; };
   st('pdf-id',    $('r-id').value);
   st('pdf-date',  fmtDate($('r-date').value));
@@ -1413,7 +1457,7 @@ function onPhotoSelected(e) {
 // SIGNATURE
 // ============================================================
 function initSig() {
-  const canvas = $('sig-canvas'); if (!canvas) return;
+  const canvas = $('sig-locataire'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.strokeStyle = '#1a2744'; ctx.lineWidth = 2; ctx.lineCap = 'round';
   const gp = e => { const r = canvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: (t.clientX-r.left)*(canvas.width/r.width), y: (t.clientY-r.top)*(canvas.height/r.height) }; };
@@ -1425,7 +1469,7 @@ function initSig() {
   canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!state.sigDrawing) return; const p = gp(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }, { passive:false });
   canvas.addEventListener('touchend',   () => state.sigDrawing = false);
 }
-function clearSig() { const c = $('sig-canvas'); if (c) c.getContext('2d').clearRect(0,0,c.width,c.height); }
+function clearSig() { const c = $('sig-locataire'); if (c) c.getContext('2d').clearRect(0,0,c.width,c.height); }
 
 // ============================================================
 // PRINT PDF

@@ -218,9 +218,18 @@ function generatePDF(rapport, statut) {
     if (rapport.zones) { row('Zones touchées', rapport.zones, false); y += 3; }
     y += 3;
 
+    // ── PASSAGES / DATES D'INTERVENTION ──────────────────────
+    const _datesInt = Array.isArray(rapport.datesInterv) ? rapport.datesInterv.filter(Boolean) : [];
+    if (rapport.nbPassages || _datesInt.length) {
+      if (rapport.nbPassages) row('Nombre de passages', String(rapport.nbPassages), false);
+      if (_datesInt.length) row("Dates d'intervention", _datesInt.map(d => fmtDate(d)).join(', '), false);
+      y += 3;
+    }
+
     // ── OBSERVATIONS ─────────────────────────────────────────
     sTitle('Observations sur place');
-    textBox(rapport.description);
+    // Sécurité : retire d'éventuels marqueurs internes restés dans la description
+    textBox(String(rapport.description || '').replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').trim());
     if (rapport.origine) {
       checkPage(15);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
@@ -432,58 +441,32 @@ function generatePDF(rapport, statut) {
       if (col > 0) y += imgH + 20;
     }
 
-    // ── SIGNATURES ───────────────────────────────────────────
-    const showSigTech = rapport.showSigTech !== false;
+    // ── SIGNATURE (uniquement locataire) ─────────────────────
     const showSigClient = rapport.showSigClient !== false;
-
-    // Signature technicien
-    if (showSigTech && rapport.sigTech && rapport.sigTech.length > 100 && rapport.sigTech !== 'data:,') {
-      checkPage(40);
-      sTitle('Signature technicien');
-      y += 3;
-      doc.setFillColor(249, 250, 251);
-      doc.roundedRect(M, y, CW/2, 30, 2, 2, 'F');
-      doc.setDrawColor(...C.border);
-      doc.roundedRect(M, y, CW/2, 30, 2, 2, 'S');
-      try { doc.addImage(rapport.sigTech, 'PNG', M + 3, y + 2, CW/2 - 6, 18); } catch(e) {}
-      doc.setFontSize(7); doc.setTextColor(...C.muted);
-      doc.text(rapport.tech || '', M + 3, y + 26);
-      doc.text(fmtDate(rapport.date), M + CW/2 - 3, y + 26, { align: 'right' });
-      y += 35;
-    }
-
-    // Signatures client / locataire
     if (showSigClient) {
       checkPage(55);
-      sTitle('Signatures');
+      sTitle('Signature');
       y += 3;
-      const sigW = (CW - 10) / 2;
-      const sigLabels = [
-        { label: 'Client / Gérance', nom: rapport.clientNom || '', data: rapport.sigClient },
-        { label: 'Locataire',        nom: rapport.locataire || '', data: rapport.sigLocataire },
-      ];
-      const today = fmtDate(rapport.date);
-      sigLabels.forEach((s, i) => {
-        const bx = M + i * (sigW + 10);
-        doc.setFillColor(249, 250, 251);
-        doc.roundedRect(bx, y, sigW, 38, 2, 2, 'F');
-        doc.setDrawColor(...C.border);
-        doc.roundedRect(bx, y, sigW, 38, 2, 2, 'S');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
-        doc.text(s.label.toUpperCase(), bx + 3, y + 6);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.text);
-        doc.text(s.nom || '—', bx + 3, y + 13);
-        doc.setFillColor(255,255,255);
-        doc.rect(bx + 3, y + 16, sigW - 6, 14, 'F');
-        if (s.data && s.data.length > 100 && s.data !== 'data:,') {
-          try { doc.addImage(s.data, 'PNG', bx + 3, y + 16, sigW - 6, 14); } catch(e) {}
-        }
-        doc.setDrawColor(...C.border);
-        doc.line(bx + 3, y + 31, bx + sigW - 3, y + 31);
-        doc.setFontSize(7); doc.setTextColor(...C.muted);
-        doc.text('Signature', bx + 3, y + 36);
-        doc.text(today, bx + sigW - 3, y + 36, { align: 'right' });
-      });
+      const sigW = (CW - 10) / 2; // même largeur qu'avant (demi-page)
+      const bx = M;
+      doc.setFillColor(249, 250, 251);
+      doc.roundedRect(bx, y, sigW, 38, 2, 2, 'F');
+      doc.setDrawColor(...C.border);
+      doc.roundedRect(bx, y, sigW, 38, 2, 2, 'S');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+      doc.text('LOCATAIRE', bx + 3, y + 6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.text);
+      doc.text(rapport.locataire || '—', bx + 3, y + 13);
+      doc.setFillColor(255,255,255);
+      doc.rect(bx + 3, y + 16, sigW - 6, 14, 'F');
+      if (rapport.sigLocataire && rapport.sigLocataire.length > 100 && rapport.sigLocataire !== 'data:,') {
+        try { doc.addImage(rapport.sigLocataire, 'PNG', bx + 3, y + 16, sigW - 6, 14); } catch(e) {}
+      }
+      doc.setDrawColor(...C.border);
+      doc.line(bx + 3, y + 31, bx + sigW - 3, y + 31);
+      doc.setFontSize(7); doc.setTextColor(...C.muted);
+      doc.text('Signature', bx + 3, y + 36);
+      doc.text(fmtDate(rapport.date), bx + sigW - 3, y + 36, { align: 'right' });
       y += 44;
     }
 
@@ -585,11 +568,11 @@ function getCurrentRapportData() {
     materiels:    state.materiels || [],
     materielComment: document.getElementById('r-materiel-comment') ? document.getElementById('r-materiel-comment').value : '',
     garantieNote: document.getElementById('r-garantie-note') ? document.getElementById('r-garantie-note').value : '',
-    showSigTech:  document.getElementById('r-show-sig-tech') ? document.getElementById('r-show-sig-tech').checked : true,
     showSigClient: document.getElementById('r-show-sig-client') ? document.getElementById('r-show-sig-client').checked : true,
-    sigClient:    document.getElementById('sig-client') ? document.getElementById('sig-client').toDataURL() : '',
     sigLocataire: document.getElementById('sig-locataire') ? document.getElementById('sig-locataire').toDataURL() : '',
     nuisibles, description: document.getElementById('r-description').value,
+    nbPassages:   document.getElementById('r-nb-passages') ? document.getElementById('r-nb-passages').value : '',
+    datesInterv:  (typeof rReadDates === 'function') ? rReadDates() : [],
     niveau:       document.getElementById('r-niveau').value,
     superficie:   document.getElementById('r-superficie').value,
     pieces:       document.getElementById('r-pieces').value,

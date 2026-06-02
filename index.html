@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601ba">
+<link rel="stylesheet" href="./style.css?v=20260601bb">
 </head>
 <body>
 
@@ -396,6 +396,17 @@
             </div>
           </div>
           <div class="form-block">
+            <div class="section-title">Passages / dates d'intervention</div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">🔁 Nombre de passages</label><input class="form-input" id="r-nb-passages" type="number" min="1" step="1" placeholder="1" oninput="updatePDF()"></div>
+              <div class="form-group">
+                <label class="form-label">📅 Dates d'intervention (plusieurs possibles)</label>
+                <div id="r-dates-wrap" style="display:flex;flex-direction:column;gap:6px;"></div>
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rAddDate()">+ Ajouter une date</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-block">
             <div class="section-title">Client (Gérance / Mandant)</div>
             <div class="form-group"><label class="form-label">Client *</label>
               <select class="form-input" id="r-client" onchange="onClientChange()"><option value="">-- Sélectionner --</option></select>
@@ -565,8 +576,8 @@
                 <label class="form-label" style="margin-bottom:0;">Description détaillée *</label>
                 <button class="btn btn-ghost btn-xs" onclick="correctWithAI(&#39;r-description&#39;,&#39;description&#39;)" id="ai-btn-description">✨ Corriger avec IA</button>
               </div>
-              <textarea class="form-input" id="r-description" rows="8" maxlength="1000" placeholder="Localisations, étendue, signes visibles, vecteurs..." oninput="updatePDF();updateCharCount(&#39;r-description&#39;,&#39;count-description&#39;,1000)"></textarea>
-              <div style="text-align:right;font-size:11px;color:var(--g400);margin-top:2px;"><span id="count-description">0</span>/1000</div>
+              <textarea class="form-input" id="r-description" rows="8" maxlength="3000" placeholder="Localisations, étendue, signes visibles, vecteurs..." oninput="updatePDF();updateCharCount(&#39;r-description&#39;,&#39;count-description&#39;,3000)"></textarea>
+              <div style="text-align:right;font-size:11px;color:var(--g400);margin-top:2px;"><span id="count-description">0</span>/3000</div>
             </div>
             <div class="form-group">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
@@ -642,6 +653,10 @@
               <label class="check-item"><input type="checkbox" id="t-poudre"> Poudre insecticide</label>
               <label class="check-item"><input type="checkbox" id="t-fumigation"> Fumigation</label>
               <label class="check-item"><input type="checkbox" id="t-pose"> Pièges mécaniques</label>
+              <label class="check-item"><input type="checkbox" id="t-appatage"> Boîtes d'appâtage sécurisées</label>
+              <label class="check-item"><input type="checkbox" id="t-rodenticide"> Rodenticides professionnels</label>
+              <label class="check-item"><input type="checkbox" id="t-racumin"> Racumin</label>
+              <label class="check-item"><input type="checkbox" id="t-talonwax"> Talonwax injection</label>
             </div>
           </div>
           <div class="form-block">
@@ -816,10 +831,10 @@
           </div>
           <div class="form-block">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-              <input type="checkbox" id="r-show-sig-tech" checked="" onchange="updatePDF()" style="width:16px;height:16px;accent-color:var(--navy);cursor:pointer;">
-              <label for="r-show-sig-tech" style="font-weight:700;font-size:14px;cursor:pointer;color:var(--navy);">Signature technicien dans le PDF</label>
+              <input type="checkbox" id="r-show-sig-client" checked="" onchange="updatePDF()" style="width:16px;height:16px;accent-color:var(--navy);cursor:pointer;">
+              <label for="r-show-sig-client" style="font-weight:700;font-size:14px;cursor:pointer;color:var(--navy);">🖊️ Signature du locataire dans le PDF</label>
             </div>
-            <canvas id="sig-canvas" width="600" height="100" style="width:100%;border:1.5px solid var(--g200);border-radius:7px;background:#fff;cursor:crosshair;touch-action:none;display:block;"></canvas>
+            <canvas id="sig-locataire" width="600" height="100" style="width:100%;border:1.5px solid var(--g200);border-radius:7px;background:#fff;cursor:crosshair;touch-action:none;display:block;"></canvas>
             <button class="btn btn-ghost btn-xs" style="margin-top:5px;" onclick="clearSig()">⌫ Effacer</button>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1126,9 +1141,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601ba"></script>
-<script src="./config.js?v=20260601ba"></script>
-<script src="./app.js?v=20260601ba"></script>
-<script src="./pdf.js?v=20260601ba"></script>
+<script src="./logo.js?v=20260601bb"></script>
+<script src="./config.js?v=20260601bb"></script>
+<script src="./app.js?v=20260601bb"></script>
+<script src="./pdf.js?v=20260601bb"></script>
 
 </body></html>
