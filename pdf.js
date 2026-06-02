@@ -98,6 +98,37 @@ function generatePDF(rapport, statut) {
       y += rowH;
     }
 
+    // Affiche une liste de paires {key,val} sur DEUX colonnes
+    function rows2col(pairs) {
+      const items = (pairs || []).filter(p => p && p.val);
+      if (!items.length) return;
+      const colW = (CW - 6) / 2;          // largeur d'une colonne
+      const gap = 6;                       // espace entre colonnes
+      const colTextW = colW - 6;
+      for (let i = 0; i < items.length; i += 2) {
+        const left = items[i];
+        const right = items[i + 1];
+        const lLines = doc.splitTextToSize(String(left.val), colTextW);
+        const rLines = right ? doc.splitTextToSize(String(right.val), colTextW) : [];
+        const cellH = Math.max(8, lLines.length * 5 + 5, rLines.length * 5 + 5);
+        checkPage(cellH + 2);
+        const shade = (Math.floor(i / 2) % 2 === 1);
+        // Fond grisé sur toute la largeur (évite le décrochage entre colonnes)
+        if (shade) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, cellH, 'F'); }
+        const drawCell = (it, lines, x) => {
+          doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+          doc.text(String(it.key).toUpperCase(), x + 2, y + 4);
+          doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...C.text);
+          doc.text(lines, x + 2, y + 9);
+        };
+        drawCell(left, lLines, M);
+        if (right) drawCell(right, rLines, M + colW + gap);
+        doc.setDrawColor(...C.border);
+        doc.line(M, y + cellH, M + CW, y + cellH);
+        y += cellH;
+      }
+    }
+
     function textBox(text, bgColor) {
       if (!text) return;
       doc.setFont('helvetica', 'normal');
@@ -169,27 +200,28 @@ function generatePDF(rapport, statut) {
       return tw + 3;
     }
 
-    // ── INFOS GÉNÉRALES ──────────────────────────────────────
+    // ── INFOS GÉNÉRALES (deux colonnes) ──────────────────────
     sTitle('Informations générales');
-    row('Technicien',      rapport.tech,       false);
-    row('Client',          rapport.clientNom,  true);
-    if (rapport.bonCommande) row('N° Bon de commande', rapport.bonCommande, false);
+    const adresseFull = (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:'');
+    const infoPairs = [
+      { key: 'Technicien',            val: rapport.tech },
+      { key: 'Client',                val: rapport.clientNom },
+      { key: 'N° Bon de commande',    val: rapport.bonCommande },
+    ];
     if (rapport.locataire) {
-      row('Locataire',          rapport.locataire,   true);
-      if (rapport.locataireTel)     row('Tél. locataire',    rapport.locataireTel, false);
-      if (rapport.locataireEmail)   row('Email locataire',   rapport.locataireEmail, true);
-      if (rapport.locataireAdresse) row('Adresse d\'intervention', rapport.locataireAdresse, false);
-    } else {
-      // Pas de locataire → afficher adresse normale
-      row('Adresse',         (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:''), false);
+      infoPairs.push({ key: 'Locataire', val: rapport.locataire });
+      infoPairs.push({ key: 'Tél. locataire', val: rapport.locataireTel });
+      infoPairs.push({ key: 'Email locataire', val: rapport.locataireEmail });
+      infoPairs.push({ key: "Adresse d'intervention", val: rapport.locataireAdresse });
     }
-    row('Adresse',         (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:''), false);
-    row('Contact',         rapport.contact,    true);
-    row('Téléphone',       rapport.tel,        false);
-    row('Email',           rapport.email,      true);
-    row('Bâtiment',        rapport.batiment,   false);
-    row('Localisation',    rapport.localisation, true);
-    row('N° Intervention', rapport.noint,      false);
+    infoPairs.push({ key: 'Adresse',        val: adresseFull });
+    infoPairs.push({ key: 'Contact',        val: rapport.contact });
+    infoPairs.push({ key: 'Téléphone',      val: rapport.tel });
+    infoPairs.push({ key: 'Email',          val: rapport.email });
+    infoPairs.push({ key: 'Bâtiment',       val: rapport.batiment });
+    infoPairs.push({ key: 'Localisation',   val: rapport.localisation });
+    infoPairs.push({ key: 'N° Intervention', val: rapport.noint });
+    rows2col(infoPairs);
     y += 5;
 
     // ── NUISIBLES & NIVEAU ───────────────────────────────────
