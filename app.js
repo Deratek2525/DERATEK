@@ -194,11 +194,35 @@ const DB = {
       if (error) console.warn(table, 'delete', error);
     }
     if (toUpsert.length) {
-      const rows = toUpsert.map(o => toDb(table, o));
-      const { error } = await sb.from(table).upsert(rows);
-      if (error) {
-        console.warn(table, 'upsert', error);
-        if (typeof toast === 'function') toast('Erreur de sauvegarde Supabase : ' + error.message, '#e63946');
+      // Colonnes déjà identifiées comme absentes côté Supabase pour cette table
+      DB._dropCols = DB._dropCols || {};
+      const dropSet = (DB._dropCols[table] = DB._dropCols[table] || new Set());
+      const buildRows = () => toUpsert.map(o => {
+        const row = toDb(table, o);
+        dropSet.forEach(c => { delete row[c]; });
+        return row;
+      });
+      let attempt = 0, ok = false, lastErr = null;
+      // Jusqu'à 6 tentatives : à chaque colonne refusée, on la retire et on réessaie
+      while (attempt < 6 && !ok) {
+        attempt++;
+        const { error } = await sb.from(table).upsert(buildRows());
+        if (!error) { ok = true; break; }
+        lastErr = error;
+        // Détecte le nom de la colonne fautive dans le message d'erreur PostgREST
+        const msg = String(error.message || '') + ' ' + String(error.details || '') + ' ' + String(error.hint || '');
+        const m = msg.match(/'([^']+)' column/) || msg.match(/column "([^"]+)"/) || msg.match(/column [a-z0-9_]+\.([a-z0-9_]+)/i) || msg.match(/column ([a-z0-9_]+) /i);
+        const col = m && m[1];
+        if (col && !dropSet.has(col)) {
+          console.warn(table, 'colonne ignorée (absente côté Supabase) :', col);
+          dropSet.add(col);
+          continue; // on retire la colonne et on réessaie
+        }
+        break; // erreur non liée à une colonne → on arrête
+      }
+      if (!ok && lastErr) {
+        console.warn(table, 'upsert', lastErr);
+        if (typeof toast === 'function') toast('Erreur de sauvegarde Supabase : ' + lastErr.message, '#e63946');
       }
     }
     this._lastSync[table] = JSON.parse(JSON.stringify(newArr));
@@ -1052,11 +1076,16 @@ function editRapport(id) {
   ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = r.rdvHeure || '';
   if ($('r-bon-commande')) $('r-bon-commande').value = r.bonCommande || '';
-  // Restaurer le locataire
+  // Restaurer le locataire : depuis le marqueur [LOC:...] (ou anciens champs pour rétrocompat)
+  const lc = rMeta.loc || {};
+  const locNom = lc.nom || r.locataire || '';
+  const locTel = lc.tel || r.locataireTel || '';
+  const locEmail = lc.email || r.locataireEmail || '';
+  const locAdr = lc.adresse || r.locataireAdresse || '';
   const setL = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
-  setL('r-locataire', r.locataire); setL('r-locataire-tel', r.locataireTel);
-  setL('r-locataire-email', r.locataireEmail); setL('r-locataire-adresse', r.locataireAdresse);
-  const hasLoc = !!(r.avecLocataire || r.locataire || r.locataireTel || r.locataireEmail || r.locataireAdresse);
+  setL('r-locataire', locNom); setL('r-locataire-tel', locTel);
+  setL('r-locataire-email', locEmail); setL('r-locataire-adresse', locAdr);
+  const hasLoc = !!(locNom || locTel || locEmail || locAdr);
   if ($('r-avec-locataire')) $('r-avec-locataire').checked = hasLoc;
   toggleLocataire();
   $('edit-id').textContent = r.id;
@@ -1231,15 +1260,35 @@ function _rapMeta(desc) {
   const s = String(desc || '');
   const np = (s.match(/\[NBPASS:([^\]]*)\]/) || [])[1] || '';
   const di = (s.match(/\[DATESINT:([^\]]*)\]/) || [])[1] || '';
-  const clean = s.replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').trim();
+  // Locataire stocké en marqueur (colonnes absentes côté Supabase) : nom|tel|email|adresse
+  const lc = (s.match(/\[LOC:([^\]]*)\]/) || [])[1] || '';
+  const lcParts = lc.split('|');
+  const clean = s
+    .replace(/\s*\[NBPASS:[^\]]*\]/g, '')
+    .replace(/\s*\[DATESINT:[^\]]*\]/g, '')
+    .replace(/\s*\[LOC:[^\]]*\]/g, '')
+    .trim();
   const dates = di.split(',').map(x => x.trim()).filter(Boolean).sort();
-  return { nbPassages: np.trim(), dates: dates, descClean: clean };
+  return {
+    nbPassages: np.trim(), dates: dates, descClean: clean,
+    loc: lc ? {
+      nom:     (lcParts[0] || '').replace(/¦/g, '|'),
+      tel:     (lcParts[1] || '').replace(/¦/g, '|'),
+      email:   (lcParts[2] || '').replace(/¦/g, '|'),
+      adresse: (lcParts[3] || '').replace(/¦/g, '|'),
+    } : null
+  };
 }
-function _composeRapDesc(descClean, nbPassages, dates) {
+function _composeRapDesc(descClean, nbPassages, dates, loc) {
   let out = (descClean || '').trim();
   const arr = Array.isArray(dates) ? dates.map(x => String(x||'').trim()).filter(Boolean) : [];
   if (nbPassages) out += (out ? '\n' : '') + '[NBPASS:' + String(nbPassages).trim() + ']';
   if (arr.length) out += (out ? '\n' : '') + '[DATESINT:' + arr.join(',') + ']';
+  // Locataire : encodé "nom|tel|email|adresse" (| échappé en ¦ dans les valeurs)
+  if (loc && (loc.nom || loc.tel || loc.email || loc.adresse)) {
+    const esc = v => String(v || '').replace(/\|/g, '¦');
+    out += (out ? '\n' : '') + '[LOC:' + [esc(loc.nom), esc(loc.tel), esc(loc.email), esc(loc.adresse)].join('|') + ']';
+  }
   return out;
 }
 function _rDateRow(val) {
@@ -1280,17 +1329,20 @@ function saveRapport(statut) {
     adresse: $('r-adresse').value, npa: $('r-npa').value, ville: $('r-ville').value,
     localisation: $('r-localisation').value, batiment: $('r-batiment').value, noint: $('r-noint').value,
     bonCommande: ($('r-bon-commande') ? $('r-bon-commande').value : ''),
-    nuisibles, description: _composeRapDesc($('r-description').value, ($('r-nb-passages')||{}).value || '', rReadDates()), niveau: $('r-niveau').value,
+    nuisibles, niveau: $('r-niveau').value,
     superficie: $('r-superficie').value, pieces: $('r-pieces').value, zones: $('r-zones').value,
     origine: $('r-origine').value, contraintes: $('r-contraintes').value,
     traitement, produits: JSON.parse(JSON.stringify(state.produits)),
     precautions: $('r-precautions').value, duree: $('r-duree').value, montant: $('r-montant').value,
     resultat: $('r-resultat').value, recommandations: $('r-recommandations').value,
     rdv: $('r-rdv').value, rdvHeure: ($('r-rdv-heure') ? $('r-rdv-heure').value : ''), garantie: $('r-garantie').value, statut,
-    avecLocataire: !!($('r-avec-locataire') && $('r-avec-locataire').checked),
-    locataire: _lv('r-locataire'), locataireTel: _lv('r-locataire-tel'),
-    locataireEmail: _lv('r-locataire-email'), locataireAdresse: _lv('r-locataire-adresse'),
   };
+  // Locataire : stocké dans la description (colonnes locataire absentes côté Supabase)
+  const _loc = {
+    nom: _lv('r-locataire'), tel: _lv('r-locataire-tel'),
+    email: _lv('r-locataire-email'), adresse: _lv('r-locataire-adresse')
+  };
+  r.description = _composeRapDesc($('r-description').value, ($('r-nb-passages')||{}).value || '', rReadDates(), _loc);
   const list = DB.rapports;
   const i = list.findIndex(x => x.id === state.editingRapportId);
   if (i >= 0) list[i] = r; else list.push(r);

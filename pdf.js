@@ -261,7 +261,7 @@ function generatePDF(rapport, statut) {
     // ── OBSERVATIONS ─────────────────────────────────────────
     sTitle('Observations sur place');
     // Sécurité : retire d'éventuels marqueurs internes restés dans la description
-    textBox(String(rapport.description || '').replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').trim());
+    textBox(String(rapport.description || '').replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').replace(/\s*\[LOC:[^\]]*\]/g, '').trim());
     if (rapport.origine) {
       checkPage(15);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
