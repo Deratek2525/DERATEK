@@ -63,12 +63,29 @@ const TABLE_FIELDS = {
 };
 const META_COLS = new Set(['user_id', 'created_at']);
 
+// Colonnes de type DATE côté Supabase (par table) : une chaîne vide y est invalide → null
+const DATE_COLS = {
+  rapports:     new Set(['date', 'rdv']),
+  intervs:      new Set(['date']),
+  documents:    new Set(['date_doc']),
+  fournisseurs: new Set(['date_doc']),
+  bons:         new Set(['date', 'date_intervention']),
+  diagnostics:  new Set(['date_doc']),
+};
+
 function toDb(table, obj) {
   const map = TABLE_FIELDS[table].js2db;
+  const dateCols = DATE_COLS[table];
   const out = {};
   for (const k of Object.keys(obj)) {
     if (obj[k] === undefined) continue;
-    out[map[k] || k] = obj[k];
+    const col = map[k] || k;
+    let val = obj[k];
+    // Colonne date avec valeur vide → null (Postgres refuse "")
+    if (dateCols && dateCols.has(col) && (val === '' || val === undefined || val === null)) {
+      val = null;
+    }
+    out[col] = val;
   }
   return out;
 }
