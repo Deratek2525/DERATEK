@@ -2575,7 +2575,14 @@ function autoFillFromBonNumero(numero) {
   // 3. Si le bon a un immeuble et que l'adresse du rapport est vide, on la pré-remplit
   if (bon.immeuble) setVal('r-adresse', bon.immeuble);
 
-  toast('✓ Locataire et gérance auto-remplis depuis le bon ' + bon.numero, '#2d9e6b');
+  // 4. Dates d'intervention effectuées du bon → liste de dates du rapport + nb de passages
+  const datesEff = _bonDatesInterv(bon);
+  if (datesEff.length) {
+    if (typeof rSetDates === 'function') rSetDates(datesEff);
+    if ($('r-nb-passages') && !$('r-nb-passages').value.trim()) $('r-nb-passages').value = String(datesEff.length);
+  }
+
+  toast('✓ Locataire, gérance et dates auto-remplis depuis le bon ' + bon.numero, '#2d9e6b');
   if (typeof updatePDF === 'function') updatePDF();
 }
 
