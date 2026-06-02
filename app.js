@@ -713,7 +713,7 @@ function autoFillIntervFromBon(numero) {
   // Adresse d'intervention + nuisible
   const adr = (loc ? loc.adresse : '') || bon.immeuble || '';
   if ($('iv-adresse') && adr) $('iv-adresse').value = adr;
-  if ($('iv-nuisible') && bon.probleme && !$('iv-nuisible').value.trim()) $('iv-nuisible').value = bon.probleme;
+  if ($('iv-nuisible') && _bonProblemeClean(bon) && !$('iv-nuisible').value.trim()) $('iv-nuisible').value = _bonProblemeClean(bon);
   // Mémorise la liaison au bon pour l'enregistrement
   state._ivBon = { id: bon.id, numero: bon.numero || numero };
   toast('Champs remplis depuis le bon ' + (bon.numero || ''), '#2d9e6b');
@@ -2335,6 +2335,37 @@ function setBonsFilter(f) {
   renderBons();
 }
 
+// Dates d'intervention EFFECTUÉES d'un bon (jusqu'à 5), stockées dans "probleme"
+// via un marqueur invisible (la table bons n'a pas de colonne dédiée côté Supabase).
+function _bonDatesInterv(b) {
+  const m = String((b && b.probleme) || '').match(/\[INTERV:([^\]]*)\]/);
+  return m ? m[1].split(',').map(s => s.trim()).filter(Boolean) : [];
+}
+function _bonProblemeClean(b) {
+  return String((b && b.probleme) || '').replace(/\s*\[INTERV:[^\]]*\]/g, '').trim();
+}
+function _setBonDatesInterv(b, dates) {
+  const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
+  const clean = _bonProblemeClean(b);
+  b.probleme = clean + (arr.length ? (clean ? '\n' : '') + '[INTERV:' + arr.join(',') + ']' : '');
+}
+// Ajoute/retire une date d'intervention effectuée sur un bon (max 5)
+function bonAddDateEffectuee(id) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const dates = _bonDatesInterv(b);
+  if (dates.length >= 5) { toast('Maximum 5 dates d\'intervention', '#e63946'); return; }
+  dates.push(today());
+  const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
+  renderBons();
+}
+function bonSetDateEffectuee(id, index, value) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const dates = _bonDatesInterv(b);
+  if (value) dates[index] = value; else dates.splice(index, 1);
+  const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
+  renderBons();
+}
+
 function renderBons() {
   const list = $('bons-list');
   const count = $('bons-count');
@@ -2349,7 +2380,7 @@ function renderBons() {
   }
   if (q) {
     bons = bons.filter(b =>
-      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.probleme||''))
+      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + _bonProblemeClean(b))
         .toLowerCase().includes(q)
     );
   }
@@ -2438,7 +2469,7 @@ function renderBons() {
               </div>
               <div style="flex:1.6;min-width:180px;">
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
-                <div style="font-size:12px;color:var(--g600);">${b.probleme || '—'}</div>
+                <div style="font-size:12px;color:var(--g600);">${_bonProblemeClean(b) || '—'}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:170px;">
                 <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
@@ -2446,6 +2477,21 @@ function renderBons() {
                   <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;">
                   <input type="time" value="${b.heureIntervention||''}" onchange="updateBonHeureInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;width:78px;">
                   <button class="btn btn-ghost btn-xs" onclick="addBonToGoogle('${b.id}')" title="Ajouter à Google Agenda">📅</button>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:155px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">✅ Interventions effectuées</div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  ${(() => {
+                    const ds = _bonDatesInterv(b);
+                    let html = ds.map((d, i) => `<div style="display:flex;gap:3px;align-items:center;">
+                      <input type="date" value="${d}" onchange="bonSetDateEffectuee('${b.id}', ${i}, this.value)" style="font-family:Arial;font-size:11px;font-weight:bold;color:#166534;padding:3px 5px;border-radius:6px;border:1.5px solid #22c55e;">
+                      <button class="btn btn-ghost btn-xs" style="color:#b00;padding:1px 5px;" onclick="bonSetDateEffectuee('${b.id}', ${i}, '')" title="Retirer">✕</button>
+                    </div>`).join('');
+                    if (ds.length < 5) html += `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="bonAddDateEffectuee('${b.id}')" title="Ajouter une date d'intervention effectuée">+ Ajouter (${ds.length}/5)</button>`;
+                    else html += `<div style="font-size:10px;color:var(--g400);">5/5 (max)</div>`;
+                    return html;
+                  })()}
                 </div>
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
@@ -2565,10 +2611,10 @@ function _syncBonIntervention(b) {
       clientId: b.geranceId || '',
       clientNom: b.geranceNom || '',
       adresse: adresse,
-      nuisible: _nuisibleInfo(b.probleme).label,
+      nuisible: _nuisibleInfo(_bonProblemeClean(b)).label,
       tech: '',
       statut: 'Planifiée',
-      couleur: _nuisibleInfo(b.probleme).color,
+      couleur: _nuisibleInfo(_bonProblemeClean(b)).color,
       notes: 'Bon ' + (b.numero || '') + (b.locataireNom ? ' — ' + b.locataireNom : ''),
       bonId: b.id,
       bonNumero: b.numero || '',
@@ -2604,13 +2650,13 @@ function addBonToGoogle(id) {
   if (!b) return;
   if (!b.dateIntervention) { toast('Choisis d\'abord une date de prochaine intervention', '#e63946'); return; }
   // Titre : Nuisible — Gérance
-  const nuisible = _nuisibleInfo(b.probleme).label;
+  const nuisible = _nuisibleInfo(_bonProblemeClean(b)).label;
   const titre = [nuisible, b.geranceNom].filter(Boolean).join(' — ');
   const details = [
     'Bon ' + (b.numero || ''),
     b.geranceNom ? 'Gérance : ' + b.geranceNom : '',
     b.locataireNom ? 'Locataire : ' + b.locataireNom : '',
-    b.probleme ? 'Problème : ' + b.probleme : ''
+    _bonProblemeClean(b) ? 'Problème : ' + _bonProblemeClean(b) : ''
   ].filter(Boolean).join('\n');
   const url = _googleCalUrl({ titre, date: b.dateIntervention, heure: b.heureIntervention || '08:00', dureeMin: 60, details, lieu: b.immeuble || '' });
   window.open(url, '_blank');
@@ -2859,7 +2905,7 @@ function createDocFromBon(bonId, type) {
     proprietaire: bon.proprietaire || '',
     bonId: bon.id,
     lignes: [
-      { desc: bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles', qte: 1, prix: 0 }
+      { desc: _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles', qte: 1, prix: 0 }
     ],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
     rabais: 5,
@@ -2894,7 +2940,7 @@ function createRapportFromBon(bonId) {
   setVal('r-bon-commande', bon.numero || '');
   if ($('r-noint')) $('r-noint').value = bon.numero || $('r-noint').value;
   // Problème → description de l'intervention
-  setVal('r-description', bon.probleme || '');
+  setVal('r-description', _bonProblemeClean(bon) || '');
   // Locataire (lieu d'intervention)
   const loc = (bon.locataireId ? (DB.locataires||[]).find(l => l.id === bon.locataireId) : null)
            || (bon.locataireNom ? (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
@@ -2949,7 +2995,7 @@ function autoFillDocFromBon(numero) {
   _editingDoc.proprietaire = bon.proprietaire || '';
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
-    _editingDoc.lignes[0].desc = bon.probleme ? ('Intervention : ' + bon.probleme) : 'Intervention antinuisibles';
+    _editingDoc.lignes[0].desc = _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles';
   }
   toast('✓ Rempli depuis le bon ' + bon.numero + ' (' + (_editingDoc.clientNom||'') + ')', '#2d9e6b');
   renderDocEditor();
@@ -4517,7 +4563,7 @@ function renderStats() {
 
   // Nuisibles → camembert (donut)
   const nuis = {};
-  bons.forEach(b => { const info = _nuisibleInfo(b.probleme); (nuis[info.label] = nuis[info.label] || { n: 0, color: info.color }).n++; });
+  bons.forEach(b => { const info = _nuisibleInfo(_bonProblemeClean(b)); (nuis[info.label] = nuis[info.label] || { n: 0, color: info.color }).n++; });
   let nk = Object.keys(nuis).sort((a,b)=>nuis[b].n-nuis[a].n);
   _makeChart('chart-nuisibles', 'doughnut', nk, nk.map(k=>nuis[k].n), nk.map(k=>nuis[k].color), false);
 
