@@ -800,11 +800,11 @@ function renderClients() {
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
         <div style="font-size:12px;color:var(--g600);">${adresseFmt || '—'}</div>
       </div>
-      ${(() => { const m = _clientMeta(c); return (m.nuisible || m.dateInterv) ? `
+      ${(() => { const m = _clientMeta(c); return (m.nuisible || m.dates.length) ? `
       <div style="flex:1.1;min-width:150px;">
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / interv.</div>
         ${m.nuisible ? `<div style="font-size:12px;font-weight:600;color:var(--navy);">${m.nuisible}</div>` : ''}
-        ${m.dateInterv ? `<div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(m.dateInterv)}</div>` : ''}
+        ${m.dates.length ? `<div style="font-size:11px;color:var(--g600);">📅 ${m.dates.map(d => fmtDate(d)).join(', ')}</div>` : ''}
       </div>` : ''; })()}
       <div style="display:flex;gap:14px;align-items:center;min-width:170px;border-left:1px solid #f0f0f0;padding-left:12px;">
         <div style="text-align:center;">
@@ -835,18 +835,47 @@ function _clientMeta(c) {
   const nuis = (notes.match(/\[NUISIBLE:([^\]]*)\]/) || [])[1] || '';
   const di   = (notes.match(/\[DATEINT:([^\]]*)\]/) || [])[1] || '';
   const clean = notes.replace(/\s*\[NUISIBLE:[^\]]*\]/g, '').replace(/\s*\[DATEINT:[^\]]*\]/g, '').trim();
-  return { nuisible: nuis.trim(), dateInterv: di.trim(), notesClean: clean };
+  // Plusieurs dates possibles, séparées par des virgules dans le marqueur
+  const dates = di.split(',').map(s => s.trim()).filter(Boolean).sort();
+  return { nuisible: nuis.trim(), dates: dates, dateInterv: dates[0] || '', notesClean: clean };
 }
-function _composeClientNotes(notesClean, nuisible, dateInterv) {
+function _composeClientNotes(notesClean, nuisible, dates) {
   let out = (notesClean || '').trim();
   if (nuisible) out += (out ? '\n' : '') + '[NUISIBLE:' + nuisible.trim() + ']';
-  if (dateInterv) out += (out ? '\n' : '') + '[DATEINT:' + dateInterv.trim() + ']';
+  const arr = Array.isArray(dates) ? dates.map(s => String(s||'').trim()).filter(Boolean) : (dates ? [String(dates).trim()] : []);
+  if (arr.length) out += (out ? '\n' : '') + '[DATEINT:' + arr.join(',') + ']';
   return out;
+}
+// --- Gestion de la liste des dates d'intervention dans la modale client ---
+function _clDateRow(val) {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:6px;align-items:center;';
+  div.innerHTML = `<input class="form-input" type="date" data-cl-date value="${val||''}" style="flex:1;">
+    <button type="button" class="btn btn-ghost btn-xs" style="color:#b00;" onclick="this.parentElement.remove()" title="Retirer cette date">✕</button>`;
+  return div;
+}
+function clAddDate(val) {
+  const wrap = $('cl-dates-wrap'); if (!wrap) return;
+  wrap.appendChild(_clDateRow(val || ''));
+}
+function clSetDates(dates) {
+  const wrap = $('cl-dates-wrap'); if (!wrap) return;
+  wrap.innerHTML = '';
+  const arr = (dates && dates.length) ? dates : [];
+  arr.forEach(d => wrap.appendChild(_clDateRow(d)));
+  if (!arr.length) wrap.appendChild(_clDateRow('')); // une ligne vide par défaut
+}
+function clReadDates() {
+  const wrap = $('cl-dates-wrap'); if (!wrap) return [];
+  return Array.from(wrap.querySelectorAll('[data-cl-date]'))
+    .map(i => i.value.trim()).filter(Boolean)
+    .sort();
 }
 function openNewClient() {
   state.editingClientId = null;
   $('modal-client-title').textContent = 'Nouveau client';
-  ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes','cl-nuisible','cl-date-interv'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes','cl-nuisible'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  clSetDates([]);
   $('cl-type').value = 'Gérance';
   $('cl-delete-btn').style.display = 'none';
   openModal('modal-client');
@@ -864,7 +893,7 @@ function editClient(id) {
   const meta = _clientMeta(c);
   $('cl-notes').value = meta.notesClean;
   if ($('cl-nuisible')) $('cl-nuisible').value = meta.nuisible;
-  if ($('cl-date-interv')) $('cl-date-interv').value = meta.dateInterv;
+  clSetDates(meta.dates);
   $('cl-delete-btn').style.display = 'inline-flex';
   openModal('modal-client');
 }
@@ -876,7 +905,7 @@ function saveClient() {
     tel: $('cl-tel').value, email: $('cl-email').value, web: $('cl-web').value,
     adresse: $('cl-adresse').value, npa: $('cl-npa').value, ville: $('cl-ville').value,
     num: $('cl-num').value, tarif: $('cl-tarif').value,
-    notes: _composeClientNotes($('cl-notes').value, ($('cl-nuisible')||{}).value || '', ($('cl-date-interv')||{}).value || ''),
+    notes: _composeClientNotes($('cl-notes').value, ($('cl-nuisible')||{}).value || '', clReadDates()),
   };
   const list = DB.clients;
   if (state.editingClientId) {
