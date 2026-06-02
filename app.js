@@ -763,9 +763,16 @@ function renderClients() {
   const rapports = DB.rapports;
   // L'élément #clients-grid a la classe CSS .clients-grid : on l'annule pour empiler les rubans
   grid.style.display = 'block';
+  const _normNom = s => String(s||'').trim().toLowerCase();
   grid.innerHTML = list.map(c => {
     const nb = rapports.filter(r => r.clientId === c.id).length;
-    const totalCA = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
+    // CA = anciens rapports "Envoyé" + factures PAYÉES liées au client (par id ou par nom)
+    const caRapports = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
+    const caFactures = (DB.documents || []).filter(d =>
+        d.type === 'facture' && d.statut === 'payee' &&
+        ((d.clientId && d.clientId === c.id) || (!d.clientId && _normNom(d.clientNom) === _normNom(c.nom)))
+      ).reduce((a,d) => a + (parseFloat(d.total)||0), 0);
+    const totalCA = caRapports + caFactures;
     const typeColor = colorForClient(c);
     const adresseFmt = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     return `
@@ -3097,6 +3104,9 @@ function saveDoc() {
   // Bascule sur l'onglet correspondant au type enregistré pour qu'il soit visible
   state.docsFilter = (toSave.type === 'facture') ? 'facture' : 'devis';
   renderDocuments();
+  // Le CA du portefeuille client dépend des factures payées → on rafraîchit
+  if (typeof renderClients === 'function') renderClients();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 
 // Change le statut d'un document
@@ -3108,6 +3118,9 @@ function updateDocStatut(id, value) {
   DB.documents = docs;
   toast('Statut mis à jour ✓', '#2d9e6b');
   renderDocuments();
+  // Le CA "CHF facturés" du portefeuille client dépend des factures payées → on rafraîchit
+  if (typeof renderClients === 'function') renderClients();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 
 // Convertit un devis accepté en facture
