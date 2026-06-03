@@ -4053,30 +4053,49 @@ function downloadDocPDF(id) {
   destLines = destLines.map(l => _fixPa(l));
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
-  // Titre du document — n° une taille plus petite (15)
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(13, 27, 62);
-  doc.text((isFacture ? 'FACTURE ' : 'DEVIS ') + (d.numero || ''), 20, 92);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(80);
-  let infoY = 99;
-  // N° de bon de travail lié (sous le titre), si dispo
-  const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
-  if (bonLie && bonLie.numero) { doc.text('Bon de travail N° ' + bonLie.numero, 20, infoY); infoY += 5; }
-  // Date affichée en haut à droite (plus ici, pour éviter le doublon)
-  if (d.locataireNom) { doc.text('Concerne : ' + d.locataireNom, 20, infoY); infoY += 5; }
-  // Adresse du locataire / lieu d'intervention : sur toute la largeur (évite le retour à la ligne)
-  if (d.locataireAdresse) { doc.splitTextToSize('Adresse : ' + d.locataireAdresse, 170).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; }); }
+  // Titre du document (style modèle : "Facture N°" en gras, taille moyenne)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
+  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, 90);
   doc.setTextColor(0);
+  // Bloc infos en "label : valeur" alignés (façon modèle 5570)
+  let infoY = 98;
+  const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+  const infoPairs = [
+    ['N° TVA', co.tva],
+    [isFacture ? 'Date facture' : 'Date devis', fmtDate(d.dateDoc) || ''],
+    ['Délai de paiement', '30 jours'],
+  ];
+  if (bonLie && bonLie.numero) infoPairs.unshift(['N° bon de travail', bonLie.numero]);
+  doc.setFontSize(9);
+  infoPairs.forEach(([k, v]) => {
+    if (!v) return;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(90);
+    doc.text(k, 20, infoY);
+    doc.setTextColor(0); doc.text(': ' + v, 62, infoY);
+    infoY += 4.6;
+  });
+  infoY += 2;
+  // Texte descriptif de l'intervention (concerne + adresse), en paragraphe
+  const descParts = [];
+  if (d.locataireNom) descParts.push('Concerne : ' + d.locataireNom);
+  if (d.locataireAdresse) descParts.push(d.locataireAdresse);
+  if (descParts.length) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
+    doc.splitTextToSize(descParts.join(' — '), 170).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; });
+    doc.setTextColor(0);
+  }
 
-  // Tableau des lignes — taille normale, lignes étalées pour remplir la page si nécessaire
+  // En-tête du tableau — style modèle : fond gris clair, texte gris foncé, filet dessous
   const drawLignesHeader = (y) => {
-    doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7, 'F');
-    doc.setTextColor(255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('Description', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix', 155, y, {align:'right'}); doc.text('Total', 188, y, {align:'right'});
+    doc.setFillColor(238, 240, 244); doc.rect(20, y - 5, 170, 7, 'F');
+    doc.setTextColor(70, 80, 100); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Désignation', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix HT', 156, y, {align:'right'}); doc.text('Montant', 188, y, {align:'right'});
+    doc.setDrawColor(180, 190, 205); doc.setLineWidth(0.3); doc.line(20, y + 2, 190, y + 2);
     doc.setTextColor(0); doc.setFont('helvetica', 'normal');
-    return y + 6;
+    return y + 7;
   };
 
-  const startY = Math.max(106, infoY + 2);
+  const startY = Math.max(106, infoY + 3);
   // Hauteur réelle du bloc totaux (sous-total + [rabais+net] + tva + total), marge incluse
   const totalsH = (d.rabais || 0) > 0 ? 24 : 17;
   const lignes = d.lignes || [];
@@ -4113,8 +4132,11 @@ function downloadDocPDF(id) {
     }
     doc.text(descLines, 22, ty, { lineHeightFactor: 1.15 });
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
-    doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
+    doc.text(_displayMontant(l.prix||0), 156, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
+    // Filet fin sous chaque ligne (style modèle)
+    doc.setDrawColor(225, 228, 233); doc.setLineWidth(0.2);
+    doc.line(20, ty + lineH + padding - 2.5, 190, ty + lineH + padding - 2.5);
     ty += lineH + padding;
   });
 
