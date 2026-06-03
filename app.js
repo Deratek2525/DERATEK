@@ -4157,8 +4157,10 @@ function downloadDocPDF(id) {
     ty += lineH + padding;
   });
 
-  // Totaux : suivent directement les lignes ; si pas la place sur la page courante → page suivante
-  if (ty + totalsH > limitFor()) { doc.addPage(); ty = 25; }
+  // Totaux : colonne de DROITE → ils peuvent descendre juste au-dessus du bulletin QR
+  // (la condition de paiement est à gauche, pas de conflit). Limite plus basse que les lignes.
+  const limiteTotaux = (doc.internal.getNumberOfPages() === 1) ? (QR_TOP - 2) : (H - 22);
+  if (ty + totalsH > limiteTotaux) { doc.addPage(); ty = 25; }
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
