@@ -4076,9 +4076,9 @@ function downloadDocPDF(id) {
     return y + 6;
   };
 
-  const startY = Math.max(110, infoY + 4);
+  const startY = Math.max(106, infoY + 2);
   // Hauteur réelle du bloc totaux (sous-total + [rabais+net] + tva + total), marge incluse
-  const totalsH = (d.rabais || 0) > 0 ? 27 : 19;
+  const totalsH = (d.rabais || 0) > 0 ? 24 : 17;
   const lignes = d.lignes || [];
   const qrZoneStart = H - 105;
 
@@ -4095,8 +4095,17 @@ function downloadDocPDF(id) {
   // Décision : si le contenu compact tient au-dessus de la zone QR (avec une petite marge),
   // on reste compact et le QR-bill va sur la MÊME page. Sinon on étale légèrement et le QR
   // passe sur sa propre page.
-  // Espacement FIXE entre les lignes : 5 mm, toujours. Pas d'étalement automatique.
-  const padding = 5;
+  // Espacement entre les lignes : 5 mm par défaut. Mais si ça ferait déborder le
+  // QR-bill en page 2, on RESSERRE juste assez pour que le QR tienne sur la page 1
+  // (jamais d'agrandissement, jamais d'étalement à gros écarts).
+  let padding = 5;
+  if (isFacture && lignes.length > 0) {
+    const contenuSansPadding = startY + 6 + totalLinesH + totalsH; // bas du bloc totaux
+    const limiteQR = qrZoneStart - 5;                              // place max avant le QR
+    const slack = limiteQR - contenuSansPadding;                   // marge disponible
+    // padding qui fait tenir le QR sur page 1, plafonné à 5 ; si négatif → QR page 2 (lignes serrées)
+    padding = slack > 0 ? Math.max(0, Math.min(5, slack / lignes.length)) : 0;
+  }
 
   // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
   const limit = isFacture ? (H - 25) : (H - 30);
@@ -4120,17 +4129,17 @@ function downloadDocPDF(id) {
 
   // Totaux : suivent directement les lignes (sauf si vraiment pas la place)
   if (ty + totalsH > limit) { doc.addPage(); ty = 25; }
-  ty += 4;
-  doc.line(120, ty, 190, ty); ty += 5;
+  ty += 3;
+  doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
-  doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+  doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
   if ((d.rabais || 0) > 0) {
     doc.setTextColor(180, 40, 40);
-    doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+    doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
     doc.setTextColor(0);
-    doc.text('Net HT', 130, ty); doc.text(_displayMontant(t.net) + ' CHF', 188, ty, {align:'right'}); ty += 5;
+    doc.text('Net HT', 130, ty); doc.text(_displayMontant(t.net) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
   }
-  doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 6;
+  doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
 
@@ -4145,7 +4154,9 @@ function downloadDocPDF(id) {
   // Pour les factures : QR-bill suisse en bas (ancré à H-105)
   // Si le contenu précédent (ty) dépasse la zone QR, on ajoute une nouvelle page dédiée au QR.
   if (isFacture) {
-    if (ty > H - 105 - 5) { doc.addPage(); }
+    // Le QR commence à H-105. On bascule en page 2 seulement si les totaux atteignent
+    // vraiment la ligne de découpe (sinon on garde le QR sur la page 1).
+    if (ty > H - 105) { doc.addPage(); }
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
