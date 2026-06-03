@@ -2040,7 +2040,7 @@ function bonShowConfirm(infos, fileName) {
         ${champ('Locataire', 'locataire_nom', infos.locataire_nom)}
         ${champ('Tél. locataire', 'locataire_tel', infos.locataire_tel)}
         ${champ('Email locataire', 'locataire_email', infos.locataire_email)}
-        ${champ('Adresse locataire', 'locataire_adresse', infos.locataire_adresse)}
+        ${champ('Adresse locataire', 'locataire_adresse', infos.locataire_adresse || infos.immeuble)}
       </div>
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📄 Bon de travaux (→ onglet Bons)</div>
@@ -2122,13 +2122,16 @@ function _findOrCreateGerance(infos) {
 function _findOrCreateLocataire(infos, geranceId) {
   const nom = (infos.locataire_nom || '').trim();
   if (!nom) return null;
+  // Adresse du locataire = adresse d'intervention. À défaut de locataire_adresse,
+  // on prend l'"Immeuble" du bon (qui est le lieu d'intervention).
+  const adrLoc = (infos.locataire_adresse || '').trim() || (infos.immeuble || '').trim();
   const locs = DB.locataires;
   const existing = locs.find(l => (l.nom || '').toLowerCase() === nom.toLowerCase());
   if (existing) {
     const updates = {};
     if (!existing.tel       && infos.locataire_tel)     updates.tel       = infos.locataire_tel;
     if (!existing.email     && infos.locataire_email)   updates.email     = infos.locataire_email;
-    if (!existing.adresse   && infos.locataire_adresse) updates.adresse   = infos.locataire_adresse;
+    if (!existing.adresse   && adrLoc)                  updates.adresse   = adrLoc;
     if (!existing.clientId  && geranceId)               updates.clientId  = geranceId;
     if (!existing.createdAt)                            updates.createdAt = new Date().toISOString();
     if (Object.keys(updates).length) {
@@ -2142,7 +2145,7 @@ function _findOrCreateLocataire(infos, geranceId) {
     nom: nom,
     tel:     infos.locataire_tel || '',
     email:   infos.locataire_email || '',
-    adresse: infos.locataire_adresse || '',
+    adresse: adrLoc,
     clientId: geranceId || '',
     createdAt: new Date().toISOString(),
     notes: 'Créé automatiquement depuis un bon de travaux.'
