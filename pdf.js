@@ -435,6 +435,45 @@ function generatePDF(rapport, statut) {
     }
     y += 3;
 
+    // ── PHOTOS avec commentaires (avant Résultat & Recommandations) ──
+    const photos = rapport.photos || window._currentPhotos || [];
+    const photoComments = rapport.photoComments || [];
+    const validPhotos = photos.filter(p => p);
+    if (validPhotos.length) {
+      doc.addPage();
+      y = 15;
+      sTitle('Photos d\'intervention');
+      const labels = ['Avant 1','Avant 2','Pendant','Après 1','Après 2','Autre'];
+      const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i], comment: photoComments[i]||'' })).filter(p => p.src);
+      const imgW = (CW - 6) / 2, imgH = 55;
+      let col = 0;
+      allPhotos.forEach((ph, i) => {
+        const blockH = imgH + (ph.comment ? 18 : 10);
+        checkPage(blockH + 5);
+        const x = M + col * (imgW + 6);
+        try {
+          const fmt = ph.src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          doc.addImage(ph.src, fmt, x, y, imgW, imgH);
+          doc.setDrawColor(...C.border);
+          doc.rect(x, y, imgW, imgH, 'S');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(...C.muted);
+          doc.text(ph.label, x + 2, y + imgH + 5);
+          if (ph.comment) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...C.text);
+            const lines = doc.splitTextToSize(ph.comment, imgW - 4);
+            doc.text(lines[0], x + 2, y + imgH + 11);
+          }
+        } catch(e) { console.warn('Image error:', e); }
+        col++;
+        if (col >= 2) { col = 0; y += imgH + (ph.comment ? 20 : 12); }
+      });
+      if (col > 0) y += imgH + 20;
+    }
+
     // ── RÉSULTAT & RECOMMANDATIONS ────────────────────────────
     sTitle('Résultat & Recommandations');
     checkPage(30);
@@ -486,45 +525,6 @@ function generatePDF(rapport, statut) {
       y += 21;
     }
     if (showGarantieNote && rapport.garantieNote) { textBox(rapport.garantieNote); y += 3; }
-
-    // ── PHOTOS avec commentaires ──────────────────────────────
-    const photos = rapport.photos || window._currentPhotos || [];
-    const photoComments = rapport.photoComments || [];
-    const validPhotos = photos.filter(p => p);
-    if (validPhotos.length) {
-      doc.addPage();
-      y = 15;
-      sTitle('Photos d\'intervention');
-      const labels = ['Avant 1','Avant 2','Pendant','Après 1','Après 2','Autre'];
-      const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i], comment: photoComments[i]||'' })).filter(p => p.src);
-      const imgW = (CW - 6) / 2, imgH = 55;
-      let col = 0;
-      allPhotos.forEach((ph, i) => {
-        const blockH = imgH + (ph.comment ? 18 : 10);
-        checkPage(blockH + 5);
-        const x = M + col * (imgW + 6);
-        try {
-          const fmt = ph.src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-          doc.addImage(ph.src, fmt, x, y, imgW, imgH);
-          doc.setDrawColor(...C.border);
-          doc.rect(x, y, imgW, imgH, 'S');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8);
-          doc.setTextColor(...C.muted);
-          doc.text(ph.label, x + 2, y + imgH + 5);
-          if (ph.comment) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(...C.text);
-            const lines = doc.splitTextToSize(ph.comment, imgW - 4);
-            doc.text(lines[0], x + 2, y + imgH + 11);
-          }
-        } catch(e) { console.warn('Image error:', e); }
-        col++;
-        if (col >= 2) { col = 0; y += imgH + (ph.comment ? 20 : 12); }
-      });
-      if (col > 0) y += imgH + 20;
-    }
 
     // ── SIGNATURE (uniquement locataire) ─────────────────────
     const showSigClient = rapport.showSigClient !== false;
