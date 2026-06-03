@@ -76,7 +76,8 @@ function generatePDF(rapport, statut) {
 
     // ── HELPERS ──────────────────────────────────────────────
     function checkPage(needed = 20) {
-      if (y + needed > 272) { doc.addPage(); y = 15; }
+      // Le footer est à 285 : on peut remplir jusqu'à ~278 avant de paginer
+      if (y + needed > 278) { doc.addPage(); y = 15; }
     }
 
     function sTitle(title) {
@@ -521,7 +522,7 @@ function generatePDF(rapport, statut) {
     // ── SIGNATURE (uniquement locataire) ─────────────────────
     const showSigClient = rapport.showSigClient !== false;
     if (showSigClient) {
-      checkPage(55);
+      checkPage(52);
       sTitle('Signature');
       y += 3;
       const sigW = (CW - 10) / 2; // même largeur qu'avant (demi-page)
