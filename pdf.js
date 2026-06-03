@@ -250,31 +250,77 @@ function generatePDF(rapport, statut) {
     rows2col(infoPairs);
     y += 5;
 
-    // ── NUISIBLES & NIVEAU ───────────────────────────────────
-    sTitle('Nuisibles & Niveau d\'infestation');
-    checkPage(30);
-
-    // Nuisibles tags
-    const nuisibles = rapport.nuisibles || [];
-    if (nuisibles.length) {
-      let tagX = M;
-      nuisibles.forEach(n => {
-        if (tagX + doc.getTextWidth(n) + 12 > M + CW) { y += 9; tagX = M; }
-        tagX += tag(n, tagX, y, C.red, C.white);
-      });
+    // ── NUISIBLES & NIVEAU  +  TRAITEMENT (bandeau partagé 2 colonnes) ──
+    const tLabels = {
+      't-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique',
+      't-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring',
+      't-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre',
+      't-fumigation':'Fumigation','t-pose':'Pièges mécaniques',
+      't-appatage':"Boîtes d'appâtage sécurisées",'t-rodenticide':'Rodenticides professionnels',
+      't-racumin':'Racumin','t-talonwax':'Talonwax injection'
+    };
+    const methodes = (rapport.traitement||[]).map(t => tLabels[t]||t);
+    checkPage(40);
+    const colW = (CW - 6) / 2;
+    const xL = M, xR = M + colW + 6;
+    // Bandeau dégradé partagé avec deux titres
+    {
+      const h = 7, steps = 60, c1 = [26,39,68], c2 = [59,130,246];
+      for (let i = 0; i < steps; i++) {
+        const t = i/(steps-1);
+        doc.setFillColor(Math.round(c1[0]+(c2[0]-c1[0])*t), Math.round(c1[1]+(c2[1]-c1[1])*t), Math.round(c1[2]+(c2[2]-c1[2])*t));
+        doc.rect(M + (CW*i/steps), y, CW/steps + 0.5, h, 'F');
+      }
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      doc.text("NUISIBLES & NIVEAU", xL + 3, y + 4.8);
+      doc.text("TRAITEMENT APPLIQUÉ", xR + 3, y + 4.8);
       y += 10;
     }
-
-    // Niveau + Superficie
-    if (rapport.niveau || rapport.superficie || rapport.pieces) {
-      checkPage(25);
-      colorPill('Niveau d\'infestation', rapport.niveau, [255, 240, 240], C.red, M, CW/2 - 3);
-      const supText = (rapport.superficie ? rapport.superficie + ' m²' : '—') + (rapport.pieces ? ' / ' + rapport.pieces + ' pièce(s)' : '');
-      colorPill('Superficie / Pièces', supText, [255, 248, 230], [176, 120, 0], M + CW/2 + 3, CW/2 - 3);
-      y += 23;
+    const yTop = y;
+    // ----- Colonne GAUCHE : nuisibles + niveau + superficie -----
+    let yL = yTop;
+    const nuisibles = rapport.nuisibles || [];
+    if (nuisibles.length) {
+      let tagX = xL;
+      nuisibles.forEach(n => {
+        if (tagX + doc.getTextWidth(n) + 12 > xL + colW) { yL += 9; tagX = xL; }
+        const tw = doc.getTextWidth(n) + 6;
+        doc.setFillColor(...C.red); doc.roundedRect(tagX, yL, tw, 6, 1, 1, 'F');
+        doc.setTextColor(...C.white); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+        doc.text(n, tagX + 3, yL + 4.2);
+        tagX += tw + 3;
+      });
+      yL += 9;
     }
+    if (rapport.niveau) {
+      doc.setFillColor(255,240,240); doc.roundedRect(xL, yL, colW, 11, 2, 2, 'F');
+      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text("NIVEAU D'INFESTATION", xL+3, yL+4);
+      doc.setTextColor(...C.red); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(rapport.niveau), xL+3, yL+9);
+      yL += 13;
+    }
+    if (rapport.superficie || rapport.pieces) {
+      const supText = (rapport.superficie ? rapport.superficie + ' m²' : '—') + (rapport.pieces ? ' / ' + rapport.pieces + ' pièce(s)' : '');
+      doc.setFillColor(255,248,230); doc.roundedRect(xL, yL, colW, 11, 2, 2, 'F');
+      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text('SUPERFICIE / PIÈCES', xL+3, yL+4);
+      doc.setTextColor(176,120,0); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(supText, xL+3, yL+9);
+      yL += 13;
+    }
+    // ----- Colonne DROITE : méthodes de traitement -----
+    let yR = yTop;
+    if (methodes.length) {
+      methodes.forEach(m => {
+        const lines = doc.splitTextToSize('• ' + m, colW - 4);
+        doc.setTextColor(30,64,175); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+        doc.text(lines, xR + 2, yR + 4);
+        yR += lines.length * 4.5 + 1.5;
+      });
+    } else {
+      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+      doc.text('—', xR + 2, yR + 4); yR += 6;
+    }
+    // On reprend sous la plus longue des deux colonnes
+    y = Math.max(yL, yR) + 3;
     if (rapport.zones) { row('Zones touchées', rapport.zones, false); y += 3; }
-    y += 3;
 
     // ── PASSAGES / DATES D'INTERVENTION ──────────────────────
     const _datesInt = Array.isArray(rapport.datesInterv) ? rapport.datesInterv.filter(Boolean) : [];
@@ -304,28 +350,7 @@ function generatePDF(rapport, statut) {
     }
     y += 3;
 
-    // ── TRAITEMENT ───────────────────────────────────────────
-    sTitle('Traitement appliqué');
-    const tLabels = {
-      't-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique',
-      't-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring',
-      't-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre',
-      't-fumigation':'Fumigation','t-pose':'Pièges mécaniques',
-      't-appatage':"Boîtes d'appâtage sécurisées",'t-rodenticide':'Rodenticides professionnels',
-      't-racumin':'Racumin','t-talonwax':'Talonwax injection'
-    };
-    const methodes = (rapport.traitement||[]).map(t => tLabels[t]||t);
-    if (methodes.length) {
-      checkPage(15);
-      doc.setFillColor(239, 246, 255);
-      doc.roundedRect(M, y, CW, 10, 2, 2, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(30, 64, 175);
-      doc.text(methodes.join('  ·  '), M + 4, y + 6.5);
-      y += 14;
-    }
-
+    // ── PRODUITS & MATÉRIELS (le traitement appliqué est déjà au-dessus) ──
     // Produits
     const produits = rapport.produits || [];
     if (produits.length) {
