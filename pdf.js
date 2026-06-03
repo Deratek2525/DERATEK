@@ -440,8 +440,8 @@ function generatePDF(rapport, statut) {
     const photoComments = rapport.photoComments || [];
     const validPhotos = photos.filter(p => p);
     if (validPhotos.length) {
-      doc.addPage();
-      y = 15;
+      // Pas de saut de page forcé : on enchaîne, et on ne change de page que si besoin
+      checkPage(80);
       sTitle('Photos d\'intervention');
       const labels = ['Avant 1','Avant 2','Pendant','Après 1','Après 2','Autre'];
       const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i], comment: photoComments[i]||'' })).filter(p => p.src);
