@@ -4006,66 +4006,14 @@ function _fixPa(txt) {
 
 // Bande "Nos prestations" en bas de page (pictogramme + libellé), façon modèle.
 function _drawPrestationsFooter(doc, W, H) {
-  const items = [
-    { label: 'Insectes du bois',     icon: 'bug' },
-    { label: 'Oiseaux / pigeons',    icon: 'bird' },
-    { label: 'Insectes volants',     icon: 'fly' },
-    { label: 'Insectes rampants',    icon: 'crawl' },
-    { label: 'Rongeurs',             icon: 'rodent' },
-    { label: 'Désinfection',         icon: 'spray' },
-  ];
-  const navy = [13, 27, 62], red = [230, 57, 70];
-  const yLine = H - 26;
-  // Filet de séparation
-  doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, yLine, 190, yLine);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...navy);
-  doc.text('NOS PRESTATIONS', 20, yLine + 5);
-  // Répartition horizontale
-  const n = items.length, x0 = 20, x1 = 190, slot = (x1 - x0) / n;
-  const cy = yLine + 14;
-  doc.setLineWidth(0.5);
-  items.forEach((it, i) => {
-    const cx = x0 + slot * i + slot / 2;
-    doc.setDrawColor(...red); doc.setFillColor(255, 255, 255);
-    _drawPestIcon(doc, it.icon, cx, cy - 1, red);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(70);
-    doc.splitTextToSize(it.label, slot - 2).forEach((ln, k) => {
-      doc.text(ln, cx, cy + 6 + k * 2.8, { align: 'center' });
-    });
-  });
-  doc.setTextColor(0);
+  // Bande illustrée "Nos prestations" (image PNG base64 : ligne rouge + 6 pictos + libellés).
+  if (typeof FOOTER_PRESTATIONS_B64 === 'undefined' || !FOOTER_PRESTATIONS_B64) return;
+  const margin = 20;
+  const imgW = W - 2 * margin;             // pleine largeur utile
+  const imgH = imgW * (360 / 1500);        // ratio de l'image source
+  const y = H - 14 - imgH;                 // ancrée en bas de page
+  try { doc.addImage(FOOTER_PRESTATIONS_B64, 'PNG', margin, y, imgW, imgH); } catch (e) { console.warn('footer prestations', e); }
 }
-// Petit pictogramme nuisible vectoriel (simple, monochrome)
-function _drawPestIcon(doc, type, cx, cy, color) {
-  doc.setDrawColor(...color); doc.setFillColor(...color); doc.setLineWidth(0.4);
-  const C = (x, y, r, mode) => doc.circle(x, y, r, mode || 'S');
-  const Ln = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
-  if (type === 'bug' || type === 'crawl') {            // coccinelle / scarabée
-    C(cx, cy, 2.2, 'S'); Ln(cx, cy - 2.2, cx, cy + 2.2);
-    C(cx, cy - 2.6, 0.7, 'F');
-    Ln(cx - 2.2, cy - 1.4, cx - 3.4, cy - 2.4); Ln(cx + 2.2, cy - 1.4, cx + 3.4, cy - 2.4);
-    Ln(cx - 2.4, cy, cx - 3.6, cy); Ln(cx + 2.4, cy, cx + 3.6, cy);
-    Ln(cx - 2.2, cy + 1.4, cx - 3.4, cy + 2.4); Ln(cx + 2.2, cy + 1.4, cx + 3.4, cy + 2.4);
-  } else if (type === 'fly') {                          // insecte volant (ailes)
-    C(cx, cy + 0.5, 1.4, 'S');
-    doc.ellipse(cx - 2.2, cy - 0.8, 1.8, 1.0, 'S'); doc.ellipse(cx + 2.2, cy - 0.8, 1.8, 1.0, 'S');
-    C(cx, cy - 1.8, 0.7, 'F');
-  } else if (type === 'bird') {                         // oiseau (mouette stylisée)
-    doc.lines([[2.2, -2.0], [2.0, 2.0]], cx - 2.1, cy + 0.6);
-    doc.lines([[2.2, -2.0], [2.0, 2.0]], cx + 0.1, cy + 0.6);
-  } else if (type === 'rodent') {                       // souris (corps + oreilles + queue)
-    doc.ellipse(cx - 0.4, cy + 0.4, 2.2, 1.6, 'S');
-    C(cx - 1.8, cy - 1.2, 0.9, 'S'); C(cx - 0.2, cy - 1.4, 0.9, 'S');
-    doc.lines([[2.4, 0], [1.2, 1.4]], cx + 1.6, cy + 0.8);
-  } else if (type === 'spray') {                        // bombe / désinfection
-    doc.rect(cx - 1.2, cy - 1.6, 2.4, 3.6, 'S');
-    doc.rect(cx - 0.5, cy - 2.6, 1.0, 1.0, 'S');
-    C(cx + 2.4, cy - 2.2, 0.4, 'F'); C(cx + 3.0, cy - 1.4, 0.4, 'F'); C(cx + 2.6, cy - 0.6, 0.4, 'F');
-  } else {                                              // défaut : point
-    C(cx, cy, 1.8, 'S');
-  }
-}
-
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
 function downloadDocPDF(id) {
   const d = (DB.documents || []).find(x => x.id === id);
