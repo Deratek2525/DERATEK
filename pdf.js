@@ -203,9 +203,11 @@ function generatePDF(rapport, statut) {
     // ── INFOS GÉNÉRALES (deux colonnes) ──────────────────────
     sTitle('Informations générales');
     const adresseFull = (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:'');
+    // Le nom de la gérance + son adresse sont regroupés dans la même case "Client"
+    const clientBloc = (rapport.clientNom || '') + (adresseFull.trim() ? '\n' + adresseFull.trim() : '');
     const infoPairs = [
       { key: 'Technicien',            val: rapport.tech },
-      { key: 'Client',                val: rapport.clientNom },
+      { key: 'Client',                val: clientBloc },
       { key: 'N° Bon de commande',    val: rapport.bonCommande },
     ];
     if (rapport.locataire) {
@@ -214,7 +216,6 @@ function generatePDF(rapport, statut) {
       infoPairs.push({ key: 'Email locataire', val: rapport.locataireEmail });
       infoPairs.push({ key: "Adresse d'intervention", val: rapport.locataireAdresse });
     }
-    infoPairs.push({ key: 'Adresse',        val: adresseFull });
     infoPairs.push({ key: 'Contact',        val: rapport.contact });
     infoPairs.push({ key: 'Téléphone',      val: rapport.tel });
     infoPairs.push({ key: 'Email',          val: rapport.email });
