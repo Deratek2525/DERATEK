@@ -450,16 +450,101 @@ function renderDashboard() {
 
   const rapports = DB.rapports, clients = DB.clients;
   const brouillon = rapports.filter(r => r.statut === 'Brouillon').length;
-  const totalCA = rapports.filter(r => r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
+  const bons = DB.bons || [];
+  const docs = DB.documents || [];
+
+  // --- Calculs métier ---
+  // Bons actifs (non terminés) + ajoutés cette semaine
+  const bonsActifs = bons.filter(b => (b.statut || '') !== 'termine');
+  const weekAgo = new Date(Date.now() - 7 * 86400000);
+  const bonsSemaine = bons.filter(b => b.createdAt && new Date(b.createdAt) >= weekAgo).length;
+  // Bons à facturer
+  const aFacturer = bons.filter(b => (b.statut || '') === 'a-facturer').length;
+  // CA encaissé ce mois (factures payées) + total factures payées
+  const moisCourant = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const facturesPayees = docs.filter(d => d.type === 'facture' && d.statut === 'payee');
+  const caMois = facturesPayees
+    .filter(d => (d.dateDoc || '').startsWith(moisCourant))
+    .reduce((a, d) => a + (parseFloat(d.total) || 0), 0);
+  // Interventions aujourd'hui + prochaine heure
+  const ivToday = (DB.intervs || []).filter(iv => iv.date === today()).sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
+  const prochaineH = ivToday.find(iv => true);
 
   const ds = $('dash-stats');
   if (ds) ds.innerHTML = [
-    { lbl: 'Total rapports', val: rapports.length, color: '' },
-    { lbl: 'Brouillons', val: brouillon, color: 'color:var(--red)' },
-    { lbl: 'Envoyés', val: rapports.filter(r => r.statut === 'Envoyé').length, color: 'color:var(--green)' },
-    { lbl: 'Clients', val: clients.length, color: '' },
-    { lbl: 'CA facturé', val: `${totalCA.toFixed(0)} CHF`, color: 'color:var(--green);font-size:18px' },
-  ].map(s => `<div class="stat-card"><div class="stat-lbl">${s.lbl}</div><div class="stat-val" style="${s.color}">${s.val}</div></div>`).join('');
+    { lbl: 'Bons actifs', val: bonsActifs.length, accent: '#2563eb',
+      sub: bonsSemaine ? '+' + bonsSemaine + ' cette semaine' : 'à traiter', icon: '📄' },
+    { lbl: 'À facturer', val: aFacturer, accent: '#f4a623',
+      sub: aFacturer ? 'bon(s) prêt(s)' : 'rien en attente', icon: '🧾' },
+    { lbl: 'CA encaissé (mois)', val: caMois.toFixed(0) + ' CHF', accent: '#2d9e6b',
+      sub: facturesPayees.length + ' facture(s) payée(s)', icon: '💰', small: true },
+    { lbl: "Interv. aujourd'hui", val: ivToday.length, accent: '#e63946',
+      sub: prochaineH ? 'prochaine ' + (prochaineH.heure || '') : 'rien de prévu', icon: '📍' },
+    { lbl: 'Clients', val: clients.length, accent: '#7c3aed',
+      sub: rapports.length + ' rapport(s)', icon: '👥' },
+  ].map(s => `<div class="stat-card" style="border-left:0;">
+      <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${s.accent};"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="stat-lbl">${s.lbl}</div><span style="font-size:14px;">${s.icon}</span>
+      </div>
+      <div class="stat-val" style="${s.small ? 'font-size:20px;' : ''}color:${s.accent};">${s.val}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>`).join('');
+
+  // --- Graphique CA 6 derniers mois (factures payées) ---
+  const caChart = $('dash-ca-chart');
+  if (caChart) {
+    const moisLabels = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+    const series = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const somme = facturesPayees.filter(f => (f.dateDoc || '').startsWith(key))
+        .reduce((a, f) => a + (parseFloat(f.total) || 0), 0);
+      series.push({ label: moisLabels[d.getMonth()], val: somme });
+    }
+    const maxV = Math.max(1, ...series.map(s => s.val));
+    const bw = 38, gap = 14, h = 110, baseY = 96;
+    let svg = `<svg viewBox="0 0 ${series.length * (bw + gap)} 116" style="width:100%;height:auto;">`;
+    svg += `<line x1="0" y1="${baseY}" x2="${series.length * (bw + gap)}" y2="${baseY}" stroke="#e5e7eb" stroke-width="0.5"/>`;
+    series.forEach((s, i) => {
+      const bh = Math.round((s.val / maxV) * (baseY - 16));
+      const x = i * (bw + gap) + gap / 2;
+      const yTop = baseY - bh;
+      const col = i === series.length - 1 ? '#1a2744' : '#85B7EB';
+      svg += `<rect x="${x}" y="${yTop}" width="${bw}" height="${bh || 1}" rx="3" fill="${col}"/>`;
+      if (s.val > 0) svg += `<text x="${x + bw/2}" y="${yTop - 2}" text-anchor="middle" style="font-size:7px;fill:#6b7280;">${Math.round(s.val)}</text>`;
+      svg += `<text x="${x + bw/2}" y="106" text-anchor="middle" style="font-size:8px;fill:#9ca3af;">${s.label}</text>`;
+    });
+    svg += '</svg>';
+    caChart.innerHTML = svg;
+  }
+
+  // --- Graphique répartition nuisibles (depuis bons + rapports) ---
+  const nuisChart = $('dash-nuisibles-chart');
+  if (nuisChart) {
+    const counts = {};
+    bons.forEach(b => { const info = _nuisibleInfo(_bonProblemeClean(b)); counts[info.label] = counts[info.label] || { n: 0, color: info.color }; counts[info.label].n++; });
+    (rapports || []).forEach(r => (r.nuisibles || []).forEach(n => { counts[n] = counts[n] || { n: 0, color: '#888780' }; counts[n].n++; }));
+    const entries = Object.entries(counts).map(([k, v]) => ({ label: k, n: v.n, color: v.color }))
+      .sort((a, b) => b.n - a.n).slice(0, 5);
+    const totalN = entries.reduce((a, e) => a + e.n, 0) || 1;
+    if (!entries.length) {
+      nuisChart.innerHTML = '<div style="font-size:12px;color:var(--g400);padding:8px 0;">Aucune donnée pour le moment.</div>';
+    } else {
+      nuisChart.innerHTML = entries.map(e => {
+        const pct = Math.round((e.n / totalN) * 100);
+        return `<div style="margin-bottom:9px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+            <span style="color:var(--navy);">${e.label}</span><span style="color:var(--g400);">${pct}%</span>
+          </div>
+          <div style="height:6px;background:var(--g100);border-radius:3px;overflow:hidden;">
+            <div style="width:${pct}%;height:6px;background:${e.color};border-radius:3px;"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 
   // Retards
   const retards = rapports.filter(r => {
