@@ -4089,26 +4089,17 @@ function downloadDocPDF(id) {
     return Math.max(dl.length * 4.2, 6);
   });
   const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
-  // Hauteur du contenu en mode COMPACT (header + lignes + totaux), tel qu'il sera vraiment dessiné
-  const minContentH = 6 + totalLinesH + totalsH;
+  // Espacement fixe entre les lignes
+  const padding = 5;
 
-  // Décision : si le contenu compact tient au-dessus de la zone QR (avec une petite marge),
-  // on reste compact et le QR-bill va sur la MÊME page. Sinon on étale légèrement et le QR
-  // passe sur sa propre page.
-  // Espacement entre les lignes : 5 mm par défaut. Mais si ça ferait déborder le
-  // QR-bill en page 2, on RESSERRE juste assez pour que le QR tienne sur la page 1
-  // (jamais d'agrandissement, jamais d'étalement à gros écarts).
-  let padding = 5;
-  if (isFacture && lignes.length > 0) {
-    const contenuSansPadding = startY + 6 + totalLinesH + totalsH; // bas du bloc totaux
-    const limiteQR = qrZoneStart - 5;                              // place max avant le QR
-    const slack = limiteQR - contenuSansPadding;                   // marge disponible
-    // padding qui fait tenir le QR sur page 1, plafonné à 5 ; si négatif → QR page 2 (lignes serrées)
-    padding = slack > 0 ? Math.max(0, Math.min(5, slack / lignes.length)) : 0;
-  }
-
-  // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
-  const limit = isFacture ? (H - 25) : (H - 30);
+  // ZONE RÉSERVÉE AU QR sur la PAGE 1 : le contenu ne doit jamais y entrer.
+  // Le QR-bill occupe les 105 mm du bas ; on réserve aussi ~13 mm au-dessus pour
+  // la condition de paiement. Les pages suivantes (sans QR) utilisent toute la hauteur.
+  const QR_TOP = H - 105;                       // début du bulletin QR
+  const limitePage1 = QR_TOP - 13;              // bas utile du contenu sur la page 1
+  const limiteAutres = H - 22;                  // bas utile sur les pages 2+ (pas de QR)
+  // Limite courante selon la page (page 1 = avec zone QR réservée)
+  const limitFor = () => (doc.internal.getNumberOfPages() === 1 ? limitePage1 : limiteAutres);
 
   let ty = startY;
   ty = drawLignesHeader(ty);
@@ -4116,7 +4107,7 @@ function downloadDocPDF(id) {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
     const lineH = lineHeights[i];
-    if (ty + lineH > limit) {
+    if (ty + lineH > limitFor()) {
       doc.addPage(); ty = 25;
       ty = drawLignesHeader(ty);
     }
@@ -4127,8 +4118,8 @@ function downloadDocPDF(id) {
     ty += lineH + padding;
   });
 
-  // Totaux : suivent directement les lignes (sauf si vraiment pas la place)
-  if (ty + totalsH > limit) { doc.addPage(); ty = 25; }
+  // Totaux : suivent directement les lignes ; si pas la place sur la page courante → page suivante
+  if (ty + totalsH > limitFor()) { doc.addPage(); ty = 25; }
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
@@ -4154,9 +4145,9 @@ function downloadDocPDF(id) {
   // Pour les factures : QR-bill suisse en bas (ancré à H-105)
   // Si le contenu précédent (ty) dépasse la zone QR, on ajoute une nouvelle page dédiée au QR.
   if (isFacture) {
-    // Le QR commence à H-105. On bascule en page 2 seulement si les totaux atteignent
-    // vraiment la ligne de découpe (sinon on garde le QR sur la page 1).
-    if (ty > H - 105) { doc.addPage(); }
+    // Le QR-bill est TOUJOURS sur la page 1, en bas, à sa position fixe.
+    // (Le contenu qui débordait est déjà allé sur les pages suivantes, qui n'ont pas de QR.)
+    doc.setPage(1);
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
