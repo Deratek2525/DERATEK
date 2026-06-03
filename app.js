@@ -1953,18 +1953,22 @@ async function bonExtractInfosIA(texte) {
   const systemPrompt =
     'Tu es un assistant qui extrait des informations depuis un BON DE TRAVAUX suisse ' +
     '(régie immobilière / gérance). Analyse le texte et renvoie UNIQUEMENT un objet JSON valide, ' +
-    'sans aucun texte autour, sans balises Markdown. Utilise exactement ces clés (chaîne vide si absent) :\n' +
+    'sans aucun texte autour, sans balises Markdown.\n' +
+    'ATTENTION DESTINATAIRE = DERATEK (le prestataire qui reçoit le bon, à NE PAS confondre avec la gérance) : ' +
+    'le bloc d\'adresse du destinataire contient "DERATEK" / "PRINCE DERATEK" / "Maillefer 25" / "2000 Neuchâtel" / "Pyramides 7 Lausanne". ' +
+    'N\'utilise JAMAIS cette adresse comme gerance_adresse. La gérance est l\'émetteur du bon (ex "Régie ... SA", "Jouval SA"), souvent en bas du document.\n' +
+    'Utilise exactement ces clés (chaîne vide si absent) :\n' +
     '{\n' +
-    '"gerance_nom": "nom de la régie/gérance",\n' +
-    '"gerant_nom": "nom du gérant ou gérante technique / contact",\n' +
+    '"gerance_nom": "nom de la régie/gérance (l\'émetteur du bon, ex Jouval SA). JAMAIS DERATEK.",\n' +
+    '"gerant_nom": "nom du gérant ou gérante technique / contact (ex le nom après \\"Aff. traitée par\\")",\n' +
     '"gerant_tel": "téléphone du gérant",\n' +
     '"gerant_email": "email du gérant",\n' +
-    '"gerance_adresse": "adresse de facturation de la gérance (rue et numéro)",\n' +
-    '"gerance_npa": "code postal gérance",\n' +
-    '"gerance_ville": "ville gérance",\n' +
+    '"gerance_adresse": "adresse de la gérance UNIQUEMENT si elle est clairement indiquée comme telle. NE METS RIEN (chaîne vide) si la seule adresse visible est celle du destinataire DERATEK / Maillefer 25 / Pyramides 7.",\n' +
+    '"gerance_npa": "code postal gérance (vide si inconnu)",\n' +
+    '"gerance_ville": "ville gérance (vide si inconnue)",\n' +
     '"numero_bon": "numéro du bon de travaux",\n' +
     '"date_bon": "date du bon au format AAAA-MM-JJ",\n' +
-    '"immeuble": "adresse de l\'immeuble concerné",\n' +
+    '"immeuble": "ADRESSE D\'INTERVENTION = l\'adresse écrite en face de \\"Immeuble\\" sur le bon (rue + numéro + NPA + ville, ex \\"Matthias Hipp 1A, 2000 Neuchâtel\\"). C\'est le lieu où DERATEK doit intervenir, PAS l\'adresse de la gérance ni de DERATEK.",\n' +
     '"proprietaire": "nom du propriétaire",\n' +
     '"locataire_nom": "nom complet du/des locataire(s)",\n' +
     '"locataire_tel": "téléphone du locataire",\n' +
