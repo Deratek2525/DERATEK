@@ -4095,18 +4095,8 @@ function downloadDocPDF(id) {
   // Décision : si le contenu compact tient au-dessus de la zone QR (avec une petite marge),
   // on reste compact et le QR-bill va sur la MÊME page. Sinon on étale légèrement et le QR
   // passe sur sa propre page.
-  // Le contenu doit finir au-dessus de la condition de paiement (~12 mm avant le bulletin)
-  const onePageSpace = (qrZoneStart - 12) - startY;
-  // Les lignes restent TOUJOURS compactes (groupées). On n'étale que très légèrement
-  // quand le QR tient sur la page 1, et JAMAIS de gros écarts entre les lignes.
-  let padding = 0;
-  if (minContentH <= onePageSpace && lignes.length > 0) {
-    // QR sur la même page : petit étalement pour aérer un peu (max 4 mm/ligne)
-    const cibleBas = qrZoneStart - 14;
-    const slack = (cibleBas - startY) - minContentH;
-    if (slack > 0) padding = Math.min(4, slack / lignes.length);
-  }
-  // Sinon (QR en page 2) : padding = 0, les lignes restent serrées en haut de la page.
+  // Espacement FIXE entre les lignes : 5 mm, toujours. Pas d'étalement automatique.
+  const padding = 5;
 
   // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
   const limit = isFacture ? (H - 25) : (H - 30);
