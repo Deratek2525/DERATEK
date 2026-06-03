@@ -209,7 +209,8 @@ function generatePDF(rapport, statut) {
       { key: 'Technicien',            val: rapport.tech },
       { key: 'Client',                val: clientBloc },
       { key: 'N° Bon de commande',    val: rapport.bonCommande },
-      { key: 'Contact',               val: rapport.contact },
+      { key: (rapport.contactRole && rapport.contactRole !== 'Contact') ? rapport.contactRole : 'Contact',
+        val: String(rapport.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim() },
       { key: 'Téléphone',             val: rapport.tel },
       { key: 'Email',                 val: rapport.email },
     ];
@@ -579,6 +580,7 @@ function getCurrentRapportData() {
     date:         document.getElementById('r-date').value,
     tech:         document.getElementById('r-tech').value,
     contact:      document.getElementById('r-contact').value,
+    contactRole:  document.getElementById('r-contact-role') ? document.getElementById('r-contact-role').value : '',
     tel:          document.getElementById('r-tel').value,
     email:        document.getElementById('r-email').value,
     adresse:      document.getElementById('r-adresse').value,

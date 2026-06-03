@@ -1089,6 +1089,9 @@ function editRapport(id) {
   if ($('r-description')) $('r-description').value = rMeta.descClean;
   if ($('r-nb-passages')) $('r-nb-passages').value = rMeta.nbPassages;
   rSetDates(rMeta.dates);
+  // Décode le rôle + nom du contact (gérant…)
+  if ($('r-contact')) $('r-contact').value = _rapContactNom(r.contact);
+  if ($('r-contact-role')) $('r-contact-role').value = _rapContactRole(r.contact) || 'Gérant';
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = (r.nuisibles||[]).includes(c.value));
   ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = r.rdvHeure || '';
@@ -1272,6 +1275,19 @@ function saveLocataire() {
 // ============================================================
 // PASSAGES / DATES D'INTERVENTION DU RAPPORT
 // Stockés via marqueurs dans "description" (pas de nouvelle colonne Supabase).
+// Rôle du contact (gérant, concierge…) encodé dans le champ "contact" : "[ROLE:Gérant]Nom"
+function _rapContactRole(contact) {
+  const m = String(contact || '').match(/^\[ROLE:([^\]]*)\]/);
+  return m ? m[1] : '';
+}
+function _rapContactNom(contact) {
+  return String(contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+}
+function _composeRapContact(role, nom) {
+  const n = String(nom || '').trim();
+  const r = String(role || '').trim();
+  return (r && r !== 'Contact') ? '[ROLE:' + r + ']' + n : n;
+}
 // ============================================================
 function _rapMeta(desc) {
   const s = String(desc || '');
@@ -1342,7 +1358,7 @@ function saveRapport(statut) {
   const r = {
     id: $('r-id').value, clientId, clientNom, clientEmail: $('r-email').value,
     date: $('r-date').value, tech: $('r-tech').value,
-    contact: $('r-contact').value, tel: $('r-tel').value, email: $('r-email').value,
+    contact: _composeRapContact(($('r-contact-role')||{}).value || '', $('r-contact').value), tel: $('r-tel').value, email: $('r-email').value,
     adresse: $('r-adresse').value, npa: $('r-npa').value, ville: $('r-ville').value,
     localisation: $('r-localisation').value, batiment: $('r-batiment').value, noint: $('r-noint').value,
     bonCommande: ($('r-bon-commande') ? $('r-bon-commande').value : ''),

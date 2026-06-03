@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601bm">
+<link rel="stylesheet" href="./style.css?v=20260601bn">
 </head>
 <body>
 
@@ -412,9 +412,23 @@
               <select class="form-input" id="r-client" onchange="onClientChange()"><option value="">-- Sélectionner --</option></select>
             </div>
             <div class="form-row">
-              <div class="form-group"><label class="form-label">Personne de contact</label><input class="form-input" id="r-contact" placeholder="M. Dupont"></div>
-              <div class="form-group"><label class="form-label">Téléphone</label><input class="form-input" id="r-tel"></div>
+              <div class="form-group"><label class="form-label">Rôle</label>
+                <select class="form-input" id="r-contact-role" onchange="updatePDF()">
+                  <option value="Gérant">Gérant</option>
+                  <option value="Gérante">Gérante</option>
+                  <option value="Directeur">Directeur</option>
+                  <option value="Directrice">Directrice</option>
+                  <option value="Concierge">Concierge</option>
+                  <option value="Responsable du bâtiment">Responsable du bâtiment</option>
+                  <option value="Responsable technique">Responsable technique</option>
+                  <option value="Technicien">Technicien</option>
+                  <option value="Propriétaire">Propriétaire</option>
+                  <option value="Contact">Personne de contact</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Nom</label><input class="form-input" id="r-contact" placeholder="M. Dupont" oninput="updatePDF()"></div>
             </div>
+            <div class="form-group"><label class="form-label">Téléphone</label><input class="form-input" id="r-tel" oninput="updatePDF()"></div>
             <div class="form-group"><label class="form-label">Email client (pour envoi du rapport)</label><input class="form-input" id="r-email"></div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">N° bon de commande</label><input class="form-input" id="r-bon-commande" placeholder="BC-2026-001" oninput="updatePDF()" onchange="autoFillFromBonNumero(this.value)" onblur="autoFillFromBonNumero(this.value)"></div>
@@ -1141,9 +1155,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601bm"></script>
-<script src="./config.js?v=20260601bm"></script>
-<script src="./app.js?v=20260601bm"></script>
-<script src="./pdf.js?v=20260601bm"></script>
+<script src="./logo.js?v=20260601bn"></script>
+<script src="./config.js?v=20260601bn"></script>
+<script src="./app.js?v=20260601bn"></script>
+<script src="./pdf.js?v=20260601bn"></script>
 
 </body></html>
