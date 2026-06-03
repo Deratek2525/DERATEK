@@ -4113,8 +4113,8 @@ function downloadDocPDF(id) {
   };
 
   const startY = Math.max(106, infoY + 3);
-  // Hauteur réelle du bloc totaux (sous-total + [rabais+net] + tva + total), marge incluse
-  const totalsH = (d.rabais || 0) > 0 ? 24 : 17;
+  // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
+  const totalsH = (d.rabais || 0) > 0 ? 20 : 17;
   const lignes = d.lignes || [];
   const qrZoneStart = H - 105;
 
@@ -4167,7 +4167,6 @@ function downloadDocPDF(id) {
     doc.setTextColor(180, 40, 40);
     doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
     doc.setTextColor(0);
-    doc.text('Net HT', 130, ty); doc.text(_displayMontant(t.net) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
   }
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
