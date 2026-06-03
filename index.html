@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601bz">
+<link rel="stylesheet" href="./style.css?v=20260601ca">
 </head>
 <body>
 
@@ -291,34 +291,29 @@
         <div class="card-hd"><span class="card-title">⚠️ Retards de traitement</span></div>
         <div id="retards-list"></div>
       </div>
-      <!-- Graphiques -->
-      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-bottom:14px;" id="dash-charts-row">
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;">
+        <!-- Interventions de la semaine, jour par jour -->
         <div class="card">
           <div class="card-hd">
-            <span class="card-title">📈 Chiffre d'affaires — 6 mois</span>
-            <span style="font-size:11px;color:var(--g400);">CHF (factures payées)</span>
+            <span class="card-title" id="dash-week-title">📅 Interventions de la semaine</span>
+            <button class="btn btn-ghost btn-sm" onclick="showScreen(&#39;agenda&#39;)">Agenda →</button>
           </div>
-          <div style="padding:12px 16px 16px;"><div id="dash-ca-chart"></div></div>
+          <div id="dash-week"></div>
         </div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title">🐛 Nuisibles traités</span></div>
-          <div style="padding:12px 16px 16px;"><div id="dash-nuisibles-chart"></div></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 340px;gap:14px;">
-        <div class="card">
-          <div class="card-hd">
-            <span class="card-title">Derniers rapports</span>
-            <button class="btn btn-ghost btn-sm" onclick="showScreen(&#39;rapports&#39;)">Voir tout →</button>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <!-- Bons entrés cette semaine -->
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-title">📄 Bons entrés cette semaine</span>
+              <button class="btn btn-ghost btn-sm" onclick="showScreen(&#39;bons&#39;)">Voir →</button>
+            </div>
+            <div id="dash-bons-semaine"></div>
           </div>
-          <div id="dash-rapports"></div>
-        </div>
-        <div class="card">
-          <div class="card-hd">
-            <span class="card-title">Interventions à venir</span>
-            <button class="btn btn-ghost btn-sm" onclick="showScreen(&#39;agenda&#39;)">Agenda</button>
+          <!-- Stats nuisibles -->
+          <div class="card">
+            <div class="card-hd"><span class="card-title">🐛 Statistiques nuisibles</span></div>
+            <div style="padding:12px 16px 16px;"><div id="dash-nuisibles-chart"></div></div>
           </div>
-          <div id="dash-intervs"></div>
         </div>
       </div>
     </div>
@@ -1187,9 +1182,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601bz"></script>
-<script src="./config.js?v=20260601bz"></script>
-<script src="./app.js?v=20260601bz"></script>
-<script src="./pdf.js?v=20260601bz"></script>
+<script src="./logo.js?v=20260601ca"></script>
+<script src="./config.js?v=20260601ca"></script>
+<script src="./app.js?v=20260601ca"></script>
+<script src="./pdf.js?v=20260601ca"></script>
 
 </body></html>

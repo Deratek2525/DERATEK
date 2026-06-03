@@ -453,71 +453,80 @@ function renderDashboard() {
   const bons = DB.bons || [];
   const docs = DB.documents || [];
 
-  // --- Calculs métier ---
-  // Bons actifs (non terminés) + ajoutés cette semaine
-  const bonsActifs = bons.filter(b => (b.statut || '') !== 'termine');
-  const weekAgo = new Date(Date.now() - 7 * 86400000);
-  const bonsSemaine = bons.filter(b => b.createdAt && new Date(b.createdAt) >= weekAgo).length;
-  // Bons à facturer
-  const aFacturer = bons.filter(b => (b.statut || '') === 'a-facturer').length;
-  // CA encaissé ce mois (factures payées) + total factures payées
-  const moisCourant = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-  const facturesPayees = docs.filter(d => d.type === 'facture' && d.statut === 'payee');
-  const caMois = facturesPayees
-    .filter(d => (d.dateDoc || '').startsWith(moisCourant))
-    .reduce((a, d) => a + (parseFloat(d.total) || 0), 0);
-  // Interventions aujourd'hui + prochaine heure
-  const ivToday = (DB.intervs || []).filter(iv => iv.date === today()).sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
-  const prochaineH = ivToday.find(iv => true);
+  // --- Bornes de la semaine en cours (lundi → dimanche) ---
+  const _monday = (() => { const d = new Date(now); const wd = (d.getDay() + 6) % 7; d.setHours(0,0,0,0); d.setDate(d.getDate() - wd); return d; })();
+  const _sunday = (() => { const d = new Date(_monday); d.setDate(d.getDate() + 6); d.setHours(23,59,59,999); return d; })();
+  const _ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  // --- Compteurs documents ---
+  const facturesPayees   = docs.filter(d => d.type === 'facture' && d.statut === 'payee');
+  const facturesNonPayees= docs.filter(d => d.type === 'facture' && d.statut !== 'payee');
+  const devisAcceptes    = docs.filter(d => d.type === 'devis'   && d.statut === 'accepte');
+  // Bons entrés cette semaine
+  const bonsSemaine = bons.filter(b => { if (!b.createdAt) return false; const c = new Date(b.createdAt); return c >= _monday && c <= _sunday; });
 
   const ds = $('dash-stats');
   if (ds) ds.innerHTML = [
-    { lbl: 'Bons actifs', val: bonsActifs.length, accent: '#2563eb',
-      sub: bonsSemaine ? '+' + bonsSemaine + ' cette semaine' : 'à traiter', icon: '📄' },
-    { lbl: 'À facturer', val: aFacturer, accent: '#f4a623',
-      sub: aFacturer ? 'bon(s) prêt(s)' : 'rien en attente', icon: '🧾' },
-    { lbl: 'CA encaissé (mois)', val: caMois.toFixed(0) + ' CHF', accent: '#2d9e6b',
-      sub: facturesPayees.length + ' facture(s) payée(s)', icon: '💰', small: true },
-    { lbl: "Interv. aujourd'hui", val: ivToday.length, accent: '#e63946',
-      sub: prochaineH ? 'prochaine ' + (prochaineH.heure || '') : 'rien de prévu', icon: '📍' },
-    { lbl: 'Clients', val: clients.length, accent: '#7c3aed',
-      sub: rapports.length + ' rapport(s)', icon: '👥' },
-  ].map(s => `<div class="stat-card" style="border-left:0;">
+    { lbl: 'Bons cette semaine', val: bonsSemaine.length, accent: '#2563eb',
+      sub: 'depuis lundi', icon: '📄', onclick: "showScreen('bons')" },
+    { lbl: 'Factures payées', val: facturesPayees.length, accent: '#2d9e6b',
+      sub: facturesPayees.reduce((a,d)=>a+(parseFloat(d.total)||0),0).toFixed(0) + ' CHF', icon: '✅', onclick: "showDocsScreen('facture')" },
+    { lbl: 'Factures non payées', val: facturesNonPayees.length, accent: '#e63946',
+      sub: facturesNonPayees.reduce((a,d)=>a+(parseFloat(d.total)||0),0).toFixed(0) + ' CHF en attente', icon: '⏳', onclick: "showDocsScreen('facture')" },
+    { lbl: 'Devis acceptés', val: devisAcceptes.length, accent: '#7c3aed',
+      sub: 'à transformer en facture', icon: '📝', onclick: "showDocsScreen('devis')" },
+  ].map(s => `<div class="stat-card" style="border-left:0;cursor:pointer;" onclick="${s.onclick}">
       <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${s.accent};"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div class="stat-lbl">${s.lbl}</div><span style="font-size:14px;">${s.icon}</span>
       </div>
-      <div class="stat-val" style="${s.small ? 'font-size:20px;' : ''}color:${s.accent};">${s.val}</div>
+      <div class="stat-val" style="color:${s.accent};">${s.val}</div>
       <div class="stat-sub">${s.sub}</div>
     </div>`).join('');
 
-  // --- Graphique CA 6 derniers mois (factures payées) ---
-  const caChart = $('dash-ca-chart');
-  if (caChart) {
-    const moisLabels = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
-    const series = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const somme = facturesPayees.filter(f => (f.dateDoc || '').startsWith(key))
-        .reduce((a, f) => a + (parseFloat(f.total) || 0), 0);
-      series.push({ label: moisLabels[d.getMonth()], val: somme });
+  // --- Interventions de la semaine, jour par jour ---
+  const dw = $('dash-week');
+  if (dw) {
+    const jours = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+    const moisAbr = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+    const allIv = DB.intervs || [];
+    const todayStr = today();
+    let html = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(_monday); d.setDate(d.getDate() + i);
+      const ds2 = _ymd(d);
+      const isToday = ds2 === todayStr;
+      const ivs = allIv.filter(iv => iv.date === ds2).sort((a,b)=>(a.heure||'').localeCompare(b.heure||''));
+      html += `<div style="padding:8px 16px;border-bottom:1px solid var(--g100);${isToday?'background:#eef4ff;':''}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${ivs.length?'6px':'0'};">
+          <span style="font-size:12px;font-weight:800;color:${isToday?'#2563eb':'var(--navy)'};min-width:118px;">${jours[i]} ${d.getDate()} ${moisAbr[d.getMonth()]}${isToday?" • auj.":''}</span>
+          ${ivs.length ? `<span style="font-size:10px;color:var(--g400);">${ivs.length} interv.</span>` : `<span style="font-size:11px;color:var(--g300);">—</span>`}
+        </div>
+        ${ivs.map(iv => `<div onclick="openEditInterv('${iv.id}')" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 8px;margin-left:6px;border-left:3px solid ${iv.couleur||'#e63946'};cursor:pointer;">
+          <span style="font-size:11px;font-weight:700;color:var(--navy);min-width:38px;">${iv.heure||'--:--'}</span>
+          <span style="font-size:11px;color:var(--g600);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${iv.nuisible?iv.nuisible+' — ':''}${iv.clientNom||'—'}${iv.adresse?' · '+iv.adresse:''}</span>
+          <span class="badge ${badgeCls(iv.statut)}" style="font-size:9px;">${iv.statut||''}</span>
+        </div>`).join('')}
+      </div>`;
     }
-    const maxV = Math.max(1, ...series.map(s => s.val));
-    const bw = 38, gap = 14, h = 110, baseY = 96;
-    let svg = `<svg viewBox="0 0 ${series.length * (bw + gap)} 116" style="width:100%;height:auto;">`;
-    svg += `<line x1="0" y1="${baseY}" x2="${series.length * (bw + gap)}" y2="${baseY}" stroke="#e5e7eb" stroke-width="0.5"/>`;
-    series.forEach((s, i) => {
-      const bh = Math.round((s.val / maxV) * (baseY - 16));
-      const x = i * (bw + gap) + gap / 2;
-      const yTop = baseY - bh;
-      const col = i === series.length - 1 ? '#1a2744' : '#85B7EB';
-      svg += `<rect x="${x}" y="${yTop}" width="${bw}" height="${bh || 1}" rx="3" fill="${col}"/>`;
-      if (s.val > 0) svg += `<text x="${x + bw/2}" y="${yTop - 2}" text-anchor="middle" style="font-size:7px;fill:#6b7280;">${Math.round(s.val)}</text>`;
-      svg += `<text x="${x + bw/2}" y="106" text-anchor="middle" style="font-size:8px;fill:#9ca3af;">${s.label}</text>`;
-    });
-    svg += '</svg>';
-    caChart.innerHTML = svg;
+    dw.innerHTML = html;
+    const wt = $('dash-week-title');
+    if (wt) wt.textContent = `📅 Semaine du ${_monday.getDate()} ${moisAbr[_monday.getMonth()]} au ${_sunday.getDate()} ${moisAbr[_sunday.getMonth()]}`;
+  }
+
+  // --- Bons entrés cette semaine (liste) ---
+  const dbs = $('dash-bons-semaine');
+  if (dbs) {
+    const list = bonsSemaine.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,6);
+    dbs.innerHTML = list.length ? list.map(b => `
+      <div onclick="showScreen('bons')" style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--g100);cursor:pointer;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);">Bon ${b.numero||'(s. n°)'}</div>
+          <div style="font-size:11px;color:var(--g400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.geranceNom||'—'} · ${_nuisibleInfo(_bonProblemeClean(b)).label}</div>
+        </div>
+        <span style="font-size:10px;color:var(--g400);">${b.createdAt?fmtDate(_ymd(new Date(b.createdAt))):''}</span>
+      </div>`).join('')
+    : '<div class="empty" style="padding:18px;"><div class="empty-icon">📄</div><div class="empty-text">Aucun bon entré cette semaine</div></div>';
   }
 
   // --- Graphique répartition nuisibles (depuis bons + rapports) ---
