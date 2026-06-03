@@ -555,6 +555,31 @@ function renderDashboard() {
     }
   }
 
+  // --- Alerte : factures impayées dont l'échéance (30 jours net) est dépassée ---
+  const impCard = $('impayes-card'), impList = $('impayes-list'), impCount = $('impayes-count');
+  if (impList) {
+    const ECHEANCE = 30; // jours
+    const impayes = facturesNonPayees.map(f => {
+      const base = f.dateDoc ? new Date(f.dateDoc) : null;
+      if (!base) return null;
+      const joursEcoules = Math.floor((now - base) / 86400000);
+      const retard = joursEcoules - ECHEANCE;
+      return retard > 0 ? { f, retard, joursEcoules } : null;
+    }).filter(Boolean).sort((a, b) => b.retard - a.retard);
+
+    if (impCard) impCard.style.display = impayes.length ? 'block' : 'none';
+    if (impCount) impCount.textContent = impayes.length ? (impayes.length + ' facture(s) · ' + impayes.reduce((a,x)=>a+(parseFloat(x.f.total)||0),0).toFixed(0) + ' CHF') : '';
+    impList.innerHTML = impayes.map(({ f, retard }) => `
+      <div onclick="showDocsScreen('facture')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--g100);cursor:pointer;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#e63946;flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);">${f.numero || '—'} — ${f.clientNom || '—'}</div>
+          <div style="font-size:11px;color:var(--g400);">Émise le ${fmtDate(f.dateDoc)} · ${_displayMontant(f.total||0)} CHF</div>
+        </div>
+        <span class="badge b-red" style="font-size:10px;">+${retard}j de retard</span>
+      </div>`).join('');
+  }
+
   // Retards
   const retards = rapports.filter(r => {
     if (r.statut === 'Envoyé') return false;
