@@ -3990,9 +3990,11 @@ function downloadDocPDF(id) {
       if (slack > 0) padding = Math.min(11, slack / lignes.length);
     }
   } else if (lignes.length > 0) {
-    // Multi-pages : léger étalement seulement (lignes resserrées, pas trop d'air)
-    const slack = fullPageSpace - minContentH;
-    if (slack > 0) padding = Math.min(2.5, slack / lignes.length);
+    // QR-bill sur page 2 : on étale les lignes pour REMPLIR la page 1 jusqu'en bas,
+    // afin d'éviter une demi-page blanche au-dessus du bulletin.
+    const cibleBas = H - 30;                       // bas utile de la page 1
+    const slack = (cibleBas - startY) - minContentH;
+    if (slack > 0) padding = Math.min(22, slack / lignes.length);
   }
 
   // Limite haute pour les lignes : bas de page naturel (le QR aura sa propre page si besoin)
