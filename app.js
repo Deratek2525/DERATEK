@@ -1973,7 +1973,7 @@ async function bonExtractInfosIA(texte) {
     '"locataire_nom": "nom complet du/des locataire(s)",\n' +
     '"locataire_tel": "téléphone du locataire",\n' +
     '"locataire_email": "email du locataire",\n' +
-    '"locataire_adresse": "adresse complète du locataire (immeuble, étage, appartement)",\n' +
+    '"locataire_adresse": "adresse postale du locataire = LA MÊME que le champ Immeuble (rue + numéro + NPA + ville). Si seule une référence/objet du type \\"A88000105\\" ou \\"APPARTEMENT 4.5 PCES REZ\\" est écrite près du locataire, NE la mets PAS ici : recopie plutôt l\'adresse de l\'Immeuble. Laisse vide si aucune rue n\'est trouvable.",\n' +
     '"probleme": "description du problème ou des travaux demandés",\n' +
     '"contact_sur_place": "personne et téléphone de contact sur place",\n' +
     '"concierge": "nom et téléphone du concierge"\n' +
@@ -2040,7 +2040,7 @@ function bonShowConfirm(infos, fileName) {
         ${champ('Locataire', 'locataire_nom', infos.locataire_nom)}
         ${champ('Tél. locataire', 'locataire_tel', infos.locataire_tel)}
         ${champ('Email locataire', 'locataire_email', infos.locataire_email)}
-        ${champ('Adresse locataire', 'locataire_adresse', infos.locataire_adresse || infos.immeuble)}
+        ${champ('Adresse locataire', 'locataire_adresse', infos.immeuble || infos.locataire_adresse)}
       </div>
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📄 Bon de travaux (→ onglet Bons)</div>
@@ -2122,9 +2122,9 @@ function _findOrCreateGerance(infos) {
 function _findOrCreateLocataire(infos, geranceId) {
   const nom = (infos.locataire_nom || '').trim();
   if (!nom) return null;
-  // Adresse du locataire = adresse d'intervention. À défaut de locataire_adresse,
-  // on prend l'"Immeuble" du bon (qui est le lieu d'intervention).
-  const adrLoc = (infos.locataire_adresse || '').trim() || (infos.immeuble || '').trim();
+  // Adresse du locataire = adresse d'intervention = l'"Immeuble" du bon en priorité
+  // (l'IA met parfois une référence/objet dans locataire_adresse, donc l'immeuble prime).
+  const adrLoc = (infos.immeuble || '').trim() || (infos.locataire_adresse || '').trim();
   const locs = DB.locataires;
   const existing = locs.find(l => (l.nom || '').toLowerCase() === nom.toLowerCase());
   if (existing) {
