@@ -4076,17 +4076,17 @@ function downloadDocPDF(id) {
     return y + 6;
   };
 
-  const startY = Math.max(116, infoY + 8);
+  const startY = Math.max(110, infoY + 4);
   // Hauteur réelle du bloc totaux (sous-total + [rabais+net] + tva + total), marge incluse
-  const totalsH = (d.rabais || 0) > 0 ? 32 : 22;
+  const totalsH = (d.rabais || 0) > 0 ? 27 : 19;
   const lignes = d.lignes || [];
   const qrZoneStart = H - 105;
 
-  // Calcul des hauteurs naturelles des lignes
+  // Calcul des hauteurs naturelles des lignes (compactes pour faire tenir le QR sur 1 page)
   doc.setFontSize(9.5);
   const lineHeights = lignes.map(l => {
     const dl = doc.splitTextToSize(l.desc || '', 100);
-    return Math.max(dl.length * 4.5, 6);
+    return Math.max(dl.length * 4.2, 6);
   });
   const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
   // Hauteur du contenu en mode COMPACT (header + lignes + totaux), tel qu'il sera vraiment dessiné
@@ -4095,14 +4095,14 @@ function downloadDocPDF(id) {
   // Décision : si le contenu compact tient au-dessus de la zone QR (avec une petite marge),
   // on reste compact et le QR-bill va sur la MÊME page. Sinon on étale légèrement et le QR
   // passe sur sa propre page.
-  const onePageSpace = (qrZoneStart - 3) - startY; // marge réduite : on privilégie le QR sur la même page
+  // Le contenu doit finir au-dessus de la condition de paiement (~12 mm avant le bulletin)
+  const onePageSpace = (qrZoneStart - 12) - startY;
   const fullPageSpace = (H - 25) - startY;
   let padding = 0;
   if (minContentH <= onePageSpace) {
     // 1 page avec QR : on répartit doucement les lignes vers le bas pour que le bloc
     // totaux + condition de paiement arrive juste au-dessus de la ligne de découpe,
     // ce qui supprime le grand vide entre le tableau et le bulletin QR.
-    // Cible : le contenu se termine ~14 mm au-dessus du bulletin (place pour la condition de paiement).
     if (lignes.length > 0) {
       const cibleBas = qrZoneStart - 14;
       const slack = (cibleBas - startY) - minContentH;
@@ -4129,7 +4129,7 @@ function downloadDocPDF(id) {
       doc.addPage(); ty = 25;
       ty = drawLignesHeader(ty);
     }
-    doc.text(descLines, 22, ty);
+    doc.text(descLines, 22, ty, { lineHeightFactor: 1.15 });
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
     doc.text(_displayMontant(l.prix||0), 155, ty, {align:'right'});
     doc.text(_displayMontant(lt), 188, ty, {align:'right'});
