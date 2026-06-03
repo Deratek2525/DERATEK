@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601bn">
+<link rel="stylesheet" href="./style.css?v=20260601bo">
 </head>
 <body>
 
@@ -140,9 +140,25 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Personne de contact</label><input class="form-input" id="cl-contact" placeholder="M. Dupont"></div>
-        <div class="form-group"><label class="form-label">Téléphone *</label><input class="form-input" id="cl-tel" placeholder="+41 79 000 00 00"></div>
+        <div class="form-group"><label class="form-label">Rôle du contact</label>
+          <select class="form-input" id="cl-contact-role">
+            <option value="Gérant">Gérant</option>
+            <option value="Gérante">Gérante</option>
+            <option value="Gérant technique">Gérant technique</option>
+            <option value="Gérante technique">Gérante technique</option>
+            <option value="Directeur">Directeur</option>
+            <option value="Directrice">Directrice</option>
+            <option value="Concierge">Concierge</option>
+            <option value="Responsable du bâtiment">Responsable du bâtiment</option>
+            <option value="Responsable technique">Responsable technique</option>
+            <option value="Technicien">Technicien</option>
+            <option value="Propriétaire">Propriétaire</option>
+            <option value="Contact">Personne de contact</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Nom du contact</label><input class="form-input" id="cl-contact" placeholder="M. Dupont"></div>
       </div>
+      <div class="form-group"><label class="form-label">Téléphone *</label><input class="form-input" id="cl-tel" placeholder="+41 79 000 00 00"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="cl-email" placeholder="contact@exemple.ch"></div>
         <div class="form-group"><label class="form-label">Site web</label><input class="form-input" id="cl-web" placeholder="www.exemple.ch"></div>
@@ -416,6 +432,8 @@
                 <select class="form-input" id="r-contact-role" onchange="updatePDF()">
                   <option value="Gérant">Gérant</option>
                   <option value="Gérante">Gérante</option>
+                  <option value="Gérant technique">Gérant technique</option>
+                  <option value="Gérante technique">Gérante technique</option>
                   <option value="Directeur">Directeur</option>
                   <option value="Directrice">Directrice</option>
                   <option value="Concierge">Concierge</option>
@@ -1155,9 +1173,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601bn"></script>
-<script src="./config.js?v=20260601bn"></script>
-<script src="./app.js?v=20260601bn"></script>
-<script src="./pdf.js?v=20260601bn"></script>
+<script src="./logo.js?v=20260601bo"></script>
+<script src="./config.js?v=20260601bo"></script>
+<script src="./app.js?v=20260601bo"></script>
+<script src="./pdf.js?v=20260601bo"></script>
 
 </body></html>

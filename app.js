@@ -829,8 +829,8 @@ function renderClients() {
         </div>
       </div>
       <div style="flex:1.2;min-width:140px;">
-        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 Contact</div>
-        <div style="font-size:12px;font-weight:600;color:var(--navy);">${c.contact || '—'}</div>
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 ${_rapContactRole(c.contact) || 'Contact'}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);">${_rapContactNom(c.contact) || '—'}</div>
         ${c.tel ? `<div style="font-size:11px;color:var(--g600);">📞 ${c.tel}</div>` : ''}
       </div>
       <div style="flex:1.2;min-width:170px;">
@@ -917,6 +917,7 @@ function openNewClient() {
   $('modal-client-title').textContent = 'Nouveau client';
   ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes','cl-nuisible'].forEach(id => { const el = $(id); if (el) el.value = ''; });
   clSetDates([]);
+  if ($('cl-contact-role')) $('cl-contact-role').value = 'Gérant';
   $('cl-type').value = 'Gérance';
   $('cl-delete-btn').style.display = 'none';
   openModal('modal-client');
@@ -926,7 +927,8 @@ function editClient(id) {
   const c = DB.clients.find(x => x.id === id); if (!c) return;
   $('modal-client-title').textContent = 'Modifier le client';
   $('cl-nom').value = c.nom; $('cl-type').value = c.type;
-  $('cl-contact').value = c.contact||''; $('cl-tel').value = c.tel||'';
+  $('cl-contact').value = _rapContactNom(c.contact); $('cl-tel').value = c.tel||'';
+  if ($('cl-contact-role')) $('cl-contact-role').value = _rapContactRole(c.contact) || 'Gérant';
   $('cl-email').value = c.email||''; $('cl-web').value = c.web||'';
   $('cl-adresse').value = c.adresse||''; $('cl-npa').value = c.npa||'';
   $('cl-ville').value = c.ville||''; $('cl-num').value = c.num||'';
@@ -942,7 +944,7 @@ function saveClient() {
   const nom = $('cl-nom').value.trim();
   if (!nom) { toast('Le nom est obligatoire', '#e63946'); return; }
   const data = {
-    nom, type: $('cl-type').value, contact: $('cl-contact').value,
+    nom, type: $('cl-type').value, contact: _composeRapContact(($('cl-contact-role')||{}).value || '', $('cl-contact').value),
     tel: $('cl-tel').value, email: $('cl-email').value, web: $('cl-web').value,
     adresse: $('cl-adresse').value, npa: $('cl-npa').value, ville: $('cl-ville').value,
     num: $('cl-num').value, tarif: $('cl-tarif').value,
@@ -1120,7 +1122,10 @@ function onClientChange() {
   if (c) {
     if (!$('r-tel').value)    $('r-tel').value    = c.tel || '';
     if (!$('r-email').value)  $('r-email').value  = c.email || '';
-    if (!$('r-contact').value) $('r-contact').value = c.contact || '';
+    // Contact : nom + rôle (gérant, concierge…) repris de la fiche client
+    if (!$('r-contact').value) $('r-contact').value = _rapContactNom(c.contact);
+    const role = _rapContactRole(c.contact);
+    if (role && $('r-contact-role')) $('r-contact-role').value = role;
     if (!$('r-adresse').value) {
       $('r-adresse').value = c.adresse || '';
       $('r-npa').value     = c.npa || '';
@@ -2442,7 +2447,7 @@ function renderBons() {
             const cli = (b.geranceId && clientById[b.geranceId]) || (b.geranceNom && clientByName[b.geranceNom.toLowerCase()]) || null;
             // Priorité aux infos gérant stockées sur le bon (chaque bon peut avoir son propre gérant)
             // Fallback sur les infos du client si le bon ne les a pas
-            const gerantNom = b.gerantNom || (cli ? (cli.contact || '') : '');
+            const gerantNom = b.gerantNom || (cli ? _rapContactNom(cli.contact) : '');
             const gerantTel = b.gerantTel || (cli ? (cli.tel || '')     : '');
             const statut = b.statut || '';
             // Couleur de fond du select selon le statut (ordre du workflow)
