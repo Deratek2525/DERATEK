@@ -26,14 +26,30 @@ function generatePDF(rapport, statut) {
     // ── HEADER ──────────────────────────────────────────────
     doc.setFillColor(...C.navy);
     doc.rect(0, 0, W, 32, 'F');
-    doc.setTextColor(...C.white);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.text('DERATEK', M, 14);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(180, 190, 210);
-    doc.text('PROFESSIONAL PEST CONTROL', M, 21);
+    // Logo DERATEK (image, version sombre) en haut à gauche sur une carte blanche
+    let logoOk = false;
+    if (typeof LOGO_B64 !== 'undefined' && LOGO_B64) {
+      try {
+        const logoW = 46, logoH = logoW * 199 / 900; // ratio d'origine du logo
+        const padX = 3, padY = 2.5;
+        const cardW = logoW + padX * 2, cardH = logoH + padY * 2;
+        const cardY = (32 - cardH) / 2;
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(M, cardY, cardW, cardH, 1.5, 1.5, 'F');
+        doc.addImage(LOGO_B64, 'PNG', M + padX, cardY + padY, logoW, logoH);
+        logoOk = true;
+      } catch (e) { logoOk = false; }
+    }
+    if (!logoOk) {
+      doc.setTextColor(...C.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.text('DERATEK', M, 14);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 190, 210);
+      doc.text('PROFESSIONAL PEST CONTROL', M, 21);
+    }
     // Badge RAPPORT
     doc.setFillColor(...C.red);
     doc.roundedRect(W - M - 54, 10, 54, 11, 2, 2, 'F');
@@ -65,11 +81,19 @@ function generatePDF(rapport, statut) {
 
     function sTitle(title) {
       checkPage(14);
-      doc.setFillColor(240, 243, 248);
-      doc.rect(M, y, CW, 7, 'F');
-      doc.setDrawColor(...C.border);
-      doc.rect(M, y, CW, 7, 'S');
-      doc.setTextColor(...C.navy);
+      // Fond en dégradé bleu (foncé → clair) simulé par fines bandes verticales
+      const h = 7, steps = 60;
+      const c1 = [26, 39, 68];    // navy foncé (gauche)
+      const c2 = [59, 130, 246];  // bleu clair (droite)
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+        const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+        const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+        doc.setFillColor(r, g, b);
+        doc.rect(M + (CW * i / steps), y, CW / steps + 0.5, h, 'F');
+      }
+      doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       doc.text(title.toUpperCase(), M + 3, y + 4.8);
