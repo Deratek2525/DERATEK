@@ -209,6 +209,9 @@ function generatePDF(rapport, statut) {
       { key: 'Technicien',            val: rapport.tech },
       { key: 'Client',                val: clientBloc },
       { key: 'N° Bon de commande',    val: rapport.bonCommande },
+      { key: 'Contact',               val: rapport.contact },
+      { key: 'Téléphone',             val: rapport.tel },
+      { key: 'Email',                 val: rapport.email },
     ];
     if (rapport.locataire) {
       infoPairs.push({ key: 'Locataire', val: rapport.locataire });
@@ -216,9 +219,6 @@ function generatePDF(rapport, statut) {
       infoPairs.push({ key: 'Email locataire', val: rapport.locataireEmail });
       infoPairs.push({ key: "Adresse d'intervention", val: rapport.locataireAdresse });
     }
-    infoPairs.push({ key: 'Contact',        val: rapport.contact });
-    infoPairs.push({ key: 'Téléphone',      val: rapport.tel });
-    infoPairs.push({ key: 'Email',          val: rapport.email });
     infoPairs.push({ key: 'Bâtiment',       val: rapport.batiment });
     infoPairs.push({ key: 'Localisation',   val: rapport.localisation });
     infoPairs.push({ key: 'N° Intervention', val: rapport.noint });
