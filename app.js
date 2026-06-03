@@ -4022,22 +4022,29 @@ function downloadDocPDF(id) {
   const isFacture = d.type === 'facture';
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
 
-  // --- En-tête identique au générateur QR-facture : LOGO + coordonnées ---
-  const logoW = 60, logoH = logoW * 199 / 900;   // ratio d'origine du logo
+  // --- En-tête horizontal (style modèle) : LOGO à gauche + coordonnées en 2 colonnes à droite ---
+  const logoW = 52, logoH = logoW * 199 / 900;   // ratio d'origine du logo
+  const logoY = 14;
   if (typeof LOGO_B64 !== 'undefined') {
-    try { doc.addImage(LOGO_B64, 'PNG', 20, 15, logoW, logoH); }
+    try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); }
     catch (e) { console.warn('logo', e); }
   } else {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 22);
   }
-  let hy = 15 + logoH + 6;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel, co.tva, co.email].forEach(l => { doc.text(l, 20, hy); hy += 4.6; });
+  // Coordonnées en 2 colonnes à droite du logo
+  const cy0 = logoY + 4;
+  const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
+  const colB = [co.email, co.tva, ''];
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  colA.forEach((l, i) => { if (l) doc.text(l, 86, cy0 + i * 4.4); });
+  colB.forEach((l, i) => { if (l) doc.text(l, 140, cy0 + i * 4.4); });
   doc.setTextColor(0);
+  // Filet de séparation sous l'en-tête
+  doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, logoY + logoH + 5, 190, logoY + logoH + 5);
 
-  // Date d'émission : en haut à droite, alignée verticalement au logo ("Neuchâtel, le ...")
+  // Date d'émission, sous le filet, à droite ("Neuchâtel, le ...")
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
-  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, 22, { align: 'right' });
+  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, logoY + logoH + 12, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
