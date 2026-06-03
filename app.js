@@ -4010,8 +4010,8 @@ function _drawPrestationsFooter(doc, W, H) {
   if (typeof FOOTER_PRESTATIONS_B64 === 'undefined' || !FOOTER_PRESTATIONS_B64) return;
   const margin = 20;
   const imgW = W - 2 * margin;             // pleine largeur utile
-  const imgH = imgW * (360 / 1500);        // ratio de l'image source
-  const y = H - 14 - imgH;                 // ancrée en bas de page
+  const imgH = imgW * (320 / 1500);        // ratio de l'image source (1500x320)
+  const y = H - 8 - imgH;                  // ancrée plus bas en bas de page
   try { doc.addImage(FOOTER_PRESTATIONS_B64, 'PNG', margin, y, imgW, imgH); } catch (e) { console.warn('footer prestations', e); }
 }
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
