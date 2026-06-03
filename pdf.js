@@ -160,45 +160,37 @@ function generatePDF(rapport, statut) {
       const lines = doc.splitTextToSize(String(text), CW - 10);
       const lineH = 5;
       const padding = 8;
-      const h = lines.length * lineH + padding;
-      checkPage(Math.min(h + 5, 60)); // vérifier espace dispo
-      // Si le texte ne tient pas sur la page restante, on pagine ligne par ligne
-      const pageBottom = 285; // bas de page A4 en mm
-      const available = pageBottom - y - 10;
-      if (h > available && available > 20) {
-        // Dessiner ce qui rentre sur cette page
-        const linesOnPage = Math.floor((available - padding) / lineH);
-        const firstLines = lines.slice(0, Math.max(1, linesOnPage));
-        const h1 = firstLines.length * lineH + padding;
-        if (bgColor) doc.setFillColor(...bgColor); else doc.setFillColor(249, 250, 251);
-        doc.roundedRect(M, y, CW, h1, 2, 2, 'F');
-        doc.setDrawColor(...C.border);
-        doc.roundedRect(M, y, CW, h1, 2, 2, 'S');
-        doc.setTextColor(...C.text);
-        doc.text(firstLines, M + 4, y + 6);
-        y += h1 + 3;
-        // Reste sur nouvelle page
-        const restLines = lines.slice(firstLines.length);
-        if (restLines.length > 0) {
+      const pageBottom = 285;      // bas de page A4 en mm
+      const usableH = pageBottom - 15 - padding; // hauteur de texte sur une page entière
+      const maxLinesPerPage = Math.floor(usableH / lineH);
+
+      // Découpe le texte en "morceaux" qui tiennent chacun sur une page,
+      // en commençant par remplir la place restante sur la page courante.
+      let idx = 0;
+      let firstChunk = true;
+      while (idx < lines.length) {
+        // Place réellement disponible sur la page courante
+        let avail = pageBottom - y - padding;
+        let linesFit = Math.floor(avail / lineH);
+        // Si presque rien ne rentre (< 3 lignes), on passe à la page suivante
+        if (linesFit < 3 && (lines.length - idx) > linesFit) {
           doc.addPage(); y = 15;
-          const h2 = restLines.length * lineH + padding;
-          if (bgColor) doc.setFillColor(...bgColor); else doc.setFillColor(249, 250, 251);
-          doc.roundedRect(M, y, CW, h2, 2, 2, 'F');
-          doc.setDrawColor(...C.border);
-          doc.roundedRect(M, y, CW, h2, 2, 2, 'S');
-          doc.setTextColor(...C.text);
-          doc.text(restLines, M + 4, y + 6);
-          y += h2 + 5;
+          avail = pageBottom - y - padding;
+          linesFit = Math.floor(avail / lineH);
         }
-      } else {
-        checkPage(h + 5);
+        const take = Math.min(linesFit, maxLinesPerPage, lines.length - idx);
+        const chunk = lines.slice(idx, idx + take);
+        const h = chunk.length * lineH + padding;
         if (bgColor) doc.setFillColor(...bgColor); else doc.setFillColor(249, 250, 251);
         doc.roundedRect(M, y, CW, h, 2, 2, 'F');
         doc.setDrawColor(...C.border);
         doc.roundedRect(M, y, CW, h, 2, 2, 'S');
         doc.setTextColor(...C.text);
-        doc.text(lines, M + 4, y + 6);
-        y += h + 5;
+        doc.text(chunk, M + 4, y + 6);
+        y += h + 4;
+        idx += take;
+        firstChunk = false;
+        if (idx < lines.length) { doc.addPage(); y = 15; }
       }
     }
 
