@@ -2541,19 +2541,50 @@ const BON_NOTE_STATUTS = [
   'Locataire absent', 'Propriétaire absent', 'En attente de confirmation',
   'Intervention réalisée', 'Intervention à reprogrammer'
 ];
+// Nuisibles concernés, regroupés par catégorie (pour les <optgroup>)
+const BON_NOTE_NUISIBLES = [
+  { groupe: 'Nuisibles rampants', items: ['Blattes', 'Cafards', 'Blattes germaniques', 'Blattes orientales', 'Fourmis', 'Punaises de lit', 'Puces', 'Poissons d\'argent', 'Araignées'] },
+  { groupe: 'Nuisibles volants', items: ['Guêpes', 'Frelons', 'Frelons asiatiques', 'Abeilles (relocalisation)', 'Mouches', 'Moustiques', 'Mites alimentaires', 'Mites textiles'] },
+  { groupe: 'Rongeurs', items: ['Souris', 'Rats', 'Mulots', 'Loirs'] },
+  { groupe: 'Autres animaux nuisibles', items: ['Fouines', 'Martres', 'Taupes', 'Pigeons', 'Corbeaux', 'Étourneaux'] }
+];
+// Types d'intervention
+const BON_NOTE_TYPES_INTERV = [
+  'Diagnostic', 'Traitement préventif', 'Traitement curatif', 'Désinsectisation',
+  'Dératisation', 'Dépigeonnage', 'Capture / éviction', 'Contrôle de suivi', 'Garantie / retour'
+];
+// Liste à plat de tous les nuisibles (pour vérifier la présence)
+function _bonNoteAllNuisibles() {
+  return BON_NOTE_NUISIBLES.reduce((acc, g) => acc.concat(g.items), []);
+}
+// Construit les <optgroup> pour le sélecteur de nuisible
+function _bonNoteNuisibleOptions(selected) {
+  let html = '<option value="">— Aucun —</option>';
+  BON_NOTE_NUISIBLES.forEach(g => {
+    html += `<optgroup label="${g.groupe}">` +
+      g.items.map(it => `<option value="${it.replace(/"/g,'&quot;')}" ${selected === it ? 'selected' : ''}>${it}</option>`).join('') +
+      '</optgroup>';
+  });
+  // Conserve une ancienne valeur hors liste
+  if (selected && _bonNoteAllNuisibles().indexOf(selected) === -1) {
+    html += `<option value="${selected.replace(/"/g,'&quot;')}" selected>${selected}</option>`;
+  }
+  return html;
+}
 // La note est désormais un objet structuré {statut, prixHT, rabais, tva, texte}
 // sérialisé en JSON dans le marqueur [NOTE:...]. Rétro-compatible : une ancienne
 // note en texte brut est lue comme { texte: "..." }.
 function _bonNoteData(b) {
   const raw = (typeof b === 'string') ? b : _bonNote(b);
-  const base = { statut: '', prixHT: '', rabais: '', tva: '', texte: '' };
+  const base = { statut: '', nuisible: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '' };
   if (!raw) return base;
   const s = raw.trim();
   if (s.charAt(0) === '{') {
     try {
       const o = JSON.parse(s);
       return {
-        statut: o.statut || '', prixHT: (o.prixHT != null ? o.prixHT : ''),
+        statut: o.statut || '', nuisible: o.nuisible || '', typeInterv: o.typeInterv || '',
+        prixHT: (o.prixHT != null ? o.prixHT : ''),
         rabais: (o.rabais != null ? o.rabais : ''), tva: (o.tva != null ? o.tva : ''),
         texte: o.texte || ''
       };
@@ -2563,7 +2594,7 @@ function _bonNoteData(b) {
   return base;
 }
 function _bonNoteHasData(d) {
-  return !!(d && (d.statut || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
+  return !!(d && (d.statut || d.nuisible || d.typeInterv || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
 }
 // Calcule les montants dérivés (rabais, HT net, TVA, TTC) à partir des champs saisis
 function _bonNoteCalc(d) {
@@ -2582,6 +2613,8 @@ function _bonNoteText(d) {
   if (!d) return '';
   const lines = [];
   if (d.statut) lines.push('Statut : ' + d.statut);
+  if (d.nuisible) lines.push('Nuisible : ' + d.nuisible);
+  if (d.typeInterv) lines.push('Type d\'intervention : ' + d.typeInterv);
   if (d.prixHT !== '' && d.prixHT != null) {
     const c = _bonNoteCalc(d);
     lines.push('Prix HT : ' + _displayMontant(c.ht) + ' CHF');
@@ -2650,6 +2683,16 @@ function openBonNote(id) {
       // Conserve un ancien statut qui ne serait plus dans la liste
       ((d.statut && BON_NOTE_STATUTS.indexOf(d.statut) === -1) ? `<option value="${(d.statut||'').replace(/"/g,'&quot;')}" selected>${d.statut}</option>` : '');
   }
+  // Nuisible (avec optgroups par catégorie)
+  const selN = $('bon-note-nuisible');
+  if (selN) selN.innerHTML = _bonNoteNuisibleOptions(d.nuisible);
+  // Type d'intervention
+  const selT = $('bon-note-type');
+  if (selT) {
+    selT.innerHTML = '<option value="">— Aucun —</option>' +
+      BON_NOTE_TYPES_INTERV.map(t => `<option value="${t}" ${d.typeInterv === t ? 'selected' : ''}>${t}</option>`).join('') +
+      ((d.typeInterv && BON_NOTE_TYPES_INTERV.indexOf(d.typeInterv) === -1) ? `<option value="${(d.typeInterv||'').replace(/"/g,'&quot;')}" selected>${d.typeInterv}</option>` : '');
+  }
   // Champs de calcul (rabais 5 % et TVA 8.1 % par défaut si vides)
   const dfltTva = (DERATEK_CONFIG && DERATEK_CONFIG.company && DERATEK_CONFIG.company.tvaTaux) || 8.1;
   const setF = (eid, v) => { const el = $(eid); if (el) el.value = (v === '' || v == null) ? '' : v; };
@@ -2689,6 +2732,8 @@ function saveBonNote() {
   const htRaw = (val('bon-note-ht') || '').trim();
   const data = {
     statut: val('bon-note-statut') || '',
+    nuisible: val('bon-note-nuisible') || '',
+    typeInterv: val('bon-note-type') || '',
     prixHT: htRaw === '' ? '' : (parseFloat(htRaw) || 0),
     rabais: htRaw === '' ? '' : (parseFloat(val('bon-note-rabais')) || 0),
     tva: htRaw === '' ? '' : (parseFloat(val('bon-note-tva')) || 0),
