@@ -2609,12 +2609,17 @@ function _bonNoteCalc(d) {
 }
 // Rendu lisible (multi-lignes) de la note pour affichage carte / bandeau devis
 function _bonNoteText(d) {
-  if (typeof d === 'string' || (d && d.probleme !== undefined)) d = _bonNoteData(d);
+  let datesInterv = [];
+  if (typeof d === 'string' || (d && d.probleme !== undefined)) {
+    if (d && d.probleme !== undefined) datesInterv = _bonDatesInterv(d);
+    d = _bonNoteData(d);
+  }
   if (!d) return '';
   const lines = [];
   if (d.statut) lines.push('Statut : ' + d.statut);
   if (d.nuisible) lines.push('Nuisible : ' + d.nuisible);
   if (d.typeInterv) lines.push('Type d\'intervention : ' + d.typeInterv);
+  if (datesInterv.length) lines.push('Dates d\'intervention : ' + datesInterv.map(fmtDate).join(', '));
   if (d.prixHT !== '' && d.prixHT != null) {
     const c = _bonNoteCalc(d);
     lines.push('Prix HT : ' + _displayMontant(c.ht) + ' CHF');
@@ -3355,6 +3360,12 @@ function createDocFromBon(bonId, type) {
   const cli = bon.geranceId ? (DB.clients || []).find(c => c.id === bon.geranceId) : null;
   const loc = bon.locataireId ? (DB.locataires || []).find(l => l.id === bon.locataireId)
             : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
+  // Ligne principale (problème) + une ligne dédiée aux dates d'intervention effectuées
+  const lignes = [
+    { desc: _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles', qte: 1, prix: 0 }
+  ];
+  const _dInterv = _bonDatesInterv(bon);
+  if (_dInterv.length) lignes.push({ desc: 'Dates d\'intervention : ' + _dInterv.map(fmtDate).join(', '), qte: 1, prix: 0 });
   _editingDoc = {
     id: newId(),
     type: type,
@@ -3369,9 +3380,7 @@ function createDocFromBon(bonId, type) {
     locataireAdresse: loc ? (loc.adresse || '') : '',
     proprietaire: bon.proprietaire || '',
     bonId: bon.id,
-    lignes: [
-      { desc: _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles', qte: 1, prix: 0 }
-    ],
+    lignes: lignes,
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
     rabais: 5,
     statut: 'brouillon',
@@ -3467,6 +3476,14 @@ function autoFillDocFromBon(numero) {
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
     _editingDoc.lignes[0].desc = _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles';
+  }
+  // Ajoute une ligne dédiée aux dates d'intervention effectuées (si pas déjà présente)
+  const _dInterv = _bonDatesInterv(bon);
+  if (_dInterv.length) {
+    const ligneDates = 'Dates d\'intervention : ' + _dInterv.map(fmtDate).join(', ');
+    if (!_editingDoc.lignes.some(l => (l.desc || '').indexOf('Dates d\'intervention') === 0)) {
+      _editingDoc.lignes.push({ desc: ligneDates, qte: 1, prix: 0 });
+    }
   }
   toast('✓ Rempli depuis le bon ' + bon.numero + ' (' + (_editingDoc.clientNom||'') + ')', '#2d9e6b');
   renderDocEditor();
