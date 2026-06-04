@@ -73,16 +73,28 @@ const DATE_COLS = {
   diagnostics:  new Set(['date_doc']),
 };
 
+// Colonnes de type UUID côté Supabase (liens entre tables) : une chaîne vide y est invalide → null
+const UUID_COLS = {
+  bons:        new Set(['gerance_id', 'locataire_id']),
+  documents:   new Set(['client_id', 'bon_id', 'devis_id']),
+  rapports:    new Set(['client_id']),
+  intervs:     new Set(['client_id', 'bon_id']),
+  locataires:  new Set(['client_id']),
+  diagnostics: new Set(['client_id', 'bon_id']),
+};
+
 function toDb(table, obj) {
   const map = TABLE_FIELDS[table].js2db;
   const dateCols = DATE_COLS[table];
+  const uuidCols = UUID_COLS[table];
   const out = {};
   for (const k of Object.keys(obj)) {
     if (obj[k] === undefined) continue;
     const col = map[k] || k;
     let val = obj[k];
-    // Colonne date avec valeur vide → null (Postgres refuse "")
-    if (dateCols && dateCols.has(col) && (val === '' || val === undefined || val === null)) {
+    // Colonne date OU uuid avec valeur vide → null (Postgres refuse "")
+    const vide = (val === '' || val === undefined || val === null);
+    if (vide && ((dateCols && dateCols.has(col)) || (uuidCols && uuidCols.has(col)))) {
       val = null;
     }
     out[col] = val;
