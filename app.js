@@ -2515,13 +2515,48 @@ function _bonDatesInterv(b) {
   const m = String((b && b.probleme) || '').match(/\[INTERV:([^\]]*)\]/);
   return m ? m[1].split(',').map(s => s.trim()).filter(Boolean) : [];
 }
+// Technicien affecté au bon (stocké dans probleme via marqueur)
+function _bonAffecte(b) {
+  const m = String((b && b.probleme) || '').match(/\[AFFECTE:([^\]]*)\]/);
+  return m ? m[1].trim() : '';
+}
 function _bonProblemeClean(b) {
-  return String((b && b.probleme) || '').replace(/\s*\[INTERV:[^\]]*\]/g, '').trim();
+  return String((b && b.probleme) || '')
+    .replace(/\s*\[INTERV:[^\]]*\]/g, '')
+    .replace(/\s*\[AFFECTE:[^\]]*\]/g, '')
+    .trim();
+}
+// Réécrit probleme propre + les marqueurs (dates + affecté)
+function _bonComposeProbleme(b) {
+  const clean = _bonProblemeClean(b);
+  const dates = _bonDatesInterv(b);
+  const aff = _bonAffecte(b);
+  let out = clean;
+  if (dates.length) out += (out ? '\n' : '') + '[INTERV:' + dates.join(',') + ']';
+  if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
+  return out;
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
+  const aff = _bonAffecte(b);
   const clean = _bonProblemeClean(b);
-  b.probleme = clean + (arr.length ? (clean ? '\n' : '') + '[INTERV:' + arr.join(',') + ']' : '');
+  let out = clean;
+  if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
+  if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
+  b.probleme = out;
+}
+// Affecte un technicien à un bon
+function bonSetAffecte(id, value) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const dates = _bonDatesInterv(b);
+  const clean = _bonProblemeClean(b);
+  let out = clean;
+  if (dates.length) out += (out ? '\n' : '') + '[INTERV:' + dates.join(',') + ']';
+  if (value) out += (out ? '\n' : '') + '[AFFECTE:' + value + ']';
+  b.probleme = out;
+  const bons = DB.bons; DB.bons = bons;
+  renderBons();
+  toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
 }
 // Ajoute/retire une date d'intervention effectuée sur un bon (max 5)
 function bonAddDateEffectuee(id) {
@@ -2667,6 +2702,18 @@ function renderBons() {
                     return html;
                   })()}
                 </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:140px;">
+                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">👷 Affecté à</div>
+                ${(() => {
+                  const aff = _bonAffecte(b);
+                  const techs = (DB.techs || []);
+                  const opts = ['<option value="">— Personne —</option>']
+                    .concat(techs.map(t => `<option value="${(t||'').replace(/"/g,'&quot;')}" ${aff===t?'selected':''}>${t}</option>`));
+                  // Si l'affecté n'est plus dans la liste, on l'ajoute pour ne pas le perdre
+                  if (aff && !techs.includes(aff)) opts.push(`<option value="${aff.replace(/"/g,'&quot;')}" selected>${aff}</option>`);
+                  return `<select onchange="bonSetAffecte('${b.id}', this.value)" title="Technicien / responsable affecté" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${aff?'#2563eb':'#d1d5db'};background:${aff?'#eff6ff':'#fff'};color:${aff?'#1d4ed8':'#6b7280'};cursor:pointer;max-width:135px;">${opts.join('')}</select>`;
+                })()}
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                 <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
