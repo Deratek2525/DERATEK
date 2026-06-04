@@ -4369,29 +4369,40 @@ function downloadDocPDF(id) {
   const isFacture = d.type === 'facture';
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
 
-  // --- En-tête horizontal (style modèle) : LOGO à gauche + coordonnées en 2 colonnes à droite ---
-  const logoW = 52, logoH = logoW * 199 / 900;   // ratio d'origine du logo
-  const logoY = 14;
-  if (typeof LOGO_B64 !== 'undefined') {
-    try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); }
-    catch (e) { console.warn('logo', e); }
-  } else {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 22);
-  }
-  // Coordonnées en 2 colonnes à droite du logo
-  const cy0 = logoY + 4;
-  const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
-  const colB = [co.email, co.tva, ''];
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
-  colA.forEach((l, i) => { if (l) doc.text(l, 86, cy0 + i * 4.4); });
-  colB.forEach((l, i) => { if (l) doc.text(l, 140, cy0 + i * 4.4); });
-  doc.setTextColor(0);
-  // Filet de séparation sous l'en-tête
-  doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, logoY + logoH + 5, 190, logoY + logoH + 5);
+  // --- En-tête horizontal (LOGO + coordonnées) — dessiné sur CHAQUE page ---
+  const logoW = 62, logoH = logoW * 199 / 900;   // logo agrandi (ratio d'origine conservé)
+  const logoY = 13;
+  const headerFiletY = logoY + logoH + 5;        // Y du filet de séparation
+  const drawHeader = () => {
+    if (typeof LOGO_B64 !== 'undefined') {
+      try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); }
+      catch (e) { console.warn('logo', e); }
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23);
+    }
+    // Coordonnées en 2 colonnes à droite du logo
+    const cy0 = logoY + 4;
+    const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
+    const colB = [co.email, co.tva];
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
+    colB.forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
+    // Site web (lien cliquable) sous l'email / la TVA
+    doc.setTextColor(13, 27, 62);
+    try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); }
+    catch (e) { doc.text('www.deratek.ch', 146, cy0 + 2 * 4.4); }
+    doc.setTextColor(0);
+    // Filet de séparation sous l'en-tête
+    doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+  };
+  // Démarre une nouvelle page de contenu : saut de page + en-tête répété, renvoie le Y de départ
+  const startContentPage = () => { doc.addPage(); drawHeader(); return headerFiletY + 8; };
+  drawHeader();
 
   // Date d'émission, sous le filet, à droite ("Neuchâtel, le ...")
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
-  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, logoY + logoH + 12, { align: 'right' });
+  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 7, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
@@ -4477,8 +4488,7 @@ function downloadDocPDF(id) {
     const descLines = doc.splitTextToSize(l.desc || '', 100);
     const lineH = lineHeights[i];
     if (ty + lineH > contentBottom) {
-      doc.addPage(); ty = 25;
-      ty = drawLignesHeader(ty);
+      ty = drawLignesHeader(startContentPage());
     }
     doc.text(descLines, 22, ty, { lineHeightFactor: 1.15 });
     doc.text(String(l.qte||0), 130, ty, {align:'right'});
@@ -4491,7 +4501,7 @@ function downloadDocPDF(id) {
   });
 
   // Bloc des totaux, juste APRÈS toutes les lignes (saut de page si pas la place).
-  if (ty + totalsH > contentBottom) { doc.addPage(); ty = 25; }
+  if (ty + totalsH > contentBottom) { ty = startContentPage(); }
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
@@ -4510,7 +4520,7 @@ function downloadDocPDF(id) {
   if (d.notes) {
     const noteLines = doc.splitTextToSize(d.notes, 170);
     const notesH = noteLines.length * 4.5 + 8;
-    if (ty + notesH > contentBottom) { doc.addPage(); ty = 6; }
+    if (ty + notesH > contentBottom) { ty = startContentPage(); }
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
     doc.text(noteLines, 20, ty + 6); doc.setTextColor(0);
     ty += notesH;
@@ -4522,7 +4532,7 @@ function downloadDocPDF(id) {
   let qrPageNum = doc.internal.getNumberOfPages();
   if (isFacture) {
     if (ty > QR_NEED_TOP) {            // pas assez de place sous le contenu → page suivante
-      doc.addPage();
+      doc.addPage(); drawHeader();     // en-tête répété sur la page du bulletin
       qrPageNum = doc.internal.getNumberOfPages();
     }
     doc.setPage(qrPageNum);
