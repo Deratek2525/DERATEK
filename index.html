@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260601cv">
+<link rel="stylesheet" href="./style.css?v=20260604cw">
 </head>
 <body>
 
@@ -205,6 +205,28 @@
       </div>
     </div>
     <div class="modal-ft"><button class="btn btn-ghost" onclick="closeModal(&#39;modal-tech&#39;)">Fermer</button></div>
+  </div>
+</div>
+
+<!-- Modal Note interne d'un bon -->
+<div class="modal-bg" id="modal-bon-note">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-hd">
+      <span class="modal-title">📝 Note interne — bon <span id="bon-note-bon"></span></span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;modal-bon-note&#39;)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--g600);margin:0 0 8px;">Infos pour la facturation (prix, type de traitement, quantités, remarques…). Non visible par le client.</p>
+      <textarea class="form-input" id="bon-note-text" rows="8" placeholder="Ex. Traitement guêpes en toiture — forfait 320 CHF. 2 passages. Location nacelle 210 CHF." style="font-size:13px;line-height:1.5;"></textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" id="bon-note-ai-btn" onclick="bonNoteAICorrect()" title="Corriger l'orthographe et structurer la note avec l'IA">✨ Corriger avec l'IA</button>
+        <span id="bon-note-status" style="font-size:12px;color:var(--g600);"></span>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal(&#39;modal-bon-note&#39;)">Annuler</button>
+      <button class="btn btn-navy" onclick="saveBonNote()">Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -1190,10 +1212,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260601cv"></script>
-<script src="./footer_prestations.js?v=20260601cv"></script>
-<script src="./config.js?v=20260601cv"></script>
-<script src="./app.js?v=20260601cv"></script>
-<script src="./pdf.js?v=20260601cv"></script>
+<script src="./logo.js?v=20260604cw"></script>
+<script src="./footer_prestations.js?v=20260604cw"></script>
+<script src="./config.js?v=20260604cw"></script>
+<script src="./app.js?v=20260604cw"></script>
+<script src="./pdf.js?v=20260604cw"></script>
 
 </body></html>

@@ -2520,43 +2520,122 @@ function _bonAffecte(b) {
   const m = String((b && b.probleme) || '').match(/\[AFFECTE:([^\]]*)\]/);
   return m ? m[1].trim() : '';
 }
+// Note interne d'un bon (prix, type de traitement… pour la facturation),
+// stockée dans "probleme" via un marqueur invisible [NOTE:<base64>].
+// Le base64 (UTF-8) évite tout souci avec les retours à la ligne et les crochets.
+function _encNote(text) {
+  try { return btoa(unescape(encodeURIComponent(String(text || '')))); }
+  catch (e) { return ''; }
+}
+function _decNote(b64) {
+  try { return decodeURIComponent(escape(atob(String(b64 || '')))); }
+  catch (e) { return ''; }
+}
+function _bonNote(b) {
+  const m = String((b && b.probleme) || '').match(/\[NOTE:([^\]]*)\]/);
+  return m ? _decNote(m[1]) : '';
+}
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
     .replace(/\s*\[INTERV:[^\]]*\]/g, '')
     .replace(/\s*\[AFFECTE:[^\]]*\]/g, '')
+    .replace(/\s*\[NOTE:[^\]]*\]/g, '')
     .trim();
 }
-// Réécrit probleme propre + les marqueurs (dates + affecté)
-function _bonComposeProbleme(b) {
-  const clean = _bonProblemeClean(b);
-  const dates = _bonDatesInterv(b);
-  const aff = _bonAffecte(b);
-  let out = clean;
-  if (dates.length) out += (out ? '\n' : '') + '[INTERV:' + dates.join(',') + ']';
+// Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note).
+// Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
+function _bonAssembleProbleme(clean, dates, aff, note) {
+  let out = String(clean || '').trim();
+  const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
+  if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
   if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
+  if (note && String(note).trim()) out += (out ? '\n' : '') + '[NOTE:' + _encNote(note) + ']';
   return out;
+}
+// Réécrit probleme propre + tous les marqueurs existants
+function _bonComposeProbleme(b) {
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  const aff = _bonAffecte(b);
-  const clean = _bonProblemeClean(b);
-  let out = clean;
-  if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
-  if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
-  b.probleme = out;
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  const dates = _bonDatesInterv(b);
-  const clean = _bonProblemeClean(b);
-  let out = clean;
-  if (dates.length) out += (out ? '\n' : '') + '[INTERV:' + dates.join(',') + ']';
-  if (value) out += (out ? '\n' : '') + '[AFFECTE:' + value + ']';
-  b.probleme = out;
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
+}
+// Enregistre/efface la note interne d'un bon
+function bonSetNote(id, text) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text);
+  const bons = DB.bons; DB.bons = bons;
+}
+
+// --- Modale Note interne d'un bon ---
+let _bonNoteEditingId = null;
+function openBonNote(id) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  _bonNoteEditingId = id;
+  const ta = $('bon-note-text'); if (ta) ta.value = _bonNote(b);
+  const titre = $('bon-note-bon'); if (titre) titre.textContent = b.numero || '';
+  const st = $('bon-note-status'); if (st) st.textContent = '';
+  openModal('modal-bon-note');
+  if (ta) setTimeout(() => ta.focus(), 50);
+}
+function saveBonNote() {
+  if (!_bonNoteEditingId) { closeModal('modal-bon-note'); return; }
+  const ta = $('bon-note-text');
+  bonSetNote(_bonNoteEditingId, ta ? ta.value : '');
+  renderBons();
+  closeModal('modal-bon-note');
+  toast((ta && ta.value.trim()) ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
+  _bonNoteEditingId = null;
+}
+// Corrige et structure la note via Mistral (orthographe + mise en forme prix/traitement)
+async function bonNoteAICorrect() {
+  const ta = $('bon-note-text'); if (!ta) return;
+  const txt = (ta.value || '').trim();
+  const st = $('bon-note-status');
+  const btn = $('bon-note-ai-btn');
+  if (!txt) { if (st) st.textContent = '✍️ Écris d\'abord quelques mots à corriger.'; return; }
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) {
+    if (st) st.textContent = '⚠️ Clé Mistral non configurée.'; return;
+  }
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = '🤖 Correction en cours…';
+  try {
+    const systemPrompt =
+      "Tu es l'assistant d'une entreprise suisse d'antinuisibles (DERATEK). " +
+      "On te donne une note interne brute servant à préparer une facture. " +
+      "Corrige l'orthographe et la grammaire, et structure proprement le contenu. " +
+      "CONSERVE toutes les informations chiffrées telles quelles : prix en CHF, quantités, dates, type de traitement, produits. " +
+      "N'invente AUCUN prix ni information absente. N'ajoute pas de TVA ni de total si non fournis. " +
+      "Reste concis et factuel. Réponds UNIQUEMENT par la note corrigée (texte simple, sans Markdown, sans préambule ni commentaire).";
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+      body: JSON.stringify({
+        model: DERATEK_CONFIG.mistral.model, max_tokens: 800, temperature: 0,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: txt }]
+      })
+    });
+    if (!response.ok) { let m = 'API ' + response.status; try { const e = await response.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(m); }
+    const data = await response.json();
+    let raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!raw) throw new Error('Réponse IA vide');
+    raw = raw.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
+    ta.value = raw;
+    if (st) st.textContent = '✓ Corrigé par l\'IA. Vérifie puis enregistre.';
+  } catch (err) {
+    console.error('Note IA error:', err);
+    if (st) st.textContent = '⚠️ Erreur IA : ' + err.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 // Ajoute/retire une date d'intervention effectuée sur un bon (max 5)
 function bonAddDateEffectuee(id) {
@@ -2728,6 +2807,10 @@ function renderBons() {
                   <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
+                ${(() => {
+                  const hasNote = !!_bonNote(b);
+                  return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (prix, type de traitement…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
+                })()}
                 <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon">📋 Rapport</button>
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
@@ -3141,7 +3224,8 @@ function createDocFromBon(bonId, type) {
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
     rabais: 5,
     statut: 'brouillon',
-    notes: ''
+    notes: '',
+    _bonNote: _bonNote(bon)
   };
   openDocEditor();
 }
@@ -3228,6 +3312,7 @@ function autoFillDocFromBon(numero) {
             : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
   _editingDoc.locataireAdresse = locAf ? (locAf.adresse || '') : '';
   _editingDoc.proprietaire = bon.proprietaire || '';
+  _editingDoc._bonNote = _bonNote(bon);
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
     _editingDoc.lignes[0].desc = _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles';
@@ -3409,7 +3494,14 @@ function renderDocEditor() {
   `).join('');
   const box = $('modal-doc-body');
   if (!box) return;
+  const noteHtml = (d._bonNote && d._bonNote.trim())
+    ? `<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+         <div style="font-size:11px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">📝 Note interne du bon (pour la facturation)</div>
+         <div style="font-size:13px;color:#7c2d12;white-space:pre-wrap;">${(d._bonNote).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+       </div>`
+    : '';
   box.innerHTML = `
+    ${noteHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
