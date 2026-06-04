@@ -4451,47 +4451,32 @@ function downloadDocPDF(id) {
 
   const startY = Math.max(106, infoY + 3);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
-  const totalsH = (d.rabais || 0) > 0 ? 20 : 17;
+  const totalsH = (d.rabais || 0) > 0 ? 24 : 20;
   const lignes = d.lignes || [];
-  const qrZoneStart = H - 105;
 
-  // Calcul des hauteurs naturelles des lignes (compactes pour faire tenir le QR sur 1 page)
+  // Géométrie du bulletin QR suisse : bande de 105 mm ancrée en bas d'une page.
+  const QR_TOP = H - 105;             // perforation haute du bulletin
+  const QR_NEED_TOP = QR_TOP - 13;    // le contenu doit finir au-dessus (place pour la condition de paiement)
+  const contentBottom = H - 20;       // marge basse normale du flux
+
+  // Espacement FIXE entre les lignes : le tableau grandit naturellement, sans compression.
+  const padding = 5;
+
+  // Hauteurs naturelles des lignes (selon le wrap du texte de désignation)
   doc.setFontSize(9.5);
   const lineHeights = lignes.map(l => {
     const dl = doc.splitTextToSize(l.desc || '', 100);
     return Math.max(dl.length * 4.2, 6);
   });
-  const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
-  // Espacement entre les lignes : 5 mm par défaut. Sur une facture, si le tableau
-  // + le bloc totaux risquent de déborder dans la zone du QR (bas de page 1), on
-  // réduit juste ce qu'il faut pour que les totaux restent sur la page 1, au-dessus
-  // du QR (jamais de totaux seuls renvoyés en page 2).
-  let padding = 5;
-  if (isFacture) {
-    const nL = lignes.length || 1;
-    // On vise à ce que le tableau se termine assez haut pour loger les totaux
-    // au-dessus du QR avec ~4 mm de marge.
-    const espaceDispo = (H - 105 - 4) - startY - 7 - totalLinesH - totalsH;
-    const padMax = espaceDispo / nL;
-    if (padMax < padding) padding = Math.max(2.5, padMax);
-  }
 
-  // ZONE RÉSERVÉE AU QR sur la PAGE 1 : le contenu ne doit jamais y entrer.
-  // Le QR-bill occupe les 105 mm du bas ; on réserve aussi ~13 mm au-dessus pour
-  // la condition de paiement. Les pages suivantes (sans QR) utilisent toute la hauteur.
-  const QR_TOP = H - 105;                       // début du bulletin QR
-  const limitePage1 = QR_TOP - 13;              // bas utile du contenu sur la page 1
-  const limiteAutres = H - 22;                  // bas utile sur les pages 2+ (pas de QR)
-  // Limite courante selon la page (page 1 = avec zone QR réservée)
-  const limitFor = () => (doc.internal.getNumberOfPages() === 1 ? limitePage1 : limiteAutres);
-
+  // Les lignes suivent le flux normal et continuent en page suivante si nécessaire.
   let ty = startY;
   ty = drawLignesHeader(ty);
   lignes.forEach((l, i) => {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
     const lineH = lineHeights[i];
-    if (ty + lineH > limitFor()) {
+    if (ty + lineH > contentBottom) {
       doc.addPage(); ty = 25;
       ty = drawLignesHeader(ty);
     }
@@ -4505,10 +4490,8 @@ function downloadDocPDF(id) {
     ty += lineH + padding;
   });
 
-  // Totaux : colonne de DROITE → ils peuvent descendre juste au-dessus du bulletin QR
-  // (la condition de paiement est à gauche, pas de conflit). Limite plus basse que les lignes.
-  const limiteTotaux = (doc.internal.getNumberOfPages() === 1) ? (QR_TOP - 2) : (H - 22);
-  if (ty + totalsH > limiteTotaux) { doc.addPage(); ty = 25; }
+  // Bloc des totaux, juste APRÈS toutes les lignes (saut de page si pas la place).
+  if (ty + totalsH > contentBottom) { doc.addPage(); ty = 25; }
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
@@ -4521,21 +4504,28 @@ function downloadDocPDF(id) {
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
+  ty += 6;
 
+  // Notes éventuelles, dans le flux
   if (d.notes) {
     const noteLines = doc.splitTextToSize(d.notes, 170);
     const notesH = noteLines.length * 4.5 + 8;
-    if (ty + notesH > limit) { doc.addPage(); ty = 25; }
+    if (ty + notesH > contentBottom) { doc.addPage(); ty = 6; }
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
-    doc.text(noteLines, 20, ty + 10); doc.setTextColor(0);
+    doc.text(noteLines, 20, ty + 6); doc.setTextColor(0);
+    ty += notesH;
   }
 
-  // Pour les factures : QR-bill suisse en bas (ancré à H-105)
-  // Si le contenu précédent (ty) dépasse la zone QR, on ajoute une nouvelle page dédiée au QR.
+  // --- Bulletin QR (factures) : DANS LE FLUX, ancré en bas de la page courante. ---
+  // S'il ne reste pas la place sous le contenu, il bascule entier en bas de la page
+  // suivante (jamais coupé, jamais superposé au texte).
+  let qrPageNum = doc.internal.getNumberOfPages();
   if (isFacture) {
-    // Le QR-bill est TOUJOURS sur la page 1, en bas, à sa position fixe.
-    // (Le contenu qui débordait est déjà allé sur les pages suivantes, qui n'ont pas de QR.)
-    doc.setPage(1);
+    if (ty > QR_NEED_TOP) {            // pas assez de place sous le contenu → page suivante
+      doc.addPage();
+      qrPageNum = doc.internal.getNumberOfPages();
+    }
+    doc.setPage(qrPageNum);
     const billTop = H - 105;
     const recW = 62, payX = recW, padX = 5;
     const message = 'Facture ' + (d.numero || '');
@@ -4603,10 +4593,11 @@ function downloadDocPDF(id) {
     if (debtLinesClean) iy = V(debtLinesClean, ix, iy, 9, infoW) + 2;
   }
 
-  // --- Bande "Nos prestations" en bas de la DERNIÈRE page (si pas de QR dessus) ---
-  // (sur une facture 1 page, le QR occupe le bas → on n'affiche pas la bande)
-  if (doc.internal.getNumberOfPages() > 1) {
-    doc.setPage(doc.internal.getNumberOfPages());
+  // --- Bande "Nos prestations" en bas de la DERNIÈRE page ---
+  // On l'affiche uniquement si cette page ne contient PAS le bulletin QR (pas de superposition).
+  const lastPage = doc.internal.getNumberOfPages();
+  if (lastPage > 1 && !(isFacture && lastPage === qrPageNum)) {
+    doc.setPage(lastPage);
     _drawPrestationsFooter(doc, W, H);
   }
 
