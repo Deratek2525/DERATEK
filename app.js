@@ -2535,6 +2535,67 @@ function _bonNote(b) {
   const m = String((b && b.probleme) || '').match(/\[NOTE:([^\]]*)\]/);
   return m ? _decNote(m[1]) : '';
 }
+// Statuts de rendez-vous proposés dans la note
+const BON_NOTE_STATUTS = [
+  'Rendez-vous confirmé', 'Rendez-vous reporté', 'Rendez-vous annulé',
+  'Locataire absent', 'Propriétaire absent', 'En attente de confirmation',
+  'Intervention réalisée', 'Intervention à reprogrammer'
+];
+// La note est désormais un objet structuré {statut, prixHT, rabais, tva, texte}
+// sérialisé en JSON dans le marqueur [NOTE:...]. Rétro-compatible : une ancienne
+// note en texte brut est lue comme { texte: "..." }.
+function _bonNoteData(b) {
+  const raw = (typeof b === 'string') ? b : _bonNote(b);
+  const base = { statut: '', prixHT: '', rabais: '', tva: '', texte: '' };
+  if (!raw) return base;
+  const s = raw.trim();
+  if (s.charAt(0) === '{') {
+    try {
+      const o = JSON.parse(s);
+      return {
+        statut: o.statut || '', prixHT: (o.prixHT != null ? o.prixHT : ''),
+        rabais: (o.rabais != null ? o.rabais : ''), tva: (o.tva != null ? o.tva : ''),
+        texte: o.texte || ''
+      };
+    } catch (e) { /* pas du JSON → texte brut */ }
+  }
+  base.texte = raw;
+  return base;
+}
+function _bonNoteHasData(d) {
+  return !!(d && (d.statut || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
+}
+// Calcule les montants dérivés (rabais, HT net, TVA, TTC) à partir des champs saisis
+function _bonNoteCalc(d) {
+  const ht = parseFloat(d.prixHT) || 0;
+  const rab = parseFloat(d.rabais) || 0;
+  const tva = parseFloat(d.tva) || 0;
+  const montantRabais = ht * rab / 100;
+  const htNet = ht - montantRabais;
+  const montantTVA = htNet * tva / 100;
+  const ttc = htNet + montantTVA;
+  return { ht, rab, tva, montantRabais, htNet, montantTVA, ttc };
+}
+// Rendu lisible (multi-lignes) de la note pour affichage carte / bandeau devis
+function _bonNoteText(d) {
+  if (typeof d === 'string' || (d && d.probleme !== undefined)) d = _bonNoteData(d);
+  if (!d) return '';
+  const lines = [];
+  if (d.statut) lines.push('Statut : ' + d.statut);
+  if (d.prixHT !== '' && d.prixHT != null) {
+    const c = _bonNoteCalc(d);
+    lines.push('Prix HT : ' + _displayMontant(c.ht) + ' CHF');
+    if (c.rab) lines.push('Rabais : ' + c.rab + ' % (− ' + _displayMontant(c.montantRabais) + ' CHF)');
+    if (c.rab) lines.push('Prix HT après rabais : ' + _displayMontant(c.htNet) + ' CHF');
+    lines.push('TVA : ' + c.tva + ' % (' + _displayMontant(c.montantTVA) + ' CHF)');
+    lines.push('Prix TTC : ' + _displayMontant(c.ttc) + ' CHF');
+  }
+  if ((d.texte || '').trim()) {
+    if (lines.length) lines.push('');
+    lines.push(d.texte.trim());
+  }
+  return lines.join('\n');
+}
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
     .replace(/\s*\[INTERV:[^\]]*\]/g, '')
@@ -2580,19 +2641,64 @@ let _bonNoteEditingId = null;
 function openBonNote(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) { toast('Bon introuvable', '#e63946'); return; }
   _bonNoteEditingId = id;
-  const ta = $('bon-note-text'); if (ta) ta.value = _bonNote(b);
+  const d = _bonNoteData(b);
+  // Remplit le sélecteur de statut
+  const sel = $('bon-note-statut');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Aucun —</option>' +
+      BON_NOTE_STATUTS.map(s => `<option value="${s}" ${d.statut === s ? 'selected' : ''}>${s}</option>`).join('') +
+      // Conserve un ancien statut qui ne serait plus dans la liste
+      ((d.statut && BON_NOTE_STATUTS.indexOf(d.statut) === -1) ? `<option value="${(d.statut||'').replace(/"/g,'&quot;')}" selected>${d.statut}</option>` : '');
+  }
+  // Champs de calcul (rabais 5 % et TVA 8.1 % par défaut si vides)
+  const dfltTva = (DERATEK_CONFIG && DERATEK_CONFIG.company && DERATEK_CONFIG.company.tvaTaux) || 8.1;
+  const setF = (eid, v) => { const el = $(eid); if (el) el.value = (v === '' || v == null) ? '' : v; };
+  setF('bon-note-ht', d.prixHT);
+  setF('bon-note-rabais', (d.prixHT !== '' && (d.rabais === '' || d.rabais == null)) ? 5 : (d.rabais === '' ? '' : d.rabais));
+  setF('bon-note-tva', (d.prixHT !== '' && (d.tva === '' || d.tva == null)) ? dfltTva : (d.tva === '' ? '' : d.tva));
+  // Si rien encore saisi, on pré-remplit rabais/TVA par défaut pour faciliter
+  if (d.prixHT === '' || d.prixHT == null) {
+    if ($('bon-note-rabais') && !$('bon-note-rabais').value) $('bon-note-rabais').value = 5;
+    if ($('bon-note-tva') && !$('bon-note-tva').value) $('bon-note-tva').value = dfltTva;
+  }
+  const ta = $('bon-note-text'); if (ta) ta.value = d.texte || '';
   const titre = $('bon-note-bon'); if (titre) titre.textContent = b.numero || '';
   const st = $('bon-note-status'); if (st) st.textContent = '';
+  bonNoteRecalc();
   openModal('modal-bon-note');
-  if (ta) setTimeout(() => ta.focus(), 50);
+  if (sel) setTimeout(() => sel.focus(), 50);
+}
+// Recalcule et affiche montant du rabais, HT après rabais, TVA et TTC en direct
+function bonNoteRecalc() {
+  const ht = parseFloat(($('bon-note-ht') || {}).value) || 0;
+  const rab = parseFloat(($('bon-note-rabais') || {}).value) || 0;
+  const tva = parseFloat(($('bon-note-tva') || {}).value) || 0;
+  const montantRabais = ht * rab / 100;
+  const htNet = ht - montantRabais;
+  const montantTVA = htNet * tva / 100;
+  const ttc = htNet + montantTVA;
+  const put = (eid, v) => { const el = $(eid); if (el) el.textContent = _displayMontant(v) + ' CHF'; };
+  put('bon-note-rabais-montant', montantRabais);
+  put('bon-note-htnet', htNet);
+  put('bon-note-tva-montant', montantTVA);
+  put('bon-note-ttc', ttc);
 }
 function saveBonNote() {
   if (!_bonNoteEditingId) { closeModal('modal-bon-note'); return; }
-  const ta = $('bon-note-text');
-  bonSetNote(_bonNoteEditingId, ta ? ta.value : '');
+  const val = eid => { const el = $(eid); return el ? el.value : ''; };
+  const htRaw = (val('bon-note-ht') || '').trim();
+  const data = {
+    statut: val('bon-note-statut') || '',
+    prixHT: htRaw === '' ? '' : (parseFloat(htRaw) || 0),
+    rabais: htRaw === '' ? '' : (parseFloat(val('bon-note-rabais')) || 0),
+    tva: htRaw === '' ? '' : (parseFloat(val('bon-note-tva')) || 0),
+    texte: (val('bon-note-text') || '').trim()
+  };
+  const payload = _bonNoteHasData(data) ? JSON.stringify(data) : '';
+  bonSetNote(_bonNoteEditingId, payload);
   renderBons();
   closeModal('modal-bon-note');
-  toast((ta && ta.value.trim()) ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
+  toast(payload ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
   _bonNoteEditingId = null;
 }
 // Corrige et structure la note via Mistral (orthographe + mise en forme prix/traitement)
@@ -2808,8 +2914,8 @@ function renderBons() {
                 </select>
                 ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
                 ${(() => {
-                  const hasNote = !!_bonNote(b);
-                  return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (prix, type de traitement…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
+                  const hasNote = _bonNoteHasData(_bonNoteData(b));
+                  return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
                 })()}
                 <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon">📋 Rapport</button>
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
@@ -3225,7 +3331,7 @@ function createDocFromBon(bonId, type) {
     rabais: 5,
     statut: 'brouillon',
     notes: '',
-    _bonNote: _bonNote(bon)
+    _bonNote: _bonNoteText(bon)
   };
   openDocEditor();
 }
@@ -3312,7 +3418,7 @@ function autoFillDocFromBon(numero) {
             : (bon.locataireNom ? (DB.locataires || []).find(l => (l.nom||'').toLowerCase() === bon.locataireNom.toLowerCase()) : null);
   _editingDoc.locataireAdresse = locAf ? (locAf.adresse || '') : '';
   _editingDoc.proprietaire = bon.proprietaire || '';
-  _editingDoc._bonNote = _bonNote(bon);
+  _editingDoc._bonNote = _bonNoteText(bon);
   // Pré-remplit une ligne avec le problème du bon (l'utilisateur n'a plus qu'à mettre le prix + ajuster la désignation)
   if (_editingDoc.lignes.length === 1 && !(_editingDoc.lignes[0].desc || '').trim()) {
     _editingDoc.lignes[0].desc = _bonProblemeClean(bon) ? ('Intervention : ' + _bonProblemeClean(bon)) : 'Intervention antinuisibles';

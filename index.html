@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604cw">
+<link rel="stylesheet" href="./style.css?v=20260604cx">
 </head>
 <body>
 
@@ -216,10 +216,46 @@
       <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;modal-bon-note&#39;)">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size:12px;color:var(--g600);margin:0 0 8px;">Infos pour la facturation (prix, type de traitement, quantités, remarques…). Non visible par le client.</p>
-      <textarea class="form-input" id="bon-note-text" rows="8" placeholder="Ex. Traitement guêpes en toiture — forfait 320 CHF. 2 passages. Location nacelle 210 CHF." style="font-size:13px;line-height:1.5;"></textarea>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
-        <button class="btn btn-ghost btn-sm" id="bon-note-ai-btn" onclick="bonNoteAICorrect()" title="Corriger l'orthographe et structurer la note avec l'IA">✨ Corriger avec l'IA</button>
+      <p style="font-size:12px;color:var(--g600);margin:0 0 10px;">Infos pour la facturation (statut, calcul de prix, remarques…). Non visible par le client.</p>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Statut du rendez-vous</label>
+        <select class="form-input" id="bon-note-statut" style="font-size:13px;"></select>
+      </div>
+
+      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px;background:#fafafa;">
+        <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:10px;">🧮 Calcul de prix</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;">
+          <label style="font-size:13px;color:var(--g600);">Prix HT (CHF)</label>
+          <input class="form-input" id="bon-note-ht" type="number" step="0.01" placeholder="0.00" style="font-size:13px;text-align:right;" oninput="bonNoteRecalc()">
+
+          <label style="font-size:13px;color:var(--g600);">Rabais (%)</label>
+          <input class="form-input" id="bon-note-rabais" type="number" step="0.1" value="5" style="font-size:13px;text-align:right;" oninput="bonNoteRecalc()">
+
+          <label style="font-size:13px;color:var(--g600);">Montant du rabais</label>
+          <div id="bon-note-rabais-montant" style="font-size:13px;text-align:right;color:#e63946;font-weight:600;">0.00 CHF</div>
+
+          <label style="font-size:13px;color:var(--g600);">Prix HT après rabais</label>
+          <div id="bon-note-htnet" style="font-size:13px;text-align:right;font-weight:600;">0.00 CHF</div>
+
+          <label style="font-size:13px;color:var(--g600);">TVA (%)</label>
+          <input class="form-input" id="bon-note-tva" type="number" step="0.1" value="8.1" style="font-size:13px;text-align:right;" oninput="bonNoteRecalc()">
+
+          <label style="font-size:13px;color:var(--g600);">Montant TVA</label>
+          <div id="bon-note-tva-montant" style="font-size:13px;text-align:right;color:var(--g600);">0.00 CHF</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:2px solid var(--navy);">
+          <span style="font-size:14px;font-weight:800;color:var(--navy);">Prix TTC</span>
+          <span id="bon-note-ttc" style="font-size:16px;font-weight:800;color:var(--navy);">0.00 CHF</span>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:6px;">
+        <label class="form-label">Remarques / type de traitement</label>
+        <textarea class="form-input" id="bon-note-text" rows="5" placeholder="Ex. Traitement guêpes en toiture — 2 passages. Location nacelle. Produits utilisés…" style="font-size:13px;line-height:1.5;"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" id="bon-note-ai-btn" onclick="bonNoteAICorrect()" title="Corriger l'orthographe et structurer les remarques avec l'IA">✨ Corriger avec l'IA</button>
         <span id="bon-note-status" style="font-size:12px;color:var(--g600);"></span>
       </div>
     </div>
@@ -1212,10 +1248,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260604cw"></script>
-<script src="./footer_prestations.js?v=20260604cw"></script>
-<script src="./config.js?v=20260604cw"></script>
-<script src="./app.js?v=20260604cw"></script>
-<script src="./pdf.js?v=20260604cw"></script>
+<script src="./logo.js?v=20260604cx"></script>
+<script src="./footer_prestations.js?v=20260604cx"></script>
+<script src="./config.js?v=20260604cx"></script>
+<script src="./app.js?v=20260604cx"></script>
+<script src="./pdf.js?v=20260604cx"></script>
 
 </body></html>
