@@ -86,15 +86,15 @@ const UUID_COLS = {
 function toDb(table, obj) {
   const map = TABLE_FIELDS[table].js2db;
   const dateCols = DATE_COLS[table];
-  const uuidCols = UUID_COLS[table];
   const out = {};
   for (const k of Object.keys(obj)) {
     if (obj[k] === undefined) continue;
     const col = map[k] || k;
     let val = obj[k];
-    // Colonne date OU uuid avec valeur vide → null (Postgres refuse "")
     const vide = (val === '' || val === undefined || val === null);
-    if (vide && ((dateCols && dateCols.has(col)) || (uuidCols && uuidCols.has(col)))) {
+    // Valeur vide → null pour : colonnes date, ET toute colonne UUID/FK
+    // (nom finissant par "_id" ou égal à "id"), que Postgres refuse en "".
+    if (vide && ((dateCols && dateCols.has(col)) || /(^|_)id$/.test(col))) {
       val = null;
     }
     out[col] = val;
