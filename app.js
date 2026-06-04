@@ -4202,8 +4202,19 @@ function downloadDocPDF(id) {
     return Math.max(dl.length * 4.2, 6);
   });
   const totalLinesH = lineHeights.reduce((a, b) => a + b, 0);
-  // Espacement fixe entre les lignes
-  const padding = 5;
+  // Espacement entre les lignes : 5 mm par défaut. Sur une facture, si le tableau
+  // + le bloc totaux risquent de déborder dans la zone du QR (bas de page 1), on
+  // réduit juste ce qu'il faut pour que les totaux restent sur la page 1, au-dessus
+  // du QR (jamais de totaux seuls renvoyés en page 2).
+  let padding = 5;
+  if (isFacture) {
+    const nL = lignes.length || 1;
+    // On vise à ce que le tableau se termine assez haut pour loger les totaux
+    // au-dessus du QR avec ~4 mm de marge.
+    const espaceDispo = (H - 105 - 4) - startY - 7 - totalLinesH - totalsH;
+    const padMax = espaceDispo / nL;
+    if (padMax < padding) padding = Math.max(2.5, padMax);
+  }
 
   // ZONE RÉSERVÉE AU QR sur la PAGE 1 : le contenu ne doit jamais y entrer.
   // Le QR-bill occupe les 105 mm du bas ; on réserve aussi ~13 mm au-dessus pour
