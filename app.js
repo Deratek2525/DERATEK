@@ -315,8 +315,23 @@ const GERANCE_PALETTE = [
   '#d946ef'  // magenta
 ];
 // Couleur déterministe à partir d'un nom (hash FNV-1a 32-bit)
+// Nom canonique d'une gérance : fusionne les variantes (ex "CPCN" et "Gérance CPCN").
+// On retire le préfixe "Gérance/Régie/..." et on unifie la casse/les espaces.
+function _geranceCanon(nom) {
+  let s = String(nom || '').trim();
+  if (!s) return '';
+  const cle = s.toLowerCase()
+    .replace(/^(g[ée]rance|r[ée]gie|immobili[èe]re?|agence)\s+/i, '')
+    .replace(/\s+/g, ' ').trim();
+  // Table d'équivalences connues (clé normalisée → libellé affiché unique)
+  const ALIAS = {
+    'cpcn': 'Gérance CPCN',
+  };
+  if (ALIAS[cle]) return ALIAS[cle];
+  return s; // sinon on garde le nom tel quel
+}
 function colorForGeranceName(nom) {
-  const key = String(nom || '').toLowerCase().trim();
+  const key = String(_geranceCanon(nom) || '').toLowerCase().trim();
   if (!key) return '#6b7280';
   let hash = 0x811c9dc5;
   for (let i = 0; i < key.length; i++) {
@@ -2557,7 +2572,7 @@ function renderBons() {
   }
   const groups = {};
   bons.forEach(b => {
-    const key = b.geranceNom || '(Sans gérance)';
+    const key = _geranceCanon(b.geranceNom) || '(Sans gérance)';
     if (!groups[key]) groups[key] = [];
     groups[key].push(b);
   });
