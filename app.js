@@ -2641,6 +2641,7 @@ function renderBons() {
             // Couleur de fond du select selon le statut (ordre du workflow)
             const statutStyles = {
               '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' }, // gris
+              'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' }, // rouge vif
               'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' }, // bleu
               'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6' }, // violet
               'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6' }, // teal
@@ -2718,6 +2719,7 @@ function renderBons() {
               <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                 <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
                   <option value="">— Statut —</option>
+                  <option value="a-transmettre" ${statut === 'a-transmettre' ? 'selected' : ''}>📕 Rapport à transmettre</option>
                   <option value="transmis"      ${statut === 'transmis'      ? 'selected' : ''}>📨 Rapport transmis</option>
                   <option value="attente-devis" ${statut === 'attente-devis' ? 'selected' : ''}>⏸️ Attente de devis</option>
                   <option value="devis-valide"  ${statut === 'devis-valide'  ? 'selected' : ''}>✍️ Devis validé</option>
@@ -2899,6 +2901,7 @@ function updateBonStatut(id, value) {
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
     '':              'Statut effacé',
+    'a-transmettre': '📕 Statut : Rapport à transmettre',
     'transmis':      '📨 Statut : Rapport transmis',
     'attente-devis': '⏸️ Statut : Attente de devis',
     'devis-valide':  '✍️ Statut : Devis validé',
@@ -4839,7 +4842,7 @@ function renderStats() {
   _makeChart('chart-gerances', 'doughnut', gk, gk.map(k=>ger[k]), gk.map(k=>colorForGeranceName(k)), false);
 
   // Statuts → barres verticales
-  const statutLabels = { '':'Non défini', 'transmis':'Transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
+  const statutLabels = { '':'Non défini', 'a-transmettre':'Rapport à transmettre', 'transmis':'Transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
   const statutCol = { '':'#9ca3af','transmis':'#3b82f6','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
   const st = {};
   bons.forEach(b => { const s = b.statut || ''; st[s] = (st[s]||0)+1; });
