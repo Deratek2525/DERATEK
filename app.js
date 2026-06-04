@@ -298,7 +298,7 @@ const fmtDate = d => { if (!d) return '—'; try { const [y,m,dd] = d.split('-')
 const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today = () => localDateStr(new Date());
 const genId = () => `R-${new Date().getFullYear()}-${String(DB.rapports.length + 420).padStart(4,'0')}`;
-const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Entreprise:'#e63946'}[t] || '#6b7280');
+const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Association:'#0ea5e9',Entreprise:'#e63946'}[t] || '#6b7280');
 // Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
 const GERANCE_PALETTE = [
   '#3b82f6', // bleu
