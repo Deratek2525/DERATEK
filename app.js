@@ -4686,14 +4686,13 @@ function downloadDocPDF(id) {
     doc.setTextColor(0);
   }
 
-  // En-tête du tableau — style modèle : fond gris clair, texte gris foncé, filet dessous
+  // En-tête du tableau — ruban BLEU (navy) avec texte blanc
   const drawLignesHeader = (y) => {
-    doc.setFillColor(238, 240, 244); doc.rect(20, y - 5, 170, 7, 'F');
-    doc.setTextColor(70, 80, 100); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7.5, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
     doc.text('Désignation', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix HT', 156, y, {align:'right'}); doc.text('Montant', 188, y, {align:'right'});
-    doc.setDrawColor(180, 190, 205); doc.setLineWidth(0.3); doc.line(20, y + 2, 190, y + 2);
     doc.setTextColor(0); doc.setFont('helvetica', 'normal');
-    return y + 7;
+    return y + 8.5;
   };
 
   const startY = Math.max(106, infoY + 3);
@@ -4706,34 +4705,32 @@ function downloadDocPDF(id) {
   const QR_NEED_TOP = QR_TOP - 13;    // le contenu doit finir au-dessus (place pour la condition de paiement)
   const contentBottom = H - 20;       // marge basse normale du flux
 
-  // Espacement FIXE entre les lignes : le tableau grandit naturellement, sans compression.
-  const padding = 5;
-
-  // Hauteurs naturelles des lignes (selon le wrap du texte de désignation)
+  // Rythme vertical uniforme : hauteur d'une ligne de texte + marge identique
+  // au-dessus et en dessous du filet, quelle que soit la longueur de la désignation.
   doc.setFontSize(9.5);
-  const lineHeights = lignes.map(l => {
-    const dl = doc.splitTextToSize(l.desc || '', 100);
-    return Math.max(dl.length * 4.2, 6);
-  });
+  const LINE = 4.4;   // hauteur d'une ligne de texte (mm)
+  const PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
 
   // Les lignes suivent le flux normal et continuent en page suivante si nécessaire.
   let ty = startY;
   ty = drawLignesHeader(ty);
-  lignes.forEach((l, i) => {
+  lignes.forEach((l) => {
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
     const descLines = doc.splitTextToSize(l.desc || '', 100);
-    const lineH = lineHeights[i];
-    if (ty + lineH > contentBottom) {
+    const rowTextH = descLines.length * LINE;
+    if (ty + rowTextH + PAD * 2 > contentBottom) {
       ty = drawLignesHeader(startContentPage());
     }
-    doc.text(descLines, 22, ty, { lineHeightFactor: 1.15 });
-    doc.text(String(l.qte||0), 130, ty, {align:'right'});
-    doc.text(_displayMontant(l.prix||0), 156, ty, {align:'right'});
-    doc.text(_displayMontant(lt), 188, ty, {align:'right'});
-    // Filet fin sous chaque ligne (style modèle)
+    const baseY = ty + LINE - 1;   // baseline de la 1re ligne (texte sous le haut de la rangée)
+    doc.text(descLines, 22, baseY, { lineHeightFactor: LINE / 3.35 });
+    doc.text(String(l.qte||0), 130, baseY, {align:'right'});
+    doc.text(_displayMontant(l.prix||0), 156, baseY, {align:'right'});
+    doc.text(_displayMontant(lt), 188, baseY, {align:'right'});
+    // Filet fin à distance FIXE sous le texte (alignement régulier)
+    const sepY = ty + rowTextH + PAD;
     doc.setDrawColor(225, 228, 233); doc.setLineWidth(0.2);
-    doc.line(20, ty + lineH + padding - 2.5, 190, ty + lineH + padding - 2.5);
-    ty += lineH + padding;
+    doc.line(20, sepY, 190, sepY);
+    ty = sepY + PAD;   // rangée suivante à la même distance sous le filet
   });
 
   // Bloc des totaux, juste APRÈS toutes les lignes (saut de page si pas la place).
