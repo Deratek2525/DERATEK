@@ -250,7 +250,8 @@ function generatePDF(rapport, statut) {
       't-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre',
       't-fumigation':'Fumigation','t-pose':'Pièges mécaniques',
       't-appatage':"Boîtes d'appâtage sécurisées",'t-rodenticide':'Rodenticides professionnels',
-      't-racumin':'Racumin','t-talonwax':'Talonwax injection'
+      't-racumin':'Racumin','t-talonwax':'Talonwax injection',
+      't-gelpro':"Application de gels professionnels — fourmis (Lasius, emarginatus, flavus, pharaon) & blattes (germanique, américaine, orientale, rayées)"
     };
     const methodes = (rapport.traitement||[]).map(t => tLabels[t]||t);
     checkPage(40);
@@ -613,7 +614,7 @@ function getCurrentRapportData() {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [];
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax'].forEach(id => {
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => {
     const el = document.getElementById(id); if (el && el.checked) traitement.push(id);
   });
   const clientId = document.getElementById('r-client').value;
