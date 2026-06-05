@@ -5748,10 +5748,11 @@ async function ancExtractIA(texte) {
     '"numero_facture":"numéro de la facture (ex 37126)",\n' +
     '"numero_devis":"numéro de devis cité dans le texte (ex 260378)",\n' +
     '"date":"date de la facture au format AAAA-MM-JJ (ex \'NEUCHÂTEL LE 20.04.2026\' -> 2026-04-20)",\n' +
-    '"facturation_nom":"civilité + prénom + nom du DESTINATAIRE de la facture (bloc adresse en haut), ex \'Monsieur Patrice Racine\'",\n' +
-    '"facturation_adresse":"rue et numéro du destinataire, ex \'Rue du Doubs 61\'",\n' +
-    '"facturation_npa":"code postal du destinataire, ex \'2300\'",\n' +
-    '"facturation_ville":"ville du destinataire, ex \'La Chaux-de-Fonds\'",\n' +
+    '"proprietaire":"UNIQUEMENT si l\'adresse contient \'p.a.\' (= par adresse / chez) : le nom de la personne AVANT le p.a. (ex \'Monsieur Aldo Brauen\'). Vide s\'il n\'y a pas de p.a.",\n' +
+    '"facturation_nom":"nom du DESTINATAIRE à qui la facture est adressée. S\'il y a un \'p.a.\', c\'est l\'ENTITÉ APRÈS le p.a. (la gérance/régie, ex \'Naef Immobilier Neuchâtel SA\'). Sinon c\'est le nom complet en haut (ex \'Monsieur Patrice Racine\')",\n' +
+    '"facturation_adresse":"rue et numéro de ce destinataire (la gérance s\'il y a un p.a.), ex \'Rue des Terreaux 9\' ou \'Rue du Doubs 61\'",\n' +
+    '"facturation_npa":"code postal du destinataire, ex \'2001\'",\n' +
+    '"facturation_ville":"ville du destinataire, ex \'Neuchâtel\'",\n' +
     '"locataire_nom":"nom de l\'occupant du LIEU d\'intervention cité dans la description des travaux (ex \'Madame Massy\'), DIFFÉRENT du destinataire",\n' +
     '"locataire_prenom":"prénom de l\'occupant si présent",\n' +
     '"locataire_adresse":"adresse du LIEU d\'intervention citée dans la description (ex \'Rue du Nord 48, 2300 La Chaux-de-Fonds\')",\n' +
@@ -5809,7 +5810,8 @@ function ancShowForm(infos) {
       </div>
       <div style="border-top:1px dashed #ccc;margin-top:8px;padding-top:10px;">
         <div style="font-size:11px;font-weight:800;color:var(--g600);text-transform:uppercase;margin-bottom:6px;">Destinataire de la facture</div>
-        ${champ('Nom (civilité + prénom + nom)', 'facturation_nom', infos.facturation_nom)}
+        ${champ('Propriétaire (si « p.a. » — sinon laisser vide)', 'proprietaire', infos.proprietaire)}
+        ${champ('Nom / Gérance (destinataire de la facture)', 'facturation_nom', infos.facturation_nom)}
         ${champ('Rue et numéro', 'facturation_adresse', infos.facturation_adresse)}
         <div style="display:grid;grid-template-columns:1fr 2fr;gap:0 14px;">
           ${champ('NPA', 'facturation_npa', infos.facturation_npa)}
@@ -5905,7 +5907,7 @@ function ancValider() {
     clientAdresse: val('anc-facturation_adresse') || '',
     clientNpa: val('anc-facturation_npa') || '', clientVille: val('anc-facturation_ville') || '',
     locataireNom: locNom, locataireAdresse: val('anc-locataire_adresse') || '',
-    proprietaire: '', bonId: '',
+    proprietaire: val('anc-proprietaire') || '', bonId: '',
     lignes: lignes, tvaTaux: tvaTaux, rabais: Math.round(rabaisPct * 100) / 100,
     statut: val('anc-statut') || 'payee',
     sousTotal: t.sousTotal, rabaisMontant: t.rabaisMontant, tvaMontant: t.tvaMontant, total: t.total,
