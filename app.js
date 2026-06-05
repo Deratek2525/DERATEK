@@ -272,7 +272,7 @@ function seedData() { /* no-op en mode Supabase */ }
 // STATE
 // ============================================================
 let state = {
-  anc: { rows: [], idx: 0, headers: [], fileName: '' },
+  anc: { queue: [], qIdx: 0, fileName: '' },
   editingRapportId: null,
   editingClientId:  null,
   editingIntervId:  null,
@@ -5644,76 +5644,74 @@ async function fournExtractInfosIA(texte) {
 // ANCIENNES FACTURES — import Excel (.xlsx) + extraction IA, une à la fois
 // ============================================================
 function ancReset() {
-  state.anc = { rows: [], idx: 0, headers: [], fileName: '' };
+  state.anc = { queue: [], qIdx: 0, fileName: '' };
   const dz = $('anc-dropzone'); if (dz) dz.style.display = '';
   const st = $('anc-status'); if (st) { st.style.display = 'none'; st.textContent = ''; }
   const fm = $('anc-form'); if (fm) { fm.style.display = 'none'; fm.innerHTML = ''; }
-  const pr = $('anc-progress'); if (pr) pr.textContent = 'Importe ton historique de factures depuis Excel — une à la fois.';
+  const pr = $('anc-progress'); if (pr) pr.textContent = 'Glisse une ou plusieurs factures Excel — chaque fichier = une facture.';
   const inp = $('anc-file-input'); if (inp) inp.value = '';
 }
 function ancHandleDrop(e) {
   e.preventDefault();
   const dz = $('anc-dropzone'); if (dz) dz.classList.remove('drag');
-  const f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) ancReadFile(f);
+  const fs = e.dataTransfer.files;
+  if (fs && fs.length) ancStartFiles(fs);
 }
-function ancHandleInput(e) { const f = e.target.files && e.target.files[0]; if (f) ancReadFile(f); }
+function ancHandleInput(e) { const fs = e.target.files; if (fs && fs.length) ancStartFiles(fs); }
+function ancStartFiles(fileList) {
+  // Chaque fichier .xlsx = UNE facture complète. On les traite l'un après l'autre.
+  state.anc = { queue: Array.from(fileList), qIdx: 0, fileName: '' };
+  const dz = $('anc-dropzone'); if (dz) dz.style.display = 'none';
+  ancProcessFile();
+}
 function ancSetStatus(msg, show) {
   const st = $('anc-status'); if (!st) return;
   st.style.display = (show === false) ? 'none' : 'block';
   st.textContent = msg || '';
 }
-function ancReadFile(file) {
-  if (typeof XLSX === 'undefined') { toast('Librairie Excel non chargée — rafraîchis la page', '#e63946'); return; }
-  ancSetStatus('📖 Lecture du fichier ' + file.name + '…');
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = new Uint8Array(ev.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
-      // Détecte la ligne d'en-tête (celle qui contient "facture"/"prix"/"adresse")
-      let headerIdx = 0;
-      for (let i = 0; i < Math.min(rows.length, 8); i++) {
-        const joined = rows[i].join(' ').toLowerCase();
-        if (joined.includes('facture') || joined.includes('prix') || joined.includes('adresse')) { headerIdx = i; break; }
-      }
-      const headers = (rows[headerIdx] || []).map(h => String(h || '').trim());
-      const dataRows = rows.slice(headerIdx + 1).filter(r => r.some(c => String(c).trim() !== ''));
-      if (!dataRows.length) { ancSetStatus('⚠️ Aucune ligne de données trouvée dans ce fichier.'); return; }
-      state.anc = { rows: dataRows, headers: headers, idx: 0, fileName: file.name };
-      const dz = $('anc-dropzone'); if (dz) dz.style.display = 'none';
-      ancProcessRow();
-    } catch (err) {
-      console.error('Excel read error', err);
-      ancSetStatus('⚠️ Impossible de lire ce fichier : ' + err.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
+// Lit tout le contenu d'une feuille Excel et le renvoie en texte (toutes cellules non vides)
+function _ancReadSheetText(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') { reject(new Error('Librairie Excel non chargée — rafraîchis la page')); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+        const out = [];
+        wb.SheetNames.forEach(n => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: '' });
+          rows.forEach(r => {
+            const line = r.map(c => String(c == null ? '' : c).trim()).filter(Boolean).join('  |  ');
+            if (line) out.push(line);
+          });
+        });
+        resolve(out.join('\n'));
+      } catch (e) { reject(e); }
+    };
+    reader.onerror = () => reject(new Error('lecture du fichier impossible'));
+    reader.readAsArrayBuffer(file);
+  });
 }
-function _ancRowText(row, headers) {
-  return row.map((cell, i) => {
-    const h = headers[i] || ('Colonne ' + (i + 1));
-    const vv = String(cell == null ? '' : cell).trim();
-    return vv ? (h + ' : ' + vv) : '';
-  }).filter(Boolean).join('\n');
-}
-async function ancProcessRow() {
+async function ancProcessFile() {
   const a = state.anc;
   const fm = $('anc-form'); if (fm) { fm.style.display = 'none'; fm.innerHTML = ''; }
   const pr = $('anc-progress');
-  if (a.idx >= a.rows.length) {
-    ancSetStatus('✅ Terminé — toutes les lignes du fichier ont été parcourues.');
-    if (pr) pr.textContent = a.rows.length + ' ligne(s) traitée(s).';
+  if (!a.queue || a.qIdx >= a.queue.length) {
+    ancSetStatus('✅ Terminé — ' + ((a.queue || []).length) + ' fichier(s) traité(s).');
+    if (pr) pr.textContent = 'Import terminé. Glisse d\'autres fichiers si besoin.';
     const dz = $('anc-dropzone'); if (dz) dz.style.display = '';
     return;
   }
-  if (pr) pr.textContent = 'Facture ' + (a.idx + 1) + ' / ' + a.rows.length + ' — ' + a.fileName;
-  ancSetStatus('🤖 Analyse de la facture ' + (a.idx + 1) + ' par l\'IA…');
-  const rowText = _ancRowText(a.rows[a.idx], a.headers);
+  const file = a.queue[a.qIdx];
+  a.fileName = file.name;
+  if (pr) pr.textContent = 'Facture ' + (a.qIdx + 1) + ' / ' + a.queue.length + ' — ' + file.name;
+  ancSetStatus('📖 Lecture de ' + file.name + '…');
+  let text;
+  try { text = await _ancReadSheetText(file); }
+  catch (err) { console.error('Excel read', err); ancSetStatus('⚠️ Lecture impossible : ' + err.message + ' — clique « Passer ».'); ancShowForm({}); return; }
+  ancSetStatus('🤖 Analyse de la facture par l\'IA…');
   try {
-    const infos = await ancExtractIA(rowText);
+    const infos = await ancExtractIA(text);
     ancSetStatus('', false);
     ancShowForm(infos);
   } catch (err) {
@@ -5724,22 +5722,22 @@ async function ancProcessRow() {
 }
 async function ancExtractIA(texte) {
   const systemPrompt =
-    "Tu extrais les informations d'une ANCIENNE FACTURE d'une entreprise antinuisibles, depuis une ligne de tableau Excel. " +
-    "Réponds UNIQUEMENT par un objet JSON valide, sans texte ni Markdown. Clés exactes (chaîne vide si absent) :\n" +
+    "On te donne le contenu COMPLET d'une ancienne FACTURE (un seul document) d'une entreprise antinuisibles (DERATEK), lu depuis Excel. " +
+    "Extrais les informations et réponds UNIQUEMENT par un objet JSON valide, sans texte ni Markdown. Clés exactes (chaîne vide si absent) :\n" +
     '{\n' +
-    '"numero_facture":"numéro de facture",\n' +
-    '"numero_devis":"numéro de devis si présent",\n' +
-    '"date":"date d\'intervention ou de facture au format AAAA-MM-JJ (si plusieurs dates, la première)",\n' +
-    '"locataire_nom":"nom de famille du locataire/occupant concerné par l\'intervention",\n' +
-    '"locataire_prenom":"prénom du locataire si présent",\n' +
-    '"locataire_adresse":"adresse complète du lieu d\'intervention (rue, NPA, ville)",\n' +
-    '"nuisible":"type de nuisible traité (souris, rats, guêpes, blattes, fourmis, punaises…)",\n' +
-    '"prestation":"description des travaux/de la prestation facturée",\n' +
-    '"prix_ht":"prix hors taxe, chiffres uniquement (ex 440.00)",\n' +
-    '"rabais":"montant du rabais en CHF si présent, chiffres uniquement",\n' +
-    '"facturation":"nom de la gérance/propriétaire/commune destinataire de la facture"\n' +
+    '"numero_facture":"numéro de la facture (ex 37126)",\n' +
+    '"numero_devis":"numéro de devis cité dans le texte (ex 260378)",\n' +
+    '"date":"date de la facture au format AAAA-MM-JJ (ex \'NEUCHÂTEL LE 20.04.2026\' -> 2026-04-20)",\n' +
+    '"facturation":"nom ET adresse du DESTINATAIRE de la facture = le bloc adresse en haut du document (ex \'Monsieur Patrice Racine, Rue du Doubs 61, 2300 La Chaux-de-Fonds\')",\n' +
+    '"locataire_nom":"nom de l\'occupant du LIEU d\'intervention cité dans la description des travaux (ex \'Madame Massy\'), DIFFÉRENT du destinataire",\n' +
+    '"locataire_prenom":"prénom de l\'occupant si présent",\n' +
+    '"locataire_adresse":"adresse du LIEU d\'intervention citée dans la description (ex \'Rue du Nord 48, 2300 La Chaux-de-Fonds\')",\n' +
+    '"nuisible":"type de nuisible traité (punaises de lit, souris, rats, guêpes, blattes, fourmis…)",\n' +
+    '"prestation":"objet / résumé court des travaux (ex \'Traitement contre les punaises de lit\')",\n' +
+    '"prix_ht":"montant HORS TAXE principal, souvent la ligne \'Matériel et main d\'oeuvre\' ou le sous-total HT avant rabais (ex 1890), chiffres uniquement",\n' +
+    '"rabais":"montant du rabais en CHF (ligne \'Rabais\'), chiffres uniquement (ex 94.5)"\n' +
     '}\n' +
-    "Sépare bien le LIEU d'intervention (locataire) de l'ADRESSE DE FACTURATION (gérance/propriétaire). Ne renvoie que des nombres pour prix_ht et rabais.";
+    "IMPORTANT : sépare bien le DESTINATAIRE de la facture (facturation) du LIEU d'intervention (locataire). Ne renvoie que des nombres pour prix_ht et rabais (sans 'CHF', point décimal).";
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
@@ -5768,7 +5766,7 @@ function ancShowForm(infos) {
   fm.style.display = 'block';
   fm.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
-      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">📁 Facture ${a.idx + 1} / ${a.rows.length} — vérifie puis valide</div>
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">📁 Facture ${a.qIdx + 1} / ${a.queue.length} — vérifie puis valide</div>
       <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Corrige ce que l'IA aurait mal lu, puis « ✅ Valider et enregistrer ».</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;">
         ${champ('N° facture', 'numero_facture', infos.numero_facture)}
@@ -5811,7 +5809,7 @@ function ancShowForm(infos) {
       </div>
     </div>`;
 }
-function ancPasser() { state.anc.idx++; ancProcessRow(); }
+function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
 function ancValider() {
   const val = id => { const el = $(id); return el ? String(el.value).trim() : ''; };
   const num = s => parseFloat(String(s).replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
@@ -5851,8 +5849,8 @@ function ancValider() {
     }
   }
   toast('✓ Facture ' + (doc.numero || '') + ' enregistrée', '#2d9e6b');
-  state.anc.idx++;
-  ancProcessRow();
+  state.anc.qIdx++;
+  ancProcessFile();
 }
 
 function fournShowConfirm(infos, fileName) {
