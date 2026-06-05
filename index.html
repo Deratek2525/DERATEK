@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604ed">
+<link rel="stylesheet" href="./style.css?v=20260604ee">
 </head>
 <body>
 
@@ -326,6 +326,7 @@
     <button id="nb-rapports" class="nav-btn" onclick="showScreen(&#39;rapports&#39;)">📋 <span>Rapports</span> <span id="nb-rapports-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span> <span class="nav-badge" id="nb-badge" style="display:none">0</span></button>
     <button id="nb-devis" class="nav-btn" onclick="showDocsScreen(&#39;devis&#39;)" style="background:#7c3aed;color:#fff;">📝 <span>Devis</span> <span id="nb-devis-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-factures" class="nav-btn" onclick="showDocsScreen(&#39;facture&#39;)" style="background:#2d9e6b;color:#fff;">🧾 <span>Factures</span> <span id="nb-factures-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
+    <button id="nb-anciennes" class="nav-btn" onclick="showScreen(&#39;anciennes&#39;)" style="background:#475569;color:#fff;">📁 <span>Anciennes factures</span></button>
     <button id="nb-clients" class="nav-btn" onclick="showScreen(&#39;clients&#39;)">👥 <span>Clients</span> <span id="nb-clients-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-locataires" class="nav-btn" onclick="showScreen(&#39;locataires&#39;)">🏠 <span>Locataires</span> <span id="nb-locataires-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span> <span id="nb-fournisseurs-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
@@ -1183,6 +1184,33 @@
     </div>
   </div>
 
+  <!-- ANCIENNES FACTURES (import Excel + IA) -->
+  <div id="screen-anciennes" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">📁 Anciennes factures</div>
+        <div class="page-sub" id="anc-progress">Importe ton historique de factures depuis Excel — une à la fois.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="ancReset()" title="Recommencer / changer de fichier">↺ Nouveau fichier</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div id="anc-dropzone" class="bon-dropzone"
+           onclick="document.getElementById('anc-file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="ancHandleDrop(event)">
+        <div class="bon-dropzone-icon">📁⬇️</div>
+        <div class="bon-dropzone-title">Glissez votre fichier Excel (.xlsx) d'anciennes factures</div>
+        <div class="bon-dropzone-sub">ou cliquez pour choisir — l'IA lit chaque ligne et tu valides une facture à la fois</div>
+        <input type="file" id="anc-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="ancHandleInput(event)">
+      </div>
+      <div id="anc-status" style="display:none;margin:14px 0;text-align:center;font-size:13px;color:var(--navy);"></div>
+      <div id="anc-form" style="display:none;margin-top:14px;"></div>
+    </div>
+  </div>
+
   <!-- DEVIS / FACTURES -->
   <div id="screen-devis" class="screen">
     <div class="page-hd">
@@ -1276,10 +1304,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260604ed"></script>
-<script src="./footer_prestations.js?v=20260604ed"></script>
-<script src="./config.js?v=20260604ed"></script>
-<script src="./app.js?v=20260604ed"></script>
-<script src="./pdf.js?v=20260604ed"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="./logo.js?v=20260604ee"></script>
+<script src="./footer_prestations.js?v=20260604ee"></script>
+<script src="./config.js?v=20260604ee"></script>
+<script src="./app.js?v=20260604ee"></script>
+<script src="./pdf.js?v=20260604ee"></script>
 
 </body></html>
