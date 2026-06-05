@@ -3441,17 +3441,29 @@ function _displayMontant(a) {
   return int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + dec;
 }
 
+// Bureaux DERATEK : adresse émettrice sélectionnable par document (Neuchâtel = défaut).
+const BUREAUX = [
+  { id: 'ne', label: 'Neuchâtel', rue: DERATEK_CONFIG.company.rue, npa: DERATEK_CONFIG.company.npa, ville: DERATEK_CONFIG.company.ville, tel: DERATEK_CONFIG.company.tel },
+  { id: 'la', label: 'Lausanne', rue: 'Ch. des Pyramides 7', npa: '1007', ville: 'Lausanne', tel: '021 552 66 72' }
+];
+function _docBureau(d) {
+  return BUREAUX.find(b => b.id === ((d && d.bureauId) || 'ne')) || BUREAUX[0];
+}
+
 // Construit le payload SPC 0200 (Swiss QR Code), refType NON (IBAN classique)
 // debtor = { nom, rue, npa, ville } (le client payeur) — optionnel
-function _buildSpcPayload(montant, message, debtor) {
+// cred = adresse créancier (bureau émetteur) — optionnel, défaut = config société
+function _buildSpcPayload(montant, message, debtor, cred) {
   const co = DERATEK_CONFIG.company;
+  const c = cred || {};
+  const cRue = c.rue || co.rue, cNpa = c.npa || co.npa, cVille = c.ville || co.ville;
   const lines = [];
   lines.push('SPC');                 // QRType
   lines.push('0200');                // Version
   lines.push('1');                   // Coding UTF-8
   lines.push(_cleanIban(co.iban));   // IBAN
   // Créancier (structuré)
-  lines.push('S', co.nom || '', co.rue || '', '', co.npa || '', co.ville || '', (co.pays || 'CH').toUpperCase());
+  lines.push('S', co.nom || '', cRue || '', '', cNpa || '', cVille || '', (co.pays || 'CH').toUpperCase());
   // Ultimate creditor (vide)
   lines.push('', '', '', '', '', '', '');
   // Montant + devise
@@ -3736,6 +3748,14 @@ function openDocEditor() {
   renderDocEditor();
   openModal('modal-doc');
 }
+// Change le bureau émetteur (adresse) du document en cours
+function docSetBureau(id) {
+  if (!_editingDoc) return;
+  _editingDoc.bureauId = id;
+  renderDocEditor();
+  const bu = _docBureau(_editingDoc);
+  toast('Bureau : DERATEK ' + bu.label, '#2d9e6b');
+}
 
 // Prestations par défaut (toujours proposées dans le menu déroulant)
 const DEFAULT_PRESTATIONS = [
@@ -3866,6 +3886,12 @@ function renderDocEditor() {
   box.innerHTML = `
     ${noteHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="form-group" style="grid-column:1 / -1;">
+        <label class="form-label">🏢 Bureau émetteur (adresse imprimée sur le document)</label>
+        <select class="form-input" onchange="docSetBureau(this.value)" style="font-weight:600;">
+          ${BUREAUX.map(bu => `<option value="${bu.id}" ${(d.bureauId||'ne')===bu.id?'selected':''}>DERATEK ${bu.label} — ${bu.rue}, ${bu.npa} ${bu.ville} · Tél. ${bu.tel}</option>`).join('')}
+        </select>
+      </div>
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
           <option value="">-- Choisir un client --</option>
@@ -3902,7 +3928,8 @@ function renderDocEditor() {
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
           <div id="doc-qr-preview" style="width:120px;height:120px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;display:flex;align-items:center;justify-content:center;"></div>
           <div style="font-size:11px;color:var(--g600);line-height:1.6;">
-            <div><b>Créancier :</b> ${DERATEK_CONFIG.company.nom} — ${_displayIban(DERATEK_CONFIG.company.iban)}</div>
+            <div><b>Créancier :</b> ${DERATEK_CONFIG.company.nom} (${_docBureau(d).label}) — ${_docBureau(d).rue}, ${_docBureau(d).npa} ${_docBureau(d).ville}</div>
+            <div><b>IBAN :</b> ${_displayIban(DERATEK_CONFIG.company.iban)}</div>
             <div><b>Payable par :</b> ${d.clientNom || '(client non défini)'}</div>
             <div><b>Montant :</b> ${_displayMontant(t.total)} CHF</div>
             <div><b>Communication :</b> Facture ${d.numero || ''}</div>
@@ -3917,7 +3944,7 @@ function renderDocEditor() {
   if (d.type === 'facture') {
     try {
       const debtor = { nom: d.clientNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
-      const payload = _buildSpcPayload(t.total, 'Facture ' + (d.numero || ''), debtor);
+      const payload = _buildSpcPayload(t.total, 'Facture ' + (d.numero || ''), debtor, _docBureau(d));
       const url = _makeQrDataUrl(payload);
       const prev = $('doc-qr-preview');
       if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
@@ -4599,6 +4626,7 @@ function downloadDocPDF(id) {
   if (d.tvaTaux === undefined || d.tvaTaux === null) d.tvaTaux = 8.1;
   try {
   const co = DERATEK_CONFIG.company;
+  const bureau = _docBureau(d);   // adresse du bureau émetteur choisi pour ce document
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
@@ -4618,7 +4646,7 @@ function downloadDocPDF(id) {
     }
     // Coordonnées en 2 colonnes à droite du logo
     const cy0 = logoY + 4;
-    const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
+    const colA = [bureau.rue, `${bureau.npa} ${bureau.ville}`, 'Tél. ' + bureau.tel];
     const colB = [co.email, co.tva];
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
     colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
@@ -4638,7 +4666,7 @@ function downloadDocPDF(id) {
 
   // Date d'émission, sous le filet, à droite ("Neuchâtel, le ...")
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
-  doc.text('Neuchâtel, le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 7, { align: 'right' });
+  doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 7, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
@@ -4775,7 +4803,7 @@ function downloadDocPDF(id) {
     // Débiteur du QR : propriétaire si présent, payable à l'adresse de la gérance
     const debtorNom = (d.proprietaire || '').trim() ? d.proprietaire : d.clientNom;
     const debtor = { nom: debtorNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
-    const payload = _buildSpcPayload(t.total, message, debtor);
+    const payload = _buildSpcPayload(t.total, message, debtor, bureau);
     const qrUrl = _makeQrDataUrl(payload);
     const debtLines = ((d.proprietaire || '').trim()
       ? [d.proprietaire, 'p.a. ' + (d.clientNom||''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
@@ -4802,7 +4830,7 @@ function downloadDocPDF(id) {
       (Array.isArray(arr)?arr:[arr]).forEach(ln => { if(!ln) return; (maxW?doc.splitTextToSize(String(ln),maxW):[String(ln)]).forEach(p=>{doc.text(p,x,cy);cy+=lh;}); });
       return cy;
     };
-    const credLines = [_displayIban(co.iban), co.nom, co.rue, `${co.npa} ${co.ville}`].filter(Boolean);
+    const credLines = [_displayIban(co.iban), co.nom, bureau.rue, `${bureau.npa} ${bureau.ville}`].filter(Boolean);
     const amountDisp = _displayMontant(t.total);
 
     // Récépissé
