@@ -2986,6 +2986,7 @@ function renderBons() {
               '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' }, // gris
               'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' }, // rouge vif
               'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' }, // bleu
+              'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1' }, // indigo
               'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6' }, // violet
               'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6' }, // teal
               'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316' }, // orange
@@ -3064,6 +3065,7 @@ function renderBons() {
                   <option value="">— Statut —</option>
                   <option value="a-transmettre" ${statut === 'a-transmettre' ? 'selected' : ''}>📕 Rapport à transmettre</option>
                   <option value="transmis"      ${statut === 'transmis'      ? 'selected' : ''}>📨 Rapport transmis</option>
+                  <option value="demande-devis" ${statut === 'demande-devis' ? 'selected' : ''}>📝 Demande de devis</option>
                   <option value="attente-devis" ${statut === 'attente-devis' ? 'selected' : ''}>⏸️ Attente de devis</option>
                   <option value="devis-valide"  ${statut === 'devis-valide'  ? 'selected' : ''}>✍️ Devis validé</option>
                   <option value="en-cours"      ${statut === 'en-cours'      ? 'selected' : ''}>⏳ En cours de traitement</option>
@@ -3255,6 +3257,7 @@ function updateBonStatut(id, value) {
     '':              'Statut effacé',
     'a-transmettre': '📕 Statut : Rapport à transmettre',
     'transmis':      '📨 Statut : Rapport transmis',
+    'demande-devis': '📝 Statut : Demande de devis',
     'attente-devis': '⏸️ Statut : Attente de devis',
     'devis-valide':  '✍️ Statut : Devis validé',
     'en-cours':      '⏳ Statut : En cours de traitement',
@@ -3993,11 +3996,39 @@ function renderDocuments() {
         </div>`;
     }
   }
+  // Section "Bons en demande de devis" (uniquement dans l'onglet Devis) :
+  // les bons au statut "Demande de devis" qui n'ont pas encore de devis lié.
+  let aDeviserHtml = '';
+  if (filtre === 'devis') {
+    const dejaDevis = id => (DB.documents || []).some(x => ((x.type || 'devis') === 'devis') && x.bonId === id);
+    const aDeviser = (DB.bons || []).filter(b => (b.statut || '') === 'demande-devis' && !dejaDevis(b.id));
+    if (aDeviser.length) {
+      aDeviserHtml = `
+        <div style="margin-bottom:14px;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;background:#eef2ff;">
+          <div style="font-size:13px;font-weight:800;color:#3730a3;margin-bottom:10px;">📝 Bons en demande de devis (${aDeviser.length})</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${aDeviser.map(b => `
+              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #c7d2fe;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+                <div style="min-width:120px;">
+                  <div style="font-size:12px;font-weight:800;color:var(--navy);">📄 ${b.numero||'—'}</div>
+                  <div style="font-size:11px;color:var(--g600);">${b.geranceNom||'—'}</div>
+                </div>
+                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${b.locataireNom?('🏠 '+b.locataireNom+' · '):''}${_bonProblemeClean(b)||''}</div>
+                <div style="display:flex;gap:5px;flex-shrink:0;">
+                  <button class="btn btn-navy btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer le devis depuis ce bon">📝 Créer le devis</button>
+                  <button class="btn btn-ghost btn-sm" onclick="showBonsActifs()" title="Voir dans les bons">Voir le bon</button>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+  }
+  const topHtml = aFacturerHtml + aDeviserHtml;
   if (!docs.length) {
     const msg = (filtre === 'facture')
       ? 'Aucune facture.<br>Crée une facture avec « + Nouvelle facture » ou convertis un devis accepté.'
       : 'Aucun devis.<br>Crée un devis depuis un bon « à facturer » ou avec « + Nouveau devis ».';
-    list.innerHTML = aFacturerHtml + '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">' + msg + '</div></div>';
+    list.innerHTML = topHtml + '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">' + msg + '</div></div>';
     return;
   }
   const statutColors = {
@@ -4009,7 +4040,7 @@ function renderDocuments() {
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
   const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
-  list.innerHTML = aFacturerHtml + docs.map(d => {
+  list.innerHTML = topHtml + docs.map(d => {
     const isDevis = d.type === 'devis';
     const accent = isDevis ? '#8b5cf6' : '#2d9e6b';
     const st = statutColors[d.statut] || statutColors.brouillon;
@@ -5255,8 +5286,8 @@ function renderStats() {
   _makeChart('chart-gerances', 'doughnut', gk, gk.map(k=>ger[k]), gk.map(k=>colorForGeranceName(k)), false);
 
   // Statuts → barres verticales
-  const statutLabels = { '':'Non défini', 'a-transmettre':'Rapport à transmettre', 'transmis':'Transmis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
-  const statutCol = { '':'#9ca3af','transmis':'#3b82f6','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
+  const statutLabels = { '':'Non défini', 'a-transmettre':'Rapport à transmettre', 'transmis':'Transmis', 'demande-devis':'Demande de devis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
+  const statutCol = { '':'#9ca3af','transmis':'#3b82f6','demande-devis':'#6366f1','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
   const st = {};
   bons.forEach(b => { const s = b.statut || ''; st[s] = (st[s]||0)+1; });
   let sk = Object.keys(st).sort((a,b)=>st[b]-st[a]);
