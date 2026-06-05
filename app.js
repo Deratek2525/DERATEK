@@ -380,6 +380,7 @@ function showScreen(name) {
   const nb = $(`nb-${name}`);
   if (nb) nb.classList.add('active');
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
+  if (name === 'anciennes' && typeof renderAnciennesList === 'function') renderAnciennesList();
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
   if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
@@ -3040,14 +3041,14 @@ function updateNavCounts() {
     else nA++;
   });
   const docs = DB.documents || [];
-  const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis').length;
+  const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !d._archive).length;
   // Bons en demande de devis (en attente) sans devis encore créé
   const nDevisAttente = (DB.bons || []).filter(b =>
     (b.statut || '') === 'demande-devis' &&
     !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
-  const nFact  = docs.filter(d => d.type === 'facture').length;
+  const nFact  = docs.filter(d => d.type === 'facture' && !d._archive).length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
   set('nb-bons-encours-count', nE);
@@ -4172,7 +4173,7 @@ function renderDocuments() {
   // Titre de la page selon l'onglet
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre);
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !d._archive);
   if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (count) count.textContent = docs.length ? docs.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
@@ -5810,6 +5811,48 @@ function ancShowForm(infos) {
     </div>`;
 }
 function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
+// Liste des anciennes factures importées, conservée dans l'onglet (payée / non payée)
+function renderAnciennesList() {
+  const box = $('anc-list'); if (!box) return;
+  const list = (DB.documents || []).filter(d => d._archive && (d.type || 'facture') === 'facture')
+    .slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  if (!list.length) { box.innerHTML = ''; return; }
+  const nPay = list.filter(d => d.statut === 'payee').length;
+  const totalTTC = list.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  box.innerHTML = `
+    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;border-top:1px solid #eee;padding-top:12px;">📁 Anciennes factures enregistrées (${list.length}) — ${nPay} payée(s) · total ${_displayMontant(totalTTC)} CHF</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${list.map(d => {
+        const paye = d.statut === 'payee';
+        return `<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+          <div style="min-width:120px;"><div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div><div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div></div>
+          <div style="flex:1.3;min-width:150px;"><div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom || '—'}</div>${d.locataireNom ? `<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>` : ''}</div>
+          <div style="min-width:110px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+            <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#f59e0b'};background:${paye ? '#dcfce7' : '#fef3c7'};color:${paye ? '#166534' : '#92400e'};cursor:pointer;">
+              <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
+              <option value="envoyee" ${!paye ? 'selected' : ''}>⏳ Non payée</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥</button>
+            <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+function ancSetStatut(id, value) {
+  const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
+  d.statut = value; DB.documents = docs;
+  renderAnciennesList();
+  toast(value === 'payee' ? '✅ Marquée payée' : '⏳ Marquée non payée', '#2d9e6b');
+}
+function ancDeleteDoc(id) {
+  const d = (DB.documents || []).find(x => x.id === id); if (!d) return;
+  if (!confirm('Supprimer définitivement la facture ' + (d.numero || '') + ' ?')) return;
+  DB.documents = (DB.documents || []).filter(x => x.id !== id);
+  renderAnciennesList();
+  toast('Facture supprimée', '#e63946');
+}
 function ancValider() {
   const val = id => { const el = $(id); return el ? String(el.value).trim() : ''; };
   const num = s => parseFloat(String(s).replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
@@ -5849,6 +5892,7 @@ function ancValider() {
     }
   }
   toast('✓ Facture ' + (doc.numero || '') + ' enregistrée', '#2d9e6b');
+  renderAnciennesList();
   state.anc.qIdx++;
   ancProcessFile();
 }
