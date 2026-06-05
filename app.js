@@ -687,7 +687,10 @@ function agendaNav(dir) {
 function agendaToday() { state.agendaDate = new Date(); renderAgenda(); }
 // Agendas Google à afficher dans l'écran Agenda (intégration en lecture).
 // Ajoute ici l'ID d'un autre agenda (ex. 'xxxx@group.calendar.google.com') pour l'inclure.
-const GOOGLE_CAL_IDS = ['deratekswiss@gmail.com'];
+const GOOGLE_CAL_IDS = [
+  'deratekswiss@gmail.com',
+  '1bdab5f890b0785f068ac6f711beaead294a8db487852a8286e02bfa128044d5@group.calendar.google.com'
+];
 function renderAgenda() {
   if (state.agendaView === 'google') renderGoogleAgenda();
   else if (state.agendaView === 'semaine') renderSemaine();
