@@ -3041,14 +3041,14 @@ function updateNavCounts() {
     else nA++;
   });
   const docs = DB.documents || [];
-  const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !d._archive).length;
+  const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d)).length;
   // Bons en demande de devis (en attente) sans devis encore créé
   const nDevisAttente = (DB.bons || []).filter(b =>
     (b.statut || '') === 'demande-devis' &&
     !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
-  const nFact  = docs.filter(d => d.type === 'facture' && !d._archive).length;
+  const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d)).length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
   set('nb-bons-encours-count', nE);
@@ -3544,6 +3544,14 @@ const BUREAUX = [
 ];
 function _docBureau(d) {
   return BUREAUX.find(b => b.id === ((d && d.bureauId) || 'ne')) || BUREAUX[0];
+}
+// Une facture importée d'historique est marquée par [ARCHIVE] dans ses notes
+// (persisté dans Supabase via une colonne texte existante, sans nouvelle colonne).
+function _docIsArchive(d) {
+  return !!(d && (d._archive || /\[ARCHIVE\]/.test(String(d.notes || ''))));
+}
+function _docNotesClean(d) {
+  return String((d && d.notes) || '').replace(/\s*\[ARCHIVE\]\s*/g, ' ').trim();
 }
 
 // Construit le payload SPC 0200 (Swiss QR Code), refType NON (IBAN classique)
@@ -4173,7 +4181,7 @@ function renderDocuments() {
   // Titre de la page selon l'onglet
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !d._archive);
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d));
   if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (count) count.textContent = docs.length ? docs.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
@@ -4873,9 +4881,9 @@ function downloadDocPDF(id) {
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
   ty += 6;
 
-  // Notes éventuelles, dans le flux
-  if (d.notes) {
-    const noteLines = doc.splitTextToSize(d.notes, 170);
+  // Notes éventuelles, dans le flux (on retire le marqueur technique [ARCHIVE])
+  if (_docNotesClean(d)) {
+    const noteLines = doc.splitTextToSize(_docNotesClean(d), 170);
     const notesH = noteLines.length * 4.5 + 8;
     if (ty + notesH > contentBottom) { ty = startContentPage(); }
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
@@ -5814,7 +5822,7 @@ function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
 // Liste des anciennes factures importées, conservée dans l'onglet (payée / non payée)
 function renderAnciennesList() {
   const box = $('anc-list'); if (!box) return;
-  const list = (DB.documents || []).filter(d => d._archive && (d.type || 'facture') === 'facture')
+  const list = (DB.documents || []).filter(d => _docIsArchive(d) && (d.type || 'facture') === 'facture')
     .slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (!list.length) { box.innerHTML = ''; return; }
   const nPay = list.filter(d => d.statut === 'payee').length;
@@ -5879,7 +5887,7 @@ function ancValider() {
     lignes: lignes, tvaTaux: tvaTaux, rabais: Math.round(rabaisPct * 100) / 100,
     statut: val('anc-statut') || 'payee',
     sousTotal: t.sousTotal, rabaisMontant: t.rabaisMontant, tvaMontant: t.tvaMontant, total: t.total,
-    notes: notesParts.join(' · '), _archive: true
+    notes: '[ARCHIVE] ' + notesParts.join(' · '), _archive: true
   };
   const docs = DB.documents; docs.push(doc); DB.documents = docs;
   if ($('anc-create-client') && $('anc-create-client').checked && doc.clientNom) {
