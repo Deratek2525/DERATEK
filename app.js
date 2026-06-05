@@ -2663,6 +2663,18 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Suivi de dératisation', desc: "Contrôle des postes d'appâtage, vérification de la consommation des appâts, remplacement si nécessaire et adaptation du dispositif selon l'activité constatée." },
     { label: 'Monitoring rongeurs', desc: "Mise en place d'un dispositif de monitoring afin de contrôler l'activité des rongeurs et d'évaluer l'évolution de la situation après traitement." },
     { label: 'Recherche des points d\'entrée des rongeurs', desc: "Inspection des zones sensibles afin d'identifier les points d'entrée possibles des rongeurs, notamment fissures, passages techniques, caves, gaines, portes, fenêtres ou conduites." }
+  ] },
+  { groupe: 'Volets roulants / caissons de stores', items: [
+    { label: 'Traitement d\'un nid de guêpes dans un caisson de store', desc: "Neutralisation d'un nid de guêpes actif situé dans un caisson de store, avec application d'un insecticide professionnel adapté. Intervention réalisée de manière ciblée afin de limiter les risques de piqûres et de supprimer l'activité du nid." },
+    { label: 'Traitement insecticide dans un caisson de volet roulant', desc: "Application ciblée d'un traitement insecticide professionnel à l'intérieur du caisson de volet roulant, suite à la présence d'insectes nuisibles. Contrôle de l'activité après traitement et sécurisation de la zone d'intervention." },
+    { label: 'Destruction d\'un nid d\'insectes volants dans un caisson de store', desc: "Destruction et neutralisation d'un nid d'insectes volants localisé dans un caisson de store, avec traitement professionnel par pulvérisation ou poudrage selon l'accessibilité du nid." },
+    { label: 'Traitement préventif d\'un caisson de store', desc: "Application d'un traitement préventif dans le caisson de store afin de limiter le risque de réinstallation d'insectes volants ou rampants dans la zone traitée." }
+  ] },
+  { groupe: 'Guêpes / frelons / insectes volants', items: [
+    { label: 'Destruction d\'un nid de guêpes', desc: "Destruction d'un nid de guêpes actif avec application d'un insecticide professionnel adapté. Intervention réalisée sur la zone infestée avec contrôle de l'activité après traitement." },
+    { label: 'Neutralisation d\'un nid de guêpes difficile d\'accès', desc: "Neutralisation d'un nid de guêpes situé dans une zone difficile d'accès, notamment toiture, façade, caisson de store, grenier ou faux plafond, avec application ciblée d'un produit insecticide professionnel." },
+    { label: 'Traitement contre les insectes volants', desc: "Traitement insecticide professionnel contre les insectes volants, avec application ciblée sur les zones de passage, de repos ou de nidification." },
+    { label: 'Traitement curatif contre les guêpes', desc: "Traitement curatif contre les guêpes comprenant la neutralisation du nid, la suppression de l'activité et la sécurisation de la zone concernée." }
   ] }
 ];
 // Construit les <optgroup> du sélecteur d'insertion de prestation
