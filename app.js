@@ -2927,8 +2927,9 @@ function renderBons() {
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
-    // Actifs = ni terminés, ni en cours de traitement (ces derniers ont leur propre onglet)
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours');
+    // Actifs = ni terminés, ni en cours, ni en demande de devis
+    // (en cours → onglet dédié ; demande de devis → écran Devis)
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
   }
   if (q) {
     bons = bons.filter(b =>
@@ -3898,6 +3899,13 @@ function saveDoc() {
   const i = docs.findIndex(x => x.id === toSave.id);
   if (i >= 0) docs[i] = toSave; else docs.push(toSave);
   DB.documents = docs;
+  // Si ce devis vient d'un bon en "Demande de devis", on bascule le bon en
+  // "Attente de devis" : il revient dans la liste des bons actifs (jamais perdu)
+  // et quitte la section "Bons en demande de devis".
+  if (toSave.type === 'devis' && toSave.bonId) {
+    const bons = DB.bons; const lb = bons.find(b => b.id === toSave.bonId);
+    if (lb && (lb.statut || '') === 'demande-devis') { lb.statut = 'attente-devis'; DB.bons = bons; }
+  }
   toast('✓ ' + (_editingDoc.type === 'facture' ? 'Facture' : 'Devis') + ' enregistré', '#2d9e6b');
   closeModal('modal-doc');
   // Bascule sur l'onglet correspondant au type enregistré pour qu'il soit visible
