@@ -685,9 +685,31 @@ function agendaNav(dir) {
   renderAgenda();
 }
 function agendaToday() { state.agendaDate = new Date(); renderAgenda(); }
+// Agendas Google à afficher dans l'écran Agenda (intégration en lecture).
+// Ajoute ici l'ID d'un autre agenda (ex. 'xxxx@group.calendar.google.com') pour l'inclure.
+const GOOGLE_CAL_IDS = ['deratekswiss@gmail.com'];
 function renderAgenda() {
-  if (state.agendaView === 'semaine') renderSemaine();
+  if (state.agendaView === 'google') renderGoogleAgenda();
+  else if (state.agendaView === 'semaine') renderSemaine();
   else renderMois();
+}
+// Affiche l'agenda Google intégré (iframe) dans l'écran Agenda
+function renderGoogleAgenda() {
+  const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view'), gg = $('agenda-google-view');
+  if (sv) sv.style.display = 'none';
+  if (mv) mv.style.display = 'none';
+  if (!gg) return;
+  gg.style.display = 'block';
+  const per = $('agenda-period'); if (per) per.textContent = 'Mon agenda Google';
+  if (!gg.dataset.loaded) {
+    const params = ['ctz=Europe/Zurich', 'wkst=2', 'mode=WEEK', 'showTitle=0', 'showPrint=0', 'showTabs=1', 'showCalendars=1', 'showTz=0']
+      .concat(GOOGLE_CAL_IDS.map(id => 'src=' + encodeURIComponent(id)));
+    const url = 'https://calendar.google.com/calendar/embed?' + params.join('&');
+    gg.innerHTML =
+      '<iframe src="' + url + '" style="border:0;width:100%;height:72vh;min-height:560px;border-radius:10px;background:#fff;" frameborder="0" scrolling="no"></iframe>' +
+      '<div style="font-size:11px;color:var(--g600);margin-top:6px;">Agenda Google de ' + GOOGLE_CAL_IDS.join(', ') + '. Si rien ne s\'affiche, connecte-toi à ce compte Google dans ce navigateur.</div>';
+    gg.dataset.loaded = '1';
+  }
 }
 function getWeekStart(d) {
   const dt = new Date(d); const day = dt.getDay();
@@ -695,8 +717,8 @@ function getWeekStart(d) {
   dt.setHours(0,0,0,0); return dt;
 }
 function renderSemaine() {
-  const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view');
-  sv.style.display = 'block'; mv.style.display = 'none';
+  const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view'), gg = $('agenda-google-view');
+  sv.style.display = 'block'; mv.style.display = 'none'; if (gg) gg.style.display = 'none';
   const ws = getWeekStart(state.agendaDate);
   const dayNames = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const monthNames = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
@@ -728,8 +750,8 @@ function renderSemaine() {
   sv.innerHTML = html;
 }
 function renderMois() {
-  const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view');
-  sv.style.display = 'none'; mv.style.display = 'block';
+  const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view'), gg = $('agenda-google-view');
+  sv.style.display = 'none'; mv.style.display = 'block'; if (gg) gg.style.display = 'none';
   const year = state.agendaDate.getFullYear(), month = state.agendaDate.getMonth();
   const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   $('agenda-period').textContent = `${monthNames[month]} ${year}`;
