@@ -2500,25 +2500,32 @@ function confirmDeleteLocataire(id, nom) {
 }
 
 // Liste des bons enregistrés, regroupés par gérance
-// Bascule entre les bons actifs et les bons terminés
+// Bascule entre les bons actifs / en cours / terminés
 function setBonsFilter(f) {
-  state.bonsFilter = (f === 'termines') ? 'termines' : 'actifs';
+  state.bonsFilter = (f === 'termines') ? 'termines' : (f === 'en-cours' ? 'en-cours' : 'actifs');
   const ba = $('bons-filter-actifs'), bt = $('bons-filter-termines');
   if (ba) ba.className = 'btn ' + (state.bonsFilter === 'actifs' ? 'btn-navy' : 'btn-ghost') + ' btn-sm';
   if (bt) bt.className = 'btn ' + (state.bonsFilter === 'termines' ? 'btn-green' : 'btn-ghost') + ' btn-sm';
   renderBons();
 }
-// Boutons de navigation du haut : Bons (actifs) et Bons terminés
+// Boutons de navigation du haut : Bons (actifs), Bons en cours, Bons terminés
 function showBonsActifs() {
   showScreen('bons');
   setBonsFilter('actifs');
 }
+function _highlightNav(id) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = $(id); if (nb) nb.classList.add('active');
+}
+function showBonsEnCours() {
+  showScreen('bons');
+  setBonsFilter('en-cours');
+  _highlightNav('nb-bons-encours');
+}
 function showBonsTermines() {
   showScreen('bons');
   setBonsFilter('termines');
-  // Met en surbrillance le bouton "Bons terminés" plutôt que "Bons"
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const nb = $('nb-bons-termines'); if (nb) nb.classList.add('active');
+  _highlightNav('nb-bons-termines');
 }
 
 // Dates d'intervention EFFECTUÉES d'un bon (jusqu'à 5), stockées dans "probleme"
@@ -2847,10 +2854,12 @@ function renderBons() {
   const count = $('bons-count');
   const q = (($('bon-search') || {}).value || '').toLowerCase();
   let bons = DB.bons || [];
-  // Filtre actifs / terminés (un bon "terminé" = statut 'termine')
+  // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
   const isTermine = b => (b.statut || '') === 'termine';
   if (state.bonsFilter === 'termines') {
     bons = bons.filter(isTermine);
+  } else if (state.bonsFilter === 'en-cours') {
+    bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
     bons = bons.filter(b => !isTermine(b));
   }
