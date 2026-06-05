@@ -5856,15 +5856,30 @@ function renderAnciennesList() {
     <div style="display:flex;flex-direction:column;gap:6px;">
       ${list.map(d => {
         const paye = d.statut === 'payee';
+        const notes = String(d.notes || '');
+        const bonNo = (notes.match(/Bon n°\s*([^·\n]+)/) || [])[1];
+        const devNo = (notes.match(/Devis n°\s*([^·\n]+)/) || [])[1];
+        const refs = [bonNo ? '📄 Bon ' + bonNo.trim() : '', devNo ? '📝 Devis ' + devNo.trim() : ''].filter(Boolean).join(' · ');
         return `<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
-          <div style="min-width:120px;"><div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div><div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div></div>
-          <div style="flex:1.3;min-width:150px;"><div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom || '—'}</div>${d.locataireNom ? `<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>` : ''}</div>
-          <div style="min-width:110px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
-          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+          <div style="min-width:130px;">
+            <div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div>
+            <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div>
+            ${refs ? `<div style="font-size:10px;color:var(--g400);">${refs}</div>` : ''}
+          </div>
+          <div style="flex:1.6;min-width:190px;">
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">🏢 Destinataire</div>
+            <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom || '—'}</div>
+            ${d.proprietaire ? `<div style="font-size:11px;color:var(--g600);">👤 Propriétaire : ${d.proprietaire}</div>` : ''}
+            ${d.locataireNom ? `<div style="font-size:11px;color:var(--g600);">🏠 Locataire : ${d.locataireNom}${d.locataireAdresse ? ' · ' + d.locataireAdresse : ''}</div>` : ''}
+          </div>
+          <div style="min-width:100px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
             <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#f59e0b'};background:${paye ? '#dcfce7' : '#fef3c7'};color:${paye ? '#166534' : '#92400e'};cursor:pointer;">
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
               <option value="envoyee" ${!paye ? 'selected' : ''}>⏳ Non payée</option>
             </select>
+            <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
+            ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
             <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
             <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
             <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
@@ -5885,6 +5900,32 @@ function ancDeleteDoc(id) {
   DB.documents = (DB.documents || []).filter(x => x.id !== id);
   renderAnciennesList();
   toast('Facture supprimée', '#e63946');
+}
+// Ouvre la fiche client pré-remplie depuis une ancienne facture (tu choisis le type et tu enregistres)
+function ancAddClientFromDoc(id) {
+  const d = (DB.documents || []).find(x => x.id === id); if (!d) return;
+  openNewClient();   // réinitialise + ouvre la modale client
+  const set = (fid, v) => { const el = $(fid); if (el) el.value = v || ''; };
+  set('cl-nom', d.clientNom || '');
+  set('cl-adresse', d.clientAdresse || '');
+  set('cl-npa', d.clientNpa || '');
+  set('cl-ville', d.clientVille || '');
+  if (d.proprietaire) set('cl-contact', d.proprietaire);   // le propriétaire comme personne de contact
+  toast('Vérifie le type puis « Enregistrer »', '#2563eb');
+}
+// Ouvre la fiche locataire pré-remplie depuis une ancienne facture
+function ancAddLocataireFromDoc(id) {
+  const d = (DB.documents || []).find(x => x.id === id); if (!d || !d.locataireNom) return;
+  state.editingLocataireId = null;
+  const set = (fid, v) => { const el = $(fid); if (el) el.value = v || ''; };
+  ['loc-prenom','loc-nom','loc-tel','loc-email','loc-adresse','loc-npa','loc-ville','loc-notes'].forEach(f => set(f, ''));
+  set('loc-nom', d.locataireNom);
+  set('loc-adresse', d.locataireAdresse || '');
+  if (typeof _refreshLocClientDropdown === 'function') _refreshLocClientDropdown('');
+  const t = $('modal-locataire-title'); if (t) t.textContent = 'Nouveau locataire';
+  const del = $('loc-delete-btn'); if (del) del.style.display = 'none';
+  openModal('modal-locataire');
+  toast('Vérifie / complète puis « Enregistrer »', '#2563eb');
 }
 function ancValider() {
   const val = id => { const el = $(id); return el ? String(el.value).trim() : ''; };
