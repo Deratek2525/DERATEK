@@ -2943,88 +2943,35 @@ function updateNavCounts() {
   set('nb-fournisseurs-count', (DB.fournisseurs || []).length);
 }
 
-function renderBons() {
-  updateBonsCounts();
-  const list = $('bons-list');
-  const count = $('bons-count');
-  const q = (($('bon-search') || {}).value || '').toLowerCase();
-  let bons = DB.bons || [];
-  // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
-  const isTermine = b => (b.statut || '') === 'termine';
-  if (state.bonsFilter === 'termines') {
-    bons = bons.filter(isTermine);
-  } else if (state.bonsFilter === 'en-cours') {
-    bons = bons.filter(b => (b.statut || '') === 'en-cours');
-  } else {
-    // Actifs = ni terminés, ni en cours, ni en demande de devis
-    // (en cours → onglet dédié ; demande de devis → écran Devis)
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
-  }
-  if (q) {
-    bons = bons.filter(b =>
-      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + _bonProblemeClean(b))
-        .toLowerCase().includes(q)
-    );
-  }
-  if (count) {
-    const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
-    count.textContent = bons.length ? bons.length + ' ' + lbl : '';
-  }
-  if (!list) return;
-  if (!bons.length) {
-    const msg = state.bonsFilter === 'termines'
-      ? 'Aucun bon terminé pour le moment.<br>Un bon apparaît ici quand son statut passe à « ✅ Travail terminé ».'
-      : 'Aucun bon actif.<br>Glissez un PDF ci-dessus pour commencer, ou consultez les « ✅ Bons terminés ».';
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">' + msg + '</div></div>';
-    return;
-  }
-  const groups = {};
-  bons.forEach(b => {
-    const key = _geranceCanon(b.geranceNom) || '(Sans gérance)';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(b);
-  });
-  // Index locataires et clients pour lookup rapide
-  const locById = {};
-  (DB.locataires || []).forEach(l => { if (l && l.id) locById[l.id] = l; });
-  const locByName = {};
-  (DB.locataires || []).forEach(l => { if (l && l.nom) locByName[l.nom.toLowerCase()] = l; });
-  const clientById = {};
-  (DB.clients || []).forEach(c => { if (c && c.id) clientById[c.id] = c; });
-  const clientByName = {};
-  (DB.clients || []).forEach(c => { if (c && c.nom) clientByName[c.nom.toLowerCase()] = c; });
-
-  list.innerHTML = Object.keys(groups).sort().map(g => {
-    const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
-    const gColor = colorForGeranceName(g);
-    return `
-      <div style="margin-top:14px;">
-        <div style="font-size:13px;font-weight:800;color:${gColor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${gColor};padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${items.map(b => {
-            const loc = (b.locataireId && locById[b.locataireId]) || (b.locataireNom && locByName[b.locataireNom.toLowerCase()]) || null;
-            const locTel     = loc ? (loc.tel || '')     : '';
-            const locAdresse = loc ? (loc.adresse || '') : (b.immeuble || '');
-            const cli = (b.geranceId && clientById[b.geranceId]) || (b.geranceNom && clientByName[b.geranceNom.toLowerCase()]) || null;
-            // Priorité aux infos gérant stockées sur le bon (chaque bon peut avoir son propre gérant)
-            // Fallback sur les infos du client si le bon ne les a pas
-            const gerantNom = b.gerantNom || (cli ? _rapContactNom(cli.contact) : '');
-            const gerantTel = b.gerantTel || (cli ? (cli.tel || '')     : '');
-            const statut = b.statut || '';
-            // Couleur de fond du select selon le statut (ordre du workflow)
-            const statutStyles = {
-              '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' }, // gris
-              'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' }, // rouge vif
-              'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' }, // bleu
-              'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1' }, // indigo
-              'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6' }, // violet
-              'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6' }, // teal
-              'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316' }, // orange
-              'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e' }, // vert
-              'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444' }, // rouge
-            };
-            const stStyle = statutStyles[statut] || statutStyles[''];
-            return `
+// Carte complète d'un bon (réutilisée dans l'écran Bons ET dans la section
+// "Bons en demande de devis" de l'écran Devis) — source unique de vérité.
+function renderBonCard(b) {
+  const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+  const gColor = colorForGeranceName(g);
+  const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
+           || (b.locataireNom && (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === (b.locataireNom||'').toLowerCase()))
+           || null;
+  const locTel     = loc ? (loc.tel || '')     : '';
+  const locAdresse = loc ? (loc.adresse || '') : (b.immeuble || '');
+  const cli = (b.geranceId && (DB.clients||[]).find(c => c.id === b.geranceId))
+           || (b.geranceNom && (DB.clients||[]).find(c => (c.nom||'').toLowerCase() === (b.geranceNom||'').toLowerCase()))
+           || null;
+  const gerantNom = b.gerantNom || (cli ? _rapContactNom(cli.contact) : '');
+  const gerantTel = b.gerantTel || (cli ? (cli.tel || '') : '');
+  const statut = b.statut || '';
+  const statutStyles = {
+    '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
+    'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' },
+    'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' },
+    'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1' },
+    'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6' },
+    'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6' },
+    'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316' },
+    'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e' },
+    'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444' },
+  };
+  const stStyle = statutStyles[statut] || statutStyles[''];
+  return `
             <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${_hexTint(gColor, 0.10)};border:1px solid ${_hexTint(gColor, 0.30)};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
                 <div style="width:34px;height:34px;border-radius:50%;background:${gColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
@@ -3085,7 +3032,6 @@ function renderBons() {
                   const techs = (DB.techs || []);
                   const opts = ['<option value="">— Personne —</option>']
                     .concat(techs.map(t => `<option value="${(t||'').replace(/"/g,'&quot;')}" ${aff===t?'selected':''}>${t}</option>`));
-                  // Si l'affecté n'est plus dans la liste, on l'ajoute pour ne pas le perdre
                   if (aff && !techs.includes(aff)) opts.push(`<option value="${aff.replace(/"/g,'&quot;')}" selected>${aff}</option>`);
                   return `<select onchange="bonSetAffecte('${b.id}', this.value)" title="Technicien / responsable affecté" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${aff?'#2563eb':'#d1d5db'};background:${aff?'#eff6ff':'#fff'};color:${aff?'#1d4ed8':'#6b7280'};cursor:pointer;max-width:135px;">${opts.join('')}</select>`;
                 })()}
@@ -3118,7 +3064,68 @@ function renderBons() {
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
               </div>
             </div>
-          `; }).join('')}
+          `;
+}
+
+function renderBons() {
+  updateBonsCounts();
+  const list = $('bons-list');
+  const count = $('bons-count');
+  const q = (($('bon-search') || {}).value || '').toLowerCase();
+  let bons = DB.bons || [];
+  // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
+  const isTermine = b => (b.statut || '') === 'termine';
+  if (state.bonsFilter === 'termines') {
+    bons = bons.filter(isTermine);
+  } else if (state.bonsFilter === 'en-cours') {
+    bons = bons.filter(b => (b.statut || '') === 'en-cours');
+  } else {
+    // Actifs = ni terminés, ni en cours, ni en demande de devis
+    // (en cours → onglet dédié ; demande de devis → écran Devis)
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
+  }
+  if (q) {
+    bons = bons.filter(b =>
+      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + _bonProblemeClean(b))
+        .toLowerCase().includes(q)
+    );
+  }
+  if (count) {
+    const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
+    count.textContent = bons.length ? bons.length + ' ' + lbl : '';
+  }
+  if (!list) return;
+  if (!bons.length) {
+    const msg = state.bonsFilter === 'termines'
+      ? 'Aucun bon terminé pour le moment.<br>Un bon apparaît ici quand son statut passe à « ✅ Travail terminé ».'
+      : 'Aucun bon actif.<br>Glissez un PDF ci-dessus pour commencer, ou consultez les « ✅ Bons terminés ».';
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">' + msg + '</div></div>';
+    return;
+  }
+  const groups = {};
+  bons.forEach(b => {
+    const key = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(b);
+  });
+  // Index locataires et clients pour lookup rapide
+  const locById = {};
+  (DB.locataires || []).forEach(l => { if (l && l.id) locById[l.id] = l; });
+  const locByName = {};
+  (DB.locataires || []).forEach(l => { if (l && l.nom) locByName[l.nom.toLowerCase()] = l; });
+  const clientById = {};
+  (DB.clients || []).forEach(c => { if (c && c.id) clientById[c.id] = c; });
+  const clientByName = {};
+  (DB.clients || []).forEach(c => { if (c && c.nom) clientByName[c.nom.toLowerCase()] = c; });
+
+  list.innerHTML = Object.keys(groups).sort().map(g => {
+    const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    const gColor = colorForGeranceName(g);
+    return `
+      <div style="margin-top:14px;">
+        <div style="font-size:13px;font-weight:800;color:${gColor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${gColor};padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${items.map(b => renderBonCard(b)).join('')}
         </div>
       </div>
     `;
@@ -4017,18 +4024,7 @@ function renderDocuments() {
         <div style="margin-bottom:14px;border:1.5px solid #16a34a;border-radius:10px;padding:12px 14px;background:#f0fdf4;">
           <div style="font-size:13px;font-weight:800;color:#166534;margin-bottom:10px;">✅ Bons terminés à facturer (${aFacturer.length})</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            ${aFacturer.map(b => `
-              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
-                <div style="min-width:120px;">
-                  <div style="font-size:12px;font-weight:800;color:var(--navy);">📄 ${b.numero||'—'}</div>
-                  <div style="font-size:11px;color:var(--g600);">${b.geranceNom||'—'}</div>
-                </div>
-                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${b.locataireNom?('🏠 '+b.locataireNom+' · '):''}${_bonProblemeClean(b)||''}</div>
-                <div style="display:flex;gap:5px;flex-shrink:0;">
-                  <button class="btn btn-green btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer la facture depuis ce bon">🧾 Créer la facture</button>
-                  <button class="btn btn-ghost btn-sm" onclick="showBonsTermines()" title="Voir dans les bons terminés">Voir le bon</button>
-                </div>
-              </div>`).join('')}
+            ${aFacturer.map(b => renderBonCard(b)).join('')}
           </div>
         </div>`;
     }
@@ -4044,18 +4040,7 @@ function renderDocuments() {
         <div style="margin-bottom:14px;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;background:#eef2ff;">
           <div style="font-size:13px;font-weight:800;color:#3730a3;margin-bottom:10px;">📝 Bons en demande de devis (${aDeviser.length})</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            ${aDeviser.map(b => `
-              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #c7d2fe;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
-                <div style="min-width:120px;">
-                  <div style="font-size:12px;font-weight:800;color:var(--navy);">📄 ${b.numero||'—'}</div>
-                  <div style="font-size:11px;color:var(--g600);">${b.geranceNom||'—'}</div>
-                </div>
-                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${b.locataireNom?('🏠 '+b.locataireNom+' · '):''}${_bonProblemeClean(b)||''}</div>
-                <div style="display:flex;gap:5px;flex-shrink:0;">
-                  <button class="btn btn-navy btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer le devis depuis ce bon">📝 Créer le devis</button>
-                  <button class="btn btn-ghost btn-sm" onclick="showBonsActifs()" title="Voir dans les bons">Voir le bon</button>
-                </div>
-              </div>`).join('')}
+            ${aDeviser.map(b => renderBonCard(b)).join('')}
           </div>
         </div>`;
     }
