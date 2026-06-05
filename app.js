@@ -5744,7 +5744,10 @@ async function ancExtractIA(texte) {
     '"numero_facture":"numéro de la facture (ex 37126)",\n' +
     '"numero_devis":"numéro de devis cité dans le texte (ex 260378)",\n' +
     '"date":"date de la facture au format AAAA-MM-JJ (ex \'NEUCHÂTEL LE 20.04.2026\' -> 2026-04-20)",\n' +
-    '"facturation":"nom ET adresse du DESTINATAIRE de la facture = le bloc adresse en haut du document (ex \'Monsieur Patrice Racine, Rue du Doubs 61, 2300 La Chaux-de-Fonds\')",\n' +
+    '"facturation_nom":"civilité + prénom + nom du DESTINATAIRE de la facture (bloc adresse en haut), ex \'Monsieur Patrice Racine\'",\n' +
+    '"facturation_adresse":"rue et numéro du destinataire, ex \'Rue du Doubs 61\'",\n' +
+    '"facturation_npa":"code postal du destinataire, ex \'2300\'",\n' +
+    '"facturation_ville":"ville du destinataire, ex \'La Chaux-de-Fonds\'",\n' +
     '"locataire_nom":"nom de l\'occupant du LIEU d\'intervention cité dans la description des travaux (ex \'Madame Massy\'), DIFFÉRENT du destinataire",\n' +
     '"locataire_prenom":"prénom de l\'occupant si présent",\n' +
     '"locataire_adresse":"adresse du LIEU d\'intervention citée dans la description (ex \'Rue du Nord 48, 2300 La Chaux-de-Fonds\')",\n' +
@@ -5801,7 +5804,13 @@ function ancShowForm(infos) {
         ${champ('Rabais (CHF)', 'rabais', infos.rabais)}
       </div>
       <div style="border-top:1px dashed #ccc;margin-top:8px;padding-top:10px;">
-        ${champ('Facturation (gérance / propriétaire / commune)', 'facturation', infos.facturation)}
+        <div style="font-size:11px;font-weight:800;color:var(--g600);text-transform:uppercase;margin-bottom:6px;">Destinataire de la facture</div>
+        ${champ('Nom (civilité + prénom + nom)', 'facturation_nom', infos.facturation_nom)}
+        ${champ('Rue et numéro', 'facturation_adresse', infos.facturation_adresse)}
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:0 14px;">
+          ${champ('NPA', 'facturation_npa', infos.facturation_npa)}
+          ${champ('Ville', 'facturation_ville', infos.facturation_ville)}
+        </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--g600);margin-top:4px;cursor:pointer;">
           <input type="checkbox" id="anc-create-client" style="width:16px;height:16px;accent-color:var(--navy);">
           Créer aussi une fiche client pour ce destinataire (sinon non enregistré)
@@ -5888,8 +5897,9 @@ function ancValider() {
     id: newId(), type: 'facture',
     numero: val('anc-numero_facture') || _nextDocNumero('facture'),
     dateDoc: val('anc-date') || today(),
-    clientId: '', clientNom: val('anc-facturation') || '',
-    clientAdresse: '', clientNpa: '', clientVille: '',
+    clientId: '', clientNom: val('anc-facturation_nom') || '',
+    clientAdresse: val('anc-facturation_adresse') || '',
+    clientNpa: val('anc-facturation_npa') || '', clientVille: val('anc-facturation_ville') || '',
     locataireNom: locNom, locataireAdresse: val('anc-locataire_adresse') || '',
     proprietaire: '', bonId: '',
     lignes: lignes, tvaTaux: tvaTaux, rabais: Math.round(rabaisPct * 100) / 100,
@@ -5902,7 +5912,7 @@ function ancValider() {
     const exists = (DB.clients || []).some(c => (c.nom || '').toLowerCase() === doc.clientNom.toLowerCase());
     if (!exists) {
       const cl = DB.clients;
-      cl.push({ id: newId(), nom: doc.clientNom, type: val('anc-client-type') || 'Gérance', adresse: '', npa: '', ville: '', contact: '', tel: '', email: '', notes: '' });
+      cl.push({ id: newId(), nom: doc.clientNom, type: val('anc-client-type') || 'Gérance', adresse: doc.clientAdresse || '', npa: doc.clientNpa || '', ville: doc.clientVille || '', contact: '', tel: '', email: '', notes: '' });
       DB.clients = cl;
       toast('Fiche client créée : ' + doc.clientNom, '#2d9e6b');
     }
