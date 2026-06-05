@@ -2634,35 +2634,41 @@ function _bonNoteText(d) {
   }
   return lines.join('\n');
 }
+// Indique si le rapport de ce bon a été marqué "fait" (coche verte)
+function _bonRapFait(b) {
+  return /\[RAPFAIT:1\]/.test(String((b && b.probleme) || ''));
+}
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
     .replace(/\s*\[INTERV:[^\]]*\]/g, '')
     .replace(/\s*\[AFFECTE:[^\]]*\]/g, '')
     .replace(/\s*\[NOTE:[^\]]*\]/g, '')
+    .replace(/\s*\[RAPFAIT:[^\]]*\]/g, '')
     .trim();
 }
-// Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note).
+// Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait).
 // Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
-function _bonAssembleProbleme(clean, dates, aff, note) {
+function _bonAssembleProbleme(clean, dates, aff, note, rapFait) {
   let out = String(clean || '').trim();
   const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
   if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
   if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
   if (note && String(note).trim()) out += (out ? '\n' : '') + '[NOTE:' + _encNote(note) + ']';
+  if (rapFait) out += (out ? '\n' : '') + '[RAPFAIT:1]';
   return out;
 }
 // Réécrit probleme propre + tous les marqueurs existants
 function _bonComposeProbleme(b) {
-  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b));
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
@@ -2670,8 +2676,17 @@ function bonSetAffecte(id, value) {
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text);
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b));
   const bons = DB.bons; DB.bons = bons;
+}
+// Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
+function bonToggleRapFait(id) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const nv = !_bonRapFait(b);
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv);
+  const bons = DB.bons; DB.bons = bons;
+  renderBons();
+  toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
 }
 
 // --- Modale Note interne d'un bon ---
@@ -2968,6 +2983,10 @@ function renderBons() {
                   return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
                 })()}
                 <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon">📋 Rapport</button>
+                ${(() => {
+                  const fait = _bonRapFait(b);
+                  return `<button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#22c55e' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
+                })()}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
