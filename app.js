@@ -2652,6 +2652,41 @@ const BON_NOTE_NUISIBLES = [
   { groupe: 'Rongeurs', items: ['Souris', 'Rats', 'Mulots', 'Loirs'] },
   { groupe: 'Autres animaux nuisibles', items: ['Fouines', 'Martres', 'Taupes', 'Pigeons', 'Corbeaux', 'Étourneaux'] }
 ];
+// Prestations types à insérer dans les remarques de la note (libellé court + description complète)
+const BON_NOTE_PRESTATIONS = [
+  { groupe: 'Rongeurs / dératisation', items: [
+    { label: 'Mise en place de boîtes d\'appâtage sécurisées', desc: "Mise en place de boîtes d'appâtage sécurisées pour la lutte contre les rongeurs, avec appâts rodenticides professionnels placés dans des postes fermés à clé et adaptés à l'environnement." },
+    { label: 'Traitement de dératisation avec postes sécurisés', desc: "Traitement de dératisation comprenant la mise en place de postes d'appâtage sécurisés, le contrôle des points de passage et la surveillance de la consommation des appâts." },
+    { label: 'Application de rodenticides professionnels', desc: "Mise en place de rodenticides professionnels à base de substances actives homologuées, notamment brodifacoum ou autres matières actives adaptées, dans des dispositifs sécurisés et conformes aux règles d'utilisation." },
+    { label: 'Traitement contre les souris', desc: "Traitement contre les souris comprenant la pose de postes d'appâtage sécurisés, l'identification des points d'entrée possibles et le contrôle de l'activité des rongeurs." },
+    { label: 'Traitement contre les rats', desc: "Traitement de dératisation contre les rats avec mise en place de postes sécurisés, appâts rodenticides professionnels et suivi de la consommation lors des passages de contrôle." },
+    { label: 'Suivi de dératisation', desc: "Contrôle des postes d'appâtage, vérification de la consommation des appâts, remplacement si nécessaire et adaptation du dispositif selon l'activité constatée." },
+    { label: 'Monitoring rongeurs', desc: "Mise en place d'un dispositif de monitoring afin de contrôler l'activité des rongeurs et d'évaluer l'évolution de la situation après traitement." },
+    { label: 'Recherche des points d\'entrée des rongeurs', desc: "Inspection des zones sensibles afin d'identifier les points d'entrée possibles des rongeurs, notamment fissures, passages techniques, caves, gaines, portes, fenêtres ou conduites." }
+  ] }
+];
+// Construit les <optgroup> du sélecteur d'insertion de prestation
+function _bonNotePrestaOptions() {
+  let html = '<option value="">➕ Insérer une prestation type…</option>';
+  BON_NOTE_PRESTATIONS.forEach((g, gi) => {
+    html += `<optgroup label="${g.groupe}">` +
+      g.items.map((it, ii) => `<option value="${gi}-${ii}">${it.label}</option>`).join('') +
+      '</optgroup>';
+  });
+  return html;
+}
+// Insère la description complète de la prestation choisie dans la zone Remarques
+function bonNoteInsertPresta(val, sel) {
+  if (sel) sel.value = '';
+  if (!val) return;
+  const [gi, ii] = val.split('-').map(Number);
+  const item = BON_NOTE_PRESTATIONS[gi] && BON_NOTE_PRESTATIONS[gi].items[ii];
+  if (!item) return;
+  const ta = $('bon-note-text'); if (!ta) return;
+  const cur = (ta.value || '').trim();
+  ta.value = (cur ? cur + '\n' : '') + item.desc;
+  ta.focus();
+}
 // Types d'intervention
 const BON_NOTE_TYPES_INTERV = [
   'Diagnostic', 'Traitement préventif', 'Traitement curatif', 'Désinsectisation',
@@ -2834,6 +2869,7 @@ function openBonNote(id) {
     if ($('bon-note-tva') && !$('bon-note-tva').value) $('bon-note-tva').value = dfltTva;
   }
   const ta = $('bon-note-text'); if (ta) ta.value = d.texte || '';
+  const selP = $('bon-note-presta'); if (selP) selP.innerHTML = _bonNotePrestaOptions();
   const titre = $('bon-note-bon'); if (titre) titre.textContent = b.numero || '';
   const st = $('bon-note-status'); if (st) st.textContent = '';
   bonNoteRecalc();

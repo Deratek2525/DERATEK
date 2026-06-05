@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604ea">
+<link rel="stylesheet" href="./style.css?v=20260604eb">
 </head>
 <body>
 
@@ -262,7 +262,8 @@
 
       <div class="form-group" style="margin-bottom:6px;">
         <label class="form-label">Remarques / type de traitement</label>
-        <textarea class="form-input" id="bon-note-text" rows="5" placeholder="Ex. Traitement guêpes en toiture — 2 passages. Location nacelle. Produits utilisés…" style="font-size:13px;line-height:1.5;"></textarea>
+        <select class="form-input" id="bon-note-presta" onchange="bonNoteInsertPresta(this.value, this)" style="font-size:13px;margin-bottom:6px;color:var(--g600);"></select>
+        <textarea class="form-input" id="bon-note-text" rows="6" placeholder="Ex. Traitement guêpes en toiture — 2 passages. Location nacelle. Produits utilisés…" style="font-size:13px;line-height:1.5;"></textarea>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" id="bon-note-ai-btn" onclick="bonNoteAICorrect()" title="Corriger l'orthographe et structurer les remarques avec l'IA">✨ Corriger avec l'IA</button>
@@ -1275,10 +1276,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260604ea"></script>
-<script src="./footer_prestations.js?v=20260604ea"></script>
-<script src="./config.js?v=20260604ea"></script>
-<script src="./app.js?v=20260604ea"></script>
-<script src="./pdf.js?v=20260604ea"></script>
+<script src="./logo.js?v=20260604eb"></script>
+<script src="./footer_prestations.js?v=20260604eb"></script>
+<script src="./config.js?v=20260604eb"></script>
+<script src="./app.js?v=20260604eb"></script>
+<script src="./pdf.js?v=20260604eb"></script>
 
 </body></html>
