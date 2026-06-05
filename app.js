@@ -2508,6 +2508,18 @@ function setBonsFilter(f) {
   if (bt) bt.className = 'btn ' + (state.bonsFilter === 'termines' ? 'btn-green' : 'btn-ghost') + ' btn-sm';
   renderBons();
 }
+// Boutons de navigation du haut : Bons (actifs) et Bons terminés
+function showBonsActifs() {
+  showScreen('bons');
+  setBonsFilter('actifs');
+}
+function showBonsTermines() {
+  showScreen('bons');
+  setBonsFilter('termines');
+  // Met en surbrillance le bouton "Bons terminés" plutôt que "Bons"
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = $('nb-bons-termines'); if (nb) nb.classList.add('active');
+}
 
 // Dates d'intervention EFFECTUÉES d'un bon (jusqu'à 5), stockées dans "probleme"
 // via un marqueur invisible (la table bons n'a pas de colonne dédiée côté Supabase).
