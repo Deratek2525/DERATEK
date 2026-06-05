@@ -696,6 +696,14 @@ function renderAgenda() {
   else if (state.agendaView === 'semaine') renderSemaine();
   else renderMois();
 }
+// Ouvre Google Agenda pour créer un nouvel événement (nouvel onglet)
+function googleNewEvent() {
+  window.open('https://calendar.google.com/calendar/render?action=TEMPLATE', '_blank');
+}
+// Ouvre Google Agenda en grand pour consulter / modifier librement
+function googleOpenAgenda() {
+  window.open('https://calendar.google.com/calendar/u/0/r', '_blank');
+}
 // Affiche l'agenda Google intégré (iframe) dans l'écran Agenda
 function renderGoogleAgenda() {
   const sv = $('agenda-semaine-view'), mv = $('agenda-mois-view'), gg = $('agenda-google-view');
@@ -713,6 +721,11 @@ function renderGoogleAgenda() {
     });
     const url = 'https://calendar.google.com/calendar/embed?' + params.join('&');
     gg.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<button class="btn btn-green btn-sm" onclick="googleNewEvent()" title="Créer un nouvel événement dans Google Agenda">➕ Nouvel événement</button>' +
+        '<button class="btn btn-navy btn-sm" onclick="googleOpenAgenda()" title="Ouvrir / modifier dans Google Agenda">✏️ Ouvrir Google Agenda</button>' +
+        '<span style="font-size:11px;color:var(--g600);">Crée ou modifie dans Google, ça réapparaît ici aussitôt.</span>' +
+      '</div>' +
       '<iframe src="' + url + '" style="border:0;width:100%;height:72vh;min-height:560px;border-radius:10px;background:#fff;" frameborder="0" scrolling="no"></iframe>' +
       '<div style="font-size:11px;color:var(--g600);margin-top:6px;">🟡 Planning Dany Jessy (jaune) · 🔵 Agenda Dany (bleu). Si rien ne s\'affiche, connecte-toi à ce compte Google dans ce navigateur.</div>';
     gg.dataset.loaded = '1';
