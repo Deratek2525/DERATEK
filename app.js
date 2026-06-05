@@ -2675,6 +2675,52 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Neutralisation d\'un nid de guêpes difficile d\'accès', desc: "Neutralisation d'un nid de guêpes situé dans une zone difficile d'accès, notamment toiture, façade, caisson de store, grenier ou faux plafond, avec application ciblée d'un produit insecticide professionnel." },
     { label: 'Traitement contre les insectes volants', desc: "Traitement insecticide professionnel contre les insectes volants, avec application ciblée sur les zones de passage, de repos ou de nidification." },
     { label: 'Traitement curatif contre les guêpes', desc: "Traitement curatif contre les guêpes comprenant la neutralisation du nid, la suppression de l'activité et la sécurisation de la zone concernée." }
+  ] },
+  { groupe: 'Mites alimentaires', items: [
+    { label: 'Traitement contre les mites alimentaires', desc: "Traitement contre les mites alimentaires comprenant l'inspection des zones infestées, l'application d'un traitement insecticide adapté et la mise en place de dispositifs de surveillance." },
+    { label: 'Traitement curatif contre les mites alimentaires', desc: "Traitement curatif contre les mites alimentaires dans les zones de stockage, armoires, cuisines ou locaux concernés, avec application ciblée sur les zones à risque." },
+    { label: 'Mise en place de pièges de monitoring contre les mites alimentaires', desc: "Installation de pièges de surveillance à phéromones permettant de contrôler l'activité des mites alimentaires et d'évaluer l'efficacité du traitement." },
+    { label: 'Inspection et traitement des zones contaminées par les mites alimentaires', desc: "Inspection des denrées et des zones de stockage, retrait des sources infestées si nécessaire, puis traitement ciblé contre les mites alimentaires." }
+  ] },
+  { groupe: 'Blattes / cafards', items: [
+    { label: 'Traitement contre les blattes', desc: "Traitement professionnel contre les blattes comprenant l'application de gels insecticides spécifiques, la mise en place de dispositifs de monitoring et le contrôle des zones sensibles." },
+    { label: 'Application de gels professionnels contre les blattes', desc: "Application de gels insecticides professionnels contre les blattes dans les zones stratégiques : cuisine, plinthes, appareils électroménagers, passages techniques, armoires et locaux sensibles." },
+    { label: 'Traitement avec rotation de gels insecticides', desc: "Mise en place de différents gels insecticides professionnels afin de limiter les risques de résistance et d'améliorer l'efficacité du traitement contre les blattes." },
+    { label: 'Monitoring contre les blattes', desc: "Mise en place de pièges de surveillance afin de contrôler l'activité des blattes et d'évaluer l'évolution de l'infestation." }
+  ] },
+  { groupe: 'Fourmis', items: [
+    { label: 'Traitement contre les fourmis', desc: "Traitement professionnel contre les fourmis avec application ciblée d'un insecticide ou d'un gel appât selon l'espèce identifiée et les zones de passage constatées." },
+    { label: 'Traitement des points de passage des fourmis', desc: "Application ciblée sur les points de passage des fourmis, notamment plinthes, fissures, seuils de portes, fenêtres, murs, terrasse ou façade." },
+    { label: 'Traitement contre les fourmis dans les fissures', desc: "Injection ciblée d'un produit insecticide dans les fissures, interstices et zones de passage afin de traiter l'activité des fourmis à la source." }
+  ] },
+  { groupe: 'Punaises de lit', items: [
+    { label: 'Traitement contre les punaises de lit', desc: "Traitement professionnel contre les punaises de lit comprenant l'inspection des zones sensibles, le traitement des lits, plinthes, prises, fissures, meubles et zones de repos." },
+    { label: 'Traitement insecticide contre les punaises de lit', desc: "Application d'un traitement insecticide professionnel contre les punaises de lit sur les zones infestées et les points de refuge possibles." },
+    { label: 'Traitement vapeur sèche contre les punaises de lit', desc: "Traitement par vapeur sèche à haute température sur les zones sensibles afin d'agir directement sur les punaises de lit, œufs et larves présents dans les supports traités." },
+    { label: 'Traitement complémentaire contre les punaises de lit', desc: "Passage complémentaire de traitement contre les punaises de lit afin de renforcer l'efficacité du traitement initial et de traiter les éventuelles éclosions restantes." }
+  ] },
+  { groupe: 'Insectes rampants', items: [
+    { label: 'Traitement contre les insectes rampants', desc: "Traitement insecticide professionnel contre les insectes rampants avec application ciblée sur les zones de passage, fissures, plinthes, seuils, caves, locaux techniques et zones sensibles." },
+    { label: 'Traitement des zones de passage des insectes rampants', desc: "Application ciblée d'un produit insecticide professionnel sur les zones de circulation des insectes rampants afin de réduire rapidement leur activité." },
+    { label: 'Traitement curatif contre les insectes rampants', desc: "Traitement curatif contre les insectes rampants comprenant l'inspection, l'application du produit adapté et le contrôle des zones infestées." }
+  ] },
+  { groupe: 'Désinfection / assainissement', items: [
+    { label: 'Désinfection des surfaces', desc: "Désinfection des surfaces avec application d'un produit professionnel adapté, dans le but de réduire la charge microbienne présente sur les zones traitées." },
+    { label: 'Traitement de désinfection après infestation', desc: "Traitement de désinfection après présence de nuisibles, comprenant l'application ciblée d'un désinfectant professionnel sur les zones contaminées." },
+    { label: 'Désinfection de locaux techniques ou communs', desc: "Désinfection de locaux techniques, caves, buanderies, locaux poubelles ou parties communes à la suite d'une présence de nuisibles ou d'un risque sanitaire." }
+  ] },
+  { groupe: 'Pigeons / oiseaux', items: [
+    { label: 'Traitement contre les pigeons', desc: "Mise en place de dispositifs de lutte contre les pigeons afin de limiter leur présence, leurs salissures et les risques liés aux déjections." },
+    { label: 'Nettoyage et désinfection des déjections d\'oiseaux', desc: "Nettoyage des déjections d'oiseaux et désinfection des zones contaminées avec produits professionnels adaptés." },
+    { label: 'Pose de dispositifs anti-pigeons', desc: "Pose de dispositifs anti-pigeons adaptés à la configuration du bâtiment afin d'empêcher le stationnement ou la nidification des oiseaux." }
+  ] },
+  { groupe: 'Phrases générales utiles pour facture', items: [
+    { label: 'Intervention de lutte antiparasitaire', desc: "Intervention de lutte antiparasitaire comprenant l'inspection des lieux, l'identification des zones sensibles et l'application d'un traitement professionnel adapté à la situation." },
+    { label: 'Traitement curatif contre nuisibles', desc: "Traitement curatif contre nuisibles avec application ciblée de produits professionnels homologués, selon le type d'infestation constatée." },
+    { label: 'Contrôle après traitement', desc: "Contrôle après traitement afin de vérifier l'évolution de l'activité des nuisibles et d'adapter le dispositif si nécessaire." },
+    { label: 'Deuxième passage de traitement', desc: "Deuxième passage de traitement comprenant le contrôle des zones traitées, le renouvellement des appâts ou produits si nécessaire et le suivi de l'activité." },
+    { label: 'Traitement préventif', desc: "Traitement préventif des zones sensibles afin de limiter les risques de réinfestation ou de nouvelle colonisation par les nuisibles." },
+    { label: 'Inspection technique', desc: "Inspection technique des lieux afin d'identifier les signes d'activité, les points d'entrée possibles et les zones favorables au développement des nuisibles." }
   ] }
 ];
 // Construit les <optgroup> du sélecteur d'insertion de prestation
