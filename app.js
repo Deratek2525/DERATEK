@@ -2861,7 +2861,8 @@ function renderBons() {
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
-    bons = bons.filter(b => !isTermine(b));
+    // Actifs = ni terminés, ni en cours de traitement (ces derniers ont leur propre onglet)
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours');
   }
   if (q) {
     bons = bons.filter(b =>
