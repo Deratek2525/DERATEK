@@ -4784,9 +4784,13 @@ function downloadDocPDF(id) {
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11);
   let dy = 62;
+  const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
     destLines = [d.proprietaire, 'p.a. ' + (d.clientNom || ''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
+  } else if (!_hasStruct && (d.clientNom || '').includes(',')) {
+    // Destinataire combiné dans un seul champ → on le découpe sur les virgules (1 élément par ligne)
+    destLines = (d.clientNom || '').split(',').map(s => s.trim()).filter(Boolean);
   } else {
     destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
   }
