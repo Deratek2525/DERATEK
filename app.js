@@ -1123,6 +1123,34 @@ function confirmDeleteClient(id, nom) {
 // ============================================================
 function renderRapports() {
   updateNavCounts();
+  // Section "Reprendre plus tard" : tous les rapports en brouillon, accès direct
+  const draftsBox = $('rapports-drafts');
+  if (draftsBox) {
+    const drafts = (DB.rapports || []).filter(r => r.statut === 'Brouillon')
+      .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (drafts.length) {
+      draftsBox.innerHTML = `
+        <div style="border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;background:#fffbeb;">
+          <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:10px;">🕒 Reprendre plus tard (${drafts.length}) — brouillons non finalisés</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${drafts.map(r => `
+              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+                <div style="min-width:120px;">
+                  <div style="font-size:12px;font-weight:800;color:var(--navy);">📋 ${r.id}</div>
+                  <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(r.date) || '—'}</div>
+                </div>
+                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${r.clientNom || '— Sans client —'}${(r.nuisibles && r.nuisibles.length) ? ' · ' + r.nuisibles.join(', ') : ''}</div>
+                <div style="display:flex;gap:5px;flex-shrink:0;">
+                  <button class="btn btn-navy btn-sm" onclick="editRapport('${r.id}')" title="Reprendre ce rapport">▶ Reprendre</button>
+                  <button class="btn btn-red btn-sm btn-xs" onclick="event.stopPropagation();confirmDeleteRapport('${r.id}')" title="Supprimer ce brouillon">🗑</button>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    } else {
+      draftsBox.innerHTML = '';
+    }
+  }
   const q = ($('rapp-search') || {}).value || '';
   const list = DB.rapports.filter(r => {
     const m = r.id.toLowerCase().includes(q.toLowerCase()) || (r.clientNom||'').toLowerCase().includes(q.toLowerCase()) || (r.nuisibles||[]).join(' ').toLowerCase().includes(q.toLowerCase()) || (r.bonCommande||'').toLowerCase().includes(q.toLowerCase());
@@ -1597,6 +1625,13 @@ function saveRapport(statut) {
     toast(statut === 'Brouillon' ? 'Brouillon sauvegardé ✓' : 'Rapport finalisé ✓', '#2d9e6b');
     if (statut === 'Finalisé') setTimeout(() => showScreen('rapports'), 800);
   }
+}
+// Enregistre le rapport en brouillon ET revient à la liste : on pourra le reprendre
+// plus tard depuis la section "Reprendre plus tard". Sauvegardé dans Supabase + l'appli.
+function saveRapportReprendre() {
+  saveRapport('Brouillon');
+  toast('Enregistré — à reprendre dans « Reprendre plus tard »', '#2d9e6b');
+  setTimeout(() => showScreen('rapports'), 700);
 }
 
 // ============================================================

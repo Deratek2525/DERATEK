@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604do">
+<link rel="stylesheet" href="./style.css?v=20260604dp">
 </head>
 <body>
 
@@ -439,6 +439,7 @@
       </div>
     </div>
     <div style="padding:16px 20px;overflow-y:auto;flex:1;">
+      <div id="rapports-drafts" style="margin-bottom:18px;"></div>
       <div id="diagnostics-section" style="margin-bottom:18px;"></div>
       <div class="card">
         <table class="tbl">
@@ -463,7 +464,8 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="downloadPDF()">📥 PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="printRapport()">🖨️ Imprimer</button>
-        <button class="btn btn-ghost btn-sm" onclick="saveRapport(&#39;Brouillon&#39;)">💾 Sauvegarder</button>
+        <button class="btn btn-ghost btn-sm" onclick="saveRapport(&#39;Brouillon&#39;)" title="Enregistrer sans quitter">💾 Sauvegarder</button>
+        <button class="btn btn-ghost btn-sm" onclick="saveRapportReprendre()" title="Enregistrer et revenir à la liste pour le reprendre plus tard">🕒 Reprendre plus tard</button>
         <button class="btn btn-navy btn-sm" onclick="saveRapport(&#39;Finalisé&#39;)">✓ Finaliser</button>
         <button class="btn btn-green btn-sm" onclick="saveRapport(&#39;Envoyé&#39;)">✉️ Envoyer</button>
       </div>
@@ -967,7 +969,7 @@
             <button class="btn btn-ghost btn-xs" style="margin-top:5px;" onclick="clearSig()">⌫ Effacer</button>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-full" onclick="saveRapport(&#39;Brouillon&#39;)">💾 Brouillon</button>
+            <button class="btn btn-ghost btn-full" onclick="saveRapportReprendre()">💾 Enregistrer et reprendre plus tard</button>
             <button class="btn btn-ghost btn-full" onclick="downloadPDF()">📥 Télécharger PDF</button>
             <button class="btn btn-navy btn-full" onclick="saveRapport(&#39;Finalisé&#39;)">✓ Finaliser</button>
             <button class="btn btn-green btn-full" onclick="saveRapport(&#39;Envoyé&#39;)">✉️ Finaliser &amp; Envoyer</button>
@@ -1271,10 +1273,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./logo.js?v=20260604do"></script>
-<script src="./footer_prestations.js?v=20260604do"></script>
-<script src="./config.js?v=20260604do"></script>
-<script src="./app.js?v=20260604do"></script>
-<script src="./pdf.js?v=20260604do"></script>
+<script src="./logo.js?v=20260604dp"></script>
+<script src="./footer_prestations.js?v=20260604dp"></script>
+<script src="./config.js?v=20260604dp"></script>
+<script src="./app.js?v=20260604dp"></script>
+<script src="./pdf.js?v=20260604dp"></script>
 
 </body></html>
