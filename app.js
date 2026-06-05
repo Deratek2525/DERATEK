@@ -936,6 +936,7 @@ function deleteInterv() {
 // CLIENTS
 // ============================================================
 function renderClients() {
+  updateNavCounts();
   const q = ($('cl-search') || {}).value || '';
   const list = DB.clients.filter(c => {
     const match = c.nom.toLowerCase().includes(q.toLowerCase()) || (c.ville||'').toLowerCase().includes(q.toLowerCase());
@@ -1121,6 +1122,7 @@ function confirmDeleteClient(id, nom) {
 // RAPPORTS LIST
 // ============================================================
 function renderRapports() {
+  updateNavCounts();
   const q = ($('rapp-search') || {}).value || '';
   const list = DB.rapports.filter(r => {
     const m = r.id.toLowerCase().includes(q.toLowerCase()) || (r.clientNom||'').toLowerCase().includes(q.toLowerCase()) || (r.nuisibles||[]).join(' ').toLowerCase().includes(q.toLowerCase()) || (r.bonCommande||'').toLowerCase().includes(q.toLowerCase());
@@ -2384,6 +2386,7 @@ async function bonConfirmSave() {
 
 // Liste des locataires, regroupés par gérance
 function renderLocataires() {
+  updateNavCounts();
   const q = (($('loc-search') || {}).value || '').toLowerCase();
   const all = DB.locataires || [];
   const list = q
@@ -2851,8 +2854,9 @@ function bonSetDateEffectuee(id, index, value) {
   renderBons();
 }
 
-// Met à jour les compteurs des boutons de navigation Bons / En cours / Terminés
-function updateBonsCounts() {
+// Met à jour les compteurs de TOUS les boutons de navigation
+function updateBonsCounts() { updateNavCounts(); }
+function updateNavCounts() {
   let nA = 0, nE = 0, nT = 0;
   (DB.bons || []).forEach(b => {
     const s = b.statut || '';
@@ -2860,10 +2864,19 @@ function updateBonsCounts() {
     else if (s === 'en-cours') nE++;
     else nA++;
   });
+  const docs = DB.documents || [];
+  const nDevis = docs.filter(d => (d.type || 'devis') === 'devis').length;
+  const nFact  = docs.filter(d => d.type === 'facture').length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
   set('nb-bons-encours-count', nE);
   set('nb-bons-termines-count', nT);
+  set('nb-devis-count', nDevis);
+  set('nb-factures-count', nFact);
+  set('nb-rapports-count', (DB.rapports || []).length);
+  set('nb-clients-count', (DB.clients || []).length);
+  set('nb-locataires-count', (DB.locataires || []).length);
+  set('nb-fournisseurs-count', (DB.fournisseurs || []).length);
 }
 
 function renderBons() {
@@ -3905,6 +3918,7 @@ function confirmDeleteDoc(id, label) {
 
 // Liste des devis/factures
 function renderDocuments() {
+  updateNavCounts();
   const list = $('documents-list');
   const count = $('documents-count');
   const q = (($('doc-search') || {}).value || '').toLowerCase();
@@ -5483,6 +5497,7 @@ function confirmDeleteFourn(id, label) {
 }
 
 function renderFournisseurs() {
+  updateNavCounts();
   const list = $('fournisseurs-list');
   const count = $('fournisseurs-count');
   const q = (($('fourn-search') || {}).value || '').toLowerCase();
