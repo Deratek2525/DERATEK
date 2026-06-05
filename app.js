@@ -378,6 +378,7 @@ function showScreen(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const nb = $(`nb-${name}`);
   if (nb) nb.classList.add('active');
+  if (typeof updateBonsCounts === 'function') updateBonsCounts();
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
   if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
@@ -469,6 +470,7 @@ async function doLogout() {
 // DASHBOARD
 // ============================================================
 function renderDashboard() {
+  if (typeof updateBonsCounts === 'function') updateBonsCounts();
   const now = new Date();
   const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -2849,7 +2851,23 @@ function bonSetDateEffectuee(id, index, value) {
   renderBons();
 }
 
+// Met à jour les compteurs des boutons de navigation Bons / En cours / Terminés
+function updateBonsCounts() {
+  let nA = 0, nE = 0, nT = 0;
+  (DB.bons || []).forEach(b => {
+    const s = b.statut || '';
+    if (s === 'termine') nT++;
+    else if (s === 'en-cours') nE++;
+    else nA++;
+  });
+  const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
+  set('nb-bons-count', nA);
+  set('nb-bons-encours-count', nE);
+  set('nb-bons-termines-count', nT);
+}
+
 function renderBons() {
+  updateBonsCounts();
   const list = $('bons-list');
   const count = $('bons-count');
   const q = (($('bon-search') || {}).value || '').toLowerCase();
