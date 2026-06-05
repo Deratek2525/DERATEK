@@ -3917,11 +3917,38 @@ function renderDocuments() {
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (count) count.textContent = docs.length ? docs.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
   if (!list) return;
+  // Section "Bons terminés à facturer" (uniquement dans l'onglet Factures) :
+  // les bons au statut "Terminé" qui n'ont pas encore de facture liée.
+  let aFacturerHtml = '';
+  if (filtre === 'facture') {
+    const dejaFacture = id => (DB.documents || []).some(x => (x.type === 'facture') && x.bonId === id);
+    const aFacturer = (DB.bons || []).filter(b => (b.statut || '') === 'termine' && !dejaFacture(b.id));
+    if (aFacturer.length) {
+      aFacturerHtml = `
+        <div style="margin-bottom:14px;border:1.5px solid #16a34a;border-radius:10px;padding:12px 14px;background:#f0fdf4;">
+          <div style="font-size:13px;font-weight:800;color:#166534;margin-bottom:10px;">✅ Bons terminés à facturer (${aFacturer.length})</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${aFacturer.map(b => `
+              <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+                <div style="min-width:120px;">
+                  <div style="font-size:12px;font-weight:800;color:var(--navy);">📄 ${b.numero||'—'}</div>
+                  <div style="font-size:11px;color:var(--g600);">${b.geranceNom||'—'}</div>
+                </div>
+                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${b.locataireNom?('🏠 '+b.locataireNom+' · '):''}${_bonProblemeClean(b)||''}</div>
+                <div style="display:flex;gap:5px;flex-shrink:0;">
+                  <button class="btn btn-green btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer la facture depuis ce bon">🧾 Créer la facture</button>
+                  <button class="btn btn-ghost btn-sm" onclick="showBonsTermines()" title="Voir dans les bons terminés">Voir le bon</button>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+  }
   if (!docs.length) {
     const msg = (filtre === 'facture')
       ? 'Aucune facture.<br>Crée une facture avec « + Nouvelle facture » ou convertis un devis accepté.'
       : 'Aucun devis.<br>Crée un devis depuis un bon « à facturer » ou avec « + Nouveau devis ».';
-    list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">' + msg + '</div></div>';
+    list.innerHTML = aFacturerHtml + '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">' + msg + '</div></div>';
     return;
   }
   const statutColors = {
@@ -3933,7 +3960,7 @@ function renderDocuments() {
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
   const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
-  list.innerHTML = docs.map(d => {
+  list.innerHTML = aFacturerHtml + docs.map(d => {
     const isDevis = d.type === 'devis';
     const accent = isDevis ? '#8b5cf6' : '#2d9e6b';
     const st = statutColors[d.statut] || statutColors.brouillon;
