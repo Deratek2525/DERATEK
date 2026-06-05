@@ -1039,9 +1039,12 @@ function renderClients() {
           <div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.3px;">CHF/h</div>
         </div>
       </div>
-      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
         <button class="btn btn-ghost btn-sm" onclick="openNewRapportForClient('${c.id}')" title="Nouveau rapport">+ Rapport</button>
+        ${CLIENT_TYPES_DOC.includes(c.type) ? `
+        <button class="btn btn-sm" onclick="createDevisFromClient('${c.id}')" title="Créer un devis pour ce client" style="font-weight:700;border:1.5px solid #8b5cf6;background:#f5f3ff;color:#6d28d9;">📝 Devis</button>
+        <button class="btn btn-sm" onclick="createFactureFromClient('${c.id}')" title="Créer une facture pour ce client" style="font-weight:700;border:1.5px solid #2d9e6b;background:#ecfdf5;color:#166534;">🧾 Facture</button>` : ''}
         <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteClient('${c.id}','${c.nom.replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
       </div>
     </div>`;
@@ -3551,6 +3554,26 @@ function createDocFromBon(bonId, type) {
 // Raccourcis depuis un bon
 function createDevisFromBon(bonId)   { createDocFromBon(bonId, 'devis'); }
 function createFactureFromBon(bonId) { createDocFromBon(bonId, 'facture'); }
+
+// Types de clients pour lesquels on propose de créer directement un devis/facture
+const CLIENT_TYPES_DOC = ['Particulier', 'PPE', 'Association', 'Commune'];
+// Crée un devis OU une facture pré-rempli depuis un client (le client est le destinataire/payeur)
+function createDocFromClient(clientId, type) {
+  type = type || 'devis';
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) { toast('Client introuvable', '#e63946'); return; }
+  _editingDoc = {
+    id: newId(), type: type, numero: _nextDocNumero(type), dateDoc: today(),
+    clientId: c.id, clientNom: c.nom || '', clientAdresse: c.adresse || '',
+    clientNpa: c.npa || '', clientVille: c.ville || '',
+    locataireNom: '', locataireAdresse: '', proprietaire: '', bonId: '',
+    lignes: [{ desc: '', qte: 1, prix: 0 }],
+    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
+  };
+  openDocEditor();
+}
+function createDevisFromClient(id)   { createDocFromClient(id, 'devis'); }
+function createFactureFromClient(id) { createDocFromClient(id, 'facture'); }
 
 // Ouvre un NOUVEAU rapport d'intervention pré-rempli depuis un bon de travaux
 function createRapportFromBon(bonId) {
