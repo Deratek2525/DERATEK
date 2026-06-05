@@ -4117,6 +4117,13 @@ function saveDoc() {
   }
   toast('✓ ' + (_editingDoc.type === 'facture' ? 'Facture' : 'Devis') + ' enregistré', '#2d9e6b');
   closeModal('modal-doc');
+  // Si c'est une ancienne facture archivée, on reste sur son onglet et on rafraîchit sa liste
+  if (_docIsArchive(toSave)) {
+    if (typeof renderAnciennesList === 'function') renderAnciennesList();
+    if (typeof renderClients === 'function') renderClients();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    return;
+  }
   // Bascule sur l'onglet correspondant au type enregistré pour qu'il soit visible
   state.docsFilter = (toSave.type === 'facture') ? 'facture' : 'devis';
   renderDocuments();
@@ -5841,7 +5848,8 @@ function renderAnciennesList() {
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
               <option value="envoyee" ${!paye ? 'selected' : ''}>⏳ Non payée</option>
             </select>
-            <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥</button>
+            <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
+            <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
             <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
           </div>
         </div>`;
