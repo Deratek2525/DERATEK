@@ -2929,7 +2929,13 @@ function updateNavCounts() {
     else nA++;
   });
   const docs = DB.documents || [];
-  const nDevis = docs.filter(d => (d.type || 'devis') === 'devis').length;
+  const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis').length;
+  // Bons en demande de devis (en attente) sans devis encore créé
+  const nDevisAttente = (DB.bons || []).filter(b =>
+    (b.statut || '') === 'demande-devis' &&
+    !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
+  ).length;
+  const nDevis = nDevisDocs + nDevisAttente;
   const nFact  = docs.filter(d => d.type === 'facture').length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
