@@ -554,15 +554,18 @@ function generatePDF(rapport, statut) {
       doc.setPage(i);
       doc.setFillColor(...C.navy);
       doc.rect(0, 285, W, 12, 'F');
+      // Ligne 1 : marque (gauche) + pagination (droite)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
       doc.setTextColor(...C.white);
-      doc.text('DERATEK Professional Pest Control', M, 291.5);
+      doc.text('DERATEK Professional Pest Control', M, 290);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(180, 190, 210);
-      doc.text('info@deratek.ch', M + 70, 291.5);
-      doc.text(`Page ${i} / ${pageCount}`, W - M, 291.5, { align: 'right' });
-      doc.text('Document confidentiel — © DERATEK 2026', W/2, 291.5, { align: 'center' });
+      doc.text(`Page ${i} / ${pageCount}`, W - M, 290, { align: 'right' });
+      // Ligne 2 : confidentialité + contacts (email + site), centrée
+      doc.setFontSize(6);
+      doc.setTextColor(180, 190, 210);
+      doc.text('Document confidentiel — © DERATEK 2026   ·   info@deratek.ch   ·   www.deratek.ch', W/2, 294.5, { align: 'center' });
     }
 
     return doc;
