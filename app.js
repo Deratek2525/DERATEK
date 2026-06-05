@@ -2982,10 +2982,11 @@ function renderBons() {
                   const hasNote = _bonNoteHasData(_bonNoteData(b));
                   return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
                 })()}
-                <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon">📋 Rapport</button>
                 ${(() => {
                   const fait = _bonRapFait(b);
-                  return `<button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#22c55e' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
+                  const rapStyle = fait ? 'border:1.5px solid #16a34a;background:#16a34a;color:#fff;' : '';
+                  return `<button class="btn ${fait ? 'btn-sm' : 'btn-ghost btn-sm'}" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon" style="font-weight:700;${rapStyle}">📋 Rapport</button>
+                <button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#16a34a' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
                 })()}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
