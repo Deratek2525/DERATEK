@@ -685,11 +685,11 @@ function agendaNav(dir) {
   renderAgenda();
 }
 function agendaToday() { state.agendaDate = new Date(); renderAgenda(); }
-// Agendas Google à afficher dans l'écran Agenda (intégration en lecture).
-// Ajoute ici l'ID d'un autre agenda (ex. 'xxxx@group.calendar.google.com') pour l'inclure.
-const GOOGLE_CAL_IDS = [
-  'deratekswiss@gmail.com',
-  '1bdab5f890b0785f068ac6f711beaead294a8db487852a8286e02bfa128044d5@group.calendar.google.com'
+// Agendas Google affichés dans l'écran Agenda (intégration en lecture), avec leur couleur.
+// color = couleur d'affichage des événements de cet agenda dans l'app.
+const GOOGLE_CALS = [
+  { id: 'deratekswiss@gmail.com', color: '#039BE5' },                                                             // Dany — bleu
+  { id: '1bdab5f890b0785f068ac6f711beaead294a8db487852a8286e02bfa128044d5@group.calendar.google.com', color: '#F6BF26' } // Planning Dany Jessy — jaune
 ];
 function renderAgenda() {
   if (state.agendaView === 'google') renderGoogleAgenda();
@@ -705,12 +705,16 @@ function renderGoogleAgenda() {
   gg.style.display = 'block';
   const per = $('agenda-period'); if (per) per.textContent = 'Mon agenda Google';
   if (!gg.dataset.loaded) {
-    const params = ['ctz=Europe/Zurich', 'wkst=2', 'mode=WEEK', 'showTitle=0', 'showPrint=0', 'showTabs=1', 'showCalendars=1', 'showTz=0']
-      .concat(GOOGLE_CAL_IDS.map(id => 'src=' + encodeURIComponent(id)));
+    let params = ['ctz=Europe/Zurich', 'wkst=2', 'mode=WEEK', 'showTitle=0', 'showPrint=0', 'showTabs=1', 'showCalendars=1', 'showTz=0'];
+    // src + color s'enchaînent dans le même ordre (chaque couleur s'applique à l'agenda qui précède)
+    GOOGLE_CALS.forEach(c => {
+      params.push('src=' + encodeURIComponent(c.id));
+      if (c.color) params.push('color=' + encodeURIComponent(c.color));
+    });
     const url = 'https://calendar.google.com/calendar/embed?' + params.join('&');
     gg.innerHTML =
       '<iframe src="' + url + '" style="border:0;width:100%;height:72vh;min-height:560px;border-radius:10px;background:#fff;" frameborder="0" scrolling="no"></iframe>' +
-      '<div style="font-size:11px;color:var(--g600);margin-top:6px;">Agenda Google de ' + GOOGLE_CAL_IDS.join(', ') + '. Si rien ne s\'affiche, connecte-toi à ce compte Google dans ce navigateur.</div>';
+      '<div style="font-size:11px;color:var(--g600);margin-top:6px;">🟡 Planning Dany Jessy (jaune) · 🔵 Agenda Dany (bleu). Si rien ne s\'affiche, connecte-toi à ce compte Google dans ce navigateur.</div>';
     gg.dataset.loaded = '1';
   }
 }
