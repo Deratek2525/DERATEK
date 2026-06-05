@@ -1201,7 +1201,7 @@ function resetRapportForm() {
   if ($('r-nb-passages')) $('r-nb-passages').value = '';
   rSetDates([]);
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = false);
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => { const el = $(id); if (el) el.checked = false; });
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => { const el = $(id); if (el) el.checked = false; });
   renderProduits(); resetPhotoGrid(); clearSig();
   $('edit-id').textContent = newId;
   $('edit-status').className = 'badge b-gray'; $('edit-status').textContent = 'Brouillon';
@@ -1245,7 +1245,7 @@ function editRapport(id) {
   if ($('r-contact')) $('r-contact').value = _rapContactNom(r.contact);
   if ($('r-contact-role')) $('r-contact-role').value = _rapContactRole(r.contact) || 'Gérant';
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]').forEach(c => c.checked = (r.nuisibles||[]).includes(c.value));
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = r.rdvHeure || '';
   if ($('r-bon-commande')) $('r-bon-commande').value = r.bonCommande || '';
   // Restaurer le locataire : depuis le marqueur [LOC:...] (ou anciens champs pour rétrocompat)
@@ -1504,8 +1504,8 @@ function saveRapport(statut) {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [], traitementLabels = [];
-  const tLabels = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges mécaniques','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection','t-gelpro':"Application de gels professionnels — fourmis (Lasius, emarginatus, flavus, pharaon) & blattes (germanique, américaine, orientale, rayées)"};
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => { const el = $(id); if (el && el.checked) { traitement.push(id); traitementLabels.push(tLabels[id]); } });
+  const tLabels = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts/pièges','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges mécaniques','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection','t-gel-fl':"Application de gels professionnels — Fourmis Lasius",'t-gel-fe':"Application de gels professionnels — Fourmis emarginatus",'t-gel-ff':"Application de gels professionnels — Fourmis flavus",'t-gel-fp':"Application de gels professionnels — Fourmis pharaon",'t-gel-bg':"Application de gels professionnels — Blattes germanique",'t-gel-ba':"Application de gels professionnels — Blattes américaine",'t-gel-bo':"Application de gels professionnels — Blattes orientale",'t-gel-br':"Application de gels professionnels — Blattes rayées"};
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => { const el = $(id); if (el && el.checked) { traitement.push(id); traitementLabels.push(tLabels[id]); } });
 
   const clientId  = $('r-client').value;
   const client    = DB.clients.find(c => c.id === clientId);
@@ -1609,8 +1609,8 @@ function updatePDF() {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [];
-  const tL = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection','t-gelpro':"Application de gels professionnels — fourmis (Lasius, emarginatus, flavus, pharaon) & blattes (germanique, américaine, orientale, rayées)"};
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => { const el = $(id); if (el && el.checked) traitement.push(tL[id]); });
+  const tL = {'t-pulv':'Pulvérisation','t-vapeur':'Vapeur','t-thermique':'Thermique','t-injection':'Injection','t-appats':'Appâts','t-monitoring':'Monitoring','t-desinfect':'Désinfection','t-flocage':'Flocage','t-gel':'Gel','t-poudre':'Poudre','t-fumigation':'Fumigation','t-pose':'Pièges','t-appatage':'Boîtes d\'appâtage sécurisées','t-rodenticide':'Rodenticides professionnels','t-racumin':'Racumin','t-talonwax':'Talonwax injection','t-gel-fl':"Application de gels professionnels — Fourmis Lasius",'t-gel-fe':"Application de gels professionnels — Fourmis emarginatus",'t-gel-ff':"Application de gels professionnels — Fourmis flavus",'t-gel-fp':"Application de gels professionnels — Fourmis pharaon",'t-gel-bg':"Application de gels professionnels — Blattes germanique",'t-gel-ba':"Application de gels professionnels — Blattes américaine",'t-gel-bo':"Application de gels professionnels — Blattes orientale",'t-gel-br':"Application de gels professionnels — Blattes rayées"};
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => { const el = $(id); if (el && el.checked) traitement.push(tL[id]); });
   const st = (id, val) => { const el = $(id); if (el) el.textContent = val || '—'; };
   st('pdf-id',    $('r-id').value);
   st('pdf-date',  fmtDate($('r-date').value));

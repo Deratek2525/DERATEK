@@ -251,7 +251,14 @@ function generatePDF(rapport, statut) {
       't-fumigation':'Fumigation','t-pose':'Pièges mécaniques',
       't-appatage':"Boîtes d'appâtage sécurisées",'t-rodenticide':'Rodenticides professionnels',
       't-racumin':'Racumin','t-talonwax':'Talonwax injection',
-      't-gelpro':"Application de gels professionnels — fourmis (Lasius, emarginatus, flavus, pharaon) & blattes (germanique, américaine, orientale, rayées)"
+      't-gel-fl':"Application de gels professionnels — Fourmis Lasius",
+      't-gel-fe':"Application de gels professionnels — Fourmis emarginatus",
+      't-gel-ff':"Application de gels professionnels — Fourmis flavus",
+      't-gel-fp':"Application de gels professionnels — Fourmis pharaon",
+      't-gel-bg':"Application de gels professionnels — Blattes germanique",
+      't-gel-ba':"Application de gels professionnels — Blattes américaine",
+      't-gel-bo':"Application de gels professionnels — Blattes orientale",
+      't-gel-br':"Application de gels professionnels — Blattes rayées"
     };
     const methodes = (rapport.traitement||[]).map(t => tLabels[t]||t);
     checkPage(40);
@@ -614,7 +621,7 @@ function getCurrentRapportData() {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
   const traitement = [];
-  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gelpro'].forEach(id => {
+  ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => {
     const el = document.getElementById(id); if (el && el.checked) traitement.push(id);
   });
   const clientId = document.getElementById('r-client').value;
