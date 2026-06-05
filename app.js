@@ -5746,6 +5746,7 @@ async function ancExtractIA(texte) {
     "Extrais les informations et réponds UNIQUEMENT par un objet JSON valide, sans texte ni Markdown. Clés exactes (chaîne vide si absent) :\n" +
     '{\n' +
     '"numero_facture":"numéro de la facture (ex 37126)",\n' +
+    '"numero_bon":"numéro de bon de travail / bon pour travaux / bon de commande si présent (ex \'2026 021 124\')",\n' +
     '"numero_devis":"numéro de devis cité dans le texte (ex 260378)",\n' +
     '"date":"date de la facture au format AAAA-MM-JJ (ex \'NEUCHÂTEL LE 20.04.2026\' -> 2026-04-20)",\n' +
     '"proprietaire":"UNIQUEMENT si l\'adresse contient \'p.a.\' (= par adresse / chez) : le nom de la personne AVANT le p.a. (ex \'Monsieur Aldo Brauen\'). Vide s\'il n\'y a pas de p.a.",\n' +
@@ -5794,6 +5795,7 @@ function ancShowForm(infos) {
       <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Corrige ce que l'IA aurait mal lu, puis « ✅ Valider et enregistrer ».</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;">
         ${champ('N° facture', 'numero_facture', infos.numero_facture)}
+        ${champ('N° bon de travail', 'numero_bon', infos.numero_bon)}
         ${champ('N° devis', 'numero_devis', infos.numero_devis)}
         ${champ('Date (AAAA-MM-JJ)', 'date', infos.date)}
         ${champ('Locataire — nom', 'locataire_nom', infos.locataire_nom)}
@@ -5896,6 +5898,7 @@ function ancValider() {
   const t = _calcTotaux(lignes, tvaTaux, rabaisPct);
   const locNom = [val('anc-locataire_prenom'), val('anc-locataire_nom')].filter(Boolean).join(' ');
   const notesParts = [];
+  if (val('anc-numero_bon')) notesParts.push('Bon n° ' + val('anc-numero_bon'));
   if (val('anc-numero_devis')) notesParts.push('Devis n° ' + val('anc-numero_devis'));
   if (val('anc-nuisible')) notesParts.push('Nuisible : ' + val('anc-nuisible'));
   notesParts.push('Importé de l\'historique Excel');
