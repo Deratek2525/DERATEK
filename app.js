@@ -4558,7 +4558,12 @@ function renderDocuments() {
   let aFacturerHtml = '';
   if (filtre === 'facture') {
     const dejaFacture = id => (DB.documents || []).some(x => (x.type === 'facture') && x.bonId === id);
-    const aFacturer = (DB.bons || []).filter(b => (b.statut || '') === 'termine' && !dejaFacture(b.id));
+    const aFacturer = (DB.bons || []).filter(b => (b.statut || '') === 'termine' && !dejaFacture(b.id))
+      .sort((a, b) => {
+        const ga = _geranceCanon(a.geranceNom || '').toLowerCase(), gbn = _geranceCanon(b.geranceNom || '').toLowerCase();
+        if (ga !== gbn) return ga.localeCompare(gbn, 'fr');
+        return (a.numero || '').localeCompare(b.numero || '');
+      });
     if (aFacturer.length) {
       aFacturerHtml = `
         <div style="margin-bottom:14px;border:1.5px solid #16a34a;border-radius:10px;padding:12px 14px;background:#f0fdf4;">
@@ -4574,7 +4579,12 @@ function renderDocuments() {
   let aDeviserHtml = '';
   if (filtre === 'devis') {
     const dejaDevis = id => (DB.documents || []).some(x => ((x.type || 'devis') === 'devis') && x.bonId === id);
-    const aDeviser = (DB.bons || []).filter(b => (b.statut || '') === 'demande-devis' && !dejaDevis(b.id));
+    const aDeviser = (DB.bons || []).filter(b => (b.statut || '') === 'demande-devis' && !dejaDevis(b.id))
+      .sort((a, b) => {
+        const ga = _geranceCanon(a.geranceNom || '').toLowerCase(), gbn = _geranceCanon(b.geranceNom || '').toLowerCase();
+        if (ga !== gbn) return ga.localeCompare(gbn, 'fr');
+        return (a.numero || '').localeCompare(b.numero || '');
+      });
     if (aDeviser.length) {
       aDeviserHtml = `
         <div style="margin-bottom:14px;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;background:#eef2ff;">
