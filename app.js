@@ -6205,8 +6205,17 @@ function renderAnciennesList() {
   if (!list.length) { box.innerHTML = ''; return; }
   const nPay = list.filter(d => d.statut === 'payee').length;
   const totalTTC = list.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  const totalPaye = list.filter(d => d.statut === 'payee').reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  const totalNonPaye = totalTTC - totalPaye;
+  const nNonPay = list.length - nPay;
   box.innerHTML = `
-    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;border-top:1px solid #eee;padding-top:12px;">📁 Anciennes factures enregistrées (${list.length}) — ${nPay} payée(s) · total ${_displayMontant(totalTTC)} CHF</div>
+    <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures enregistrées (${list.length}) · total ${_displayMontant(totalTTC)} CHF</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé (payées)</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span></div>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">⏳ Reste à encaisser (non payées)</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
+      </div>
+    </div>
     <div style="display:flex;flex-direction:column;gap:6px;">
       ${list.map(d => {
         const paye = d.statut === 'payee';
