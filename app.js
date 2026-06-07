@@ -274,6 +274,7 @@ function seedData() { /* no-op en mode Supabase */ }
 let state = {
   anc: { queue: [], qIdx: 0, fileName: '' },
   docStatutFilter: 'tous',
+  docGroupBy: 'date',
   editingRapportId: null,
   editingClientId:  null,
   editingIntervId:  null,
@@ -4648,7 +4649,7 @@ function renderDocuments() {
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
   const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
-  list.innerHTML = topHtml + docs.map(d => {
+  const cardOf = (d) => {
     const isDevis = d.type === 'devis';
     const accent = isDevis ? '#8b5cf6' : '#2d9e6b';
     const st = statutColors[d.statut] || statutColors.brouillon;
@@ -4680,7 +4681,34 @@ function renderDocuments() {
         <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
       </div>
     </div>`;
-  }).join('');
+  };
+  // Barre de classement (par date / par gérance)
+  const gb = state.docGroupBy || 'date';
+  const gbtn = (v, label) => `<button onclick="docSetGroupBy('${v}')" style="font-size:11px;font-weight:700;padding:5px 10px;border-radius:16px;cursor:pointer;border:1.5px solid ${gb===v?'#0d1b3e':'#d1d5db'};background:${gb===v?'#0d1b3e':'#fff'};color:${gb===v?'#fff':'#374151'};">${label}</button>`;
+  const groupToolbar = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;"><span style="font-size:11px;color:var(--g600);font-weight:700;">Classer :</span>${gbtn('date','📅 Par date')}${gbtn('gerance','🏢 Par gérance')}</div>`;
+  // Rendu : à plat (par date) ou regroupé par gérance
+  let cardsHtml;
+  if (gb === 'gerance') {
+    const groups = {};
+    docs.forEach(d => { const k = ((d.clientNom || '').trim()) || '(Sans client)'; (groups[k] = groups[k] || []).push(d); });
+    cardsHtml = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'fr')).map(g => {
+      const arr = groups[g];
+      const sub = arr.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+      return `
+        <div style="margin-top:12px;">
+          <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;border-bottom:2px solid #e5e7eb;padding-bottom:4px;margin-bottom:6px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(sub)} CHF)</span></div>
+          ${arr.map(cardOf).join('')}
+        </div>`;
+    }).join('');
+  } else {
+    cardsHtml = docs.map(cardOf).join('');
+  }
+  list.innerHTML = topHtml + groupToolbar + cardsHtml;
+}
+// Classement de la liste devis/factures : 'date' ou 'gerance'
+function docSetGroupBy(v) {
+  state.docGroupBy = (v === 'gerance') ? 'gerance' : 'date';
+  renderDocuments();
 }
 
 // ============================================================
