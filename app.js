@@ -2656,7 +2656,7 @@ const BON_NOTE_NUISIBLES = [
 ];
 // Prestations types à insérer dans les remarques de la note (libellé court + description complète)
 const BON_NOTE_PRESTATIONS = [
-  { groupe: 'Guêpes — nid', items: [
+  { groupe: 'Guêpes — nid', nuisibles: ['Guêpes'], items: [
     { label: 'Nid de guêpes — caisson de store', desc: "Traitement contre un nid de guêpes situé dans un caisson de store, effectué par injection d’une poudre insecticide professionnelle." },
     { label: 'Nid de guêpes — sous toiture', desc: "Traitement contre un nid de guêpes situé sous toiture, effectué par injection d’une poudre insecticide professionnelle." },
     { label: 'Nid de guêpes — jardin', desc: "Traitement contre un nid de guêpes situé dans un jardin, effectué par injection d’une poudre insecticide professionnelle." },
@@ -2674,15 +2674,33 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Nid de guêpes — canne télescopique 10 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 10 mètres, avec application d’une poudre insecticide professionnelle." }
   ] }
 ];
-// Construit les <optgroup> du sélecteur d'insertion de prestation
-function _bonNotePrestaOptions() {
+// Construit les <optgroup> du sélecteur d'insertion de prestation.
+// Si un nuisible est passé, on n'affiche QUE les groupes liés à ce nuisible
+// (s'il en existe ; sinon on affiche tout pour rester utilisable).
+function _bonNotePrestaOptions(selectedNuisible) {
+  let groups = BON_NOTE_PRESTATIONS;
+  if (selectedNuisible) {
+    const sn = selectedNuisible.toLowerCase();
+    const matching = BON_NOTE_PRESTATIONS.filter(g => (g.nuisibles || []).some(n => {
+      const nn = String(n).toLowerCase();
+      return nn === sn || sn.includes(nn) || nn.includes(sn);
+    }));
+    if (matching.length) groups = matching;
+  }
   let html = '<option value="">➕ Insérer une prestation type…</option>';
-  BON_NOTE_PRESTATIONS.forEach((g, gi) => {
+  groups.forEach(g => {
+    const realGi = BON_NOTE_PRESTATIONS.indexOf(g);   // index dans le tableau complet (pour l'insertion)
     html += `<optgroup label="${g.groupe}">` +
-      g.items.map((it, ii) => `<option value="${gi}-${ii}">${it.label}</option>`).join('') +
+      g.items.map((it, ii) => `<option value="${realGi}-${ii}">${it.label}</option>`).join('') +
       '</optgroup>';
   });
   return html;
+}
+// Quand on change le nuisible concerné, on re-filtre la liste des prestations
+function bonNoteNuisibleChanged() {
+  const nuis = (($('bon-note-nuisible') || {}).value) || '';
+  const selP = $('bon-note-presta');
+  if (selP) selP.innerHTML = _bonNotePrestaOptions(nuis);
 }
 // Insère la description complète de la prestation choisie dans la zone Remarques
 function bonNoteInsertPresta(val, sel) {
@@ -2893,7 +2911,7 @@ function openBonNote(id) {
     if ($('bon-note-tva') && !$('bon-note-tva').value) $('bon-note-tva').value = dfltTva;
   }
   const ta = $('bon-note-text'); if (ta) ta.value = d.texte || '';
-  const selP = $('bon-note-presta'); if (selP) selP.innerHTML = _bonNotePrestaOptions();
+  const selP = $('bon-note-presta'); if (selP) selP.innerHTML = _bonNotePrestaOptions(d.nuisible || '');
   const titre = $('bon-note-bon'); if (titre) titre.textContent = b.numero || '';
   const st = $('bon-note-status'); if (st) st.textContent = '';
   bonNoteRecalc();
