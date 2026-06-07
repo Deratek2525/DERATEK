@@ -2180,6 +2180,57 @@ async function viewBonPdf(bonId) {
   }
 }
 
+// --- Aperçu du PDF d'un bon au survol (sans cliquer) ---
+let _bonPdfUrlCache = {};
+let _bonPdfHoverTimer = null;
+async function bonPdfPreview(bonId, el) {
+  clearTimeout(_bonPdfHoverTimer);
+  _bonPdfHoverTimer = setTimeout(async () => {
+    const bon = (DB.bons || []).find(b => b.id === bonId);
+    if (!bon || !bon.pdfPath || !sb) return;
+    let url = _bonPdfUrlCache[bonId];
+    if (!url) {
+      try {
+        const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(bon.pdfPath, 3600);
+        if (error || !data || !data.signedUrl) return;
+        url = data.signedUrl; _bonPdfUrlCache[bonId] = url;
+      } catch (e) { return; }
+    }
+    _showPdfHoverPreview(url, el);
+  }, 250);
+}
+function bonPdfPreviewHide() {
+  clearTimeout(_bonPdfHoverTimer);
+  // petit délai pour permettre de déplacer la souris sur l'aperçu
+  setTimeout(() => {
+    const p = document.getElementById('pdf-hover-preview');
+    if (p && !p.matches(':hover')) p.style.display = 'none';
+  }, 180);
+}
+function _showPdfHoverPreview(url, el) {
+  let p = document.getElementById('pdf-hover-preview');
+  if (!p) {
+    p = document.createElement('div');
+    p.id = 'pdf-hover-preview';
+    p.style.cssText = 'position:fixed;z-index:99999;width:340px;height:460px;background:#fff;border:2px solid #0d1b3e;border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.35);overflow:hidden;display:none;';
+    p.innerHTML = '<div style="font-size:11px;font-weight:700;color:#0d1b3e;padding:4px 8px;background:#eef2f8;">📎 Aperçu du PDF</div><iframe style="width:100%;height:calc(100% - 22px);border:0;"></iframe>';
+    document.body.appendChild(p);
+    p.addEventListener('mouseenter', () => { p.style.display = 'block'; });
+    p.addEventListener('mouseleave', () => { p.style.display = 'none'; });
+  }
+  const ifr = p.querySelector('iframe');
+  const full = url + '#toolbar=0&navpanes=0&view=FitH';
+  if (ifr.getAttribute('src') !== full) ifr.setAttribute('src', full);
+  const r = el.getBoundingClientRect();
+  let left = r.left - 200; if (left < 8) left = 8;
+  if (left + 340 > window.innerWidth - 8) left = window.innerWidth - 348;
+  let top = r.bottom + 6;
+  if (top + 460 > window.innerHeight - 8) top = Math.max(8, r.top - 466);
+  p.style.left = left + 'px';
+  p.style.top = top + 'px';
+  p.style.display = 'block';
+}
+
 // Supprime le PDF du Storage (en silence si échec — la suppression du bon prime)
 async function _deleteBonPdf(pdfPath) {
   if (!sb || !pdfPath) return;
@@ -3421,7 +3472,7 @@ function renderBonCard(b) {
                   <option value="termine"       ${statut === 'termine'       ? 'selected' : ''}>✅ Travail terminé</option>
                   <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
-                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" title="Ouvrir le PDF dans un nouvel onglet">📎 PDF</button>` : ''}
+                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" onmouseenter="bonPdfPreview('${b.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = ouvrir dans un nouvel onglet">📎 PDF</button>` : ''}
                 ${(() => {
                   const hasNote = _bonNoteHasData(_bonNoteData(b));
                   return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
