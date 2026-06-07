@@ -3950,8 +3950,8 @@ function createDocFromClient(clientId, type) {
     id: newId(), type: type, numero: _nextDocNumero(type), dateDoc: today(),
     clientId: c.id, clientNom: c.nom || '', clientAdresse: c.adresse || '',
     clientNpa: c.npa || '', clientVille: c.ville || '',
-    locataireNom: '', locataireAdresse: '', proprietaire: '', bonId: '',
-    lignes: [{ desc: '', qte: 1, prix: 0 }],
+    locataireNom: '', locataireAdresse: '', proprietaire: '', bonId: '', nuisible: '',
+    lignes: [{ desc: '', qte: 1, prix: 0 }, { desc: "Dates d'intervention : ", qte: 1, prix: 0 }],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
   };
   // Bascule sur l'onglet Devis / Factures puis ouvre l'éditeur (le document se crée « dans Factures »)
@@ -4012,7 +4012,8 @@ function openNewDoc(type) {
   _editingDoc = {
     id: newId(), type: type, numero: _nextDocNumero(type),
     dateDoc: today(), clientId: '', clientNom: '', clientAdresse: '', clientNpa: '', clientVille: '',
-    locataireNom: '', bonId: '', lignes: [{ desc: '', qte: 1, prix: 0 }],
+    locataireNom: '', bonId: '', nuisible: '',
+    lignes: [{ desc: '', qte: 1, prix: 0 }, { desc: "Dates d'intervention : ", qte: 1, prix: 0 }],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
   };
   openDocEditor();
@@ -4141,12 +4142,46 @@ function getAllPrestations() {
   return out.sort((a, b) => (a.libelle||'').localeCompare(b.libelle||''));
 }
 // Sélection d'une prestation modèle → remplit la description (et le prix si défini)
-function onLignePresta(i, libelle) {
-  if (!libelle || !_editingDoc || !_editingDoc.lignes[i]) return;
-  _editingDoc.lignes[i].desc = libelle;
-  const p = getAllPrestations().find(x => x.libelle === libelle);
-  if (p && parseFloat(p.prix) > 0) _editingDoc.lignes[i].prix = parseFloat(p.prix);
+function onLignePresta(i, value) {
+  if (!value || !_editingDoc || !_editingDoc.lignes[i]) return;
+  if (value.indexOf('presta:') === 0) {
+    // Prestation par nuisible (BON_NOTE_PRESTATIONS) → on insère la description complète
+    const [gi, ii] = value.slice(7).split('-').map(Number);
+    const it = BON_NOTE_PRESTATIONS[gi] && BON_NOTE_PRESTATIONS[gi].items[ii];
+    if (it) _editingDoc.lignes[i].desc = it.desc;
+  } else {
+    const libelle = (value.indexOf('lib:') === 0) ? value.slice(4) : value;
+    _editingDoc.lignes[i].desc = libelle;
+    const p = getAllPrestations().find(x => x.libelle === libelle);
+    if (p && parseFloat(p.prix) > 0) _editingDoc.lignes[i].prix = parseFloat(p.prix);
+  }
   renderDocEditor();
+}
+// Change le nuisible du document (filtre les prestations proposées par ligne)
+function docSetNuisible(v) {
+  if (!_editingDoc) return;
+  _editingDoc.nuisible = v || '';
+  renderDocEditor();
+}
+// Options du menu "prestation" d'une ligne : prestations du nuisible choisi + standards toujours présents
+function _docPrestaOptions(nuisible) {
+  let html = '<option value="">＋ Choisir une prestation…</option>';
+  if (nuisible) {
+    const sn = nuisible.toLowerCase();
+    BON_NOTE_PRESTATIONS.forEach(g => {
+      if (!(g.nuisibles || []).some(n => { const nn = String(n).toLowerCase(); return nn === sn || sn.includes(nn) || nn.includes(sn); })) return;
+      const gi = BON_NOTE_PRESTATIONS.indexOf(g);
+      html += `<optgroup label="${g.groupe}">` +
+        g.items.map((it, ii) => `<option value="presta:${gi}-${ii}">${it.label}</option>`).join('') +
+        '</optgroup>';
+    });
+  }
+  html += '<optgroup label="Standard">' +
+    '<option value="lib:Matériel et main d\'œuvre">Matériel et main d\'œuvre</option>' +
+    '<option value="lib:Dates d\'intervention : ">Dates d\'intervention</option>' +
+    getAllPrestations().map(p => `<option value="lib:${(p.libelle||'').replace(/"/g,'&quot;')}">${(p.libelle||'').replace(/</g,'&lt;')}</option>`).join('') +
+    '</optgroup>';
+  return html;
 }
 // Enregistre la description (et le prix) d'une ligne comme nouvelle prestation modèle
 function addPrestaModel(i) {
@@ -4217,7 +4252,7 @@ function renderDocEditor() {
   if (!d) return;
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
   const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
-  const prestaOpts = getAllPrestations().map(p => `<option value="${(p.libelle||'').replace(/"/g,'&quot;')}">${(p.libelle||'').replace(/</g,'&lt;')}</option>`).join('');
+  const prestaOpts = _docPrestaOptions(d.nuisible || '');
   const lignesHtml = d.lignes.map((l, i) => `
     <tr>
       <td style="padding:3px;">
@@ -4252,6 +4287,10 @@ function renderDocEditor() {
         <select class="form-input" onchange="docSetBureau(this.value)" style="font-weight:600;">
           ${BUREAUX.map(bu => `<option value="${bu.id}" ${(d.bureauId||'ne')===bu.id?'selected':''}>DERATEK ${bu.label} — ${bu.rue}, ${bu.npa} ${bu.ville} · Tél. ${bu.tel}</option>`).join('')}
         </select>
+      </div>
+      <div class="form-group" style="grid-column:1 / -1;">
+        <label class="form-label">🐛 Nuisible concerné (filtre les prestations)</label>
+        <select class="form-input" onchange="docSetNuisible(this.value)" style="font-size:13px;">${_bonNoteNuisibleOptions(d.nuisible || '')}</select>
       </div>
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
