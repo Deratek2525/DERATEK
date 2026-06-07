@@ -3947,6 +3947,8 @@ function createDocFromClient(clientId, type) {
     lignes: [{ desc: '', qte: 1, prix: 0 }],
     tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
   };
+  // Bascule sur l'onglet Devis / Factures puis ouvre l'éditeur (le document se crée « dans Factures »)
+  if (typeof showDocsScreen === 'function') showDocsScreen(type);
   openDocEditor();
 }
 function createDevisFromClient(id)   { createDocFromClient(id, 'devis'); }
