@@ -273,6 +273,7 @@ function seedData() { /* no-op en mode Supabase */ }
 // ============================================================
 let state = {
   anc: { queue: [], qIdx: 0, fileName: '' },
+  docStatutFilter: 'tous',
   editingRapportId: null,
   editingClientId:  null,
   editingIntervId:  null,
@@ -365,11 +366,17 @@ const initials = nom => nom.split(' ').filter(w => w.length > 1).slice(0,2).map(
 // Ouvre l'écran Devis/Factures filtré sur un type ('devis' ou 'facture')
 function showDocsScreen(type) {
   state.docsFilter = (type === 'facture') ? 'facture' : 'devis';
+  state.docStatutFilter = 'tous';   // réinitialise le filtre par statut à chaque changement d'onglet
   showScreen('devis');
   // Surligne le bon bouton du menu (devis ou factures)
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const nb = $(state.docsFilter === 'facture' ? 'nb-factures' : 'nb-devis');
   if (nb) nb.classList.add('active');
+}
+// Filtre la liste des factures/devis par statut (chips récap)
+function docSetStatutFilter(v) {
+  state.docStatutFilter = v || 'tous';
+  renderDocuments();
 }
 
 function showScreen(name) {
@@ -4446,9 +4453,13 @@ function renderDocuments() {
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
   let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d));
+  const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
+  // Filtre par statut (chips récap)
+  const sf = state.docStatutFilter || 'tous';
+  if (sf !== 'tous') docs = docs.filter(d => (d.statut || 'brouillon') === sf);
   if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
-  if (count) count.textContent = docs.length ? docs.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
+  if (count) count.textContent = allOfType.length ? allOfType.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
   if (!list) return;
   // Section "Bons terminés à facturer" (uniquement dans l'onglet Factures) :
   // les bons au statut "Terminé" qui n'ont pas encore de facture liée.
@@ -4502,7 +4513,34 @@ function renderDocuments() {
         </div>
       </div>`;
   }
-  const topHtml = aFacturerHtml + aDeviserHtml + brouillonsHtml;
+  // Barre récap + filtres par statut (uniquement pour les Factures)
+  let statsBar = '';
+  if (filtre === 'facture') {
+    const byS = st => allOfType.filter(d => (d.statut || 'brouillon') === st);
+    const sumS = st => byS(st).reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+    const tBrouillon = sumS('brouillon'), tEnvoyee = sumS('envoyee'), tPayee = sumS('payee');
+    const totalEnvoye = tEnvoyee + tPayee;
+    const chip = (val, label, n, col) => {
+      const on = (sf === val);
+      return `<button onclick="docSetStatutFilter('${val}')" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid ${on ? col : '#d1d5db'};background:${on ? col : '#fff'};color:${on ? '#fff' : '#374151'};">${label} (${n})</button>`;
+    };
+    const carte = (label, montant, bg, bd, cl) =>
+      `<div style="background:${bg};border:1px solid ${bd};border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:${cl};font-weight:800;">${label}</span> : <b>${_displayMontant(montant)} CHF</b></div>`;
+    statsBar = `
+      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:10px;">
+        ${chip('tous', 'Toutes', allOfType.length, '#0d1b3e')}
+        ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
+        ${chip('envoyee', '📨 Non payées', byS('envoyee').length, '#2563eb')}
+        ${chip('payee', '✅ Payées', byS('payee').length, '#16a34a')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        ${carte('Total envoyé', totalEnvoye, '#ecfdf5', '#bbf7d0', '#166534')}
+        ${carte('Total non envoyé (brouillons)', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
+        ${carte('Reste à encaisser', tEnvoyee, '#eff6ff', '#bfdbfe', '#1d4ed8')}
+        ${carte('Encaissé (payées)', tPayee, '#f0fdf4', '#bbf7d0', '#15803d')}
+      </div>`;
+  }
+  const topHtml = statsBar + aFacturerHtml + aDeviserHtml + brouillonsHtml;
   if (!docs.length) {
     const msg = (filtre === 'facture')
       ? 'Aucune facture.<br>Crée une facture avec « + Nouvelle facture » ou convertis un devis accepté.'
