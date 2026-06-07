@@ -3003,16 +3003,18 @@ const BON_NOTE_PRESTATIONS = [
 // Construit les <optgroup> du sélecteur d'insertion de prestation.
 // Si un nuisible est passé, on n'affiche QUE les groupes liés à ce nuisible
 // (s'il en existe ; sinon on affiche tout pour rester utilisable).
-function _bonNotePrestaOptions(selectedNuisible) {
-  let groups = BON_NOTE_PRESTATIONS;
-  if (selectedNuisible) {
-    const sn = selectedNuisible.toLowerCase();
-    const matching = BON_NOTE_PRESTATIONS.filter(g => (g.nuisibles || []).some(n => {
-      const nn = String(n).toLowerCase();
-      return nn === sn || sn.includes(nn) || nn.includes(sn);
-    }));
-    if (matching.length) groups = matching;
-  }
+// Groupes de prestations correspondant à une liste de nuisibles (1 ou 2)
+function _prestaMatchGroups(nuisibles) {
+  const sel = (Array.isArray(nuisibles) ? nuisibles : [nuisibles]).map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+  if (!sel.length) return [];
+  return BON_NOTE_PRESTATIONS.filter(g => (g.nuisibles || []).some(n => {
+    const nn = String(n).toLowerCase();
+    return sel.some(sn => nn === sn || sn.includes(nn) || nn.includes(sn));
+  }));
+}
+function _bonNotePrestaOptions(nuisibles) {
+  const m = _prestaMatchGroups(nuisibles);
+  let groups = m.length ? m : BON_NOTE_PRESTATIONS;
   let html = '<option value="">➕ Insérer une prestation type…</option>';
   groups.forEach(g => {
     const realGi = BON_NOTE_PRESTATIONS.indexOf(g);   // index dans le tableau complet (pour l'insertion)
@@ -3024,9 +3026,10 @@ function _bonNotePrestaOptions(selectedNuisible) {
 }
 // Quand on change le nuisible concerné, on re-filtre la liste des prestations
 function bonNoteNuisibleChanged() {
-  const nuis = (($('bon-note-nuisible') || {}).value) || '';
+  const n1 = (($('bon-note-nuisible') || {}).value) || '';
+  const n2 = (($('bon-note-nuisible2') || {}).value) || '';
   const selP = $('bon-note-presta');
-  if (selP) selP.innerHTML = _bonNotePrestaOptions(nuis);
+  if (selP) selP.innerHTML = _bonNotePrestaOptions([n1, n2]);
 }
 // Insère la description complète de la prestation choisie dans la zone Remarques
 function bonNoteInsertPresta(val, sel) {
@@ -3088,14 +3091,14 @@ function _bonNoteNuisibleOptions(selected) {
 // note en texte brut est lue comme { texte: "..." }.
 function _bonNoteData(b) {
   const raw = (typeof b === 'string') ? b : _bonNote(b);
-  const base = { statut: '', nuisible: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '' };
+  const base = { statut: '', nuisible: '', nuisible2: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '' };
   if (!raw) return base;
   const s = raw.trim();
   if (s.charAt(0) === '{') {
     try {
       const o = JSON.parse(s);
       return {
-        statut: o.statut || '', nuisible: o.nuisible || '', typeInterv: o.typeInterv || '',
+        statut: o.statut || '', nuisible: o.nuisible || '', nuisible2: o.nuisible2 || '', typeInterv: o.typeInterv || '',
         prixHT: (o.prixHT != null ? o.prixHT : ''),
         rabais: (o.rabais != null ? o.rabais : ''), tva: (o.tva != null ? o.tva : ''),
         texte: o.texte || ''
@@ -3106,7 +3109,7 @@ function _bonNoteData(b) {
   return base;
 }
 function _bonNoteHasData(d) {
-  return !!(d && (d.statut || d.nuisible || d.typeInterv || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
+  return !!(d && (d.statut || d.nuisible || d.nuisible2 || d.typeInterv || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
 }
 // Calcule les montants dérivés (rabais, HT net, TVA, TTC) à partir des champs saisis
 function _bonNoteCalc(d) {
@@ -3129,7 +3132,7 @@ function _bonNoteText(d) {
   if (!d) return '';
   const lines = [];
   if (d.statut) lines.push('Statut : ' + d.statut);
-  if (d.nuisible) lines.push('Nuisible : ' + d.nuisible);
+  if (d.nuisible) lines.push('Nuisible : ' + d.nuisible + (d.nuisible2 ? ' + ' + d.nuisible2 : ''));
   if (d.typeInterv) lines.push('Type d\'intervention : ' + d.typeInterv);
   if (datesInterv.length) lines.push('Dates d\'intervention : ' + datesInterv.map(fmtDate).join(', '));
   if (d.prixHT !== '' && d.prixHT != null) {
@@ -3215,9 +3218,11 @@ function openBonNote(id) {
       // Conserve un ancien statut qui ne serait plus dans la liste
       ((d.statut && BON_NOTE_STATUTS.indexOf(d.statut) === -1) ? `<option value="${(d.statut||'').replace(/"/g,'&quot;')}" selected>${d.statut}</option>` : '');
   }
-  // Nuisible (avec optgroups par catégorie)
+  // Nuisible (avec optgroups par catégorie) — deux sélecteurs possibles
   const selN = $('bon-note-nuisible');
   if (selN) selN.innerHTML = _bonNoteNuisibleOptions(d.nuisible);
+  const selN2 = $('bon-note-nuisible2');
+  if (selN2) selN2.innerHTML = _bonNoteNuisibleOptions(d.nuisible2);
   // Type d'intervention
   const selT = $('bon-note-type');
   if (selT) {
@@ -3237,7 +3242,7 @@ function openBonNote(id) {
     if ($('bon-note-tva') && !$('bon-note-tva').value) $('bon-note-tva').value = dfltTva;
   }
   const ta = $('bon-note-text'); if (ta) ta.value = d.texte || '';
-  const selP = $('bon-note-presta'); if (selP) selP.innerHTML = _bonNotePrestaOptions(d.nuisible || '');
+  const selP = $('bon-note-presta'); if (selP) selP.innerHTML = _bonNotePrestaOptions([d.nuisible, d.nuisible2]);
   const titre = $('bon-note-bon'); if (titre) titre.textContent = b.numero || '';
   const st = $('bon-note-status'); if (st) st.textContent = '';
   bonNoteRecalc();
@@ -3266,6 +3271,7 @@ function saveBonNote() {
   const data = {
     statut: val('bon-note-statut') || '',
     nuisible: val('bon-note-nuisible') || '',
+    nuisible2: val('bon-note-nuisible2') || '',
     typeInterv: val('bon-note-type') || '',
     prixHT: htRaw === '' ? '' : (parseFloat(htRaw) || 0),
     rabais: htRaw === '' ? '' : (parseFloat(val('bon-note-rabais')) || 0),
@@ -4216,19 +4222,20 @@ function docSetNuisible(v) {
   _editingDoc.nuisible = v || '';
   renderDocEditor();
 }
+function docSetNuisible2(v) {
+  if (!_editingDoc) return;
+  _editingDoc.nuisible2 = v || '';
+  renderDocEditor();
+}
 // Options du menu "prestation" d'une ligne : prestations du nuisible choisi + standards toujours présents
-function _docPrestaOptions(nuisible) {
+function _docPrestaOptions(nuisibles) {
   let html = '<option value="">＋ Choisir une prestation…</option>';
-  if (nuisible) {
-    const sn = nuisible.toLowerCase();
-    BON_NOTE_PRESTATIONS.forEach(g => {
-      if (!(g.nuisibles || []).some(n => { const nn = String(n).toLowerCase(); return nn === sn || sn.includes(nn) || nn.includes(sn); })) return;
-      const gi = BON_NOTE_PRESTATIONS.indexOf(g);
-      html += `<optgroup label="${g.groupe}">` +
-        g.items.map((it, ii) => `<option value="presta:${gi}-${ii}">${it.label}</option>`).join('') +
-        '</optgroup>';
-    });
-  }
+  _prestaMatchGroups(nuisibles).forEach(g => {
+    const gi = BON_NOTE_PRESTATIONS.indexOf(g);
+    html += `<optgroup label="${g.groupe}">` +
+      g.items.map((it, ii) => `<option value="presta:${gi}-${ii}">${it.label}</option>`).join('') +
+      '</optgroup>';
+  });
   html += '<optgroup label="Standard">' +
     '<option value="lib:Matériel et main d\'œuvre">Matériel et main d\'œuvre</option>' +
     '<option value="lib:Dates d\'intervention : ">Dates d\'intervention</option>' +
@@ -4305,7 +4312,7 @@ function renderDocEditor() {
   if (!d) return;
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
   const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
-  const prestaOpts = _docPrestaOptions(d.nuisible || '');
+  const prestaOpts = _docPrestaOptions([d.nuisible, d.nuisible2]);
   const lignesHtml = d.lignes.map((l, i) => `
     <tr>
       <td style="padding:3px;">
@@ -4341,9 +4348,13 @@ function renderDocEditor() {
           ${BUREAUX.map(bu => `<option value="${bu.id}" ${(d.bureauId||'ne')===bu.id?'selected':''}>DERATEK ${bu.label} — ${bu.rue}, ${bu.npa} ${bu.ville} · Tél. ${bu.tel}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group" style="grid-column:1 / -1;">
+      <div class="form-group">
         <label class="form-label">🐛 Nuisible concerné (filtre les prestations)</label>
         <select class="form-input" onchange="docSetNuisible(this.value)" style="font-size:13px;">${_bonNoteNuisibleOptions(d.nuisible || '')}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">🐛 2ᵉ nuisible (optionnel)</label>
+        <select class="form-input" onchange="docSetNuisible2(this.value)" style="font-size:13px;">${_bonNoteNuisibleOptions(d.nuisible2 || '')}</select>
       </div>
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
