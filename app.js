@@ -2672,6 +2672,28 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Nid de guêpes — canne télescopique 8 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 8 mètres, avec application d’une poudre insecticide professionnelle." },
     { label: 'Nid de guêpes — canne télescopique 9 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 9 mètres, avec application d’une poudre insecticide professionnelle." },
     { label: 'Nid de guêpes — canne télescopique 10 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 10 mètres, avec application d’une poudre insecticide professionnelle." }
+  ] },
+  { groupe: 'Rongeurs — rats & souris', nuisibles: ['Souris', 'Rats', 'Mulots', 'Loirs'], items: [
+    { label: 'Boîtes d\'appâtage sécurisées', desc: "Mise en place de boîtes d’appâtage sécurisées contre les rongeurs." },
+    { label: 'Dératisation — postes sécurisés', desc: "Traitement de dératisation par mise en place de postes d’appâtage sécurisés." },
+    { label: 'Rodenticides — boîtes sécurisées', desc: "Mise en place de rodenticides professionnels dans des boîtes sécurisées." },
+    { label: 'Souris — postes sécurisés', desc: "Traitement contre les souris avec mise en place de postes d’appâtage sécurisés." },
+    { label: 'Rats — postes sécurisés', desc: "Traitement contre les rats avec mise en place de postes d’appâtage sécurisés." },
+    { label: 'Boîtes — caves', desc: "Mise en place de boîtes d’appâtage sécurisées dans les caves." },
+    { label: 'Boîtes — local poubelles', desc: "Mise en place de boîtes d’appâtage sécurisées dans le local poubelles." },
+    { label: 'Boîtes — zones de passage', desc: "Mise en place de boîtes d’appâtage sécurisées dans les zones de passage des rongeurs." },
+    { label: 'Dératisation — appartement', desc: "Traitement de dératisation dans un appartement avec pose de postes d’appâtage sécurisés." },
+    { label: 'Dératisation — cuisine', desc: "Traitement de dératisation dans une cuisine avec pose de postes d’appâtage sécurisés." },
+    { label: 'Dératisation — sous-sol', desc: "Traitement de dératisation dans un sous-sol avec pose de postes d’appâtage sécurisés." },
+    { label: 'Dératisation — combles', desc: "Traitement de dératisation dans des combles avec pose de postes d’appâtage sécurisés." },
+    { label: 'Dératisation — local technique', desc: "Traitement de dératisation dans un local technique avec pose de postes d’appâtage sécurisés." },
+    { label: 'Dératisation — jardin', desc: "Traitement de dératisation dans un jardin avec pose de postes d’appâtage sécurisés." },
+    { label: 'Contrôle et recharge des boîtes', desc: "Contrôle et recharge des boîtes d’appâtage sécurisées contre les rongeurs." },
+    { label: 'Contrôle consommation des appâts', desc: "Contrôle de consommation des appâts rodenticides dans les postes sécurisés." },
+    { label: 'Renforcement du dispositif', desc: "Renforcement du dispositif de dératisation avec ajout de boîtes d’appâtage sécurisées." },
+    { label: 'Monitoring rongeurs', desc: "Mise en place d’un dispositif de monitoring contre les rongeurs." },
+    { label: 'Contrôle traces / indices', desc: "Contrôle des traces de passage, consommations et indices de présence de rongeurs." },
+    { label: 'Traitement curatif rongeurs', desc: "Traitement curatif contre les rongeurs avec produits professionnels homologués." }
   ] }
 ];
 // Construit les <optgroup> du sélecteur d'insertion de prestation.
