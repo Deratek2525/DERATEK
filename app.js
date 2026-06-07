@@ -2655,7 +2655,25 @@ const BON_NOTE_NUISIBLES = [
   { groupe: 'Autres animaux nuisibles', items: ['Fouines', 'Martres', 'Taupes', 'Pigeons', 'Corbeaux', 'Étourneaux'] }
 ];
 // Prestations types à insérer dans les remarques de la note (libellé court + description complète)
-const BON_NOTE_PRESTATIONS = []; // vidé — en attente de la nouvelle liste
+const BON_NOTE_PRESTATIONS = [
+  { groupe: 'Guêpes — nid', items: [
+    { label: 'Nid de guêpes — caisson de store', desc: "Traitement contre un nid de guêpes situé dans un caisson de store, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — sous toiture', desc: "Traitement contre un nid de guêpes situé sous toiture, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — jardin', desc: "Traitement contre un nid de guêpes situé dans un jardin, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — terrasse', desc: "Traitement contre un nid de guêpes situé sur une terrasse, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — chambre', desc: "Traitement contre un nid de guêpes situé dans une chambre, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — cuisine', desc: "Traitement contre un nid de guêpes situé dans une cuisine, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — séjour', desc: "Traitement contre un nid de guêpes situé dans un séjour, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — cheminée', desc: "Traitement contre un nid de guêpes situé dans une cheminée, effectué par injection d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 3 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 3 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 5 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 5 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 6 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 6 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 7 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 7 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 8 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 8 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 9 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 9 mètres, avec application d’une poudre insecticide professionnelle." },
+    { label: 'Nid de guêpes — canne télescopique 10 m', desc: "Traitement contre un nid de guêpes à l’aide d’une canne télescopique de 10 mètres, avec application d’une poudre insecticide professionnelle." }
+  ] }
+];
 // Construit les <optgroup> du sélecteur d'insertion de prestation
 function _bonNotePrestaOptions() {
   let html = '<option value="">➕ Insérer une prestation type…</option>';
