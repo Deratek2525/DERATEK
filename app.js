@@ -2212,7 +2212,7 @@ function _showPdfHoverPreview(url, el) {
   if (!p) {
     p = document.createElement('div');
     p.id = 'pdf-hover-preview';
-    p.style.cssText = 'position:fixed;z-index:99999;width:340px;height:460px;background:#fff;border:2px solid #0d1b3e;border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.35);overflow:hidden;display:none;';
+    p.style.cssText = 'position:fixed;z-index:99999;width:540px;height:720px;max-height:88vh;background:#fff;border:2px solid #0d1b3e;border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.35);overflow:hidden;display:none;';
     p.innerHTML = '<div style="font-size:11px;font-weight:700;color:#0d1b3e;padding:4px 8px;background:#eef2f8;">📎 Aperçu du PDF</div><iframe style="width:100%;height:calc(100% - 22px);border:0;"></iframe>';
     document.body.appendChild(p);
     p.addEventListener('mouseenter', () => { p.style.display = 'block'; });
@@ -2222,10 +2222,11 @@ function _showPdfHoverPreview(url, el) {
   const full = url + '#toolbar=0&navpanes=0&view=FitH';
   if (ifr.getAttribute('src') !== full) ifr.setAttribute('src', full);
   const r = el.getBoundingClientRect();
-  let left = r.left - 200; if (left < 8) left = 8;
-  if (left + 340 > window.innerWidth - 8) left = window.innerWidth - 348;
+  const W = 540, H = Math.min(720, Math.round(window.innerHeight * 0.88));
+  let left = r.left - 280; if (left < 8) left = 8;
+  if (left + W > window.innerWidth - 8) left = window.innerWidth - W - 8;
   let top = r.bottom + 6;
-  if (top + 460 > window.innerHeight - 8) top = Math.max(8, r.top - 466);
+  if (top + H > window.innerHeight - 8) top = Math.max(8, window.innerHeight - H - 8);
   p.style.left = left + 'px';
   p.style.top = top + 'px';
   p.style.display = 'block';
