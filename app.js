@@ -2680,13 +2680,28 @@ function bonNoteInsertPresta(val, sel) {
 }
 // Types d'intervention
 const BON_NOTE_TYPES_INTERV = [
-  'Diagnostic', 'Traitement préventif', 'Traitement curatif', 'Désinsectisation',
-  'Dératisation', 'Dépigeonnage', 'Capture / éviction', 'Contrôle de suivi', 'Garantie / retour',
-  'Traitement d\'un nid de guêpes',
-  'Traitement d\'un nid de guêpes sous toiture',
-  'Traitement d\'un nid de guêpes dans un caisson de store',
-  'Traitement d\'un nid de guêpes dans un buisson',
-  'Traitement d\'un nid de guêpes dans le jardin'
+  'Traitement guêpes',
+  'Traitement frelons',
+  'Traitement blattes',
+  'Traitement punaises de lit',
+  'Traitement mites alimentaires',
+  'Traitement mites textiles',
+  'Traitement poissons d\'argent',
+  'Traitement fourmis',
+  'Traitement rongeurs',
+  'Dératisation',
+  'Traitement souris',
+  'Traitement rats',
+  'Traitement fouines',
+  'Traitement pigeons',
+  'Traitement mouches',
+  'Traitement insectes du bois',
+  'Traitement capricornes',
+  'Traitement vrillettes',
+  'Traitement désinfection',
+  'Inspection / diagnostic',
+  'Contrôle après traitement',
+  'Monitoring nuisibles'
 ];
 // Liste à plat de tous les nuisibles (pour vérifier la présence)
 function _bonNoteAllNuisibles() {
