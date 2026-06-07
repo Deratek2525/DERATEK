@@ -4689,14 +4689,21 @@ function renderDocuments() {
   // Rendu : à plat (par date) ou regroupé par gérance
   let cardsHtml;
   if (gb === 'gerance') {
+    // Regroupe par gérance avec une clé NORMALISÉE (minuscules, espaces, variantes via _geranceCanon)
+    // pour que la même gérance écrite différemment soit bien réunie.
     const groups = {};
-    docs.forEach(d => { const k = ((d.clientNom || '').trim()) || '(Sans client)'; (groups[k] = groups[k] || []).push(d); });
-    cardsHtml = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'fr')).map(g => {
-      const arr = groups[g];
+    docs.forEach(d => {
+      const canon = _geranceCanon(d.clientNom || '') || '(Sans client)';
+      const key = canon.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!groups[key]) groups[key] = { name: canon, items: [] };
+      groups[key].items.push(d);
+    });
+    cardsHtml = Object.keys(groups).sort((a, b) => groups[a].name.localeCompare(groups[b].name, 'fr')).map(k => {
+      const arr = groups[k].items;
       const sub = arr.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
       return `
         <div style="margin-top:12px;">
-          <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;border-bottom:2px solid #e5e7eb;padding-bottom:4px;margin-bottom:6px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(sub)} CHF)</span></div>
+          <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;border-bottom:2px solid #e5e7eb;padding-bottom:4px;margin-bottom:6px;">🏢 ${groups[k].name} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(sub)} CHF)</span></div>
           ${arr.map(cardOf).join('')}
         </div>`;
     }).join('');
