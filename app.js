@@ -2753,6 +2753,38 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Renforcé — plinthes/vapeur/poudre/gaines', desc: "Traitement renforcé contre les punaises de lit avec démontage des plinthes, vapeur sèche, poudre insecticide et rebouchage des gaines." },
     { label: 'Complet zones de refuge', desc: "Traitement complet des zones de refuge des punaises de lit comprenant les plinthes, prises, interrupteurs, gaines électriques et fissures." },
     { label: 'Combiné — vapeur + micro-encapsulé + poudre', desc: "Traitement professionnel contre les punaises de lit avec application combinée de vapeur sèche, insecticide micro-encapsulé et poudre insecticide professionnelle." }
+  ] },
+  { groupe: 'Fouines', nuisibles: ['Fouines', 'Martres'], items: [
+    { label: 'Inspection zones de passage', desc: "Inspection des zones de passage suspectées d’une fouine." },
+    { label: 'Recherche points d\'entrée', desc: "Recherche des points d’entrée utilisés par la fouine." },
+    { label: 'Contrôle combles / toiture / façade', desc: "Contrôle des combles, toiture, façade et isolation concernant une présence possible de fouine." },
+    { label: 'Recherche d\'indices de présence', desc: "Recherche d’indices de présence de fouine : odeurs, déjections, bruits, traces et dégâts." },
+    { label: 'Traitement répulsif professionnel', desc: "Mise en place d’un traitement répulsif professionnel contre les fouines." },
+    { label: 'Répulsif — zones de passage', desc: "Application d’un répulsif professionnel dans les zones de passage de la fouine." },
+    { label: 'Répulsif — combles', desc: "Traitement répulsif contre les fouines dans les combles." },
+    { label: 'Répulsif — sous toiture', desc: "Traitement répulsif contre les fouines sous toiture." },
+    { label: 'Répulsif — isolation', desc: "Traitement répulsif contre les fouines dans l’isolation." },
+    { label: 'Répulsif — caisson de store', desc: "Traitement répulsif contre les fouines dans un caisson de store." },
+    { label: 'Répulsif — vides techniques', desc: "Traitement répulsif contre les fouines dans les vides techniques." },
+    { label: 'Répulsif — façade / isolation', desc: "Traitement répulsif contre les fouines entre la façade et l’isolation." },
+    { label: 'Dispositif répulsif', desc: "Mise en place d’un dispositif répulsif afin de limiter la présence de fouines." },
+    { label: 'Répulsif ciblé — zones sensibles', desc: "Application ciblée d’un produit répulsif professionnel dans les zones sensibles." },
+    { label: 'Nettoyage zones souillées', desc: "Nettoyage des zones souillées par la présence de fouine." },
+    { label: 'Retrait déjections / matériaux souillés', desc: "Retrait des déjections et matériaux souillés par la fouine." },
+    { label: 'Désinfection zones contaminées', desc: "Désinfection des zones contaminées par les déjections de fouine." },
+    { label: 'Retrait matériaux de nidification', desc: "Retrait d’anciens matériaux de nidification liés à la présence de fouine." },
+    { label: 'Contrôle dégâts — isolation', desc: "Contrôle des dégâts causés par une fouine dans l’isolation." },
+    { label: 'Contrôle dégâts — combles', desc: "Contrôle des dégâts causés par une fouine dans les combles." },
+    { label: 'Recommandation fermeture des accès', desc: "Recommandation de fermeture des accès après confirmation du départ de la fouine." },
+    { label: 'Obturation points d\'entrée', desc: "Obturation des points d’entrée après traitement et contrôle d’absence de fouine." },
+    { label: 'Pose grilles / protections', desc: "Pose de grilles ou protections afin d’empêcher le retour de la fouine." },
+    { label: 'Mise en sécurité des accès', desc: "Mise en sécurité des accès afin de limiter les risques de réinfestation." },
+    { label: 'Intervention préventive (retour)', desc: "Intervention préventive contre le retour d’une fouine." },
+    { label: 'Répulsif + fermeture des accès', desc: "Traitement répulsif et recommandations de fermeture des accès contre les fouines." },
+    { label: 'Expertise — toiture', desc: "Expertise concernant une suspicion de présence de fouine dans la toiture." },
+    { label: 'Expertise — combles', desc: "Expertise concernant une suspicion de présence de fouine dans les combles." },
+    { label: 'Nuisances sonores', desc: "Intervention contre les nuisances sonores liées à la présence probable d’une fouine." },
+    { label: 'Éloignement sans capture', desc: "Traitement professionnel visant à éloigner les fouines sans capture ni destruction de l’animal." }
   ] }
 ];
 // Construit les <optgroup> du sélecteur d'insertion de prestation.
