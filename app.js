@@ -2693,7 +2693,22 @@ const BON_NOTE_PRESTATIONS = [
     { label: 'Renforcement du dispositif', desc: "Renforcement du dispositif de dératisation avec ajout de boîtes d’appâtage sécurisées." },
     { label: 'Monitoring rongeurs', desc: "Mise en place d’un dispositif de monitoring contre les rongeurs." },
     { label: 'Contrôle traces / indices', desc: "Contrôle des traces de passage, consommations et indices de présence de rongeurs." },
-    { label: 'Traitement curatif rongeurs', desc: "Traitement curatif contre les rongeurs avec produits professionnels homologués." }
+    { label: 'Traitement curatif rongeurs', desc: "Traitement curatif contre les rongeurs avec produits professionnels homologués." },
+    { label: 'Injection Racumin — cloisons', desc: "Traitement de dératisation par injection de Racumin dans les cloisons." },
+    { label: 'Injection rodenticide — cloisons', desc: "Traitement de dératisation par injection de produit rodenticide professionnel dans les cloisons." },
+    { label: 'Injection ciblée derrière cloisons', desc: "Traitement contre les rongeurs par injection ciblée de produit professionnel derrière les cloisons." },
+    { label: 'Talon Wax Blocks — derrière lambris', desc: "Traitement de dératisation par injection de Talon Wax Blocks derrière le lambris." },
+    { label: 'Blocs rodenticides — derrière lambris', desc: "Mise en place de blocs rodenticides professionnels derrière le lambris." },
+    { label: 'Souris — injection derrière cloisons', desc: "Traitement contre les souris par injection de produit spécial derrière les cloisons." },
+    { label: 'Rats — injection derrière cloisons', desc: "Traitement contre les rats par injection de produit spécial derrière les cloisons." },
+    { label: 'Vides techniques / doublages', desc: "Traitement ciblé contre les rongeurs dans les vides techniques, cloisons et doublages." },
+    { label: 'Dératisation — derrière cloisons', desc: "Traitement de dératisation derrière les cloisons avec produit professionnel adapté." },
+    { label: 'Injection — zones de passage', desc: "Injection de produit rodenticide professionnel dans les zones de passage suspectées des rongeurs." },
+    { label: 'Curatif — cloisons / doublages', desc: "Traitement curatif contre les rongeurs dans les cloisons, doublages et zones non accessibles." },
+    { label: 'Application — lambris & cloisons', desc: "Application ciblée de produits professionnels contre les rongeurs derrière les lambris et cloisons." },
+    { label: 'Zones creuses', desc: "Traitement de dératisation dans les zones creuses avec application de produits rodenticides professionnels." },
+    { label: 'Passages dissimulés', desc: "Mise en place de produits rodenticides professionnels dans les passages dissimulés des rongeurs." },
+    { label: 'Cavités murales / zones techniques', desc: "Traitement contre les rongeurs avec injection ciblée dans les cavités murales et zones techniques." }
   ] }
 ];
 // Construit les <optgroup> du sélecteur d'insertion de prestation.
