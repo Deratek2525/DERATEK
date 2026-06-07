@@ -274,7 +274,7 @@ function seedData() { /* no-op en mode Supabase */ }
 let state = {
   anc: { queue: [], qIdx: 0, fileName: '' },
   docStatutFilter: 'tous',
-  docGroupBy: 'date',
+  docGroupBy: 'gerance',
   editingRapportId: null,
   editingClientId:  null,
   editingIntervId:  null,
