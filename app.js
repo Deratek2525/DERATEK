@@ -4344,6 +4344,13 @@ function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 });
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 
 // Enregistre le document (devis/facture)
+// Enregistre le document en brouillon (rappel « à finir ») dans l'onglet Devis/Factures
+function saveDocBrouillon() {
+  if (!_editingDoc) return;
+  _editingDoc.statut = 'brouillon';
+  saveDoc();
+  toast('💾 Enregistré en brouillon — à finir dans ' + (_editingDoc && _editingDoc.type === 'facture' ? 'Factures' : 'Devis'), '#2563eb');
+}
 function saveDoc() {
   if (!_editingDoc) return;
   const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais);
@@ -4475,7 +4482,27 @@ function renderDocuments() {
         </div>`;
     }
   }
-  const topHtml = aFacturerHtml + aDeviserHtml;
+  // Section "À finir / brouillons" : les devis/factures encore en brouillon (rappel)
+  let brouillonsHtml = '';
+  const brouillons = docs.filter(d => (d.statut || '') === 'brouillon')
+    .slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  if (brouillons.length) {
+    const accent = (filtre === 'facture') ? '#2d9e6b' : '#8b5cf6';
+    brouillonsHtml = `
+      <div style="margin-bottom:14px;border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;background:#fffbeb;">
+        <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:10px;">🕒 À finir — ${filtre === 'facture' ? 'factures' : 'devis'} en brouillon (${brouillons.length})</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${brouillons.map(d => `
+            <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+              <div style="min-width:120px;"><div style="font-size:12px;font-weight:800;color:var(--navy);">${filtre==='facture'?'🧾':'📝'} ${d.numero||'—'}</div><div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div></div>
+              <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${d.clientNom||'—'}${d.locataireNom?(' · 🏠 '+d.locataireNom):''}</div>
+              <div style="min-width:100px;text-align:right;font-size:13px;font-weight:700;color:var(--navy);">${_displayMontant(d.total||0)} CHF</div>
+              <button class="btn btn-sm" onclick="editDoc('${d.id}')" title="Finir ce document" style="font-weight:700;border:1.5px solid ${accent};background:#fff;color:${accent};">✏️ Finir</button>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+  const topHtml = aFacturerHtml + aDeviserHtml + brouillonsHtml;
   if (!docs.length) {
     const msg = (filtre === 'facture')
       ? 'Aucune facture.<br>Crée une facture avec « + Nouvelle facture » ou convertis un devis accepté.'
