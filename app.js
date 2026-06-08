@@ -1277,7 +1277,11 @@ function populateTechSelect(sel, selected) {
 }
 function populateClientSelectRapport(selectedId) {
   $('r-client').innerHTML = '<option value="">-- Sélectionner un client --</option>' +
-    DB.clients.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom} (${c.type})</option>`).join('');
+    DB.clients.map(c => {
+      const contact = _rapContactNom(c.contact || '');
+      const label = contact ? `${c.nom} — ${contact} (${c.type})` : `${c.nom} (${c.type})`;
+      return `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${label}</option>`;
+    }).join('');
 }
 function resetRapportForm() {
   state.produits = []; state.photos = [null,null,null,null,null,null];
