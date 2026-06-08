@@ -3153,37 +3153,50 @@ function _bonNoteText(d) {
 function _bonRapFait(b) {
   return /\[RAPFAIT:1\]/.test(String((b && b.probleme) || ''));
 }
+// Horodatage de mise en statut "À contacter / Urgent" (pour l'alerte 48 h), stocké via marqueur
+function _bonAlerte(b) {
+  const m = String((b && b.probleme) || '').match(/\[ALERTE:([^\]]*)\]/);
+  return m ? m[1].trim() : '';
+}
+// Heures écoulées depuis l'horodatage d'alerte (ou null si pas d'alerte)
+function _bonAlerteHeures(b) {
+  const t = _bonAlerte(b); if (!t) return null;
+  const d = new Date(t); if (isNaN(d.getTime())) return null;
+  return (Date.now() - d.getTime()) / 3600000;
+}
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
     .replace(/\s*\[INTERV:[^\]]*\]/g, '')
     .replace(/\s*\[AFFECTE:[^\]]*\]/g, '')
     .replace(/\s*\[NOTE:[^\]]*\]/g, '')
     .replace(/\s*\[RAPFAIT:[^\]]*\]/g, '')
+    .replace(/\s*\[ALERTE:[^\]]*\]/g, '')
     .trim();
 }
-// Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait).
+// Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait, alerte).
 // Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
-function _bonAssembleProbleme(clean, dates, aff, note, rapFait) {
+function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte) {
   let out = String(clean || '').trim();
   const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
   if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
   if (aff) out += (out ? '\n' : '') + '[AFFECTE:' + aff + ']';
   if (note && String(note).trim()) out += (out ? '\n' : '') + '[NOTE:' + _encNote(note) + ']';
   if (rapFait) out += (out ? '\n' : '') + '[RAPFAIT:1]';
+  if (alerte) out += (out ? '\n' : '') + '[ALERTE:' + alerte + ']';
   return out;
 }
 // Réécrit probleme propre + tous les marqueurs existants
 function _bonComposeProbleme(b) {
-  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b));
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
@@ -3191,14 +3204,14 @@ function bonSetAffecte(id, value) {
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b));
   const bons = DB.bons; DB.bons = bons;
 }
 // Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
 function bonToggleRapFait(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const nv = !_bonRapFait(b);
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv);
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
@@ -3393,6 +3406,8 @@ function renderBonCard(b) {
   const statut = b.statut || '';
   const statutStyles = {
     '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
+    'urgent':        { bg: '#fee2e2', color: '#b91c1c', border: '#ef4444' }, // rouge
+    'a-contacter':   { bg: '#cffafe', color: '#0e7490', border: '#06b6d4' }, // cyan
     'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' },
     'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' },
     'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1' },
@@ -3468,9 +3483,19 @@ function renderBonCard(b) {
                   return `<select onchange="bonSetAffecte('${b.id}', this.value)" title="Technicien / responsable affecté" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${aff?'#2563eb':'#d1d5db'};background:${aff?'#eff6ff':'#fff'};color:${aff?'#1d4ed8':'#6b7280'};cursor:pointer;max-width:135px;">${opts.join('')}</select>`;
                 })()}
               </div>
-              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+                ${(() => {
+                  const h = _bonAlerteHeures(b);
+                  if ((statut === 'a-contacter' || statut === 'urgent') && h !== null && h >= 48) {
+                    const lbl = statut === 'urgent' ? '🚨 URGENT' : '📞 À CONTACTER';
+                    return `<span title="En statut « ${lbl} » depuis plus de 48 h" style="font-size:11px;font-weight:800;color:#fff;background:#dc2626;border-radius:6px;padding:4px 9px;">⚠️ ${lbl} · +48 h</span>`;
+                  }
+                  return '';
+                })()}
                 <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon" style="font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;border:1.5px solid ${stStyle.border};background:${stStyle.bg};color:${stStyle.color};cursor:pointer;">
                   <option value="">— Statut —</option>
+                  <option value="urgent"        ${statut === 'urgent'        ? 'selected' : ''}>🚨 Urgent (alerte 48 h)</option>
+                  <option value="a-contacter"   ${statut === 'a-contacter'   ? 'selected' : ''}>📞 À contacter (alerte 48 h)</option>
                   <option value="a-transmettre" ${statut === 'a-transmettre' ? 'selected' : ''}>📕 Rapport à transmettre</option>
                   <option value="transmis"      ${statut === 'transmis'      ? 'selected' : ''}>📨 Rapport transmis</option>
                   <option value="demande-devis" ${statut === 'demande-devis' ? 'selected' : ''}>📝 Demande de devis</option>
@@ -3720,10 +3745,22 @@ function updateBonStatut(id, value) {
   const bons = DB.bons;
   const b = bons.find(x => x.id === id);
   if (!b) return;
+  const prev = b.statut || '';
   b.statut = value;
+  // Statuts à alerte 48 h : on (ré)enclenche le minuteur en passant DANS le statut, on l'efface en sortant
+  const alertStatuts = ['a-contacter', 'urgent'];
+  let alerte = _bonAlerte(b);
+  if (alertStatuts.includes(value)) {
+    if (!alertStatuts.includes(prev) || !alerte) alerte = new Date().toISOString();
+  } else {
+    alerte = '';
+  }
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte);
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
     '':              'Statut effacé',
+    'a-contacter':   '📞 Statut : À contacter (alerte 48 h)',
+    'urgent':        '🚨 Statut : Urgent (alerte 48 h)',
     'a-transmettre': '📕 Statut : Rapport à transmettre',
     'transmis':      '📨 Statut : Rapport transmis',
     'demande-devis': '📝 Statut : Demande de devis',
@@ -5952,8 +5989,8 @@ function renderStats() {
   _makeChart('chart-gerances', 'doughnut', gk, gk.map(k=>ger[k]), gk.map(k=>colorForGeranceName(k)), false);
 
   // Statuts → barres verticales
-  const statutLabels = { '':'Non défini', 'a-transmettre':'Rapport à transmettre', 'transmis':'Transmis', 'demande-devis':'Demande de devis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
-  const statutCol = { '':'#9ca3af','transmis':'#3b82f6','demande-devis':'#6366f1','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
+  const statutLabels = { '':'Non défini', 'urgent':'Urgent', 'a-contacter':'À contacter', 'a-transmettre':'Rapport à transmettre', 'transmis':'Transmis', 'demande-devis':'Demande de devis', 'attente-devis':'Attente devis', 'devis-valide':'Devis validé', 'en-cours':'En cours', 'termine':'Terminé', 'a-facturer':'À facturer' };
+  const statutCol = { '':'#9ca3af','urgent':'#ef4444','a-contacter':'#06b6d4','transmis':'#3b82f6','demande-devis':'#6366f1','attente-devis':'#8b5cf6','devis-valide':'#14b8a6','en-cours':'#f97316','termine':'#22c55e','a-facturer':'#ef4444' };
   const st = {};
   bons.forEach(b => { const s = b.statut || ''; st[s] = (st[s]||0)+1; });
   let sk = Object.keys(st).sort((a,b)=>st[b]-st[a]);
