@@ -991,7 +991,8 @@ function renderClients() {
   updateNavCounts();
   const q = ($('cl-search') || {}).value || '';
   const list = DB.clients.filter(c => {
-    const match = c.nom.toLowerCase().includes(q.toLowerCase()) || (c.ville||'').toLowerCase().includes(q.toLowerCase());
+    const hay = ((c.nom||'') + ' ' + (c.ville||'') + ' ' + (c.npa||'') + ' ' + (c.adresse||'') + ' ' + (c.num||'') + ' ' + (c.tel||'') + ' ' + (c.email||'') + ' ' + _rapContactNom(c.contact||'') + ' ' + (c.type||'')).toLowerCase();
+    const match = hay.includes(q.toLowerCase());
     return match && (state.clientsFilter === 'Tous' || c.type === state.clientsFilter);
   });
   const cc = $('clients-count');
@@ -1208,7 +1209,8 @@ function renderRapports() {
   }
   const q = ($('rapp-search') || {}).value || '';
   const list = DB.rapports.filter(r => {
-    const m = r.id.toLowerCase().includes(q.toLowerCase()) || (r.clientNom||'').toLowerCase().includes(q.toLowerCase()) || (r.nuisibles||[]).join(' ').toLowerCase().includes(q.toLowerCase()) || (r.bonCommande||'').toLowerCase().includes(q.toLowerCase());
+    const hay = ((r.id||'') + ' ' + (r.clientNom||'') + ' ' + (r.nuisibles||[]).join(' ') + ' ' + (r.bonCommande||'') + ' ' + (r.noint||'') + ' ' + (r.tech||'') + ' ' + (r.ville||'') + ' ' + (r.contact||'')).toLowerCase();
+    const m = hay.includes(q.toLowerCase());
     return m && (state.rapportsFilter === 'Tous' || r.statut === state.rapportsFilter);
   });
   const tb = $('rapports-tbody');
@@ -2531,8 +2533,12 @@ function renderLocataires() {
   updateNavCounts();
   const q = (($('loc-search') || {}).value || '').toLowerCase();
   const all = DB.locataires || [];
+  const _clById = {}; (DB.clients || []).forEach(c => { if (c && c.id) _clById[c.id] = c; });
   const list = q
-    ? all.filter(l => ((l.nom||'') + ' ' + (l.adresse||'')).toLowerCase().includes(q))
+    ? all.filter(l => {
+        const ger = (l.clientId && _clById[l.clientId]) ? _clById[l.clientId].nom : '';
+        return ((l.prenom||'') + ' ' + (l.nom||'') + ' ' + (l.adresse||'') + ' ' + (l.ville||'') + ' ' + (l.npa||'') + ' ' + (l.tel||'') + ' ' + (l.email||'') + ' ' + ger).toLowerCase().includes(q);
+      })
     : all;
   const count = $('locataires-count');
   if (count) count.textContent = `${list.length} locataire${list.length !== 1 ? 's' : ''}`;
@@ -3543,7 +3549,7 @@ function renderBons() {
   }
   if (q) {
     bons = bons.filter(b =>
-      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + _bonProblemeClean(b))
+      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.gerantNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.gerantTel||'') + ' ' + _bonProblemeClean(b))
         .toLowerCase().includes(q)
     );
   }
@@ -4597,7 +4603,10 @@ function renderDocuments() {
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';
   if (sf !== 'tous') docs = docs.filter(d => (d.statut || 'brouillon') === sf);
-  if (q) docs = docs.filter(d => ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')).toLowerCase().includes(q));
+  if (q) docs = docs.filter(d => {
+    const bonNo = d.bonId ? (((DB.bons||[]).find(b => b.id === d.bonId)||{}).numero || '') : '';
+    return ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')+' '+(d.proprietaire||'')+' '+(d.clientVille||'')+' '+bonNo+' '+(d.notes||'')).toLowerCase().includes(q);
+  });
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (count) count.textContent = allOfType.length ? allOfType.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
   if (!list) return;
