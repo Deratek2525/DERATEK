@@ -1232,10 +1232,16 @@ function renderRapports() {
     return;
   }
 
-  const ligneRapport = r => `
+  const ligneRapport = r => {
+    const loc = (_rapMeta(r.description).loc) || {};
+    const locTxt = [loc.nom, loc.adresse].filter(Boolean).join(' · ');
+    const locLigne = locTxt
+      ? `<div style="font-size:11.5px;color:#1e3a8a;margin-top:2px;">🏠 ${locTxt}</div>`
+      : '';
+    return `
     <tr onclick="editRapport('${r.id}')">
       <td style="font-weight:700;color:var(--navy);">${r.id}</td>
-      <td>${r.clientNom||'—'}</td>
+      <td>${r.clientNom||'—'}${locLigne}</td>
       <td>${r.bonCommande || '—'}</td>
       <td>${(r.nuisibles||[]).join(', ')||'—'}</td>
       <td>${fmtDate(r.date)}</td>
@@ -1244,6 +1250,7 @@ function renderRapports() {
       <td><span class="badge ${badgeCls(r.statut)}">${r.statut}</span></td>
       <td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteRapport('${r.id}')">🗑</button></td>
     </tr>`;
+  };
 
   tb.innerHTML = noms.map(nom => {
     // Rapports de la gérance, du plus récent au plus ancien
