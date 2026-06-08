@@ -379,16 +379,19 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .tbl tbody tr:hover td { background: var(--g50); }
 /* Ligne de section : nom de la gérance */
 .tbl tbody tr.rapport-groupe { cursor: default; }
-.tbl tbody tr.rapport-groupe:hover td { background: #cfe4fb; }
+.tbl tbody tr.rapport-groupe:hover td { background: #14203a; }
 .tbl tbody tr.rapport-groupe td {
-  background: #dbeafe; color: #1e3a8a;
-  font-weight: 700; font-size: 14px; letter-spacing: .3px;
+  background: #1a2744; color: #ffffff;
+  font-weight: 800; font-size: 14px; letter-spacing: .3px;
   padding: 11px 14px; border-top: 3px solid var(--white);
 }
 .rapport-groupe-nb {
-  background: rgba(30,58,138,.12); color: #1e3a8a;
+  background: rgba(255,255,255,.18); color: #ffffff;
   font-size: 11px; font-weight: 700; padding: 2px 9px;
   border-radius: 999px; margin-left: 8px;
+}
+.rapport-groupe-tech {
+  color: #ffffff; font-weight: 700; font-size: 12px; margin-left: 10px;
 }
 
 /* ============================================================

@@ -1264,9 +1264,11 @@ function renderRapports() {
     // Rapports de la gérance, du plus récent au plus ancien
     const rapps = groupes[nom].slice().reverse();
     const nb = rapps.length;
+    const techs = [...new Set(rapps.map(r => r.tech).filter(Boolean))];
+    const techTxt = techs.length ? `<span class="rapport-groupe-tech">👷 ${techs.join(', ')}</span>` : '';
     const entete = `
       <tr class="rapport-groupe">
-        <td colspan="9">🏢 ${nom} <span class="rapport-groupe-nb">${nb} rapport${nb > 1 ? 's' : ''}</span></td>
+        <td colspan="9">🏢 ${nom} <span class="rapport-groupe-nb">${nb} rapport${nb > 1 ? 's' : ''}</span>${techTxt}</td>
       </tr>`;
     return entete + rapps.map(ligneRapport).join('');
   }).join('');
