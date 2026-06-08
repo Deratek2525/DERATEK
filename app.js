@@ -1635,6 +1635,21 @@ function saveRapport(statut) {
   DB.rapports = list; state.editingRapportId = r.id;
   $('edit-id').textContent = r.id;
 
+  // Rapport finalisé → le bon de commande lié passe automatiquement à « ✅ Terminé »
+  // et est marqué « rapport fait ». Ainsi la chaîne bon → facture → facturation archivée
+  // se reconnaît toute seule au moment d'archiver la facture payée.
+  if (statut === 'Finalisé' && r.bonCommande) {
+    const bons = DB.bons;
+    const bon = bons.find(b => _factNorm(b.numero) === _factNorm(r.bonCommande));
+    if (bon) {
+      const stPrev = bon.statut || '';
+      // On ne rétrograde pas un bon déjà « à facturer » ou déjà terminé.
+      if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '');
+      DB.bons = bons;
+    }
+  }
+
   // Synchronise le prochain rendez-vous du rapport vers le planning/agenda.
   // Chaque rapport possède au plus une intervention liée (id stable "rdv-<idRapport>"),
   // ainsi un nouvel enregistrement met à jour la même entrée au lieu d'en créer une autre.
