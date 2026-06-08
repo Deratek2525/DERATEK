@@ -4718,13 +4718,16 @@ function renderDocuments() {
   const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
   const cardOf = (d) => {
     const isDevis = d.type === 'devis';
-    const accent = isDevis ? '#8b5cf6' : '#2d9e6b';
     const st = statutColors[d.statut] || statutColors.brouillon;
     const opts = isDevis
       ? ['brouillon','envoye','accepte','refuse']
       : ['brouillon','envoyee','payee'];
+    // Factures : carte teintée de la couleur de la gérance. Devis : violet.
+    const gColor = isDevis ? '#8b5cf6' : colorForGeranceName(_geranceCanon(d.clientNom || '') || '(Sans client)');
+    const cardBg = isDevis ? '#fff' : _hexTint(gColor, 0.10);
+    const cardBorder = isDevis ? '#e5e7eb' : _hexTint(gColor, 0.30);
     return `
-    <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:14px;background:${cardBg};border:1px solid ${cardBorder};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
       <div style="min-width:130px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}</div>
         <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
@@ -4768,9 +4771,15 @@ function renderDocuments() {
     cardsHtml = Object.keys(groups).sort((a, b) => groups[a].name.localeCompare(groups[b].name, 'fr')).map(k => {
       const arr = groups[k].items;
       const sub = arr.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+      // En-tête de gérance coloré (couleur de la gérance) pour les factures
+      const gColor = (filtre === 'facture') ? colorForGeranceName(groups[k].name) : '#0d1b3e';
+      const headStyle = (filtre === 'facture')
+        ? `background:${_hexTint(gColor, 0.18)};color:${gColor};border-radius:8px;padding:7px 12px;`
+        : `color:var(--navy);border-bottom:2px solid #e5e7eb;padding-bottom:4px;`;
+      const dot = (filtre === 'facture') ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${gColor};margin-right:6px;vertical-align:middle;"></span>` : '🏢 ';
       return `
         <div style="margin-top:12px;">
-          <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;border-bottom:2px solid #e5e7eb;padding-bottom:4px;margin-bottom:6px;">🏢 ${groups[k].name} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(sub)} CHF)</span></div>
+          <div style="font-size:13px;font-weight:800;text-transform:uppercase;margin-bottom:6px;${headStyle}">${dot}${groups[k].name} <span style="font-weight:500;opacity:.85;">(${arr.length} · ${_displayMontant(sub)} CHF)</span></div>
           ${arr.map(cardOf).join('')}
         </div>`;
     }).join('');
