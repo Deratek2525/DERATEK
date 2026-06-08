@@ -1799,14 +1799,24 @@ function _htmlToBoldText(html) {
     const n = parseInt(fw, 10);
     return !isNaN(n) && n >= 600;
   };
+  // Balises dont le CONTENU ne doit jamais devenir du texte (sinon le CSS du presse-papiers
+  // macOS — p.p1{...}, span.s1{...} — se retrouve collé dans la description).
+  const SKIP = /^(style|script|head|title|meta|link|noscript|colgroup|col)$/;
   const walk = (node, bold) => {
     node.childNodes.forEach(ch => {
       if (ch.nodeType === 3) {
         const t = ch.nodeValue.replace(/\s+/g, " ");
         if (!t) return;
-        out += bold ? ("**" + t + "**") : t;
+        if (bold) {
+          // On garde les espaces de début/fin À L'EXTÉRIEUR des marqueurs **…**
+          const lead = (t.match(/^\s*/) || [""])[0];
+          const trail = (t.match(/\s*$/) || [""])[0];
+          const core = t.slice(lead.length, t.length - trail.length);
+          out += core ? (lead + "**" + core + "**" + trail) : t;
+        } else out += t;
       } else if (ch.nodeType === 1) {
         const tag = ch.tagName.toLowerCase();
+        if (SKIP.test(tag)) return;
         const b = bold || isBold(ch);
         walk(ch, b);
         if (/^(p|div|br|li|tr|h[1-6])$/.test(tag)) out += "\n";
@@ -1816,7 +1826,9 @@ function _htmlToBoldText(html) {
   walk(tpl.content, false);
   out = out
     .replace(/\*\*(\s*)\*\*/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return out;
