@@ -1682,9 +1682,9 @@ function saveRapport(statut) {
       adresse: (r.adresse||'') + (r.npa?' '+r.npa:'') + (r.ville?' '+r.ville:''),
       superficie: (r.superficie ? r.superficie+' m²' : '—') + (r.pieces ? ' / '+r.pieces+' pièce(s)' : ''),
       noint: r.noint || '—', nuisibles: nuisibles.join(', ') || '—', niveau: r.niveau || '—',
-      description: r.description || '—', traitement: traitementLabels.join(', ') || '—',
+      description: (r.description || '—').replace(/\*\*/g, ''), traitement: traitementLabels.join(', ') || '—',
       produits: produitsStr || '—', precautions: r.precautions || '—',
-      resultat: r.resultat || '—', recommandations: r.recommandations || '—',
+      resultat: r.resultat || '—', recommandations: (r.recommandations || '—').replace(/\*\*/g, ''),
       montant: r.montant ? r.montant + ' CHF' : '—',
       rdv: r.rdv ? fmtDate(r.rdv) : '—', garantie: r.garantie || '—',
       email: DERATEK_CONFIG.email.deratek, name: r.tech || 'DERATEK',
@@ -1745,12 +1745,93 @@ function updatePDF() {
   const sup = $('r-superficie').value, pie = $('r-pieces').value;
   st('pdf-superficie', (sup ? sup+'m²' : '—') + (pie ? ' / '+pie+' pièce(s)' : ''));
   st('pdf-niveau',      $('r-niveau').value);
-  const desc = $('r-description').value || '—';
+  const desc = ($('r-description').value || '—').replace(/\*\*/g, '');
   st('pdf-description', desc.substring(0,100) + (desc.length > 100 ? '…' : ''));
   st('pdf-traitement',  traitement.join(', ') || '—');
   const montant = $('r-montant').value;
   st('pdf-montant', montant ? montant+' CHF' : '—');
   st('pdf-resultat', $('r-resultat').value);
+}
+
+// ============================================================
+// GRAS (texte enrichi simple via marqueurs **…**)
+// Le gras est stocké dans le texte sous forme **gras** (compatible Supabase,
+// aucune colonne ajoutée) et rendu en gras dans le PDF du rapport.
+// ============================================================
+function toggleBold(fieldId) {
+  const el = $(fieldId); if (!el) return;
+  const s = el.selectionStart, e = el.selectionEnd, v = el.value;
+  if (s === e) {
+    // Pas de sélection : insère **​** et place le curseur au milieu
+    el.value = v.slice(0, s) + '****' + v.slice(e);
+    el.selectionStart = el.selectionEnd = s + 2;
+  } else {
+    let sel = v.slice(s, e);
+    if (/^\*\*[\s\S]*\*\*$/.test(sel)) {
+      // Déjà en gras → on retire le gras
+      sel = sel.slice(2, -2);
+      el.value = v.slice(0, s) + sel + v.slice(e);
+      el.selectionStart = s; el.selectionEnd = s + sel.length;
+    } else {
+      el.value = v.slice(0, s) + '**' + sel + '**' + v.slice(e);
+      el.selectionStart = s + 2; el.selectionEnd = e + 2;
+    }
+  }
+  el.focus();
+  el.dispatchEvent(new Event('input'));
+}
+function boldShortcut(ev, el) {
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'B')) {
+    ev.preventDefault();
+    toggleBold(el.id);
+  }
+}
+// Convertit du HTML collé (Word, web, …) en texte avec marqueurs **gras**
+function _htmlToBoldText(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  let out = "";
+  const isBold = node => {
+    const tag = (node.tagName || "").toLowerCase();
+    if (tag === "b" || tag === "strong") return true;
+    const fw = (node.style && node.style.fontWeight) || "";
+    if (fw === "bold" || fw === "bolder") return true;
+    const n = parseInt(fw, 10);
+    return !isNaN(n) && n >= 600;
+  };
+  const walk = (node, bold) => {
+    node.childNodes.forEach(ch => {
+      if (ch.nodeType === 3) {
+        const t = ch.nodeValue.replace(/\s+/g, " ");
+        if (!t) return;
+        out += bold ? ("**" + t + "**") : t;
+      } else if (ch.nodeType === 1) {
+        const tag = ch.tagName.toLowerCase();
+        const b = bold || isBold(ch);
+        walk(ch, b);
+        if (/^(p|div|br|li|tr|h[1-6])$/.test(tag)) out += "\n";
+      }
+    });
+  };
+  walk(tpl.content, false);
+  out = out
+    .replace(/\*\*(\s*)\*\*/g, "$1")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return out;
+}
+function pasteKeepBold(ev, el) {
+  const cd = ev.clipboardData || window.clipboardData;
+  if (!cd) return;
+  const html = cd.getData('text/html');
+  if (!html) return; // collage texte simple : comportement par défaut
+  ev.preventDefault();
+  const md = _htmlToBoldText(html);
+  const s = el.selectionStart, e = el.selectionEnd, v = el.value;
+  el.value = v.slice(0, s) + md + v.slice(e);
+  el.selectionStart = el.selectionEnd = s + md.length;
+  el.dispatchEvent(new Event('input'));
 }
 
 // ============================================================

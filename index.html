@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604fx">
+<link rel="stylesheet" href="./style.css?v=20260604fy">
 </head>
 <body>
 
@@ -703,9 +703,12 @@
             <div class="form-group">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
                 <label class="form-label" style="margin-bottom:0;">Description détaillée *</label>
-                <button class="btn btn-ghost btn-xs" onclick="correctWithAI(&#39;r-description&#39;,&#39;description&#39;)" id="ai-btn-description">✨ Corriger avec IA</button>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <button class="btn btn-ghost btn-xs" onclick="toggleBold(&#39;r-description&#39;)" title="Mettre la sélection en gras (Ctrl/Cmd+B)" style="font-weight:800;">B Gras</button>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI(&#39;r-description&#39;,&#39;description&#39;)" id="ai-btn-description">✨ Corriger avec IA</button>
+                </div>
               </div>
-              <textarea class="form-input" id="r-description" rows="8" maxlength="5000" placeholder="Localisations, étendue, signes visibles, vecteurs..." oninput="updatePDF();updateCharCount(&#39;r-description&#39;,&#39;count-description&#39;,5000)"></textarea>
+              <textarea class="form-input" id="r-description" rows="8" maxlength="5000" placeholder="Localisations, étendue, signes visibles, vecteurs... — sélectionnez du texte puis « B Gras », ou collez du texte en gras." onpaste="pasteKeepBold(event,this)" onkeydown="boldShortcut(event,this)" oninput="updatePDF();updateCharCount(&#39;r-description&#39;,&#39;count-description&#39;,5000)"></textarea>
               <div style="text-align:right;font-size:11px;color:var(--g400);margin-top:2px;"><span id="count-description">0</span>/5000</div>
             </div>
             <div class="form-group">
@@ -963,9 +966,12 @@
             <div class="form-group">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
                 <label class="form-label" style="margin-bottom:0;">Recommandations au client</label>
-                <button class="btn btn-ghost btn-xs" onclick="correctWithAI(&#39;r-recommandations&#39;,&#39;recommandations&#39;)">✨ Corriger</button>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <button class="btn btn-ghost btn-xs" onclick="toggleBold(&#39;r-recommandations&#39;)" title="Mettre la sélection en gras (Ctrl/Cmd+B)" style="font-weight:800;">B Gras</button>
+                  <button class="btn btn-ghost btn-xs" onclick="correctWithAI(&#39;r-recommandations&#39;,&#39;recommandations&#39;)">✨ Corriger</button>
+                </div>
               </div>
-              <textarea class="form-input" id="r-recommandations" rows="5" maxlength="800" placeholder="Conseils de prévention, suivi, travaux à prévoir..." oninput="updatePDF();updateCharCount(&#39;r-recommandations&#39;,&#39;count-recommandations&#39;,800)"></textarea>
+              <textarea class="form-input" id="r-recommandations" rows="5" maxlength="800" placeholder="Conseils de prévention, suivi, travaux à prévoir..." onpaste="pasteKeepBold(event,this)" onkeydown="boldShortcut(event,this)" oninput="updatePDF();updateCharCount(&#39;r-recommandations&#39;,&#39;count-recommandations&#39;,800)"></textarea>
               <div style="text-align:right;font-size:11px;color:var(--g400);margin-top:2px;"><span id="count-recommandations">0</span>/800</div>
             </div>
           </div>
@@ -1330,10 +1336,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260604fx"></script>
-<script src="./footer_prestations.js?v=20260604fx"></script>
-<script src="./config.js?v=20260604fx"></script>
-<script src="./app.js?v=20260604fx"></script>
-<script src="./pdf.js?v=20260604fx"></script>
+<script src="./logo.js?v=20260604fy"></script>
+<script src="./footer_prestations.js?v=20260604fy"></script>
+<script src="./config.js?v=20260604fy"></script>
+<script src="./app.js?v=20260604fy"></script>
+<script src="./pdf.js?v=20260604fy"></script>
 
 </body></html>

@@ -24,6 +24,70 @@ function generatePDF(rapport, statut) {
         .replace(/[ \t]+/g, ' ');
     }
 
+    // Découpe un texte (avec marqueurs **gras**) en lignes qui tiennent dans maxW.
+    // Retourne un tableau de lignes ; chaque ligne est un tableau de segments {t, b}.
+    function _wrapBold(text, maxW) {
+      const measure = (t, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); return doc.getTextWidth(t); };
+      const spaceW = measure(' ', false);
+      const lines = [];
+      String(text).split('\n').forEach(para => {
+        // 1) parse des runs gras/normal
+        const runs = []; let bold = false, buf = '';
+        for (let i = 0; i < para.length; i++) {
+          if (para[i] === '*' && para[i + 1] === '*') { if (buf) { runs.push({ t: buf, b: bold }); buf = ''; } bold = !bold; i++; continue; }
+          buf += para[i];
+        }
+        if (buf) runs.push({ t: buf, b: bold });
+        // 2) découpe en mots (les espaces sont des séparateurs)
+        const words = []; let cur = null;
+        runs.forEach(r => {
+          r.t.split(/(\s+)/).forEach(p => {
+            if (p === '') return;
+            if (/^\s+$/.test(p)) { if (cur) { words.push(cur); cur = null; } words.push({ space: true }); }
+            else { if (!cur) cur = { segs: [], w: 0 }; cur.segs.push({ t: p, b: r.b }); cur.w += measure(p, r.b); }
+          });
+        });
+        if (cur) words.push(cur);
+        // 3) remplissage glouton
+        let line = [], lineW = 0, pendingSpace = false;
+        const flush = () => { lines.push(line); line = []; lineW = 0; pendingSpace = false; };
+        words.forEach(w => {
+          if (w.space) { if (line.length) pendingSpace = true; return; }
+          if (w.w > maxW) { // mot plus long que la largeur → coupe caractère par caractère
+            if (line.length) flush();
+            let chunk = { segs: [], w: 0 };
+            w.segs.forEach(sg => {
+              for (const ch of sg.t) {
+                const cw = measure(ch, sg.b);
+                if (chunk.w + cw > maxW && chunk.w > 0) { lines.push(chunk.segs); chunk = { segs: [], w: 0 }; }
+                const last = chunk.segs[chunk.segs.length - 1];
+                if (last && last.b === sg.b) last.t += ch; else chunk.segs.push({ t: ch, b: sg.b });
+                chunk.w += cw;
+              }
+            });
+            line = chunk.segs.slice(); lineW = chunk.w; pendingSpace = false;
+            return;
+          }
+          const addW = (pendingSpace ? spaceW : 0) + w.w;
+          if (lineW + addW > maxW && line.length) { flush(); line.push(...w.segs); lineW = w.w; pendingSpace = false; return; }
+          if (pendingSpace) { line.push({ t: ' ', b: false }); lineW += spaceW; pendingSpace = false; }
+          line.push(...w.segs); lineW += w.w;
+        });
+        flush(); // fin de paragraphe (préserve les lignes vides)
+      });
+      return lines;
+    }
+    // Dessine une ligne enrichie (segments {t,b}) en gérant le changement gras/normal.
+    function _drawRichLine(segs, x, y2) {
+      let cx = x;
+      segs.forEach(sg => {
+        if (!sg.t) return;
+        doc.setFont('helvetica', sg.b ? 'bold' : 'normal');
+        doc.text(sg.t, cx, y2);
+        cx += doc.getTextWidth(sg.t);
+      });
+    }
+
     // Couleurs
     const C = {
       navy:   [26,  39,  68],
@@ -174,19 +238,8 @@ function generatePDF(rapport, statut) {
       doc.setFontSize(9);
       const maxW = CW - 10;
       const clean = _sanPdf(text);
-      let lines = doc.splitTextToSize(clean, maxW);
-      // Sécurité : coupe par caractère toute ligne qui dépasserait encore la largeur utile.
-      const _hw = [];
-      lines.forEach(ln => {
-        if (doc.getTextWidth(ln) <= maxW) { _hw.push(ln); return; }
-        let cur = '';
-        for (const ch of ln) {
-          if (cur && doc.getTextWidth(cur + ch) > maxW) { _hw.push(cur); cur = ch; }
-          else cur += ch;
-        }
-        if (cur) _hw.push(cur);
-      });
-      lines = _hw;
+      // Lignes enrichies (gras inline via **…**), déjà coupées à la largeur utile.
+      const lines = _wrapBold(clean, maxW);
       const lineH = 5;
       const padding = 8;
       const pageBottom = 285;      // bas de page A4 en mm
@@ -215,7 +268,7 @@ function generatePDF(rapport, statut) {
         doc.setDrawColor(...C.border);
         doc.roundedRect(M, y, CW, h, 2, 2, 'S');
         doc.setTextColor(...C.text);
-        doc.text(chunk, M + 4, y + 6);
+        chunk.forEach((segs, li) => _drawRichLine(segs, M + 4, y + 6 + li * lineH));
         y += h + 4;
         idx += take;
         firstChunk = false;
