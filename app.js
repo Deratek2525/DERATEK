@@ -5778,9 +5778,10 @@ function downloadDocPDF(id, mode) {
   }
 
   // --- Bande "Nos prestations" en bas de la DERNIÈRE page ---
-  // On l'affiche uniquement si cette page ne contient PAS le bulletin QR (pas de superposition).
+  // Uniquement sur les FACTURES (retirée des devis à la demande), et seulement si
+  // cette page ne contient PAS le bulletin QR (pas de superposition).
   const lastPage = doc.internal.getNumberOfPages();
-  if (lastPage > 1 && !(isFacture && lastPage === qrPageNum)) {
+  if (isFacture && lastPage > 1 && lastPage !== qrPageNum) {
     doc.setPage(lastPage);
     _drawPrestationsFooter(doc, W, H);
   }
