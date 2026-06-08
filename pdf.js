@@ -158,7 +158,27 @@ function generatePDF(rapport, statut) {
       if (!text) return;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      const lines = doc.splitTextToSize(String(text), CW - 10);
+      const maxW = CW - 10;
+      // Normalise les espaces typographiques (insécables, fines insécables, etc. souvent
+      // insérés par la correction IA en français) : ils ne font pas partie de la police PDF,
+      // s'affichent en caractères parasites et faussent le retour à la ligne → texte qui déborde.
+      const clean = String(text)
+        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+        .replace(/[\u200B\u200C\u200D\u2060\uFEFF\u00AD]/g, '')
+        .replace(/[ \t]+/g, ' ');
+      let lines = doc.splitTextToSize(clean, maxW);
+      // Sécurité : coupe par caractère toute ligne qui dépasserait encore la largeur utile.
+      const _hw = [];
+      lines.forEach(ln => {
+        if (doc.getTextWidth(ln) <= maxW) { _hw.push(ln); return; }
+        let cur = '';
+        for (const ch of ln) {
+          if (cur && doc.getTextWidth(cur + ch) > maxW) { _hw.push(cur); cur = ch; }
+          else cur += ch;
+        }
+        if (cur) _hw.push(cur);
+      });
+      lines = _hw;
       const lineH = 5;
       const padding = 8;
       const pageBottom = 285;      // bas de page A4 en mm
