@@ -1190,18 +1190,26 @@ function renderRapports() {
         <div style="border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;background:#fffbeb;">
           <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:10px;">🕒 Reprendre plus tard (${drafts.length}) — brouillons non finalisés</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            ${drafts.map(r => `
+            ${drafts.map(r => {
+              const loc = (_rapMeta(r.description || '').loc) || {};
+              const adr = [r.adresse, [r.npa, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') || loc.adresse || '';
+              const nuis = (r.nuisibles && r.nuisibles.length) ? r.nuisibles.join(', ') : '';
+              return `
               <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
                 <div style="min-width:120px;">
                   <div style="font-size:12px;font-weight:800;color:var(--navy);">📋 ${r.id}</div>
                   <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(r.date) || '—'}</div>
                 </div>
-                <div style="flex:1;min-width:150px;font-size:12px;color:var(--g600);">${r.clientNom || '— Sans client —'}${(r.nuisibles && r.nuisibles.length) ? ' · ' + r.nuisibles.join(', ') : ''}</div>
+                <div style="flex:1;min-width:180px;font-size:12px;color:var(--g600);">
+                  <div style="font-weight:600;color:var(--navy);">${r.clientNom || '— Sans client —'}${nuis ? ' · 🐛 ' + nuis : ''}</div>
+                  <div style="font-size:11px;margin-top:2px;">${adr ? '📍 ' + adr : ''}${adr && r.tech ? ' &nbsp;·&nbsp; ' : ''}${r.tech ? '👷 ' + r.tech : ''}</div>
+                </div>
                 <div style="display:flex;gap:5px;flex-shrink:0;">
                   <button class="btn btn-navy btn-sm" onclick="editRapport('${r.id}')" title="Reprendre ce rapport">▶ Reprendre</button>
                   <button class="btn btn-red btn-sm btn-xs" onclick="event.stopPropagation();confirmDeleteRapport('${r.id}')" title="Supprimer ce brouillon">🗑</button>
                 </div>
-              </div>`).join('')}
+              </div>`;
+            }).join('')}
           </div>
         </div>`;
     } else {
