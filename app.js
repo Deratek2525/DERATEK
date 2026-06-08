@@ -2230,6 +2230,65 @@ async function bonPdfPreview(bonId, el) {
     _showPdfHoverPreview(url, el);
   }, 250);
 }
+// Aperçu au survol de la FACTURE (générée à la volée en PDF, mise en cache par id)
+let _factPdfUrlCache = {};
+function factPdfPreview(id, el) {
+  clearTimeout(_bonPdfHoverTimer);
+  _bonPdfHoverTimer = setTimeout(() => {
+    let url = _factPdfUrlCache[id];
+    if (!url) {
+      try { url = downloadDocPDF(id, 'blob'); } catch (e) { return; }
+      if (!url) return;
+      _factPdfUrlCache[id] = url;
+    }
+    _showPdfHoverPreview(url, el);
+  }, 250);
+}
+// Aperçu au survol du RAPPORT (reconstruit depuis l'enregistrement puis généré en PDF)
+let _rapPdfUrlCache = {};
+function _rapportObjForPdf(r) {
+  const meta = _rapMeta(r.description || '');
+  const loc = meta.loc || {};
+  return {
+    id: r.id, clientNom: r.clientNom || '', clientEmail: r.email || '',
+    date: r.date || '', tech: r.tech || '',
+    contact: _rapContactNom(r.contact || ''), contactRole: _rapContactRole(r.contact || '') || '',
+    tel: r.tel || '', email: r.email || '',
+    adresse: r.adresse || '', npa: r.npa || '', ville: r.ville || '',
+    localisation: r.localisation || '', batiment: r.batiment || '', noint: r.noint || '',
+    bonCommande: r.bonCommande || '',
+    locataire: loc.nom || '', locataireTel: loc.tel || '', locataireEmail: loc.email || '', locataireAdresse: loc.adresse || '',
+    showPrix: true, showDuree: true, showRdv: true, showGarantie: true, showGarantieNote: true, showPrecautions: true,
+    volume: '', photoComments: ['', '', '', '', '', ''], materiels: [], materielComment: '',
+    garantieNote: '', showSigClient: true, sigLocataire: '',
+    nuisibles: r.nuisibles || [], description: meta.descClean || r.description || '',
+    nbPassages: meta.nbPassages || '', datesInterv: meta.dates || [],
+    niveau: r.niveau || '', superficie: r.superficie || '', pieces: r.pieces || '', zones: r.zones || '',
+    origine: r.origine || '', contraintes: r.contraintes || '',
+    traitement: r.traitement || [], produits: r.produits || [],
+    precautions: r.precautions || '', duree: r.duree || '', montant: r.montant || '',
+    resultat: r.resultat || '', recommandations: r.recommandations || '',
+    rdv: r.rdv || '', rdvHeure: r.rdvHeure || '', garantie: r.garantie || '',
+    photos: r.photos || [],
+  };
+}
+function rapPdfPreview(rid, el) {
+  clearTimeout(_bonPdfHoverTimer);
+  _bonPdfHoverTimer = setTimeout(() => {
+    let url = _rapPdfUrlCache[rid];
+    if (!url) {
+      try {
+        const r = (DB.rapports || []).find(x => x.id === rid);
+        if (!r || typeof generatePDF !== 'function') return;
+        const doc = generatePDF(_rapportObjForPdf(r));
+        if (!doc) return;
+        url = doc.output('bloburl');
+      } catch (e) { return; }
+      _rapPdfUrlCache[rid] = url;
+    }
+    _showPdfHoverPreview(url, el);
+  }, 250);
+}
 function bonPdfPreviewHide() {
   clearTimeout(_bonPdfHoverTimer);
   // petit délai pour permettre de déplacer la souris sur l'aperçu
@@ -4011,10 +4070,10 @@ function renderFactArchive() {
         <span style="font-size:11px;color:var(--g400);">📅 ${fmtDate(f.dateDoc) || '—'}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px dashed #eee;padding-top:10px;">
-        ${b && b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')">📎 PDF du bon</button>` : ''}
-        ${r ? `<button class="btn btn-ghost btn-sm" onclick="editRapport('${r.id}')">📋 Voir le rapport</button>` : ''}
+        ${b && b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" onmouseenter="bonPdfPreview('${b.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = ouvrir">📎 PDF du bon</button>` : ''}
+        ${r ? `<button class="btn btn-ghost btn-sm" onclick="editRapport('${r.id}')" onmouseenter="rapPdfPreview('${r.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu du rapport · Clic = ouvrir">📋 Voir le rapport</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="editDoc('${f.id}')">✏️ Voir la facture</button>
-        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${f.id}')">📥 PDF facture</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${f.id}')" onmouseenter="factPdfPreview('${f.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = télécharger">📥 PDF facture</button>
         <button class="btn btn-ghost btn-sm" onclick="unarchiveFact('${f.id}')" title="Repasser la facture en non payée (le dossier ressort de l'archive)">↩︎ Désarchiver</button>
       </div>
     </div>`;
@@ -5362,9 +5421,9 @@ function _drawPrestationsFooter(doc, W, H) {
   try { doc.addImage(FOOTER_PRESTATIONS_B64, 'PNG', margin, y, imgW, imgH); } catch (e) { console.warn('footer prestations', e); }
 }
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
-function downloadDocPDF(id) {
+function downloadDocPDF(id, mode) {
   const d = (DB.documents || []).find(x => x.id === id);
-  if (!d) { toast('Document introuvable', '#e63946'); return; }
+  if (!d) { if (mode !== 'blob') toast('Document introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   // Sécurisation : lignes peut arriver comme string JSON depuis Supabase, ou être absent
   if (typeof d.lignes === 'string') { try { d.lignes = JSON.parse(d.lignes); } catch (e) { d.lignes = []; } }
@@ -5623,12 +5682,14 @@ function downloadDocPDF(id) {
     _drawPrestationsFooter(doc, W, H);
   }
 
+  // Mode "blob" : on renvoie une URL d'aperçu (survol) au lieu de télécharger.
+  if (mode === 'blob') return doc.output('bloburl');
   const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
   doc.save(fname);
   toast('✓ PDF téléchargé', '#2d9e6b');
   } catch (err) {
     console.error('PDF error', err);
-    toast('Erreur PDF : ' + (err.message || 'voir console'), '#e63946');
+    if (mode !== 'blob') toast('Erreur PDF : ' + (err.message || 'voir console'), '#e63946');
   }
 }
 
