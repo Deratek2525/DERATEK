@@ -10,6 +10,20 @@ function generatePDF(rapport, statut) {
     const W = 210, M = 14, CW = W - M*2;
     let y = 0;
 
+    // Nettoie un texte avant rendu PDF : ne conserve que les caractères que la police
+    // standard (WinAnsi) sait afficher. Les espaces typographiques (insécables, fines…),
+    // tirets exotiques, marques de format et caractères invisibles — souvent introduits par
+    // la correction IA en français — faussent le calcul de largeur et font déborder / parasitent
+    // le texte du PDF. On les normalise ou on les supprime ici, une bonne fois pour toutes.
+    function _sanPdf(text) {
+      return String(text == null ? '' : text)
+        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+        .replace(/[\u2010\u2011\u2012\u2015]/g, '-')
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '')
+        .replace(/[^\u0000-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/g, '')
+        .replace(/[ \t]+/g, ' ');
+    }
+
     // Couleurs
     const C = {
       navy:   [26,  39,  68],
@@ -105,7 +119,7 @@ function generatePDF(rapport, statut) {
       if (!val) return;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      const valLines = doc.splitTextToSize(String(val), CW - 6);
+      const valLines = doc.splitTextToSize(_sanPdf(val), CW - 6);
       const rowH = Math.max(8, valLines.length * 5 + 5);
       checkPage(rowH + 2);
       if (shade) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, rowH, 'F'); }
@@ -133,8 +147,8 @@ function generatePDF(rapport, statut) {
       for (let i = 0; i < items.length; i += 2) {
         const left = items[i];
         const right = items[i + 1];
-        const lLines = doc.splitTextToSize(String(left.val), colTextW);
-        const rLines = right ? doc.splitTextToSize(String(right.val), colTextW) : [];
+        const lLines = doc.splitTextToSize(_sanPdf(left.val), colTextW);
+        const rLines = right ? doc.splitTextToSize(_sanPdf(right.val), colTextW) : [];
         const cellH = Math.max(8, lLines.length * 5 + 5, rLines.length * 5 + 5);
         checkPage(cellH + 2);
         const shade = (Math.floor(i / 2) % 2 === 1);
@@ -159,13 +173,7 @@ function generatePDF(rapport, statut) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       const maxW = CW - 10;
-      // Normalise les espaces typographiques (insécables, fines insécables, etc. souvent
-      // insérés par la correction IA en français) : ils ne font pas partie de la police PDF,
-      // s'affichent en caractères parasites et faussent le retour à la ligne → texte qui déborde.
-      const clean = String(text)
-        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
-        .replace(/[\u200B\u200C\u200D\u2060\uFEFF\u00AD]/g, '')
-        .replace(/[ \t]+/g, ' ');
+      const clean = _sanPdf(text);
       let lines = doc.splitTextToSize(clean, maxW);
       // Sécurité : coupe par caractère toute ligne qui dépasserait encore la largeur utile.
       const _hw = [];
