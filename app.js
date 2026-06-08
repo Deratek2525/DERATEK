@@ -389,6 +389,7 @@ function showScreen(name) {
   if (nb) nb.classList.add('active');
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
   if (name === 'anciennes' && typeof renderAnciennesList === 'function') renderAnciennesList();
+  if (name === 'fact-archive' && typeof renderFactArchive === 'function') renderFactArchive();
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
   if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
@@ -1209,6 +1210,7 @@ function renderRapports() {
   }
   const q = ($('rapp-search') || {}).value || '';
   const list = DB.rapports.filter(r => {
+    if (_isRapportFactArchived(r)) return false; // parti dans « Facturation archivée »
     const hay = ((r.id||'') + ' ' + (r.clientNom||'') + ' ' + (r.nuisibles||[]).join(' ') + ' ' + (r.bonCommande||'') + ' ' + (r.noint||'') + ' ' + (r.tech||'') + ' ' + (r.ville||'') + ' ' + (r.contact||'')).toLowerCase();
     const m = hay.includes(q.toLowerCase());
     return m && (state.rapportsFilter === 'Tous' || r.statut === state.rapportsFilter);
@@ -3368,6 +3370,7 @@ function updateBonsCounts() { updateNavCounts(); }
 function updateNavCounts() {
   let nA = 0, nE = 0, nT = 0;
   (DB.bons || []).forEach(b => {
+    if (_isBonFactArchived(b)) return; // parti dans facturation archivée
     const s = b.statut || '';
     if (s === 'termine') nT++;
     else if (s === 'en-cours') nE++;
@@ -3381,14 +3384,17 @@ function updateNavCounts() {
     !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
-  const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d)).length;
+  const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d) && !_isFactureFactArchived(d)).length;
+  const nRapports = (DB.rapports || []).filter(r => !_isRapportFactArchived(r)).length;
+  const nFactArchive = _factArchiveSets().length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
   set('nb-bons-encours-count', nE);
   set('nb-bons-termines-count', nT);
   set('nb-devis-count', nDevis);
   set('nb-factures-count', nFact);
-  set('nb-rapports-count', (DB.rapports || []).length);
+  set('nb-fact-archive-count', nFactArchive);
+  set('nb-rapports-count', nRapports);
   set('nb-clients-count', (DB.clients || []).length);
   set('nb-locataires-count', (DB.locataires || []).length);
   set('nb-fournisseurs-count', (DB.fournisseurs || []).length);
@@ -3535,7 +3541,8 @@ function renderBons() {
   const list = $('bons-list');
   const count = $('bons-count');
   const q = (($('bon-search') || {}).value || '').toLowerCase();
-  let bons = DB.bons || [];
+  // Les bons dont la facture est payée partent dans « Facturation archivée »
+  let bons = (DB.bons || []).filter(b => !_isBonFactArchived(b));
   // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
   const isTermine = b => (b.statut || '') === 'termine';
   if (state.bonsFilter === 'termines') {
@@ -3909,6 +3916,90 @@ function _docIsArchive(d) {
 }
 function _docNotesClean(d) {
   return String((d && d.notes) || '').replace(/\s*\[ARCHIVE\]\s*/g, ' ').trim();
+}
+
+// ============================================================
+// FACTURATION ARCHIVÉE : quand une facture est PAYÉE et liée à un bon,
+// le trio (bon + rapport + facture) devient un dossier clos. Calculé
+// dynamiquement (aucun marqueur) : si on dé-paie la facture, tout revient.
+// ============================================================
+function _factNorm(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
+// Une facture (non importée Excel) payée et rattachée à un bon
+function _isFactureFactArchived(d) {
+  return !!(d && d.type === 'facture' && (d.statut || '') === 'payee' && d.bonId && !_docIsArchive(d));
+}
+// Un bon est archivé s'il a une facture payée liée
+function _isBonFactArchived(b) {
+  if (!b || !b.id) return false;
+  return (DB.documents || []).some(d => _isFactureFactArchived(d) && d.bonId === b.id);
+}
+// Un rapport est archivé si son n° de bon de commande correspond à un bon archivé
+function _isRapportFactArchived(r) {
+  if (!r || !r.bonCommande) return false;
+  const bon = (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande));
+  return bon ? _isBonFactArchived(bon) : false;
+}
+// Construit les dossiers archivés (1 par facture payée liée à un bon)
+function _factArchiveSets() {
+  const sets = [];
+  (DB.documents || []).forEach(d => {
+    if (!_isFactureFactArchived(d)) return;
+    const bon = (DB.bons || []).find(b => b.id === d.bonId) || null;
+    const rapport = bon ? ((DB.rapports || []).find(r => _factNorm(r.bonCommande) === _factNorm(bon.numero)) || null) : null;
+    sets.push({ facture: d, bon, rapport });
+  });
+  sets.sort((a, b) => (b.facture.dateDoc || '').localeCompare(a.facture.dateDoc || ''));
+  return sets;
+}
+// Rendu de l'onglet « Facturation archivée »
+function renderFactArchive() {
+  updateNavCounts();
+  const box = $('fact-archive-list'); if (!box) return;
+  const q = (($('fact-archive-search') || {}).value || '').toLowerCase();
+  let sets = _factArchiveSets();
+  if (q) sets = sets.filter(s => {
+    const f = s.facture, b = s.bon, r = s.rapport;
+    return ((f.numero||'') + ' ' + (f.clientNom||'') + ' ' + (f.locataireNom||'') + ' ' + (b ? (b.numero||'') : '') + ' ' + (b ? (b.geranceNom||'') : '') + ' ' + (r ? (r.id||'') : '')).toLowerCase().includes(q);
+  });
+  const sub = $('fact-archive-sub');
+  const totalArch = sets.reduce((s, x) => s + (parseFloat(x.facture.total) || 0), 0);
+  if (sub) sub.textContent = sets.length + ' dossier(s) clos · ' + _displayMontant(totalArch) + ' CHF encaissés';
+  if (!sets.length) {
+    box.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Aucun dossier archivé.<br>Un dossier (bon + rapport + facture) arrive ici dès qu\'une facture liée à un bon est marquée « Payée ».</div></div>';
+    return;
+  }
+  const pill = (icon, txt, col) => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${col};background:${_hexTint(col,0.12)};border:1px solid ${_hexTint(col,0.30)};border-radius:6px;padding:3px 8px;">${icon} ${txt}</span>`;
+  box.innerHTML = sets.map(s => {
+    const f = s.facture, b = s.bon, r = s.rapport;
+    return `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #0f766e;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.04);">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);min-width:150px;">${f.clientNom || '—'}</div>
+        <div style="flex:1;font-size:12px;color:var(--g600);">${f.locataireNom ? ('🏠 ' + f.locataireNom) : ''}</div>
+        <div style="font-size:14px;font-weight:800;color:#15803d;">${_displayMontant(f.total || 0)} CHF · ✅ Payée</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+        ${b ? pill('📄', 'Bon ' + (b.numero || ''), '#2563eb') : pill('📄', 'Bon — (introuvable)', '#9ca3af')}
+        ${r ? pill('📋', 'Rapport ' + (r.id || ''), '#7c3aed') : pill('📋', 'Rapport — (aucun)', '#9ca3af')}
+        ${pill('🧾', 'Facture ' + (f.numero || ''), '#0f766e')}
+        <span style="font-size:11px;color:var(--g400);">📅 ${fmtDate(f.dateDoc) || '—'}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px dashed #eee;padding-top:10px;">
+        ${b && b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')">📎 PDF du bon</button>` : ''}
+        ${r ? `<button class="btn btn-ghost btn-sm" onclick="editRapport('${r.id}')">📋 Voir le rapport</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="editDoc('${f.id}')">✏️ Voir la facture</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${f.id}')">📥 PDF facture</button>
+        <button class="btn btn-ghost btn-sm" onclick="unarchiveFact('${f.id}')" title="Repasser la facture en non payée (le dossier ressort de l'archive)">↩︎ Désarchiver</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+// Désarchive : remet la facture en « Envoyée » (non payée) → le trio ressort des archives
+function unarchiveFact(id) {
+  const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
+  d.statut = 'envoyee'; DB.documents = docs;
+  renderFactArchive();
+  toast('Dossier ressorti de l\'archive (facture remise en « non payée »)', '#2d9e6b');
 }
 
 // Construit le payload SPC 0200 (Swiss QR Code), refType NON (IBAN classique)
@@ -4549,7 +4640,8 @@ function updateDocStatut(id, value) {
   if (!d) return;
   d.statut = value;
   DB.documents = docs;
-  toast('Statut mis à jour ✓', '#2d9e6b');
+  if (value === 'payee' && d.bonId) toast('✅ Payée — dossier classé dans « 📦 Facturation archivée »', '#0f766e');
+  else toast('Statut mis à jour ✓', '#2d9e6b');
   renderDocuments();
   // Le CA "CHF facturés" du portefeuille client dépend des factures payées → on rafraîchit
   if (typeof renderClients === 'function') renderClients();
@@ -4598,7 +4690,8 @@ function renderDocuments() {
   // Titre de la page selon l'onglet
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d));
+  // Exclut les factures payées liées à un bon (parties dans « Facturation archivée »)
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d));
   const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';

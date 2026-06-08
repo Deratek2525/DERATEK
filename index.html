@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260604fp">
+<link rel="stylesheet" href="./style.css?v=20260604fq">
 </head>
 <body>
 
@@ -331,6 +331,7 @@
     <button id="nb-devis" class="nav-btn" onclick="showDocsScreen(&#39;devis&#39;)" style="background:#7c3aed;color:#fff;">📝 <span>Devis</span> <span id="nb-devis-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-factures" class="nav-btn" onclick="showDocsScreen(&#39;facture&#39;)" style="background:#2d9e6b;color:#fff;">🧾 <span>Factures</span> <span id="nb-factures-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-anciennes" class="nav-btn" onclick="showScreen(&#39;anciennes&#39;)" style="background:#475569;color:#fff;">📁 <span>Anciennes factures</span></button>
+    <button id="nb-fact-archive" class="nav-btn" onclick="showScreen(&#39;fact-archive&#39;)" style="background:#0f766e;color:#fff;">📦 <span>Facturation archivée</span> <span id="nb-fact-archive-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-clients" class="nav-btn" onclick="showScreen(&#39;clients&#39;)">👥 <span>Clients</span> <span id="nb-clients-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-locataires" class="nav-btn" onclick="showScreen(&#39;locataires&#39;)">🏠 <span>Locataires</span> <span id="nb-locataires-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span> <span id="nb-fournisseurs-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
@@ -1216,6 +1217,24 @@
     </div>
   </div>
 
+  <!-- FACTURATION ARCHIVÉE (bon + rapport + facture payée) -->
+  <div id="screen-fact-archive" class="screen">
+    <div class="page-hd">
+      <div>
+        <div class="page-title">📦 Facturation archivée</div>
+        <div class="page-sub" id="fact-archive-sub">Dossiers clos : bon + rapport + facture payée, regroupés.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="search-wrap" style="min-width:200px;">
+          <input type="text" placeholder="Rechercher..." id="fact-archive-search" oninput="renderFactArchive()">
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div id="fact-archive-list"></div>
+    </div>
+  </div>
+
   <!-- DEVIS / FACTURES -->
   <div id="screen-devis" class="screen">
     <div class="page-hd">
@@ -1311,10 +1330,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260604fp"></script>
-<script src="./footer_prestations.js?v=20260604fp"></script>
-<script src="./config.js?v=20260604fp"></script>
-<script src="./app.js?v=20260604fp"></script>
-<script src="./pdf.js?v=20260604fp"></script>
+<script src="./logo.js?v=20260604fq"></script>
+<script src="./footer_prestations.js?v=20260604fq"></script>
+<script src="./config.js?v=20260604fq"></script>
+<script src="./app.js?v=20260604fq"></script>
+<script src="./pdf.js?v=20260604fq"></script>
 
 </body></html>
