@@ -1330,6 +1330,9 @@ function resetRapportForm() {
   clearLocataireSelection();
   if ($('bloc-locataire')) $('bloc-locataire').style.display = 'block';
   const d = $('r-locataire-details'); if (d) d.style.display = 'block';
+  // Bloc « Adresse d'intervention » fermé par défaut
+  if ($('r-avec-adresse')) $('r-avec-adresse').checked = false;
+  if (typeof toggleAdresse === 'function') toggleAdresse();
   showTab('infos'); updatePDF();
 }
 function openNewRapport() { state.editingRapportId = null; resetRapportForm(); showScreen('rapport-edit'); }
@@ -1379,6 +1382,10 @@ function editRapport(id) {
   const hasLoc = !!(locNom || locTel || locEmail || locAdr);
   if ($('r-avec-locataire')) $('r-avec-locataire').checked = hasLoc;
   toggleLocataire();
+  // Ouvre le bloc « Adresse d'intervention » si une adresse est enregistrée
+  const hasAdr = !!((r.adresse || '') || (r.npa || '') || (r.ville || ''));
+  if ($('r-avec-adresse')) $('r-avec-adresse').checked = hasAdr;
+  if (typeof toggleAdresse === 'function') toggleAdresse();
   $('edit-id').textContent = r.id;
   $('edit-status').className = 'badge ' + badgeCls(r.statut); $('edit-status').textContent = r.statut;
   $('edit-meta').textContent = (r.clientNom || '') + (r.date ? ' · ' + fmtDate(r.date) : '');
@@ -1395,14 +1402,34 @@ function onClientChange() {
     $('r-contact').value = _rapContactNom(c.contact) || '';
     const role = _rapContactRole(c.contact);
     if ($('r-contact-role')) $('r-contact-role').value = role || 'Gérant';
-    // Adresse : on ne complète que si elle est vide (c'est le lieu d'intervention, pas la gérance)
-    if (!$('r-adresse').value) {
-      $('r-adresse').value = c.adresse || '';
-      $('r-npa').value     = c.npa || '';
-      $('r-ville').value   = c.ville || '';
-    }
+    // NB : on ne remplit PAS l'adresse d'intervention avec l'adresse de la gérance
+    // (ce champ correspond au lieu d'intervention = locataire / immeuble).
   }
   updatePDF();
+}
+// Affiche/masque le bloc « Adresse d'intervention » selon la case à cocher
+function toggleAdresse() {
+  const on = !!($('r-avec-adresse') && $('r-avec-adresse').checked);
+  const d = $('bloc-adresse-details');
+  if (d) d.style.display = on ? 'block' : 'none';
+  if (typeof updatePDF === 'function') updatePDF();
+}
+// Découpe une adresse "Rue 12, 2000 Ville" en {adresse, npa, ville}
+function _parseAdresseInter(s) {
+  s = String(s || '').trim();
+  const m = s.match(/^(.*?)[,\s]+(\d{4})\s+(.+)$/);
+  if (m) return { adresse: m[1].replace(/[,\s]+$/, '').trim(), npa: m[2], ville: m[3].trim() };
+  return { adresse: s, npa: '', ville: '' };
+}
+// Renseigne le bloc « Adresse d'intervention » et l'ouvre
+function _setAdresseInter(adrStr) {
+  const p = _parseAdresseInter(adrStr || '');
+  if (!p.adresse && !p.npa && !p.ville) return;
+  if ($('r-adresse')) $('r-adresse').value = p.adresse;
+  if ($('r-npa'))     $('r-npa').value     = p.npa;
+  if ($('r-ville'))   $('r-ville').value   = p.ville;
+  if ($('r-avec-adresse')) $('r-avec-adresse').checked = true;
+  toggleAdresse();
 }
 
 // ============================================================
@@ -4461,6 +4488,8 @@ function createRapportFromBon(bonId) {
     setVal('r-locataire-email', loc ? loc.email : '');
     setVal('r-locataire-adresse', locAdr);
   }
+  // Adresse d'intervention (immeuble du bon, sinon adresse du locataire) → on ouvre le bloc
+  _setAdresseInter(bon.immeuble || locAdr || '');
   if (typeof updatePDF === 'function') updatePDF();
   showScreen('rapport-edit');
   toast('Rapport pré-rempli depuis le bon ' + (bon.numero || ''), '#2d9e6b');
