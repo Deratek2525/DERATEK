@@ -5071,6 +5071,15 @@ function renderDocuments() {
   const cardOf = (d) => {
     const isDevis = d.type === 'devis';
     const st = statutColors[d.statut] || statutColors.brouillon;
+    // Bon lié → n° de bon + adresse d'intervention ; rapport lié → technicien
+    const _bon = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+    const _bonNum = (_bon && _bon.numero) || d.bonCommande || '';
+    const _adrInt = (_bon && _bon.immeuble) || d.locataireAdresse || '';
+    let _tech = '';
+    if (_bon) {
+      const _rap = (DB.rapports || []).find(r => _factNorm(r.bonCommande) === _factNorm(_bon.numero));
+      _tech = (_rap && _rap.tech) || _bonAffecte(_bon) || '';
+    }
     const opts = isDevis
       ? ['brouillon','envoye','accepte','refuse']
       : ['brouillon','envoyee','payee'];
@@ -5088,6 +5097,9 @@ function renderDocuments() {
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
         <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
         ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
+        ${_adrInt?`<div style="font-size:11px;color:var(--g600);">📍 ${_adrInt}</div>`:''}
+        ${_bonNum?`<div style="font-size:11px;color:var(--g600);">📄 Bon ${_bonNum}</div>`:''}
+        ${_tech?`<div style="font-size:11px;color:var(--g600);">👷 ${_tech}</div>`:''}
       </div>
       <div style="min-width:110px;text-align:right;">
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Total TTC</div>
