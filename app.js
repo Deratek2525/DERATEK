@@ -1193,8 +1193,11 @@ function renderRapports() {
             ${drafts.map(r => {
               const loc = (_rapMeta(r.description || '').loc) || {};
               const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
-              const adr = [r.adresse, [r.npa, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') || loc.adresse || (_bon && _bon.immeuble) || '';
+              // Adresse D'INTERVENTION (locataire / immeuble du bon) — jamais celle de la gérance
+              const adr = loc.adresse || (_bon && _bon.immeuble) || '';
+              const locNom = loc.nom || (_bon && _bon.locataireNom) || '';
               const nuis = (r.nuisibles && r.nuisibles.length) ? r.nuisibles.join(', ') : '';
+              const sousLigne = [locNom ? '🏠 ' + locNom : '', adr ? '📍 ' + adr : '', r.tech ? '👷 ' + r.tech : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
               return `
               <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
                 <div style="min-width:120px;">
@@ -1203,7 +1206,7 @@ function renderRapports() {
                 </div>
                 <div style="flex:1;min-width:180px;font-size:12px;color:var(--g600);">
                   <div style="font-weight:600;color:var(--navy);">${r.clientNom || '— Sans client —'}${nuis ? ' · 🐛 ' + nuis : ''}</div>
-                  <div style="font-size:11px;margin-top:2px;">${adr ? '📍 ' + adr : ''}${adr && r.tech ? ' &nbsp;·&nbsp; ' : ''}${r.tech ? '👷 ' + r.tech : ''}</div>
+                  ${sousLigne ? `<div style="font-size:11px;margin-top:2px;">${sousLigne}</div>` : ''}
                 </div>
                 <div style="display:flex;gap:5px;flex-shrink:0;">
                   <button class="btn btn-navy btn-sm" onclick="editRapport('${r.id}')" title="Reprendre ce rapport">▶ Reprendre</button>
