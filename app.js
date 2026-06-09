@@ -1386,6 +1386,11 @@ function editRapport(id) {
   const hasAdr = !!((r.adresse || '') || (r.npa || '') || (r.ville || ''));
   if ($('r-avec-adresse')) $('r-avec-adresse').checked = hasAdr;
   if (typeof toggleAdresse === 'function') toggleAdresse();
+  // Pas d'adresse enregistrée mais un bon lié avec immeuble → on récupère la rue d'intervention
+  if (!hasAdr && r.bonCommande) {
+    const _b = (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande));
+    if (_b && _b.immeuble && typeof _setAdresseInter === 'function') _setAdresseInter(_b.immeuble);
+  }
   $('edit-id').textContent = r.id;
   $('edit-status').className = 'badge ' + badgeCls(r.statut); $('edit-status').textContent = r.statut;
   $('edit-meta').textContent = (r.clientNom || '') + (r.date ? ' · ' + fmtDate(r.date) : '');

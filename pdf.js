@@ -300,13 +300,15 @@ function generatePDF(rapport, statut) {
 
     // ── INFOS GÉNÉRALES (deux colonnes) ──────────────────────
     sTitle('Informations générales');
-    const adresseFull = (rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:'');
-    // Le nom de la gérance + son adresse sont regroupés dans la même case "Client"
-    const clientBloc = (rapport.clientNom || '') + (adresseFull.trim() ? '\n' + adresseFull.trim() : '');
+    const adresseFull = ((rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:'')).trim();
+    // Adresse d'intervention = la rue (adresse/NPA/ville) ; à défaut, l'adresse du locataire.
+    const interAdr = adresseFull || (rapport.locataireAdresse || '');
+    const clientBloc = (rapport.clientNom || '');   // la case Client ne contient QUE la gérance
     const infoPairs = [
       { key: 'Technicien',            val: rapport.tech },
       { key: 'Client',                val: clientBloc },
       { key: 'N° Bon de commande',    val: rapport.bonCommande },
+      { key: "Adresse d'intervention", val: interAdr },
       { key: (rapport.contactRole && rapport.contactRole !== 'Contact') ? rapport.contactRole : 'Contact',
         val: String(rapport.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim() },
       { key: 'Téléphone',             val: rapport.tel },
@@ -316,7 +318,11 @@ function generatePDF(rapport, statut) {
       infoPairs.push({ key: 'Locataire', val: rapport.locataire });
       infoPairs.push({ key: 'Tél. locataire', val: rapport.locataireTel });
       infoPairs.push({ key: 'Email locataire', val: rapport.locataireEmail });
-      infoPairs.push({ key: "Adresse d'intervention", val: rapport.locataireAdresse });
+      // Si l'adresse du locataire est en réalité une description du logement (appt/étage),
+      // on la garde séparément pour ne pas la confondre avec la rue d'intervention.
+      if (rapport.locataireAdresse && rapport.locataireAdresse !== interAdr) {
+        infoPairs.push({ key: 'Logement', val: rapport.locataireAdresse });
+      }
     }
     infoPairs.push({ key: 'Bâtiment',       val: rapport.batiment });
     infoPairs.push({ key: 'Localisation',   val: rapport.localisation });
