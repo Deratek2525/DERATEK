@@ -1192,7 +1192,8 @@ function renderRapports() {
           <div style="display:flex;flex-direction:column;gap:6px;">
             ${drafts.map(r => {
               const loc = (_rapMeta(r.description || '').loc) || {};
-              const adr = [r.adresse, [r.npa, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') || loc.adresse || '';
+              const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
+              const adr = [r.adresse, [r.npa, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ') || loc.adresse || (_bon && _bon.immeuble) || '';
               const nuis = (r.nuisibles && r.nuisibles.length) ? r.nuisibles.join(', ') : '';
               return `
               <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
