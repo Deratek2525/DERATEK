@@ -5114,7 +5114,7 @@ function renderDocuments() {
         ${chip('tous', 'Toutes', allOfType.length, '#0d1b3e')}
         ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
         ${chip('pret', '📤 Prêt à envoyer', byS('pret').length, '#d97706')}
-        ${chip('envoyee', '📨 Non payées', byS('envoyee').length, '#2563eb')}
+        ${chip('envoyee', '📨 Envoyées', byS('envoyee').length, '#2563eb')}
         ${chip('payee', '✅ Payées', byS('payee').length, '#16a34a')}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
