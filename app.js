@@ -1386,10 +1386,18 @@ function editRapport(id) {
   const hasAdr = !!((r.adresse || '') || (r.npa || '') || (r.ville || ''));
   if ($('r-avec-adresse')) $('r-avec-adresse').checked = hasAdr;
   if (typeof toggleAdresse === 'function') toggleAdresse();
-  // Pas d'adresse enregistrée mais un bon lié avec immeuble → on récupère la rue d'intervention
-  if (!hasAdr && r.bonCommande) {
-    const _b = (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande));
+  // Correction : sur d'anciens rapports, l'adresse d'intervention enregistrée était en fait
+  // l'adresse de la GÉRANCE (ancien remplissage auto). On la remplace par la vraie adresse
+  // d'intervention = l'immeuble du bon lié (ou on la vide si aucun bon).
+  const _cliRec = r.clientId ? (DB.clients || []).find(c => c.id === r.clientId) : null;
+  const _adrIsGerance = !!(_cliRec && _cliRec.adresse && _factNorm((r.adresse || '') + (r.ville || '')) === _factNorm((_cliRec.adresse || '') + (_cliRec.ville || '')));
+  const _b = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
+  if (_adrIsGerance) {
+    ['r-adresse', 'r-npa', 'r-ville'].forEach(id => { const e = $(id); if (e) e.value = ''; });
     if (_b && _b.immeuble && typeof _setAdresseInter === 'function') _setAdresseInter(_b.immeuble);
+    else { if ($('r-avec-adresse')) $('r-avec-adresse').checked = false; if (typeof toggleAdresse === 'function') toggleAdresse(); }
+  } else if (!hasAdr && _b && _b.immeuble && typeof _setAdresseInter === 'function') {
+    _setAdresseInter(_b.immeuble);
   }
   $('edit-id').textContent = r.id;
   $('edit-status').className = 'badge ' + badgeCls(r.statut); $('edit-status').textContent = r.statut;
