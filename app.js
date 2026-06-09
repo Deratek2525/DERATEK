@@ -5101,7 +5101,7 @@ function renderDocuments() {
   if (filtre === 'facture') {
     const byS = st => allOfType.filter(d => (d.statut || 'brouillon') === st);
     const sumS = st => byS(st).reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
-    const tBrouillon = sumS('brouillon'), tEnvoyee = sumS('envoyee'), tPayee = sumS('payee');
+    const tBrouillon = sumS('brouillon'), tPret = sumS('pret'), tEnvoyee = sumS('envoyee'), tPayee = sumS('payee');
     const totalEnvoye = tEnvoyee + tPayee;
     const chip = (val, label, n, col) => {
       const on = (sf === val);
@@ -5113,6 +5113,7 @@ function renderDocuments() {
       <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:10px;">
         ${chip('tous', 'Toutes', allOfType.length, '#0d1b3e')}
         ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
+        ${chip('pret', '📤 Prêt à envoyer', byS('pret').length, '#d97706')}
         ${chip('envoyee', '📨 Non payées', byS('envoyee').length, '#2563eb')}
         ${chip('payee', '✅ Payées', byS('payee').length, '#16a34a')}
       </div>
@@ -5136,10 +5137,11 @@ function renderDocuments() {
     'envoye':    { bg:'#dbeafe', color:'#1d4ed8' },
     'accepte':   { bg:'#bbf7d0', color:'#166534' },
     'refuse':    { bg:'#fecaca', color:'#991b1b' },
+    'pret':      { bg:'#fef3c7', color:'#b45309' },
     'envoyee':   { bg:'#dbeafe', color:'#1d4ed8' },
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
-  const statutLabel = { brouillon:'Brouillon', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
+  const statutLabel = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
   const cardOf = (d) => {
     const isDevis = d.type === 'devis';
     const st = statutColors[d.statut] || statutColors.brouillon;
@@ -5154,7 +5156,7 @@ function renderDocuments() {
     }
     const opts = isDevis
       ? ['brouillon','envoye','accepte','refuse']
-      : ['brouillon','envoyee','payee'];
+      : ['brouillon','pret','envoyee','payee'];
     // Factures : carte teintée de la couleur de la gérance. Devis : violet.
     const gColor = isDevis ? '#8b5cf6' : colorForGeranceName(_geranceCanon(d.clientNom || '') || '(Sans client)');
     const cardBg = isDevis ? '#fff' : _hexTint(gColor, 0.10);
@@ -5319,9 +5321,9 @@ function docShowImportConfirm(infos, fileName) {
   const box = $('doc-import-confirm'); if (!box) return;
   const type = (infos.type||'').toLowerCase().includes('factur') ? 'facture' : 'devis';
   const statutOpts = type === 'facture'
-    ? ['brouillon','envoyee','payee']
+    ? ['brouillon','pret','envoyee','payee']
     : ['brouillon','envoye','accepte','refuse'];
-  const statutLabels = { brouillon:'Brouillon', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
+  const statutLabels = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
   const champ = (label, key, val) =>
     `<div style="margin-bottom:6px;">
        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
@@ -5426,8 +5428,8 @@ function docShowImportConfirm(infos, fileName) {
 function docImportTypeChange(v) {
   const disp = $('docimp-type-disp'); if (disp) disp.textContent = v === 'facture' ? 'FACTURE' : 'DEVIS';
   const sel = $('docimp-statut'); if (!sel) return;
-  const opts = v === 'facture' ? ['brouillon','envoyee','payee'] : ['brouillon','envoye','accepte','refuse'];
-  const labels = { brouillon:'Brouillon', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
+  const opts = v === 'facture' ? ['brouillon','pret','envoyee','payee'] : ['brouillon','envoye','accepte','refuse'];
+  const labels = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', envoyee:'Envoyée', accepte:'Accepté', refuse:'Refusé', payee:'Payée' };
   sel.innerHTML = opts.map(o => `<option value="${o}">${labels[o]||o}</option>`).join('');
 }
 function docImpAddLine() {
