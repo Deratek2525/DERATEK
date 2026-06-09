@@ -1246,7 +1246,11 @@ function renderRapports() {
 
   const ligneRapport = r => {
     const loc = (_rapMeta(r.description).loc) || {};
-    const locTxt = [loc.nom, loc.adresse].filter(Boolean).join(' · ');
+    const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
+    // Adresse d'intervention : locataire/immeuble du bon (jamais la gérance)
+    const locNom = loc.nom || (_bon && _bon.locataireNom) || '';
+    const locAdr = loc.adresse || (_bon && _bon.immeuble) || '';
+    const locTxt = [locNom, locAdr].filter(Boolean).join(' · ');
     const locLigne = locTxt
       ? `<div style="font-size:11.5px;color:#1e3a8a;margin-top:2px;">🏠 ${locTxt}</div>`
       : '';
