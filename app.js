@@ -1381,12 +1381,13 @@ function onClientChange() {
   const id = $('r-client').value;
   const c = DB.clients.find(x => x.id === id);
   if (c) {
-    if (!$('r-tel').value)    $('r-tel').value    = c.tel || '';
-    if (!$('r-email').value)  $('r-email').value  = c.email || '';
-    // Contact : nom + rôle (gérant, concierge…) repris de la fiche client
-    if (!$('r-contact').value) $('r-contact').value = _rapContactNom(c.contact);
+    // Sélection d'un client → on (re)remplit systématiquement les coordonnées du contact
+    $('r-tel').value     = c.tel || '';
+    $('r-email').value   = c.email || '';
+    $('r-contact').value = _rapContactNom(c.contact) || '';
     const role = _rapContactRole(c.contact);
-    if (role && $('r-contact-role')) $('r-contact-role').value = role;
+    if ($('r-contact-role')) $('r-contact-role').value = role || 'Gérant';
+    // Adresse : on ne complète que si elle est vide (c'est le lieu d'intervention, pas la gérance)
     if (!$('r-adresse').value) {
       $('r-adresse').value = c.adresse || '';
       $('r-npa').value     = c.npa || '';
