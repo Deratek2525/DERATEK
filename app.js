@@ -2571,19 +2571,11 @@ function _findOrCreateGerance(infos) {
   const existing = clients.find(c => (c.nom || '').toLowerCase() === nom.toLowerCase());
   if (existing) {
     const updates = {};
-    // Gérant technique détecté : s'il est NOUVEAU (différent du contact enregistré),
-    // on l'enregistre automatiquement comme contact de la gérance, avec son tél/email.
-    const curContact = _rapContactNom(existing.contact || '');
-    if (infos.gerant_nom && _factNorm(infos.gerant_nom) !== _factNorm(curContact)) {
-      updates.contact = infos.gerant_nom;
-      if (infos.gerant_tel)   updates.tel   = infos.gerant_tel;
-      if (infos.gerant_email) updates.email = infos.gerant_email;
-    } else {
-      // Sinon on complète seulement ce qui manque
-      if (!existing.contact && infos.gerant_nom)   updates.contact = infos.gerant_nom;
-      if (!existing.tel     && infos.gerant_tel)   updates.tel     = infos.gerant_tel;
-      if (!existing.email   && infos.gerant_email) updates.email   = infos.gerant_email;
-    }
+    // On NE remplace JAMAIS le contact existant de la gérance : on complète seulement
+    // les champs vides. Le nom du gérant écrit sur le bon reste porté par le BON lui-même.
+    if (!existing.contact && infos.gerant_nom)      updates.contact = infos.gerant_nom;
+    if (!existing.tel     && infos.gerant_tel)      updates.tel     = infos.gerant_tel;
+    if (!existing.email   && infos.gerant_email)    updates.email   = infos.gerant_email;
     if (!existing.adresse && infos.gerance_adresse) updates.adresse = infos.gerance_adresse;
     if (!existing.npa     && infos.gerance_npa)     updates.npa     = infos.gerance_npa;
     if (!existing.ville   && infos.gerance_ville)   updates.ville   = infos.gerance_ville;
@@ -4361,18 +4353,6 @@ function createRapportFromBon(bonId) {
   // Gérance / client
   const cli = (bon.geranceId ? (DB.clients||[]).find(c => c.id === bon.geranceId) : null)
            || (bon.geranceNom ? (DB.clients||[]).find(c => (c.nom||'').toLowerCase() === bon.geranceNom.toLowerCase()) : null);
-  // Si le bon porte un gérant différent du contact enregistré sur la gérance,
-  // on met à jour automatiquement le contact de la gérance (nouveau gérant technique).
-  if (cli && bon.gerantNom && _factNorm(bon.gerantNom) !== _factNorm(_rapContactNom(cli.contact || ''))) {
-    const clients = DB.clients;
-    const c = clients.find(x => x.id === cli.id);
-    if (c) {
-      c.contact = bon.gerantNom;
-      if (bon.gerantTel)   c.tel   = bon.gerantTel;
-      if (bon.gerantEmail) c.email = bon.gerantEmail;
-      DB.clients = clients;
-    }
-  }
   if (cli) { populateClientSelectRapport(cli.id); onClientChange(); }
   else if (bon.geranceNom && $('r-client')) {
     // Gérance non encore en base : on laisse le select vide mais on remplit le contact
