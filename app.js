@@ -2449,6 +2449,7 @@ function _rapportObjForPdf(r) {
   const loc = meta.loc || {};
   return {
     id: r.id, clientNom: r.clientNom || '', clientEmail: r.email || '',
+    clientAdresse: (() => { const c = r.clientId ? (DB.clients||[]).find(x => x.id === r.clientId) : null; return c ? ((c.adresse||'') + (c.npa?' '+c.npa:'') + (c.ville?' '+c.ville:'')).trim() : ''; })(),
     date: r.date || '', tech: r.tech || '',
     contact: _rapContactNom(r.contact || ''), contactRole: _rapContactRole(r.contact || '') || '',
     tel: r.tel || '', email: r.email || '',

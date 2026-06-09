@@ -303,7 +303,8 @@ function generatePDF(rapport, statut) {
     const adresseFull = ((rapport.adresse||'') + (rapport.npa?' '+rapport.npa:'') + (rapport.ville?' '+rapport.ville:'')).trim();
     // Adresse d'intervention = la rue (adresse/NPA/ville) ; à défaut, l'adresse du locataire.
     const interAdr = adresseFull || (rapport.locataireAdresse || '');
-    const clientBloc = (rapport.clientNom || '');   // la case Client ne contient QUE la gérance
+    // Case Client = nom de la gérance + SON adresse (l'adresse de la gérance, pas celle d'intervention)
+    const clientBloc = (rapport.clientNom || '') + (rapport.clientAdresse ? '\n' + rapport.clientAdresse : '');
     const infoPairs = [
       { key: 'Technicien',            val: rapport.tech },
       { key: 'Client',                val: clientBloc },
@@ -698,6 +699,7 @@ function getCurrentRapportData() {
   return {
     id:           document.getElementById('r-id').value,
     clientNom:    client ? client.nom : '',
+    clientAdresse: client ? ((client.adresse||'') + (client.npa?' '+client.npa:'') + (client.ville?' '+client.ville:'')).trim() : '',
     clientEmail:  document.getElementById('r-email').value,
     date:         document.getElementById('r-date').value,
     tech:         document.getElementById('r-tech').value,
