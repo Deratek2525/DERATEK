@@ -2335,7 +2335,7 @@ async function bonProcessFile(file) {
       return;
     }
     setStatus('🤖 Analyse intelligente du bon par l\'IA…');
-    const infos = await bonExtractInfosIA(texte);
+    const infos = _normalizeBonInfos(await bonExtractInfosIA(texte));
     setStatus('');
     bonShowConfirm(infos, file.name);
   } catch (err) {
@@ -2343,6 +2343,27 @@ async function bonProcessFile(file) {
     console.error('Bon error:', err);
     toast('Erreur : ' + err.message, '#e63946');
   }
+}
+
+// Normalise les infos extraites d'un bon : sur les bons (Naef, etc.), la ligne « Immeuble »
+// est l'ADRESSE D'INTERVENTION (= adresse du client/locataire, rue + NPA + ville).
+// La ligne « Chez : … / Appartement … étage … » est le nom du locataire + une description
+// du logement, qui ne doit JAMAIS servir d'adresse postale.
+function _normalizeBonInfos(infos) {
+  if (!infos) return infos;
+  const isLogement = s => {
+    s = String(s || '');
+    if (!s.trim()) return false;
+    const hasNpa = /\b\d{4}\b/.test(s);                       // un vrai NPA suisse
+    const looksRoom = /appart|appt|étage|etage|pi[eè]ces?|\bpces?\b|studio|\brez\b|comble|^\s*n[°o]|\sn[°o]/i.test(s);
+    return looksRoom && !hasNpa;
+  };
+  const imm = String(infos.immeuble || '').trim();
+  // L'adresse du locataire = l'adresse de l'immeuble (rue d'intervention).
+  if (imm && (!String(infos.locataire_adresse || '').trim() || isLogement(infos.locataire_adresse))) {
+    infos.locataire_adresse = imm;
+  }
+  return infos;
 }
 
 // Upload du PDF dans Supabase Storage. Retourne le chemin stocké (ou '' en cas d'échec)
