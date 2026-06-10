@@ -5945,24 +5945,58 @@ const RAPPEL_TEXTES = {
   2: "Malgré notre premier rappel, la facture mentionnée ci-dessous demeure impayée. Nous vous prions de bien vouloir la régler dans un délai de 10 jours. Conformément à nos conditions, des frais de rappel de CHF 60.00 sont désormais ajoutés au montant dû.",
   3: "Malgré nos rappels précédents, la facture mentionnée ci-dessous demeure impayée. Par la présente, nous vous mettons formellement EN DEMEURE de régler le montant total ci-dessous dans un délai de 10 jours. À défaut de paiement dans ce délai, nous engagerons sans autre avis une procédure de recouvrement (poursuite), tous les frais en découlant étant à votre charge.",
 };
-// Génère et télécharge le PDF de rappel d'une facture (niveau 1, 2 ou 3)
-function generateRappel(docId, niveau) {
+// Ouvre la fenêtre de préparation du rappel (texte + infos modifiables avant génération)
+let _rappelDocId = null;
+function openRappelModal(docId, niveau) {
+  const src = (DB.documents || []).find(x => x.id === docId);
+  if (!src) { toast('Facture introuvable', '#e63946'); return; }
+  _rappelDocId = docId;
+  niveau = Math.min(3, Math.max(1, parseInt(niveau, 10) || 1));
+  if ($('rappel-titre')) $('rappel-titre').textContent = 'Rappel de paiement — Facture ' + (src.numero || '');
+  if ($('rappel-niveau')) $('rappel-niveau').value = String(niveau);
+  if ($('rappel-date')) $('rappel-date').value = today();
+  rappelNiveauChange();   // pré-remplit texte + frais
+  openModal('modal-rappel');
+}
+function rappelNiveauChange() {
+  const n = Math.min(3, Math.max(1, parseInt(($('rappel-niveau') || {}).value, 10) || 1));
+  if ($('rappel-texte')) $('rappel-texte').value = RAPPEL_TEXTES[n];
+  if ($('rappel-frais')) $('rappel-frais').value = (n >= 2 ? 60 : 0);
+}
+// Génère le PDF depuis la fenêtre (avec les ajouts éventuels de l'utilisateur)
+function rappelGenerer() {
+  const niveau = Math.min(3, Math.max(1, parseInt(($('rappel-niveau') || {}).value, 10) || 1));
+  const opts = {
+    texte: ($('rappel-texte') || {}).value || RAPPEL_TEXTES[niveau],
+    infos: ($('rappel-infos') || {}).value || '',
+    frais: parseFloat(($('rappel-frais') || {}).value) || 0,
+    dateR: ($('rappel-date') || {}).value || today(),
+  };
+  generateRappel(_rappelDocId, niveau, opts);
+  closeModal('modal-rappel');
+}
+// Construit et télécharge le PDF de rappel (niveau 1/2/3, avec options éditées)
+function generateRappel(docId, niveau, opts) {
+  opts = opts || {};
   niveau = Math.min(3, Math.max(1, parseInt(niveau, 10) || 1));
   const src = (DB.documents || []).find(x => x.id === docId);
   if (!src) { toast('Facture introuvable', '#e63946'); return; }
   let baseTotal = parseFloat(src.total);
   if (!baseTotal || isNaN(baseTotal)) { try { baseTotal = _calcTotaux(src.lignes || [], src.tvaTaux, src.rabais).total || 0; } catch (e) { baseTotal = 0; } }
-  const frais = niveau >= 2 ? 60 : 0;
+  const frais = (opts.frais != null) ? (parseFloat(opts.frais) || 0) : (niveau >= 2 ? 60 : 0);
+  const texte = (opts.texte && opts.texte.trim()) ? opts.texte : RAPPEL_TEXTES[niveau];
+  const fullTexte = texte + (opts.infos && opts.infos.trim() ? ('\n\n' + opts.infos.trim()) : '');
   const r = JSON.parse(JSON.stringify(src));
   r._rappel = true;
   r._rappelLabel = RAPPEL_LABELS[niveau];
-  r._rappelTexte = RAPPEL_TEXTES[niveau];
+  r._rappelTexte = fullTexte;
+  r._rappelFactureDate = src.dateDoc;            // date de la facture d'origine (pour le sous-titre)
+  if (opts.dateR) r.dateDoc = opts.dateR;        // date d'émission du rappel (« Neuchâtel, le … »)
   r.lignes = [{ desc: 'Facture N° ' + (src.numero || '') + (src.dateDoc ? (' du ' + fmtDate(src.dateDoc)) : '') + ' — montant impayé', qte: 1, prix: baseTotal }];
   if (frais) r.lignes.push({ desc: 'Frais de rappel (' + niveau + 'e rappel)', qte: 1, prix: frais });
   r.tvaTaux = 0; r.rabais = 0; r.notes = '';
   downloadDocPDF(r);
-  // Mémorise le niveau de rappel atteint sur la facture d'origine
-  _setAncRappel(docId, niveau);
+  _setAncRappel(docId, niveau);   // mémorise le niveau atteint
   toast('📄 ' + (RAPPEL_LABELS[niveau] || 'Rappel') + ' généré', '#2d9e6b');
 }
 
@@ -6044,7 +6078,7 @@ function downloadDocPDF(id, mode) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(200, 30, 30);
     doc.text(d._rappelLabel || 'RAPPEL DE PAIEMENT', 20, titleY);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90);
-    doc.text('Facture ' + (d.numero || '') + (d.dateDoc ? (' du ' + fmtDate(d.dateDoc)) : ''), 20, titleY + 6);
+    doc.text('Facture ' + (d.numero || '') + ((d._rappelFactureDate || d.dateDoc) ? (' du ' + fmtDate(d._rappelFactureDate || d.dateDoc)) : ''), 20, titleY + 6);
     doc.setTextColor(0);
   } else {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
@@ -7183,7 +7217,7 @@ function renderAnciennesList() {
             </select>
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
-              return `<select onchange="if(this.value){generateRappel('${d.id}', parseInt(this.value,10));this.value='';}" title="Générer un rappel de paiement" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;cursor:pointer;">
+              return `<select onchange="if(this.value){openRappelModal('${d.id}', parseInt(this.value,10));this.value='';}" title="Préparer un rappel de paiement" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;cursor:pointer;">
                 <option value="">📄 Rappel…</option>
                 <option value="1">1er rappel</option>
                 <option value="2">2e rappel (+60 CHF)</option>
