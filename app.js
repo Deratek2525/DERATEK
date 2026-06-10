@@ -5328,7 +5328,7 @@ function renderDocuments() {
     const carte = (label, montant, bg, bd, cl) =>
       `<div style="background:${bg};border:1px solid ${bd};border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:${cl};font-weight:800;">${label}</span> : <b>${_displayMontant(montant)} CHF</b></div>`;
     statsBar = `
-      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:flex-end;margin-bottom:10px;">
         ${chip('tous', 'Toutes', allOfType.length, '#0d1b3e')}
         ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
         ${chip('pret', '📤 Prêt à envoyer', byS('pret').length, '#d97706')}
