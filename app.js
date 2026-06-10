@@ -3743,10 +3743,7 @@ function renderBonCard(b, solid) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
   const gColor = customColor || colorForGeranceName(g);
-  // Un bon URGENT est TOUJOURS en rouge plein, quel que soit l'onglet (priorité visuelle absolue).
-  const _urgent = (b.statut === 'urgent');
-  const baseColor = _urgent ? '#dc2626' : gColor;
-  const fillSolid = _urgent ? true : (solid === true);   // fond plein (onglet « Bons » ou urgent) ou clair (en cours, terminés…)
+  const fillSolid = (solid === true);               // fond plein (onglet « Bons ») ou clair (en cours, terminés…)
   const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
            || (b.locataireNom && (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === (b.locataireNom||'').toLowerCase()))
            || null;
@@ -3760,7 +3757,7 @@ function renderBonCard(b, solid) {
   const statut = b.statut || '';
   const statutStyles = {
     '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' },
-    'urgent':        { bg: '#fee2e2', color: '#b91c1c', border: '#ef4444' }, // rouge
+    'urgent':        { bg: '#dc2626', color: '#ffffff', border: '#b91c1c' }, // rouge PLEIN (toujours)
     'a-contacter':   { bg: '#cffafe', color: '#0e7490', border: '#06b6d4' }, // cyan
     'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626' },
     'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' },
@@ -3773,16 +3770,16 @@ function renderBonCard(b, solid) {
   };
   const stStyle = statutStyles[statut] || statutStyles[''];
   // Fond PLEIN (onglet « Bons ») → texte auto-contrasté ; sinon fond CLAIR → texte foncé normal.
-  const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(baseColor);
+  const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(gColor);
   const _dark = _lum < 0.62;
-  const bg         = fillSolid ? baseColor : _hexTint(baseColor, 0.12);
-  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(baseColor, 0.30);
-  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : baseColor;
+  const bg         = fillSolid ? gColor : _hexTint(gColor, 0.12);
+  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(gColor, 0.30);
+  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : gColor;
   const T  = fillSolid ? (_dark ? '#ffffff' : '#0d1b3e') : '#0d1b3e';
   const TL = fillSolid ? (_dark ? 'rgba(255,255,255,.72)' : '#475569') : '#64748b';
   const T2 = fillSolid ? (_dark ? 'rgba(255,255,255,.9)' : '#334155') : '#475569';
   const dateCol  = fillSolid ? (_dark ? '#ffdada' : '#b91c1c') : '#e63946';
-  const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : baseColor;
+  const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : gColor;
   const iconCol  = fillSolid ? T : '#ffffff';
   return `
             <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
