@@ -3739,10 +3739,11 @@ function updateNavCounts() {
 
 // Carte complète d'un bon (réutilisée dans l'écran Bons ET dans la section
 // "Bons en demande de devis" de l'écran Devis) — source unique de vérité.
-function renderBonCard(b) {
+function renderBonCard(b, solid) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
   const gColor = customColor || colorForGeranceName(g);
+  const fillSolid = (solid === true);               // fond plein (onglet « Bons ») ou clair (en cours, terminés…)
   const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
            || (b.locataireNom && (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === (b.locataireNom||'').toLowerCase()))
            || null;
@@ -3768,18 +3769,22 @@ function renderBonCard(b) {
     'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444' },
   };
   const stStyle = statutStyles[statut] || statutStyles[''];
-  // Couleur de fond PLEINE + texte qui s'adapte (blanc sur fond foncé, foncé sur fond clair)
+  // Fond PLEIN (onglet « Bons ») → texte auto-contrasté ; sinon fond CLAIR → texte foncé normal.
   const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(gColor);
   const _dark = _lum < 0.62;
-  const T  = _dark ? '#ffffff' : '#0d1b3e';
-  const TL = _dark ? 'rgba(255,255,255,.72)' : '#475569';
-  const T2 = _dark ? 'rgba(255,255,255,.9)' : '#334155';
-  const dateCol = _dark ? '#ffdada' : '#b91c1c';
-  const iconBg = _dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)';
+  const bg         = fillSolid ? gColor : _hexTint(gColor, 0.12);
+  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(gColor, 0.30);
+  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : gColor;
+  const T  = fillSolid ? (_dark ? '#ffffff' : '#0d1b3e') : '#0d1b3e';
+  const TL = fillSolid ? (_dark ? 'rgba(255,255,255,.72)' : '#475569') : '#64748b';
+  const T2 = fillSolid ? (_dark ? 'rgba(255,255,255,.9)' : '#334155') : '#475569';
+  const dateCol  = fillSolid ? (_dark ? '#ffdada' : '#b91c1c') : '#e63946';
+  const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : gColor;
+  const iconCol  = fillSolid ? T : '#ffffff';
   return `
-            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${gColor};color:${T};border:1px solid rgba(0,0,0,.12);border-left:6px solid ${_dark?'rgba(255,255,255,.55)':'rgba(0,0,0,.28)'};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
+            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
-                <div style="width:34px;height:34px;border-radius:50%;background:${iconBg};color:${T};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
+                <div style="width:34px;height:34px;border-radius:50%;background:${iconBg};color:${iconCol};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
                 <div>
                   <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
                   <div style="font-size:12px;color:${dateCol};font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
@@ -3943,7 +3948,7 @@ function renderBons() {
       <div style="margin-top:14px;">
         <div style="font-size:13px;font-weight:800;color:${gColor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${gColor};padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          ${items.map(b => renderBonCard(b)).join('')}
+          ${items.map(b => renderBonCard(b, state.bonsFilter === 'actifs')).join('')}
         </div>
       </div>
     `;
