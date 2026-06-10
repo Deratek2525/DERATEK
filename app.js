@@ -286,7 +286,7 @@ let state = {
   clientsFilter:    'Tous',
   bonsFilter:       'actifs',   // 'actifs' (non terminés) ou 'termines'
   docsFilter:       'devis',    // 'devis' ou 'facture' (onglet Devis / Factures séparés)
-  agendaView:       'semaine',
+  agendaView:       'google',
   agendaDate:       new Date(),
   photos:           [null, null, null, null, null, null],
   currentPhotoSlot: 0,
