@@ -1764,7 +1764,7 @@ function saveRapport(statut) {
       const stPrev = bon.statut || '';
       // On ne rétrograde pas un bon déjà « à facturer » ou déjà terminé.
       if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
-      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '');
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon));
       DB.bons = bons;
     }
   }
@@ -3501,11 +3501,17 @@ function _bonProblemeClean(b) {
     .replace(/\s*\[NOTE:[^\]]*\]/g, '')
     .replace(/\s*\[RAPFAIT:[^\]]*\]/g, '')
     .replace(/\s*\[ALERTE:[^\]]*\]/g, '')
+    .replace(/\s*\[COLOR:[^\]]*\]/g, '')
     .trim();
+}
+// Couleur de fond personnalisée du bon (marqueur [COLOR:#hex] dans probleme). Vide = couleur auto (gérance).
+function _bonColor(b) {
+  const m = String((b && b.probleme) || '').match(/\[COLOR:(#[0-9a-fA-F]{3,8})\]/);
+  return m ? m[1] : '';
 }
 // Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait, alerte).
 // Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
-function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte) {
+function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color) {
   let out = String(clean || '').trim();
   const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
   if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
@@ -3513,20 +3519,21 @@ function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte) {
   if (note && String(note).trim()) out += (out ? '\n' : '') + '[NOTE:' + _encNote(note) + ']';
   if (rapFait) out += (out ? '\n' : '') + '[RAPFAIT:1]';
   if (alerte) out += (out ? '\n' : '') + '[ALERTE:' + alerte + ']';
+  if (color) out += (out ? '\n' : '') + '[COLOR:' + color + ']';
   return out;
 }
 // Réécrit probleme propre + tous les marqueurs existants
 function _bonComposeProbleme(b) {
-  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b));
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
@@ -3534,17 +3541,25 @@ function bonSetAffecte(id, value) {
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b));
   const bons = DB.bons; DB.bons = bons;
 }
 // Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
 function bonToggleRapFait(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const nv = !_bonRapFait(b);
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b), _bonColor(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
+}
+// Couleur de fond personnalisée de la carte du bon (vide = couleur auto de la gérance)
+function bonSetColor(id, color) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), color || '');
+  const bons = DB.bons; DB.bons = bons;
+  renderBons();
+  toast(color ? '🎨 Couleur du bon modifiée' : '↺ Couleur automatique (gérance) rétablie', '#2d9e6b');
 }
 
 // --- Modale Note interne d'un bon ---
@@ -3726,7 +3741,8 @@ function updateNavCounts() {
 // "Bons en demande de devis" de l'écran Devis) — source unique de vérité.
 function renderBonCard(b) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
-  const gColor = colorForGeranceName(g);
+  const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
+  const gColor = customColor || colorForGeranceName(g);
   const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
            || (b.locataireNom && (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === (b.locataireNom||'').toLowerCase()))
            || null;
@@ -3852,6 +3868,8 @@ function renderBonCard(b) {
                 })()}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
                 <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
+                <input type="color" value="${customColor || gColor}" onchange="bonSetColor('${b.id}', this.value)" title="🎨 Choisir la couleur de fond de ce bon" style="width:30px;height:30px;padding:0;border:1.5px solid #d1d5db;border-radius:6px;cursor:pointer;background:#fff;flex-shrink:0;">
+                ${customColor ? `<button class="btn btn-ghost btn-xs" onclick="bonSetColor('${b.id}','')" title="Revenir à la couleur automatique (gérance)">↺</button>` : ''}
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
               </div>
             </div>
@@ -4090,7 +4108,7 @@ function updateBonStatut(id, value) {
   } else {
     alerte = '';
   }
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte);
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte, _bonColor(b));
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
     '':              'Statut effacé',
