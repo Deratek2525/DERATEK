@@ -5355,7 +5355,7 @@ function renderDocuments() {
     'envoye':    { bg:'#dbeafe', color:'#1d4ed8' },
     'accepte':   { bg:'#bbf7d0', color:'#166534' },
     'refuse':    { bg:'#fecaca', color:'#991b1b' },
-    'pret':      { bg:'#fef3c7', color:'#b45309' },
+    'pret':      { bg:'#facc15', color:'#422006' },
     'envoyee':   { bg:'#1a2744', color:'#ffffff' },
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
