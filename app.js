@@ -42,6 +42,8 @@ const TABLE_FIELDS = {
   rapports:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
     bonCommande: 'bon_commande', rdvHeure: 'rdv_heure',
+    locataireNom: 'locataire_nom', locataireTel: 'locataire_tel',
+    locataireEmail: 'locataire_email', locataireAdresse: 'locataire_adresse',
   } },
   techs:      { js2db: {} },
   prestations:{ js2db: {} },
@@ -1191,7 +1193,7 @@ function renderRapports() {
           <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:10px;">🕒 Reprendre plus tard (${drafts.length}) — brouillons non finalisés</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
             ${drafts.map(r => {
-              const loc = (_rapMeta(r.description || '').loc) || {};
+              const loc = _rapLoc(r);
               const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
               // Adresse D'INTERVENTION (locataire / immeuble du bon) — jamais celle de la gérance
               const adr = loc.adresse || (_bon && _bon.immeuble) || '';
@@ -1223,7 +1225,8 @@ function renderRapports() {
   const q = ($('rapp-search') || {}).value || '';
   const list = DB.rapports.filter(r => {
     if (_isRapportFactArchived(r)) return false; // parti dans « Facturation archivée »
-    const hay = ((r.id||'') + ' ' + (r.clientNom||'') + ' ' + (r.nuisibles||[]).join(' ') + ' ' + (r.bonCommande||'') + ' ' + (r.noint||'') + ' ' + (r.tech||'') + ' ' + (r.ville||'') + ' ' + (r.contact||'')).toLowerCase();
+    const _l = _rapLoc(r);
+    const hay = ((r.id||'') + ' ' + (r.clientNom||'') + ' ' + (r.nuisibles||[]).join(' ') + ' ' + (r.bonCommande||'') + ' ' + (r.noint||'') + ' ' + (r.tech||'') + ' ' + (r.ville||'') + ' ' + (r.contact||'') + ' ' + (_l.nom||'') + ' ' + (_l.adresse||'')).toLowerCase();
     const m = hay.includes(q.toLowerCase());
     return m && (state.rapportsFilter === 'Tous' || r.statut === state.rapportsFilter);
   });
@@ -1245,7 +1248,7 @@ function renderRapports() {
   }
 
   const ligneRapport = r => {
-    const loc = (_rapMeta(r.description).loc) || {};
+    const loc = _rapLoc(r);
     const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
     // Adresse d'intervention : locataire/immeuble du bon (jamais la gérance)
     const locNom = loc.nom || (_bon && _bon.locataireNom) || '';
@@ -1370,12 +1373,12 @@ function editRapport(id) {
   ['t-pulv','t-vapeur','t-thermique','t-injection','t-appats','t-monitoring','t-desinfect','t-flocage','t-gel','t-poudre','t-fumigation','t-pose','t-appatage','t-rodenticide','t-racumin','t-talonwax','t-gel-fl','t-gel-fe','t-gel-ff','t-gel-fp','t-gel-bg','t-gel-ba','t-gel-bo','t-gel-br'].forEach(id => { const el = $(id); if (el) el.checked = (r.traitement||[]).includes(id); });
   if ($('r-rdv-heure')) $('r-rdv-heure').value = r.rdvHeure || '';
   if ($('r-bon-commande')) $('r-bon-commande').value = r.bonCommande || '';
-  // Restaurer le locataire : depuis le marqueur [LOC:...] (ou anciens champs pour rétrocompat)
-  const lc = rMeta.loc || {};
+  // Restaurer le locataire : colonnes Supabase d'abord, sinon ancien marqueur [LOC:...]
+  const lc = _rapLoc(r);
   const locNom = lc.nom || r.locataire || '';
-  const locTel = lc.tel || r.locataireTel || '';
-  const locEmail = lc.email || r.locataireEmail || '';
-  const locAdr = lc.adresse || r.locataireAdresse || '';
+  const locTel = lc.tel || '';
+  const locEmail = lc.email || '';
+  const locAdr = lc.adresse || '';
   const setL = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
   setL('r-locataire', locNom); setL('r-locataire-tel', locTel);
   setL('r-locataire-email', locEmail); setL('r-locataire-adresse', locAdr);
@@ -1642,6 +1645,18 @@ function _composeRapDesc(descClean, nbPassages, dates, loc, archived) {
   if (archived) out += (out ? '\n' : '') + '[ARCHIVE]';
   return out;
 }
+// Locataire d'un rapport : on lit en PRIORITÉ les vraies colonnes Supabase
+// (locataire_nom/tel/email/adresse) et, à défaut (anciens rapports), l'ancien marqueur [LOC:].
+function _rapLoc(r) {
+  if (!r) return { nom: '', tel: '', email: '', adresse: '' };
+  const m = (_rapMeta(r.description).loc) || {};
+  return {
+    nom:     r.locataireNom     || m.nom     || '',
+    tel:     r.locataireTel     || m.tel     || '',
+    email:   r.locataireEmail   || m.email   || '',
+    adresse: r.locataireAdresse || m.adresse || '',
+  };
+}
 // Rapport archivé manuellement (envoyé dans « Facturation archivée » avant la facture)
 function _rapManualArchived(r) { return !!r && /\[ARCHIVE\]/.test(String(r.description || '')); }
 function _setRapArchive(rid, on) {
@@ -1704,14 +1719,18 @@ function saveRapport(statut) {
     resultat: $('r-resultat').value, recommandations: $('r-recommandations').value,
     rdv: $('r-rdv').value, rdvHeure: ($('r-rdv-heure') ? $('r-rdv-heure').value : ''), garantie: $('r-garantie').value, statut,
   };
-  // Locataire : stocké dans la description (colonnes locataire absentes côté Supabase)
+  // Locataire : on écrit dans les VRAIES colonnes Supabase (locataire_nom/tel/email/adresse)…
   const _loc = {
     nom: _lv('r-locataire'), tel: _lv('r-locataire-tel'),
     email: _lv('r-locataire-email'), adresse: _lv('r-locataire-adresse')
   };
+  r.locataireNom = _loc.nom; r.locataireTel = _loc.tel;
+  r.locataireEmail = _loc.email; r.locataireAdresse = _loc.adresse;
   // On conserve l'état « archivé » si le rapport l'était déjà
   const _prev = (DB.rapports || []).find(x => x.id === state.editingRapportId);
   const _wasArchived = _prev ? _rapManualArchived(_prev) : false;
+  // …et on conserve aussi le marqueur [LOC:] dans la description (double écriture de sécurité
+  // pendant la transition — il est ignoré à l'affichage et dans le PDF).
   r.description = _composeRapDesc($('r-description').value, ($('r-nb-passages')||{}).value || '', rReadDates(), _loc, _wasArchived);
   const list = DB.rapports;
   const i = list.findIndex(x => x.id === state.editingRapportId);
@@ -2446,7 +2465,7 @@ function factPdfPreview(id, el) {
 let _rapPdfUrlCache = {};
 function _rapportObjForPdf(r) {
   const meta = _rapMeta(r.description || '');
-  const loc = meta.loc || {};
+  const loc = _rapLoc(r);
   return {
     id: r.id, clientNom: r.clientNom || '', clientEmail: r.email || '',
     clientAdresse: (() => { const c = r.clientId ? (DB.clients||[]).find(x => x.id === r.clientId) : null; return c ? ((c.adresse||'') + (c.npa?' '+c.npa:'') + (c.ville?' '+c.ville:'')).trim() : ''; })(),
@@ -4286,7 +4305,7 @@ function renderFactArchive() {
     const f = s.facture, b = s.bon, r = s.rapport;
     const isPaid = !!(f && f.statut === 'payee');
     const clientNom = (f && f.clientNom) || (r && r.clientNom) || (b && b.geranceNom) || '—';
-    const locNom = (f && f.locataireNom) || (r && (_rapMeta(r.description).loc || {}).nom) || '';
+    const locNom = (f && f.locataireNom) || (r && _rapLoc(r).nom) || '';
     const montant = (f && f.total) ? _displayMontant(f.total) + ' CHF · ✅ Payée' : (r && r.montant ? r.montant + ' CHF' : '') ;
     const statutTxt = isPaid
       ? `<span style="color:#15803d;">${_displayMontant(f.total || 0)} CHF · ✅ Payée</span>`
