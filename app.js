@@ -4195,6 +4195,91 @@ function _autoBackupCheck(force) {
   catch (e) { console.warn('autobackup', e); }
 }
 
+// Export Excel LISIBLE (un onglet par catégorie) — généré côté navigateur via SheetJS.
+function exportExcel() {
+  if (typeof XLSX === 'undefined') { toast('Librairie Excel non chargée — réessayez dans un instant', '#e63946'); return; }
+  try {
+    const docs = DB.documents || [];
+    const cleanM = s => String(s || '').replace(/\[ROLE:[^\]]*\]/g, '').replace(/\s*\[(ARCHIVE|NBPASS|DATESINT|LOC|INTERV|AFFECTE|NOTE|RAPFAIT|ALERTE):?[^\]]*\]/g, '').trim();
+    const joinA = a => Array.isArray(a) ? a.filter(Boolean).join(', ') : (a || '');
+    const numf = x => { const n = parseFloat(x); return isNaN(n) ? '' : n; };
+    const isAnc = x => /\[ARCHIVE\]/.test(String(x.notes || ''));
+    const sortBy = (arr, k) => (arr || []).slice().sort((a, b) => String(a[k] || '').localeCompare(String(b[k] || ''), 'fr'));
+    const STF = { brouillon: 'Brouillon', pret: 'Prêt à envoyer', envoyee: 'Envoyée', payee: 'Payée' };
+    const STD = { brouillon: 'Brouillon', envoye: 'Envoyé', accepte: 'Accepté', refuse: 'Refusé' };
+    const STB = { 'a-transmettre': 'Rapport à transmettre', transmis: 'Transmis', 'demande-devis': 'Demande de devis', 'attente-devis': 'Attente devis', 'devis-valide': 'Devis validé', 'en-cours': 'En cours', termine: 'Terminé', 'a-facturer': 'À facturer', urgent: 'Urgent', 'a-contacter': 'À contacter' };
+    const wb = XLSX.utils.book_new();
+    const addSheet = (name, headers, rows, widths, moneyCols) => {
+      const aoa = [headers].concat(rows);
+      if (moneyCols && rows.length) {
+        const tr = new Array(headers.length).fill(''); tr[0] = 'TOTAL';
+        moneyCols.forEach(mc => { tr[mc] = rows.reduce((s, r) => s + (parseFloat(r[mc]) || 0), 0); });
+        aoa.push(tr);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      if (widths) ws['!cols'] = widths.map(w => ({ wch: w }));
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      XLSX.utils.book_append_sheet(wb, ws, name.substring(0, 31));
+    };
+    const today = new Date().toISOString().split('T')[0];
+
+    // Résumé (en premier)
+    const resume = [['DERATEK — Sauvegarde des données'], ['Exportée le ' + today], [], ['Catégorie', 'Nombre'],
+      ['Clients / gérances', (DB.clients || []).length], ['Locataires', (DB.locataires || []).length],
+      ['Bons', (DB.bons || []).length], ['Rapports', (DB.rapports || []).length],
+      ['Factures', docs.filter(x => x.type === 'facture').length], ['Devis', docs.filter(x => x.type === 'devis').length],
+      ['Fournisseurs', (DB.fournisseurs || []).length], ['Prestations', (DB.prestations || []).length],
+      ['Diagnostics', (DB.diagnostics || []).length], ['Interventions (agenda)', (DB.intervs || []).length],
+      ['Techniciens', (DB.techs || []).length]];
+    const wsR = XLSX.utils.aoa_to_sheet(resume); wsR['!cols'] = [{ wch: 28 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsR, 'Résumé');
+
+    // Factures
+    const fact = sortBy(docs.filter(x => x.type === 'facture'), 'numero');
+    addSheet('Factures', ['N°', 'Catégorie', 'Date', 'Client / gérance', 'Locataire', 'Adresse intervention', 'Total TTC', 'Statut'],
+      fact.map(x => [x.numero || '', isAnc(x) ? 'Ancienne (importée)' : (x.statut === 'payee' ? 'Payée/archivée' : 'Courante'), x.dateDoc || '', x.clientNom || '', x.locataireNom || '', x.locataireAdresse || '', numf(x.total), STF[x.statut] || x.statut || '']),
+      [12, 20, 12, 30, 26, 30, 14, 16], [6]);
+    // Devis
+    addSheet('Devis', ['N°', 'Date', 'Client / gérance', 'Locataire', 'Total TTC', 'Statut'],
+      docs.filter(x => x.type === 'devis').map(x => [x.numero || '', x.dateDoc || '', x.clientNom || '', x.locataireNom || '', numf(x.total), STD[x.statut] || x.statut || '']),
+      [14, 12, 30, 26, 14, 14], [4]);
+    // Bons
+    addSheet('Bons', ['N°', 'Date', 'Gérance', 'Gérant', 'Tél gérant', 'Locataire', 'Immeuble (intervention)', 'Problème / travaux', 'Statut'],
+      sortBy(DB.bons, 'numero').map(x => [x.numero || '', x.date || '', x.geranceNom || '', x.gerantNom || '', x.gerantTel || '', x.locataireNom || '', x.immeuble || '', cleanM(x.probleme).substring(0, 300), STB[x.statut] || x.statut || '']),
+      [16, 12, 28, 20, 16, 24, 30, 45, 18]);
+    // Rapports
+    addSheet('Rapports', ['N°', 'Date', 'Client / gérance', 'Technicien', 'Locataire', 'Adresse intervention', 'Nuisibles', 'N° bon', 'Montant', 'Statut'],
+      (DB.rapports || []).map(x => { const l = _rapLoc(x); return [x.id || '', x.date || '', x.clientNom || '', x.tech || '', l.nom || '', l.adresse || x.adresse || '', joinA(x.nuisibles), x.bonCommande || '', numf(x.montant), x.statut || '']; }),
+      [14, 12, 28, 16, 24, 30, 24, 16, 12, 12], [8]);
+    // Clients
+    addSheet('Clients-Gérances', ['Nom', 'Type', 'Contact', 'Rôle', 'Téléphone', 'Email', 'Adresse', 'NPA', 'Ville'],
+      sortBy(DB.clients, 'nom').map(x => [x.nom || '', x.type || '', _rapContactNom(x.contact), _rapContactRole(x.contact) || '', x.tel || '', x.email || '', x.adresse || '', x.npa || '', x.ville || '']),
+      [34, 14, 22, 12, 16, 28, 28, 8, 18]);
+    // Locataires
+    addSheet('Locataires', ['Nom', 'Prénom', 'Téléphone', 'Email', 'Adresse', 'NPA', 'Ville'],
+      sortBy(DB.locataires, 'nom').map(x => [x.nom || '', x.prenom || '', x.tel || '', x.email || '', x.adresse || '', x.npa || '', x.ville || '']),
+      [26, 18, 16, 28, 30, 8, 18]);
+    // Fournisseurs
+    addSheet('Fournisseurs', ['Nom', 'Secteur', 'N°', 'Date', 'Montant', 'Description'],
+      sortBy(DB.fournisseurs, 'nom').map(x => [x.nom || '', x.secteur || '', x.numero || '', x.dateDoc || '', numf(x.montant), x.description || '']),
+      [30, 22, 14, 12, 14, 40], [4]);
+    // Agenda
+    addSheet('Agenda-Interventions', ['Date', 'Heure', 'Client', 'Adresse', 'Nuisible', 'Technicien', 'Statut'],
+      (DB.intervs || []).map(x => [x.date || '', x.heure || '', x.clientNom || '', x.adresse || '', x.nuisible || '', x.tech || '', x.statut || '']),
+      [12, 8, 26, 30, 18, 16, 14]);
+    // Prestations
+    addSheet('Prestations', ['Libellé', 'Prix'], (DB.prestations || []).map(x => [x.libelle || '', numf(x.prix)]), [50, 14], [1]);
+    // Techniciens
+    addSheet('Techniciens', ['Nom'], (DB.techs || []).filter(t => typeof t === 'string').map(t => [t]), [30]);
+
+    XLSX.writeFile(wb, 'deratek-lisible-' + today + '.xlsx');
+    toast('✓ Export Excel téléchargé', '#2d9e6b');
+  } catch (e) {
+    console.error('exportExcel', e);
+    toast('Erreur export Excel : ' + e.message, '#e63946');
+  }
+}
+
 function importData(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
