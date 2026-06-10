@@ -5356,7 +5356,7 @@ function renderDocuments() {
     'accepte':   { bg:'#bbf7d0', color:'#166534' },
     'refuse':    { bg:'#fecaca', color:'#991b1b' },
     'pret':      { bg:'#fef3c7', color:'#b45309' },
-    'envoyee':   { bg:'#dbeafe', color:'#1d4ed8' },
+    'envoyee':   { bg:'#1a2744', color:'#ffffff' },
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
   const statutLabel = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
