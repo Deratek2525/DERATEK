@@ -4995,7 +4995,7 @@ function renderDocEditor() {
       </td>
     </tr>
   `).join('');
-  const box = $('modal-doc-body');
+  const box = $('modal-doc-form') || $('modal-doc-body');
   if (!box) return;
   const noteHtml = (d._bonNote && d._bonNote.trim())
     ? `<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
@@ -5078,6 +5078,25 @@ function renderDocEditor() {
       if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
     } catch (e) { console.warn('QR preview', e); }
   }
+  _docPdfLive();   // aperçu PDF en direct à droite
+}
+
+// Aperçu PDF en direct du document en cours d'édition (panneau de droite de l'éditeur).
+let _docPdfLiveTimer = null, _docPdfLiveUrl = null;
+function _docPdfLive() {
+  if (!_editingDoc) return;
+  clearTimeout(_docPdfLiveTimer);
+  _docPdfLiveTimer = setTimeout(() => {
+    const ifr = document.getElementById('doc-pdf-preview');
+    if (!ifr) return;
+    try {
+      const url = downloadDocPDF(_editingDoc, 'blob');
+      if (!url) return;
+      if (_docPdfLiveUrl) { try { URL.revokeObjectURL(_docPdfLiveUrl); } catch (e) {} }
+      _docPdfLiveUrl = url;
+      ifr.src = url + '#toolbar=0&navpanes=0&view=FitH';
+    } catch (e) { console.warn('aperçu live', e); }
+  }, 350);
 }
 
 // HTML du bloc récapitulatif des totaux
@@ -5881,7 +5900,8 @@ function _drawPrestationsFooter(doc, W, H) {
 }
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
 function downloadDocPDF(id, mode) {
-  const d = (DB.documents || []).find(x => x.id === id);
+  // id peut être un identifiant OU directement un objet document (aperçu en direct dans l'éditeur)
+  const d = (id && typeof id === 'object') ? id : (DB.documents || []).find(x => x.id === id);
   if (!d) { if (mode !== 'blob') toast('Document introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   // Sécurisation : lignes peut arriver comme string JSON depuis Supabase, ou être absent

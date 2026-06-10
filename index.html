@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260606hi">
+<link rel="stylesheet" href="./style.css?v=20260606hj">
 </head>
 <body>
 
@@ -1319,12 +1319,18 @@
 
 <!-- Modale éditeur devis/facture -->
 <div class="modal-bg" id="modal-doc">
-  <div class="modal" style="max-width:760px;">
+  <div class="modal" style="max-width:1200px;width:96vw;">
     <div class="modal-hd">
       <span class="modal-title" id="modal-doc-title">Devis</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-doc')">✕</button>
     </div>
-    <div class="modal-body" id="modal-doc-body"></div>
+    <div class="modal-body" id="modal-doc-body" style="display:flex;gap:16px;align-items:stretch;">
+      <div id="modal-doc-form" style="flex:1;min-width:0;overflow:auto;max-height:74vh;padding-right:4px;" oninput="_docPdfLive()" onchange="_docPdfLive()"></div>
+      <div id="modal-doc-preview" style="width:440px;flex-shrink:0;display:flex;flex-direction:column;">
+        <div style="font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;">👁️ Aperçu en direct</div>
+        <iframe id="doc-pdf-preview" title="Aperçu de la facture" style="width:100%;flex:1;min-height:74vh;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;"></iframe>
+      </div>
+    </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
       <button class="btn btn-ghost" onclick="saveDocBrouillon()" title="Enregistrer en brouillon pour le finir plus tard (rappel dans Factures)">💾 Brouillon — à finir</button>
@@ -1340,10 +1346,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260606hi"></script>
-<script src="./footer_prestations.js?v=20260606hi"></script>
-<script src="./config.js?v=20260606hi"></script>
-<script src="./app.js?v=20260606hi"></script>
-<script src="./pdf.js?v=20260606hi"></script>
+<script src="./logo.js?v=20260606hj"></script>
+<script src="./footer_prestations.js?v=20260606hj"></script>
+<script src="./config.js?v=20260606hj"></script>
+<script src="./app.js?v=20260606hj"></script>
+<script src="./pdf.js?v=20260606hj"></script>
 
 </body></html>
