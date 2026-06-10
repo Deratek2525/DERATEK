@@ -4134,12 +4134,16 @@ function exportData() {
       version: (typeof DERATEK_CONFIG !== 'undefined' && DERATEK_CONFIG.app) ? DERATEK_CONFIG.app.version : '2.0',
       exportedAt: new Date().toISOString()
     },
-    drt_techs:      DB.techs,
-    drt_clients:    DB.clients,
-    drt_rapports:   DB.rapports,
-    drt_intervs:    DB.intervs,
-    drt_locataires: DB.locataires,
-    drt_bons:       DB.bons
+    drt_techs:        DB.techs,
+    drt_clients:      DB.clients,
+    drt_rapports:     DB.rapports,
+    drt_intervs:      DB.intervs,
+    drt_locataires:   DB.locataires,
+    drt_bons:         DB.bons,
+    drt_documents:    DB.documents,     // devis ET factures
+    drt_prestations:  DB.prestations,
+    drt_diagnostics:  DB.diagnostics,
+    drt_fournisseurs: DB.fournisseurs
   };
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
@@ -4173,12 +4177,16 @@ function importData(event) {
       }
       // Mapping clé export → propriété DB
       const map = {
-        drt_techs:      'techs',
-        drt_clients:    'clients',
-        drt_rapports:   'rapports',
-        drt_intervs:    'intervs',
-        drt_locataires: 'locataires',
-        drt_bons:       'bons',
+        drt_techs:        'techs',
+        drt_clients:      'clients',
+        drt_rapports:     'rapports',
+        drt_intervs:      'intervs',
+        drt_locataires:   'locataires',
+        drt_bons:         'bons',
+        drt_documents:    'documents',
+        drt_prestations:  'prestations',
+        drt_diagnostics:  'diagnostics',
+        drt_fournisseurs: 'fournisseurs',
       };
       let n = 0;
       Object.keys(map).forEach(k => {
@@ -4188,11 +4196,13 @@ function importData(event) {
         }
       });
       toast(`✓ ${n} collection(s) restaurée(s) — synchronisation Supabase en cours…`, '#2d9e6b');
-      if (typeof renderDashboard === 'function')  renderDashboard();
-      if (typeof renderClients === 'function')    renderClients();
-      if (typeof renderLocataires === 'function') renderLocataires();
-      if (typeof renderBons === 'function')       renderBons();
-      if (typeof renderRapports === 'function')   renderRapports();
+      if (typeof renderDashboard === 'function')   renderDashboard();
+      if (typeof renderClients === 'function')     renderClients();
+      if (typeof renderLocataires === 'function')  renderLocataires();
+      if (typeof renderBons === 'function')        renderBons();
+      if (typeof renderRapports === 'function')    renderRapports();
+      if (typeof renderDocuments === 'function')   renderDocuments();
+      if (typeof renderFournisseurs === 'function')renderFournisseurs();
     } catch (err) {
       toast("Erreur d'import : " + err.message, '#e63946');
     } finally {
