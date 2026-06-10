@@ -463,6 +463,7 @@ async function doLogin() {
       try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
     }
     renderDashboard();
+    setTimeout(_autoBackupCheck, 1500);
   } catch (err) {
     if (errEl) { errEl.textContent = 'Erreur : ' + err.message; errEl.style.display = 'block'; }
   } finally {
@@ -2114,6 +2115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
         }
         renderDashboard();
+        setTimeout(_autoBackupCheck, 1500);
       }
     } catch (err) { console.warn('Auto-login', err); }
   }
@@ -4156,7 +4158,41 @@ function exportData() {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  _setLastBackup();
   toast('✓ Sauvegarde téléchargée', '#2d9e6b');
+}
+
+// ---- Sauvegarde automatique (préférence locale, pas une donnée métier) ----
+function _autoBackupOn() { try { return localStorage.getItem('drt_autobackup') === '1'; } catch (e) { return false; } }
+function _lastBackup()   { try { return localStorage.getItem('drt_lastbackup') || ''; } catch (e) { return ''; } }
+function _setLastBackup() { try { localStorage.setItem('drt_lastbackup', new Date().toISOString()); } catch (e) {} _refreshAutoBackupBtn(); }
+function _refreshAutoBackupBtn() {
+  const b = document.getElementById('btn-autobackup'); if (!b) return;
+  const on = _autoBackupOn(); const last = _lastBackup();
+  const lastTxt = last ? (' · dernière : ' + new Date(last).toLocaleDateString('fr-CH')) : ' · jamais';
+  b.textContent = on ? '🔄 Sauvegarde auto : ON' : '🔄 Sauvegarde auto : OFF';
+  b.style.background = on ? '#dcfce7' : '';
+  b.style.color = on ? '#166534' : '';
+  b.style.fontWeight = on ? '800' : '';
+  b.title = (on ? 'Sauvegarde automatique hebdomadaire activée — cliquer pour désactiver' : 'Cliquer pour activer une sauvegarde automatique chaque semaine') + lastTxt;
+}
+function toggleAutoBackup() {
+  const on = !_autoBackupOn();
+  try { localStorage.setItem('drt_autobackup', on ? '1' : '0'); } catch (e) {}
+  _refreshAutoBackupBtn();
+  if (on) { toast('🔄 Sauvegarde auto activée (1×/semaine)', '#2d9e6b'); _autoBackupCheck(true); }
+  else    { toast('Sauvegarde auto désactivée', '#6b7280'); }
+}
+// Au démarrage : si activée et que la dernière sauvegarde date de plus de 7 jours,
+// on télécharge automatiquement une sauvegarde complète.
+function _autoBackupCheck(force) {
+  _refreshAutoBackupBtn();
+  if (!_autoBackupOn()) return;
+  const last = _lastBackup();
+  const due = force || !last || (Date.now() - new Date(last).getTime() > 7 * 24 * 3600 * 1000);
+  if (!due) return;
+  try { exportData(); toast('🔄 Sauvegarde automatique effectuée', '#2d9e6b'); }
+  catch (e) { console.warn('autobackup', e); }
 }
 
 function importData(event) {

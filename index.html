@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260605gu">
+<link rel="stylesheet" href="./style.css?v=20260605gv">
 </head>
 <body>
 
@@ -341,6 +341,7 @@
       <div class="nav-title">Rapport Nuisibles</div>
       <div class="nav-right-btns">
         <button class="nav-action-btn no-print" onclick="exportData()" title="Télécharger une sauvegarde JSON de toutes mes données">💾 Exporter</button>
+        <button class="nav-action-btn no-print" id="btn-autobackup" onclick="toggleAutoBackup()" title="Activer une sauvegarde automatique chaque semaine">🔄 Sauvegarde auto : OFF</button>
         <button class="nav-action-btn no-print" onclick="document.getElementById('import-file-input').click()" title="Restaurer une sauvegarde JSON">📥 Importer</button>
         <input type="file" id="import-file-input" accept=".json,application/json" style="display:none" onchange="importData(event)">
         <button class="nav-action-btn no-print" onclick="openTechModal()">⚙️ Techniciens</button>
@@ -1338,10 +1339,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260605gu"></script>
-<script src="./footer_prestations.js?v=20260605gu"></script>
-<script src="./config.js?v=20260605gu"></script>
-<script src="./app.js?v=20260605gu"></script>
-<script src="./pdf.js?v=20260605gu"></script>
+<script src="./logo.js?v=20260605gv"></script>
+<script src="./footer_prestations.js?v=20260605gv"></script>
+<script src="./config.js?v=20260605gv"></script>
+<script src="./app.js?v=20260605gv"></script>
+<script src="./pdf.js?v=20260605gv"></script>
 
 </body></html>
