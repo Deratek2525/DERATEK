@@ -4413,7 +4413,16 @@ function _docIsArchive(d) {
   return !!(d && (d._archive || /\[ARCHIVE\]/.test(String(d.notes || ''))));
 }
 function _docNotesClean(d) {
-  return String((d && d.notes) || '').replace(/\s*\[ARCHIVE\]\s*/g, ' ').trim();
+  return String((d && d.notes) || '').replace(/\s*\[ARCHIVE\]\s*/g, ' ').replace(/\s*\[RAPPEL:\d\]\s*/g, ' ').trim();
+}
+// Niveau de rappel déjà émis pour une facture (marqueur [RAPPEL:n] dans notes)
+function _ancRappelNiveau(d) { const m = String((d && d.notes) || '').match(/\[RAPPEL:(\d)\]/); return m ? parseInt(m[1], 10) : 0; }
+function _setAncRappel(id, niveau) {
+  const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
+  let n = String(d.notes || '').replace(/\s*\[RAPPEL:\d\]/g, '');
+  if (niveau) n += (n ? ' ' : '') + '[RAPPEL:' + niveau + ']';
+  d.notes = n; DB.documents = docs;
+  if (typeof renderAnciennesList === 'function') renderAnciennesList();
 }
 
 // ============================================================
@@ -5927,6 +5936,36 @@ function _drawPrestationsFooter(doc, W, H) {
   try { doc.addImage(FOOTER_PRESTATIONS_B64, 'PNG', margin, y, imgW, imgH); } catch (e) { console.warn('footer prestations', e); }
 }
 // Génère le PDF (devis ou facture) — facture inclut le QR-bill
+// ============================================================
+// RAPPELS DE PAIEMENT (factures impayées)
+// ============================================================
+const RAPPEL_LABELS = { 1: '1ER RAPPEL', 2: '2E RAPPEL', 3: '3E RAPPEL — MISE EN DEMEURE' };
+const RAPPEL_TEXTES = {
+  1: "Sauf erreur ou omission de notre part, la facture mentionnée ci-dessous demeure impayée à ce jour. Nous vous prions de bien vouloir procéder à son règlement dans un délai de 10 jours. Si votre paiement s'est croisé avec ce rappel, nous vous prions de ne pas en tenir compte et vous en remercions.",
+  2: "Malgré notre premier rappel, la facture mentionnée ci-dessous demeure impayée. Nous vous prions de bien vouloir la régler dans un délai de 10 jours. Conformément à nos conditions, des frais de rappel de CHF 60.00 sont désormais ajoutés au montant dû.",
+  3: "Malgré nos rappels précédents, la facture mentionnée ci-dessous demeure impayée. Par la présente, nous vous mettons formellement EN DEMEURE de régler le montant total ci-dessous dans un délai de 10 jours. À défaut de paiement dans ce délai, nous engagerons sans autre avis une procédure de recouvrement (poursuite), tous les frais en découlant étant à votre charge.",
+};
+// Génère et télécharge le PDF de rappel d'une facture (niveau 1, 2 ou 3)
+function generateRappel(docId, niveau) {
+  niveau = Math.min(3, Math.max(1, parseInt(niveau, 10) || 1));
+  const src = (DB.documents || []).find(x => x.id === docId);
+  if (!src) { toast('Facture introuvable', '#e63946'); return; }
+  let baseTotal = parseFloat(src.total);
+  if (!baseTotal || isNaN(baseTotal)) { try { baseTotal = _calcTotaux(src.lignes || [], src.tvaTaux, src.rabais).total || 0; } catch (e) { baseTotal = 0; } }
+  const frais = niveau >= 2 ? 60 : 0;
+  const r = JSON.parse(JSON.stringify(src));
+  r._rappel = true;
+  r._rappelLabel = RAPPEL_LABELS[niveau];
+  r._rappelTexte = RAPPEL_TEXTES[niveau];
+  r.lignes = [{ desc: 'Facture N° ' + (src.numero || '') + (src.dateDoc ? (' du ' + fmtDate(src.dateDoc)) : '') + ' — montant impayé', qte: 1, prix: baseTotal }];
+  if (frais) r.lignes.push({ desc: 'Frais de rappel (' + niveau + 'e rappel)', qte: 1, prix: frais });
+  r.tvaTaux = 0; r.rabais = 0; r.notes = '';
+  downloadDocPDF(r);
+  // Mémorise le niveau de rappel atteint sur la facture d'origine
+  _setAncRappel(docId, niveau);
+  toast('📄 ' + (RAPPEL_LABELS[niveau] || 'Rappel') + ' généré', '#2d9e6b');
+}
+
 function downloadDocPDF(id, mode) {
   // id peut être un identifiant OU directement un objet document (aperçu en direct dans l'éditeur)
   const d = (id && typeof id === 'object') ? id : (DB.documents || []).find(x => x.id === id);
@@ -6001,9 +6040,17 @@ function downloadDocPDF(id, mode) {
 
   // Titre du document À GAUCHE de l'adresse du destinataire (même hauteur, en haut)
   const titleY = 50;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
-  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, titleY);
-  doc.setTextColor(0);
+  if (d._rappel) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(200, 30, 30);
+    doc.text(d._rappelLabel || 'RAPPEL DE PAIEMENT', 20, titleY);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90);
+    doc.text('Facture ' + (d.numero || '') + (d.dateDoc ? (' du ' + fmtDate(d.dateDoc)) : ''), 20, titleY + 6);
+    doc.setTextColor(0);
+  } else {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
+    doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, titleY);
+    doc.setTextColor(0);
+  }
   // Bloc infos "label : valeur" sous le titre (à gauche)
   let infoY = titleY + 9;
   const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
@@ -6033,6 +6080,14 @@ function downloadDocPDF(id, mode) {
     doc.splitTextToSize(descParts.join(' — '), 170).forEach(ln => { doc.text(ln, 20, cy); cy += 4.6; });
     doc.setTextColor(0);
     infoY = cy;
+  }
+  // Texte de relance (rappel de paiement), placé sous la zone fenêtre de l'enveloppe
+  if (d._rappel && d._rappelTexte) {
+    let ry = Math.max(infoY, 96);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20);
+    doc.splitTextToSize(d._rappelTexte, 170).forEach(ln => { doc.text(ln, 20, ry); ry += 5.2; });
+    doc.setTextColor(0);
+    infoY = ry + 3;
   }
 
   // En-tête du tableau — ruban BLEU (navy) avec texte blanc
@@ -6099,6 +6154,13 @@ function downloadDocPDF(id, mode) {
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
+  if (d._rappel) {
+    // Rappel : pas de détail HT/TVA, juste le montant total à payer (le QR reprend ce montant)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(180, 30, 30);
+    doc.text('Total à payer', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
+    doc.setTextColor(0);
+    ty += 6;
+  } else {
   doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
   if ((d.rabais || 0) > 0) {
     doc.setTextColor(180, 40, 40);
@@ -6109,6 +6171,7 @@ function downloadDocPDF(id, mode) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
   ty += 6;
+  }
 
   // Notes éventuelles, dans le flux (on retire le marqueur technique [ARCHIVE])
   if (_docNotesClean(d)) {
@@ -6208,7 +6271,7 @@ function downloadDocPDF(id, mode) {
 
   // Mode "blob" : on renvoie une URL d'aperçu (survol) au lieu de télécharger.
   if (mode === 'blob') return doc.output('bloburl');
-  const fname = (isFacture?'facture-':'devis-') + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
+  const fname = (d._rappel ? 'rappel-' : (isFacture?'facture-':'devis-')) + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
   doc.save(fname);
   toast('✓ PDF téléchargé', '#2d9e6b');
   } catch (err) {
@@ -7075,16 +7138,26 @@ function renderAnciennesList() {
   const totalPaye = list.filter(d => d.statut === 'payee').reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const totalNonPaye = totalTTC - totalPaye;
   const nNonPay = list.length - nPay;
+  const sf = state.ancFilter || 'tous';
+  const shown = sf === 'impayees' ? list.filter(d => d.statut !== 'payee')
+              : sf === 'payees'   ? list.filter(d => d.statut === 'payee')
+              : list;
+  const fchip = (v, label, n, col) => `<button onclick="ancSetFilter('${v}')" style="font-size:12px;font-weight:700;padding:5px 11px;border-radius:18px;cursor:pointer;border:1.5px solid ${sf===v?col:'#d1d5db'};background:${sf===v?col:'#fff'};color:${sf===v?'#fff':'#374151'};">${label} (${n})</button>`;
   box.innerHTML = `
     <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
       <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures enregistrées (${list.length}) · total ${_displayMontant(totalTTC)} CHF</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé (payées)</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span></div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">⏳ Reste à encaisser (non payées)</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${fchip('tous', 'Toutes', list.length, '#0d1b3e')}
+        ${fchip('impayees', '⏳ Impayées', nNonPay, '#b45309')}
+        ${fchip('payees', '✅ Payées', nPay, '#16a34a')}
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;">
-      ${list.map(d => {
+      ${shown.map(d => {
         const paye = d.statut === 'payee';
         const notes = String(d.notes || '');
         const bonNo = (notes.match(/Bon n°\s*([^·\n]+)/) || [])[1];
@@ -7108,6 +7181,12 @@ function renderAnciennesList() {
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
               <option value="envoyee" ${!paye ? 'selected' : ''}>⏳ Non payée</option>
             </select>
+            ${!paye ? (() => {
+              const niv = _ancRappelNiveau(d);
+              const next = Math.min(3, niv + 1);
+              const lbl = next === 1 ? '1er rappel' : (next === 2 ? '2e rappel (+60 CHF)' : '3e rappel (mise en demeure)');
+              return `<button class="btn btn-sm" onclick="generateRappel('${d.id}', ${next})" style="font-weight:700;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;" title="Générer le PDF — ${lbl}">📄 ${lbl}</button>${niv ? `<span style="font-size:10px;font-weight:800;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:2px 8px;">rappel ${niv} fait</span>` : ''}`;
+            })() : ''}
             <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
             ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
             <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
@@ -7118,6 +7197,7 @@ function renderAnciennesList() {
       }).join('')}
     </div>`;
 }
+function ancSetFilter(v) { state.ancFilter = v || 'tous'; renderAnciennesList(); }
 function ancSetStatut(id, value) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
   d.statut = value; DB.documents = docs;
