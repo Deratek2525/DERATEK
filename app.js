@@ -5397,15 +5397,17 @@ function renderDocuments() {
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Total TTC</div>
         <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total||0)} CHF</div>
       </div>
-      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-        ${d.statut==='envoyee'?`<span style="font-size:12px;font-weight:800;color:var(--navy);">📅 ${fmtDate(d.dateDoc)||'—'}</span>`:''}
-        <select onchange="updateDocStatut('${d.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${st.color};background:${st.bg};color:${st.color};cursor:pointer;">
-          ${opts.map(o=>`<option value="${o}" ${d.statut===o?'selected':''}>${statutLabel[o]}</option>`).join('')}
-        </select>
-        <button class="btn btn-ghost btn-sm" onclick="editDoc('${d.id}')" title="Modifier">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
-        ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
-        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+          <select onchange="updateDocStatut('${d.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${st.color};background:${st.bg};color:${st.color};cursor:pointer;">
+            ${opts.map(o=>`<option value="${o}" ${d.statut===o?'selected':''}>${statutLabel[o]}</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="editDoc('${d.id}')" title="Modifier">✏️</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
+          ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
+          <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+        </div>
+        ${d.statut==='envoyee'?`<div style="font-size:15px;font-weight:800;color:#1a2744;">📅 ${fmtDate(d.dateDoc)||'—'}</div>`:''}
       </div>
     </div>`;
   };
