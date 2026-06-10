@@ -3946,7 +3946,7 @@ function renderBons() {
     const gColor = colorForGeranceName(g);
     return `
       <div style="margin-top:14px;">
-        <div style="font-size:13px;font-weight:800;color:${gColor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${gColor};padding-bottom:4px;">🏢 ${g} <span style="font-weight:500;color:var(--g600);">(${items.length})</span></div>
+        <div style="font-size:16px;font-weight:900;color:#0d1b3e;background:${_hexTint(gColor,0.20)};border-left:6px solid ${gColor};text-transform:uppercase;letter-spacing:.3px;margin-bottom:9px;padding:9px 14px;border-radius:7px;box-shadow:0 1px 2px rgba(0,0,0,.06);">🏢 ${g} <span style="font-weight:800;color:#fff;background:${gColor};border-radius:11px;padding:1px 10px;font-size:13px;margin-left:6px;">${items.length}</span></div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(b => renderBonCard(b, state.bonsFilter === 'actifs')).join('')}
         </div>
