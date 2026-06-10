@@ -5937,7 +5937,7 @@ function downloadDocPDF(id, mode) {
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11);
-  let dy = 50;
+  let dy = 48;
   const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
@@ -5951,12 +5951,13 @@ function downloadDocPDF(id, mode) {
   destLines = destLines.map(l => _fixPa(l));
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
-  // Titre du document (style modèle : "Facture N°" en gras, taille moyenne)
+  // Titre du document SOUS l'adresse du destinataire (à gauche, aligné sur la marge)
+  const titleY = dy + 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
-  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, 50);
+  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, titleY);
   doc.setTextColor(0);
-  // Bloc infos en "label : valeur" alignés (à GAUCHE, à la même hauteur que l'adresse à droite)
-  let infoY = 58;
+  // Bloc infos "label : valeur" sous le titre
+  let infoY = titleY + 6;
   const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
   const infoPairs = [
     ['N° TVA', co.tva],
@@ -5992,15 +5993,15 @@ function downloadDocPDF(id, mode) {
     return y + 8.5;
   };
 
-  // La table démarre sous le PLUS BAS des deux blocs (infos à gauche, adresse à droite).
-  const startY = Math.max(78, infoY + 3, dy + 3);
+  // La table démarre sous le bloc infos (qui est déjà sous l'adresse).
+  const startY = Math.max(infoY + 3, dy + 5);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
   const totalsH = (d.rabais || 0) > 0 ? 24 : 20;
   const lignes = d.lignes || [];
 
   // Géométrie du bulletin QR suisse : bande de 105 mm ancrée en bas d'une page.
   const QR_TOP = H - 105;             // perforation haute du bulletin
-  const QR_NEED_TOP = QR_TOP - 13;    // le contenu doit finir au-dessus (place pour la condition de paiement)
+  const QR_NEED_TOP = QR_TOP - 10;    // le contenu doit finir au-dessus (place pour la condition de paiement)
   const contentBottom = H - 20;       // marge basse normale du flux
 
   // Rythme vertical uniforme : hauteur d'une ligne de texte + marge identique
@@ -6009,15 +6010,14 @@ function downloadDocPDF(id, mode) {
   let LINE = 4.4;   // hauteur d'une ligne de texte (mm)
   let PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
 
-  // --- Compression adaptative (factures) : si le contenu déborderait juste un peu sur la
-  // zone du QR, on resserre tableau + totaux pour TOUT faire tenir sur UNE seule page. ---
+  // --- Compression adaptative (factures) : on resserre UNIQUEMENT le tableau (jamais les
+  // totaux, qui gardent un espacement normal), juste ce qu'il faut pour tenir sur UNE page. ---
   let _K = 1;
   if (isFacture) {
-    let need = 8.5;  // hauteur de l'en-tête du tableau
-    lignes.forEach(l => { need += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
-    need += totalsH + 9;                     // totaux + marges internes
-    const avail = QR_NEED_TOP - startY;      // place dispo avant le bulletin QR sur cette page
-    if (need > avail && need <= avail * 1.9) _K = Math.max(0.55, (avail - 2) / need);
+    let needRows = 8.5;  // hauteur de l'en-tête du tableau
+    lignes.forEach(l => { needRows += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
+    const availRows = QR_NEED_TOP - startY - totalsH - 6;  // place pour les lignes (totaux réservés)
+    if (needRows > availRows && needRows <= availRows * 2.4) _K = Math.max(0.62, (availRows - 2) / needRows);
   }
   LINE *= _K; PAD *= _K;
 
@@ -6045,20 +6045,19 @@ function downloadDocPDF(id, mode) {
 
   // Bloc des totaux, juste APRÈS toutes les lignes (saut de page si pas la place).
   if (ty + totalsH > contentBottom) { ty = startContentPage(); }
-  const TS = 4.3 * _K;   // espacement vertical des lignes de totaux (comprimé si besoin)
-  ty += 3 * _K;
-  doc.line(120, ty, 190, ty); ty += TS;
+  ty += 3;
+  doc.line(120, ty, 190, ty); ty += 4.3;
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
-  doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += TS;
+  doc.text('Sous-total HT', 130, ty); doc.text(_displayMontant(t.sousTotal) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
   if ((d.rabais || 0) > 0) {
     doc.setTextColor(180, 40, 40);
-    doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += TS;
+    doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
     doc.setTextColor(0);
   }
-  doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5 * _K;
+  doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
-  ty += 6 * _K;
+  ty += 6;
 
   // Notes éventuelles, dans le flux (on retire le marqueur technique [ARCHIVE])
   if (_docNotesClean(d)) {
