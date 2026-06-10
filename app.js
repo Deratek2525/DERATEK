@@ -3742,8 +3742,11 @@ function updateNavCounts() {
 function renderBonCard(b, solid) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
-  const gColor = customColor || colorForGeranceName(g);
+  const gerColor = colorForGeranceName(g);          // couleur de la gérance
+  const gColor = customColor || gerColor;
   const fillSolid = (solid === true);               // fond plein (onglet « Bons ») ou clair (en cours, terminés…)
+  // Dans les autres onglets (En cours, Terminés…), on reprend la couleur de la GÉRANCE (pas la couleur perso).
+  const displayColor = fillSolid ? gColor : gerColor;
   const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
            || (b.locataireNom && (DB.locataires||[]).find(l => (l.nom||'').toLowerCase() === (b.locataireNom||'').toLowerCase()))
            || null;
@@ -3770,16 +3773,16 @@ function renderBonCard(b, solid) {
   };
   const stStyle = statutStyles[statut] || statutStyles[''];
   // Fond PLEIN (onglet « Bons ») → texte auto-contrasté ; sinon fond CLAIR → texte foncé normal.
-  const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(gColor);
+  const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(displayColor);
   const _dark = _lum < 0.62;
-  const bg         = fillSolid ? gColor : _hexTint(gColor, 0.12);
-  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(gColor, 0.30);
-  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : gColor;
+  const bg         = fillSolid ? displayColor : _hexTint(displayColor, 0.12);
+  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(displayColor, 0.30);
+  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : displayColor;
   const T  = fillSolid ? (_dark ? '#ffffff' : '#0d1b3e') : '#0d1b3e';
   const TL = fillSolid ? (_dark ? 'rgba(255,255,255,.72)' : '#475569') : '#64748b';
   const T2 = fillSolid ? (_dark ? 'rgba(255,255,255,.9)' : '#334155') : '#475569';
   const dateCol  = fillSolid ? (_dark ? '#ffdada' : '#b91c1c') : '#e63946';
-  const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : gColor;
+  const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : displayColor;
   const iconCol  = fillSolid ? T : '#ffffff';
   return `
             <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
