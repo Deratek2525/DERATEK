@@ -4411,7 +4411,9 @@ function _docNotesClean(d) {
 function _factNorm(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
 // Une facture (non importée Excel) payée et rattachée à un bon
 function _isFactureFactArchived(d) {
-  return !!(d && d.type === 'facture' && (d.statut || '') === 'payee' && d.bonId && !_docIsArchive(d));
+  // Toute facture PAYÉE (sauf anciennes factures importées) part dans « Facturation archivée »,
+  // qu'elle soit liée à un bon ou non.
+  return !!(d && d.type === 'facture' && (d.statut || '') === 'payee' && !_docIsArchive(d));
 }
 // Un bon est archivé s'il a une facture payée liée OU si un de ses rapports a été
 // envoyé manuellement dans « Facturation archivée » (avant même la facture).
@@ -4481,7 +4483,7 @@ function renderFactArchive() {
     return;
   }
   const pill = (icon, txt, col) => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${col};background:${_hexTint(col,0.12)};border:1px solid ${_hexTint(col,0.30)};border-radius:6px;padding:3px 8px;">${icon} ${txt}</span>`;
-  box.innerHTML = sets.map(s => {
+  const card = (s) => {
     const f = s.facture, b = s.bon, r = s.rapport;
     const isPaid = !!(f && f.statut === 'payee');
     const clientNom = (f && f.clientNom) || (r && r.clientNom) || (b && b.geranceNom) || '—';
@@ -4513,7 +4515,16 @@ function renderFactArchive() {
         <button class="btn btn-ghost btn-sm" onclick="${isPaid ? `unarchiveFact('${f.id}')` : (r ? `unarchiveRapport('${r.id}')` : '')}" title="Ressortir ce dossier de l'archive">↩︎ Désarchiver</button>
       </div>
     </div>`;
-  }).join('');
+  };
+  // Deux sections : dossiers complets (bon/rapport) et factures payées sans bon
+  const withDossier = sets.filter(s => s.bon || s.rapport);
+  const sansBon = sets.filter(s => !s.bon && !s.rapport);
+  const section = (titre, arr, color) => arr.length ? `
+    <div style="font-size:13px;font-weight:800;color:${color};text-transform:uppercase;letter-spacing:.3px;margin:4px 0 8px;border-bottom:2px solid ${_hexTint(color,0.4)};padding-bottom:4px;">${titre} <span style="font-weight:600;color:var(--g600);">(${arr.length})</span></div>
+    ${arr.map(card).join('')}` : '';
+  box.innerHTML = section('📦 Dossiers complets — bon · rapport · facture', withDossier, '#0f766e')
+                + (sansBon.length && withDossier.length ? '<div style="height:14px;"></div>' : '')
+                + section('🧾 Factures payées sans bon', sansBon, '#1d4ed8');
 }
 // Désarchive : remet la facture en « Envoyée » (non payée) → le trio ressort des archives
 function unarchiveFact(id) {
@@ -5319,8 +5330,10 @@ function renderDocuments() {
   if (filtre === 'facture') {
     const byS = st => allOfType.filter(d => (d.statut || 'brouillon') === st);
     const sumS = st => byS(st).reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
-    const tBrouillon = sumS('brouillon'), tPret = sumS('pret'), tEnvoyee = sumS('envoyee'), tPayee = sumS('payee');
-    const totalEnvoye = tEnvoyee + tPayee;
+    // Les factures PAYÉES ne sont plus dans la liste (elles sont dans « Facturation archivée »).
+    // On les recompte directement depuis toutes les factures pour le total encaissé.
+    const paidAll = (DB.documents || []).filter(x => x.type === 'facture' && (x.statut || '') === 'payee' && !_docIsArchive(x));
+    const tBrouillon = sumS('brouillon'), tEnvoyee = sumS('envoyee'), tPayee = paidAll.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
     const chip = (val, label, n, col) => {
       const on = (sf === val);
       return `<button onclick="docSetStatutFilter('${val}')" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid ${on ? col : '#d1d5db'};background:${on ? col : '#fff'};color:${on ? '#fff' : '#374151'};">${label} (${n})</button>`;
@@ -5333,12 +5346,11 @@ function renderDocuments() {
         ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
         ${chip('pret', '📤 Prêt à envoyer', byS('pret').length, '#d97706')}
         ${chip('envoyee', '📨 Envoyées', byS('envoyee').length, '#2563eb')}
-        ${chip('payee', '✅ Payées', byS('payee').length, '#16a34a')}
+        <button onclick="showScreen('fact-archive')" title="Les factures payées sont dans « Facturation archivée »" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid #16a34a;background:#fff;color:#166534;">✅ Payées (${paidAll.length}) ↗</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-        ${carte('Total envoyé', totalEnvoye, '#ecfdf5', '#bbf7d0', '#166534')}
-        ${carte('Total non envoyé (brouillons)', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
-        ${carte('Reste à encaisser', tEnvoyee, '#eff6ff', '#bfdbfe', '#1d4ed8')}
+        ${carte('Total envoyé (à encaisser)', tEnvoyee, '#eff6ff', '#bfdbfe', '#1d4ed8')}
+        ${carte('Brouillons', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
         ${carte('Encaissé (payées)', tPayee, '#f0fdf4', '#bbf7d0', '#15803d')}
       </div>`;
   }
