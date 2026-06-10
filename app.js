@@ -3768,39 +3768,47 @@ function renderBonCard(b) {
     'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444' },
   };
   const stStyle = statutStyles[statut] || statutStyles[''];
+  // Couleur de fond PLEINE + texte qui s'adapte (blanc sur fond foncé, foncé sur fond clair)
+  const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(gColor);
+  const _dark = _lum < 0.62;
+  const T  = _dark ? '#ffffff' : '#0d1b3e';
+  const TL = _dark ? 'rgba(255,255,255,.72)' : '#475569';
+  const T2 = _dark ? 'rgba(255,255,255,.9)' : '#334155';
+  const dateCol = _dark ? '#ffdada' : '#b91c1c';
+  const iconBg = _dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)';
   return `
-            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${_hexTint(gColor, 0.10)};border:1px solid ${_hexTint(gColor, 0.30)};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
+            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${gColor};color:${T};border:1px solid rgba(0,0,0,.12);border-left:6px solid ${_dark?'rgba(255,255,255,.55)':'rgba(0,0,0,.28)'};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
-                <div style="width:34px;height:34px;border-radius:50%;background:${gColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
+                <div style="width:34px;height:34px;border-radius:50%;background:${iconBg};color:${T};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
                 <div>
-                  <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
-                  <div style="font-size:12px;color:var(--red);font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
+                  <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
+                  <div style="font-size:12px;color:${dateCol};font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
                 </div>
               </div>
               <div style="flex:1;min-width:130px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏢 Gérance</div>
-                <div style="font-size:12px;font-weight:600;color:var(--navy);">${g}</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏢 Gérance</div>
+                <div style="font-size:12px;font-weight:600;color:${T};">${g}</div>
               </div>
               <div style="flex:1;min-width:130px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 Gérant</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;letter-spacing:.3px;">👤 Gérant</div>
                 <div style="font-size:12px;">${gerantNom || '—'}</div>
-                ${gerantTel ? `<div style="font-size:11px;color:var(--g600);">📞 ${gerantTel}</div>` : ''}
+                ${gerantTel ? `<div style="font-size:11px;color:${T2};">📞 ${gerantTel}</div>` : ''}
               </div>
               <div style="flex:1.2;min-width:150px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏠 Locataire</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🏠 Locataire</div>
                 <div style="font-size:12px;">${b.locataireNom || '—'}</div>
-                ${locTel ? `<div style="font-size:11px;color:var(--g600);">📞 ${locTel}</div>` : ''}
+                ${locTel ? `<div style="font-size:11px;color:${T2};">📞 ${locTel}</div>` : ''}
               </div>
               <div style="flex:1.4;min-width:170px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
-                <div style="font-size:12px;color:var(--g600);">${locAdresse || '—'}</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
+                <div style="font-size:12px;color:${T2};">${locAdresse || '—'}</div>
               </div>
               <div style="flex:1.6;min-width:180px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
-                <div style="font-size:12px;color:var(--g600);">${_bonProblemeClean(b) || '—'}</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / problème</div>
+                <div style="font-size:12px;color:${T2};">${_bonProblemeClean(b) || '—'}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:170px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
                 <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
                   <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;">
                   <input type="time" value="${b.heureIntervention||''}" onchange="updateBonHeureInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;width:78px;">
@@ -3808,7 +3816,7 @@ function renderBonCard(b) {
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:155px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">✅ Interventions effectuées</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;">✅ Interventions effectuées</div>
                 <div style="display:flex;flex-direction:column;gap:3px;">
                   ${(() => {
                     const ds = _bonDatesInterv(b);
@@ -3817,13 +3825,13 @@ function renderBonCard(b) {
                       <button class="btn btn-ghost btn-xs" style="color:#b00;padding:1px 5px;" onclick="bonSetDateEffectuee('${b.id}', ${i}, '')" title="Retirer">✕</button>
                     </div>`).join('');
                     if (ds.length < 5) html += `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="bonAddDateEffectuee('${b.id}')" title="Ajouter une date d'intervention effectuée">+ Ajouter (${ds.length}/5)</button>`;
-                    else html += `<div style="font-size:10px;color:var(--g400);">5/5 (max)</div>`;
+                    else html += `<div style="font-size:10px;color:${TL};">5/5 (max)</div>`;
                     return html;
                   })()}
                 </div>
               </div>
               <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:140px;">
-                <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">👷 Affecté à</div>
+                <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;">👷 Affecté à</div>
                 ${(() => {
                   const aff = _bonAffecte(b);
                   const techs = (DB.techs || []);
