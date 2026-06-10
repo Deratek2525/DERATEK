@@ -5383,7 +5383,7 @@ function renderDocuments() {
     <div style="display:flex;align-items:center;gap:14px;background:${cardBg};border:1px solid ${cardBorder};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
       <div style="min-width:130px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}</div>
-        <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+        <div style="font-size:11px;${d.statut==='envoyee'?'color:var(--navy);font-weight:800;':'color:var(--g600);'}">📅 ${fmtDate(d.dateDoc)||'—'}</div>
       </div>
       <div style="flex:1.4;min-width:160px;">
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
