@@ -5937,7 +5937,7 @@ function downloadDocPDF(id, mode) {
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11);
-  let dy = 55;
+  let dy = 50;
   const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
@@ -5953,10 +5953,10 @@ function downloadDocPDF(id, mode) {
 
   // Titre du document (style modèle : "Facture N°" en gras, taille moyenne)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
-  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, 80);
+  doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, 50);
   doc.setTextColor(0);
-  // Bloc infos en "label : valeur" alignés (façon modèle 5570)
-  let infoY = 88;
+  // Bloc infos en "label : valeur" alignés (à GAUCHE, à la même hauteur que l'adresse à droite)
+  let infoY = 58;
   const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
   const infoPairs = [
     ['N° TVA', co.tva],
@@ -5992,7 +5992,8 @@ function downloadDocPDF(id, mode) {
     return y + 8.5;
   };
 
-  const startY = Math.max(92, infoY + 3);
+  // La table démarre sous le PLUS BAS des deux blocs (infos à gauche, adresse à droite).
+  const startY = Math.max(78, infoY + 3, dy + 3);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
   const totalsH = (d.rabais || 0) > 0 ? 24 : 20;
   const lignes = d.lignes || [];
