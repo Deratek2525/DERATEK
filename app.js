@@ -5994,14 +5994,17 @@ function downloadDocPDF(id, mode) {
     infoY += 4.6;
   });
   infoY += 2;
-  // Texte descriptif de l'intervention (concerne + adresse), en paragraphe
+  // Texte descriptif de l'intervention (« Concerne : … »). Placé PLUS BAS que la fenêtre
+  // de l'enveloppe C5 (sinon son adresse apparaît dans la fenêtre à côté du destinataire).
   const descParts = [];
   if (d.locataireNom) descParts.push('Concerne : ' + d.locataireNom);
   if (d.locataireAdresse) descParts.push(d.locataireAdresse);
   if (descParts.length) {
+    let cy = Math.max(infoY, 92);   // 92 mm : sous la zone fenêtre du destinataire
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
-    doc.splitTextToSize(descParts.join(' — '), 170).forEach(ln => { doc.text(ln, 20, infoY); infoY += 4.6; });
+    doc.splitTextToSize(descParts.join(' — '), 170).forEach(ln => { doc.text(ln, 20, cy); cy += 4.6; });
     doc.setTextColor(0);
+    infoY = cy;
   }
 
   // En-tête du tableau — ruban BLEU (navy) avec texte blanc
