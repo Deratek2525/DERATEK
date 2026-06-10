@@ -5398,6 +5398,7 @@ function renderDocuments() {
         <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total||0)} CHF</div>
       </div>
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+        ${d.statut==='envoyee'?`<span style="font-size:12px;font-weight:800;color:var(--navy);">📅 ${fmtDate(d.dateDoc)||'—'}</span>`:''}
         <select onchange="updateDocStatut('${d.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${st.color};background:${st.bg};color:${st.color};cursor:pointer;">
           ${opts.map(o=>`<option value="${o}" ${d.statut===o?'selected':''}>${statutLabel[o]}</option>`).join('')}
         </select>
