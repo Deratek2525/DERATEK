@@ -2801,6 +2801,19 @@ async function bonConfirmSave() {
     return;
   }
 
+  // Détection de doublon : un bon portant le même numéro existe-t-il déjà ?
+  if (infos.numero_bon) {
+    const dup = (DB.bons || []).find(b => b.numero && _factNorm(b.numero) === _factNorm(infos.numero_bon));
+    if (dup) {
+      const ger = dup.geranceNom ? (' — ' + dup.geranceNom) : '';
+      const dt = dup.date ? (' du ' + fmtDate(dup.date)) : '';
+      if (!confirm('⚠️ Doublon possible\n\nUn bon portant le numéro « ' + infos.numero_bon + ' » existe déjà' + ger + dt + '.\n\nVoulez-vous quand même l\'enregistrer (créer un 2ᵉ bon avec ce numéro) ?')) {
+        toast('Import annulé — ce bon existe déjà', '#f4a623');
+        return;
+      }
+    }
+  }
+
   const gerance   = _findOrCreateGerance(infos);
   const locataire = _findOrCreateLocataire(infos, gerance ? gerance.id : '');
 
