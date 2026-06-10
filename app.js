@@ -44,6 +44,7 @@ const TABLE_FIELDS = {
     bonCommande: 'bon_commande', rdvHeure: 'rdv_heure',
     locataireNom: 'locataire_nom', locataireTel: 'locataire_tel',
     locataireEmail: 'locataire_email', locataireAdresse: 'locataire_adresse',
+    nbPassages: 'nb_passages', datesIntervention: 'dates_intervention', archive: 'archive',
   } },
   techs:      { js2db: {} },
   prestations:{ js2db: {} },
@@ -1361,11 +1362,11 @@ function editRapport(id) {
     const el = $(id); const key = id.replace('r-','');
     if (el) el.value = r[key] || '';
   });
-  // Décode passages + dates d'intervention depuis la description (marqueurs)
+  // Passages + dates : colonnes Supabase d'abord, sinon anciens marqueurs
   const rMeta = _rapMeta(r.description);
   if ($('r-description')) $('r-description').value = rMeta.descClean;
-  if ($('r-nb-passages')) $('r-nb-passages').value = rMeta.nbPassages;
-  rSetDates(rMeta.dates);
+  if ($('r-nb-passages')) $('r-nb-passages').value = _rapNbPassages(r);
+  rSetDates(_rapDates(r));
   // Décode le rôle + nom du contact (gérant…)
   if ($('r-contact')) $('r-contact').value = _rapContactNom(r.contact);
   if ($('r-contact-role')) $('r-contact-role').value = _rapContactRole(r.contact) || 'Gérant';
@@ -1657,14 +1658,24 @@ function _rapLoc(r) {
     adresse: r.locataireAdresse || m.adresse || '',
   };
 }
-// Rapport archivé manuellement (envoyé dans « Facturation archivée » avant la facture)
-function _rapManualArchived(r) { return !!r && /\[ARCHIVE\]/.test(String(r.description || '')); }
+// Nombre de passages / dates d'intervention : colonnes Supabase d'abord, sinon marqueurs.
+function _rapNbPassages(r) {
+  if (r && r.nbPassages) return String(r.nbPassages);
+  return _rapMeta(r && r.description).nbPassages || '';
+}
+function _rapDates(r) {
+  if (r && r.datesIntervention) return String(r.datesIntervention).split(',').map(x => x.trim()).filter(Boolean).sort();
+  return _rapMeta(r && r.description).dates || [];
+}
+// Rapport archivé manuellement : colonne booléenne d'abord, sinon ancien marqueur [ARCHIVE].
+function _rapManualArchived(r) { return !!r && (r.archive === true || /\[ARCHIVE\]/.test(String(r.description || ''))); }
 function _setRapArchive(rid, on) {
   const list = DB.rapports;
   const r = list.find(x => x.id === rid);
   if (!r) return;
+  r.archive = !!on;                         // vraie colonne Supabase
   let d = String(r.description || '').replace(/\s*\[ARCHIVE\]/g, '');
-  if (on) d += (d ? '\n' : '') + '[ARCHIVE]';
+  if (on) d += (d ? '\n' : '') + '[ARCHIVE]';   // double écriture de sécurité (marqueur)
   r.description = d;
   DB.rapports = list;
 }
@@ -1726,9 +1737,13 @@ function saveRapport(statut) {
   };
   r.locataireNom = _loc.nom; r.locataireTel = _loc.tel;
   r.locataireEmail = _loc.email; r.locataireAdresse = _loc.adresse;
+  // Passages + dates d'intervention → vraies colonnes Supabase
+  r.nbPassages = ($('r-nb-passages') || {}).value || '';
+  r.datesIntervention = rReadDates().join(',');
   // On conserve l'état « archivé » si le rapport l'était déjà
   const _prev = (DB.rapports || []).find(x => x.id === state.editingRapportId);
   const _wasArchived = _prev ? _rapManualArchived(_prev) : false;
+  r.archive = _wasArchived;                  // vraie colonne booléenne
   // …et on conserve aussi le marqueur [LOC:] dans la description (double écriture de sécurité
   // pendant la transition — il est ignoré à l'affichage et dans le PDF).
   r.description = _composeRapDesc($('r-description').value, ($('r-nb-passages')||{}).value || '', rReadDates(), _loc, _wasArchived);
@@ -2480,7 +2495,7 @@ function _rapportObjForPdf(r) {
     volume: '', photoComments: ['', '', '', '', '', ''], materiels: [], materielComment: '',
     garantieNote: '', showSigClient: true, sigLocataire: '',
     nuisibles: r.nuisibles || [], description: meta.descClean || r.description || '',
-    nbPassages: meta.nbPassages || '', datesInterv: meta.dates || [],
+    nbPassages: _rapNbPassages(r), datesInterv: _rapDates(r),
     niveau: r.niveau || '', superficie: r.superficie || '', pieces: r.pieces || '', zones: r.zones || '',
     origine: r.origine || '', contraintes: r.contraintes || '',
     traitement: r.traitement || [], produits: r.produits || [],
