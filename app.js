@@ -7183,9 +7183,12 @@ function renderAnciennesList() {
             </select>
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
-              const next = Math.min(3, niv + 1);
-              const lbl = next === 1 ? '1er rappel' : (next === 2 ? '2e rappel (+60 CHF)' : '3e rappel (mise en demeure)');
-              return `<button class="btn btn-sm" onclick="generateRappel('${d.id}', ${next})" style="font-weight:700;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;" title="Générer le PDF — ${lbl}">📄 ${lbl}</button>${niv ? `<span style="font-size:10px;font-weight:800;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:2px 8px;">rappel ${niv} fait</span>` : ''}`;
+              return `<select onchange="if(this.value){generateRappel('${d.id}', parseInt(this.value,10));this.value='';}" title="Générer un rappel de paiement" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;cursor:pointer;">
+                <option value="">📄 Rappel…</option>
+                <option value="1">1er rappel</option>
+                <option value="2">2e rappel (+60 CHF)</option>
+                <option value="3">3e rappel (mise en demeure)</option>
+              </select>${niv ? `<span style="font-size:10px;font-weight:800;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:2px 8px;">rappel ${niv} fait</span>` : ''}`;
             })() : ''}
             <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
             ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
