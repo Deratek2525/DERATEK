@@ -5937,7 +5937,7 @@ function downloadDocPDF(id, mode) {
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11);
-  let dy = 48;
+  let dy = 50;
   const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
@@ -5951,13 +5951,13 @@ function downloadDocPDF(id, mode) {
   destLines = destLines.map(l => _fixPa(l));
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
-  // Titre du document SOUS l'adresse du destinataire (à gauche, aligné sur la marge)
-  const titleY = dy + 7;
+  // Titre du document À GAUCHE de l'adresse du destinataire (même hauteur, en haut)
+  const titleY = 50;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
   doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, titleY);
   doc.setTextColor(0);
-  // Bloc infos "label : valeur" sous le titre
-  let infoY = titleY + 6;
+  // Bloc infos "label : valeur" sous le titre (à gauche)
+  let infoY = titleY + 9;
   const bonLie = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
   const infoPairs = [
     ['N° TVA', co.tva],
