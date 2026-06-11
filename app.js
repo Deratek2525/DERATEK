@@ -503,8 +503,10 @@ function renderDashboard() {
   const _ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
   // --- Compteurs documents ---
-  const facturesPayees   = docs.filter(d => d.type === 'facture' && d.statut === 'payee');
-  const facturesNonPayees= docs.filter(d => d.type === 'facture' && d.statut !== 'payee');
+  // On EXCLUT les documents de rappel : ils répètent le montant de leur facture d'origine
+  // (sinon double comptage). Les vraies factures (ruban) + anciennes factures sont comptées.
+  const facturesPayees   = docs.filter(d => d.type === 'facture' && d.statut === 'payee' && !_isRappelDoc(d));
+  const facturesNonPayees= docs.filter(d => d.type === 'facture' && d.statut !== 'payee' && !_isRappelDoc(d));
   const devisAcceptes    = docs.filter(d => d.type === 'devis'   && d.statut === 'accepte');
   // Bons entrés cette semaine
   const bonsSemaine = bons.filter(b => { if (!b.createdAt) return false; const c = new Date(b.createdAt); return c >= _monday && c <= _sunday; });
