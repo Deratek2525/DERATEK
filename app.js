@@ -4415,7 +4415,7 @@ function _docIsArchive(d) {
 function _docNotesClean(d) {
   return String((d && d.notes) || '')
     .replace(/\s*\[ARCHIVE\]\s*/g, ' ')
-    .replace(/\s*\[RAPPEL:\d\]\s*/g, ' ')
+    .replace(/\s*\[RAPPEL:\d(?:\|[^\]]*)?\]\s*/g, ' ')
     .replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[ENVDATE:[^\]]*\]\s*/g, ' ')
     .trim();
@@ -4452,16 +4452,23 @@ function _rappelMeta(d) {
 // Échéance du délai de 10 jours après le dernier rappel émis (pour une facture source).
 // Retourne { daysLeft, niveau, deadline } ou null si aucun rappel daté.
 function _rappelDeadlineInfo(d) {
-  const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id && x.dateDoc);
-  if (!rappels.length) return null;
-  let last = rappels[0];
-  rappels.forEach(r => { if ((r.dateDoc || '') > (last.dateDoc || '')) last = r; });
-  const base = new Date(last.dateDoc + 'T00:00:00');
+  const niveau = _ancRappelNiveau(d);
+  if (!niveau) return null;   // aucun rappel émis → pas de décompte
+  // Date de référence du dernier rappel, par priorité :
+  //  1) date stockée dans le marqueur [RAPPEL:n|date]  2) date du doc de rappel
+  //  3) date d'envoi de la facture  4) date de la facture
+  let baseStr = _ancRappelDate(d);
+  if (!baseStr) {
+    const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id && x.dateDoc);
+    if (rappels.length) { let last = rappels[0]; rappels.forEach(r => { if ((r.dateDoc || '') > (last.dateDoc || '')) last = r; }); baseStr = last.dateDoc; }
+  }
+  if (!baseStr) baseStr = _ancEnvoiDate(d) || d.dateDoc;
+  if (!baseStr) return null;
+  const base = new Date(baseStr + 'T00:00:00');
   if (isNaN(base.getTime())) return null;
   const deadline = new Date(base.getTime() + 10 * 86400000);
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const daysLeft = Math.round((deadline.getTime() - now.getTime()) / 86400000);
-  const niveau = (_rappelMeta(last) || {}).niveau || _ancRappelNiveau(d) || 1;
   return { daysLeft, niveau, deadline };
 }
 // Reconstitue les champs runtime _rappel* d'un document rappel rechargé depuis Supabase
@@ -4477,12 +4484,14 @@ function _applyRappelRuntime(d) {
   d._rappelFactureDate = m.factureDate || d._rappelFactureDate;
   return d;
 }
-// Niveau de rappel déjà émis pour une facture (marqueur [RAPPEL:n] dans notes)
-function _ancRappelNiveau(d) { const m = String((d && d.notes) || '').match(/\[RAPPEL:(\d)\]/); return m ? parseInt(m[1], 10) : 0; }
+// Niveau de rappel déjà émis (marqueur [RAPPEL:n] ou [RAPPEL:n|date] dans notes)
+function _ancRappelNiveau(d) { const m = String((d && d.notes) || '').match(/\[RAPPEL:(\d)(?:\|[^\]]*)?\]/); return m ? parseInt(m[1], 10) : 0; }
+// Date du dernier rappel (partie après « | » dans le marqueur), si présente
+function _ancRappelDate(d) { const m = String((d && d.notes) || '').match(/\[RAPPEL:\d\|([^\]]+)\]/); return m ? m[1] : ''; }
 function _setAncRappel(id, niveau) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
-  let n = String(d.notes || '').replace(/\s*\[RAPPEL:\d\]/g, '');
-  if (niveau) n += (n ? ' ' : '') + '[RAPPEL:' + niveau + ']';
+  let n = String(d.notes || '').replace(/\s*\[RAPPEL:\d(?:\|[^\]]*)?\]/g, '');
+  if (niveau) n += (n ? ' ' : '') + '[RAPPEL:' + niveau + '|' + today() + ']';   // on horodate le rappel
   d.notes = n; DB.documents = docs;
   if (typeof renderAnciennesList === 'function') renderAnciennesList();
 }
