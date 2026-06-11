@@ -5365,7 +5365,7 @@ function renderDocuments() {
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
   // Exclut les factures payées liées à un bon (parties dans « Facturation archivée »)
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d));
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d));
   const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';
