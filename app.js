@@ -4413,7 +4413,37 @@ function _docIsArchive(d) {
   return !!(d && (d._archive || /\[ARCHIVE\]/.test(String(d.notes || ''))));
 }
 function _docNotesClean(d) {
-  return String((d && d.notes) || '').replace(/\s*\[ARCHIVE\]\s*/g, ' ').replace(/\s*\[RAPPEL:\d\]\s*/g, ' ').trim();
+  return String((d && d.notes) || '')
+    .replace(/\s*\[ARCHIVE\]\s*/g, ' ')
+    .replace(/\s*\[RAPPEL:\d\]\s*/g, ' ')
+    .replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]\s*/g, ' ')
+    .trim();
+}
+// ---- Rappels SAUVEGARDÉS : un rappel généré est stocké comme document de type
+// facture, identifié par des marqueurs dans "notes" (survivent à Supabase). ----
+function _isRappelDoc(d) { return /\[RAPPELDOC:\d\]/.test(String((d && d.notes) || '')); }
+function _rappelMeta(d) {
+  const notes = String((d && d.notes) || '');
+  const mN = notes.match(/\[RAPPELDOC:(\d)\]/);
+  if (!mN) return null;
+  const niveau = parseInt(mN[1], 10) || 1;
+  const srcId = (notes.match(/\[RAPPELSRC:([^\]]*)\]/) || [])[1] || '';
+  const factureDate = (notes.match(/\[RAPPELFD:([^\]]*)\]/) || [])[1] || '';
+  const txtB64 = (notes.match(/\[RAPPELTXT:([^\]]*)\]/) || [])[1] || '';
+  return { niveau, srcId, factureDate, texte: txtB64 ? _decNote(txtB64) : (RAPPEL_TEXTES[niveau] || '') };
+}
+// Reconstitue les champs runtime _rappel* d'un document rappel rechargé depuis Supabase
+function _applyRappelRuntime(d) {
+  if (!d || d._rappel) return d;
+  const m = _rappelMeta(d);
+  if (!m) return d;
+  d._rappel = true;
+  d._rappelNiveau = m.niveau;
+  d._rappelSourceId = m.srcId;
+  d._rappelLabel = RAPPEL_LABELS[m.niveau];
+  d._rappelTexte = m.texte;
+  d._rappelFactureDate = m.factureDate || d._rappelFactureDate;
+  return d;
 }
 // Niveau de rappel déjà émis pour une facture (marqueur [RAPPEL:n] dans notes)
 function _ancRappelNiveau(d) { const m = String((d && d.notes) || '').match(/\[RAPPEL:(\d)\]/); return m ? parseInt(m[1], 10) : 0; }
@@ -4831,6 +4861,14 @@ function onDocClientSelect(clientId) {
 function editDoc(id) {
   const d = (DB.documents || []).find(x => x.id === id);
   if (!d) return;
+  // Rappel sauvegardé → on le rouvre en mode rappel (sans la logique de réparation des totaux)
+  if (_isRappelDoc(d)) {
+    _editingDoc = JSON.parse(JSON.stringify(d));
+    if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
+    _applyRappelRuntime(_editingDoc);
+    openDocEditor();
+    return;
+  }
   _editingDoc = JSON.parse(JSON.stringify(d));
   if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
   if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
@@ -5447,7 +5485,7 @@ function renderDocuments() {
     return `
     <div style="display:flex;align-items:center;gap:14px;background:${cardBg};border:1px solid ${cardBorder};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
       <div style="min-width:130px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}</div>
+        <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}${_isRappelDoc(d)?` <span style="font-size:9px;font-weight:800;color:#fff;background:#dc2626;border-radius:8px;padding:1px 6px;vertical-align:middle;">RAPPEL ${(_rappelMeta(d)||{}).niveau||''}</span>`:''}</div>
         <div style="font-size:11px;${d.statut==='envoyee'?'color:var(--navy);font-weight:800;':'color:var(--g600);'}">📅 ${fmtDate(d.dateDoc)||'—'}</div>
       </div>
       <div style="flex:1.4;min-width:160px;">
@@ -6011,20 +6049,46 @@ function rappelEditSetNiveau(v) {
   if (frais) _editingDoc.lignes.push({ desc: 'Frais de rappel (' + n + 'e rappel)', qte: 1, prix: frais });
   renderDocEditor();
 }
-// Génère et télécharge le PDF du rappel depuis l'éditeur, puis mémorise le niveau atteint.
+// Génère le PDF du rappel, l'enregistre comme document (visible dans le ruban Factures
+// ET sous la facture d'origine dans Anciennes factures), puis mémorise le niveau atteint.
 function rappelGenererDepuisEditeur() {
   if (!_editingDoc) return;
   const niv = _editingDoc._rappelNiveau || 1;
   downloadDocPDF(_editingDoc);
+  _saveRappelDoc(_editingDoc, niv);
   if (_editingDoc._rappelSourceId) _setAncRappel(_editingDoc._rappelSourceId, niv);
   closeModal('modal-doc');
-  toast('📄 ' + (RAPPEL_LABELS[niv] || 'Rappel') + ' généré', '#2d9e6b');
+  toast('📄 ' + (RAPPEL_LABELS[niv] || 'Rappel') + ' généré et enregistré', '#2d9e6b');
+  if (typeof renderDocuments === 'function') { state.docsFilter = 'facture'; renderDocuments(); }
+  if (typeof renderAnciennesList === 'function') renderAnciennesList();
+}
+// Enregistre (ou met à jour) le rappel dans DB.documents.
+function _saveRappelDoc(ed, niv) {
+  const t = _calcTotaux(ed.lignes, ed.tvaTaux, ed.rabais);
+  const toSave = JSON.parse(JSON.stringify(ed));
+  ['_bonNumeroSaisi', '_bonNote', '_rappel', '_rappelLabel', '_rappelTexte', '_rappelFactureDate', '_rappelNiveau', '_rappelSourceId']
+    .forEach(k => delete toSave[k]);
+  toSave.sousTotal = t.sousTotal; toSave.tvaMontant = t.tvaMontant; toSave.rabaisMontant = t.rabaisMontant; toSave.total = t.total;
+  toSave.type = 'facture';
+  toSave.statut = 'envoyee';
+  // Métadonnées du rappel encodées dans notes (préserve d'éventuelles notes utilisateur)
+  const baseNotes = String(ed.notes || '').replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]/g, '').replace(/\s*\[RAPPEL:\d\]/g, '').trim();
+  const markers = '[RAPPELDOC:' + niv + '][RAPPELSRC:' + (ed._rappelSourceId || '') + '][RAPPELFD:' + (ed._rappelFactureDate || '') + '][RAPPELTXT:' + _encNote(ed._rappelTexte || '') + ']';
+  toSave.notes = (baseNotes ? baseNotes + ' ' : '') + markers;
+  const docs = DB.documents;
+  // Si on régénère le même rappel (même facture source + même niveau), on remplace l'existant
+  const existing = docs.find(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === (ed._rappelSourceId || '') && (_rappelMeta(x) || {}).niveau === niv);
+  if (existing) { toSave.id = existing.id; const i = docs.findIndex(x => x.id === existing.id); docs[i] = toSave; }
+  else { toSave.id = newId(); docs.push(toSave); }
+  DB.documents = docs;
 }
 
 function downloadDocPDF(id, mode) {
   // id peut être un identifiant OU directement un objet document (aperçu en direct dans l'éditeur)
-  const d = (id && typeof id === 'object') ? id : (DB.documents || []).find(x => x.id === id);
+  let d = (id && typeof id === 'object') ? id : (DB.documents || []).find(x => x.id === id);
   if (!d) { if (mode !== 'blob') toast('Document introuvable', '#e63946'); return; }
+  // Rappel sauvegardé (rechargé sans champs runtime) → on reconstitue _rappel* sur une copie
+  if (!d._rappel && _isRappelDoc(d)) d = _applyRappelRuntime(JSON.parse(JSON.stringify(d)));
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   // Sécurisation : lignes peut arriver comme string JSON depuis Supabase, ou être absent
   if (typeof d.lignes === 'string') { try { d.lignes = JSON.parse(d.lignes); } catch (e) { d.lignes = []; } }
@@ -7218,7 +7282,20 @@ function renderAnciennesList() {
         const bonNo = (notes.match(/Bon n°\s*([^·\n]+)/) || [])[1];
         const devNo = (notes.match(/Devis n°\s*([^·\n]+)/) || [])[1];
         const refs = [bonNo ? '📄 Bon ' + bonNo.trim() : '', devNo ? '📝 Devis ' + devNo.trim() : ''].filter(Boolean).join(' · ');
-        return `<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+        // Rappels sauvegardés rattachés à cette facture (listés sous la facture)
+        const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id)
+          .sort((a, b) => ((_rappelMeta(a) || {}).niveau || 0) - ((_rappelMeta(b) || {}).niveau || 0));
+        const rappelsHtml = rappels.length ? `<div style="margin:2px 0 0 22px;display:flex;flex-direction:column;gap:4px;">
+            ${rappels.map(r => { const meta = _rappelMeta(r) || {}; return `<div style="display:flex;align-items:center;gap:10px;background:#fff5f5;border:1px solid #fecaca;border-left:3px solid #dc2626;border-radius:7px;padding:5px 10px;flex-wrap:wrap;">
+              <div style="font-size:11px;font-weight:800;color:#b91c1c;min-width:130px;">📄 ${RAPPEL_LABELS[meta.niveau] || ('RAPPEL ' + (meta.niveau || ''))}</div>
+              <div style="font-size:11px;color:var(--g600);flex:1;min-width:90px;">📅 ${fmtDate(r.dateDoc) || '—'}</div>
+              <div style="font-size:12px;font-weight:700;color:#b91c1c;min-width:90px;text-align:right;">${_displayMontant(r.total || 0)} CHF</div>
+              <button class="btn btn-ghost btn-sm" onclick="editDoc('${r.id}')" title="Rouvrir / modifier ce rappel">✏️</button>
+              <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${r.id}')" title="Télécharger le PDF du rappel">📥 PDF</button>
+              <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${r.id}')" title="Supprimer ce rappel">🗑</button>
+            </div>`; }).join('')}
+          </div>` : '';
+        return `<div style="display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
           <div style="min-width:130px;">
             <div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div>
             <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div>
@@ -7251,7 +7328,7 @@ function renderAnciennesList() {
             <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
             <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
           </div>
-        </div>`;
+        </div>${rappelsHtml}</div>`;
       }).join('')}
     </div>`;
 }
