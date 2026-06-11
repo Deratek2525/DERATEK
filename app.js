@@ -7363,7 +7363,7 @@ function renderAnciennesList() {
             ${d.locataireNom ? `<div style="font-size:11px;color:var(--g600);">🏠 Locataire : ${d.locataireNom}${d.locataireAdresse ? ' · ' + d.locataireAdresse : ''}</div>` : ''}
           </div>
           <div style="width:110px;flex-shrink:0;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
-          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;align-items:center;flex:1;min-width:0;flex-wrap:wrap;">
             ${(() => {
               const stt = d.statut === 'payee' ? 'payee' : d.statut === 'impayee' ? 'impayee' : 'envoyee';
               const bg = stt === 'payee' ? '#dcfce7' : stt === 'impayee' ? '#fef3c7' : '#1a2744';
@@ -7394,11 +7394,13 @@ function renderAnciennesList() {
                 <option value="3">3e rappel (mise en demeure)</option>
               </select>${niv ? `<span onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels enregistrés" style="font-size:10px;font-weight:800;color:#fff;background:#dc2626;border:1px solid #dc2626;border-radius:10px;padding:2px 8px;cursor:pointer;">rappel ${niv} fait ${rapOpen ? '▴' : '▾'}</span>` : ''}${dlChip}`;
             })() : ''}
-            <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
-            ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
-            <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
-            <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
-            <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
+            <div style="margin-left:auto;display:flex;gap:5px;align-items:center;flex-shrink:0;">
+              <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
+              ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
+              <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
+              <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
+              <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${d.id}')" title="Supprimer">🗑</button>
+            </div>
           </div>
         </div>${rappelsHtml}</div>`;
       }).join('')}
