@@ -4432,6 +4432,21 @@ function _rappelMeta(d) {
   const txtB64 = (notes.match(/\[RAPPELTXT:([^\]]*)\]/) || [])[1] || '';
   return { niveau, srcId, factureDate, texte: txtB64 ? _decNote(txtB64) : (RAPPEL_TEXTES[niveau] || '') };
 }
+// Échéance du délai de 10 jours après le dernier rappel émis (pour une facture source).
+// Retourne { daysLeft, niveau, deadline } ou null si aucun rappel daté.
+function _rappelDeadlineInfo(d) {
+  const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id && x.dateDoc);
+  if (!rappels.length) return null;
+  let last = rappels[0];
+  rappels.forEach(r => { if ((r.dateDoc || '') > (last.dateDoc || '')) last = r; });
+  const base = new Date(last.dateDoc + 'T00:00:00');
+  if (isNaN(base.getTime())) return null;
+  const deadline = new Date(base.getTime() + 10 * 86400000);
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const daysLeft = Math.round((deadline.getTime() - now.getTime()) / 86400000);
+  const niveau = (_rappelMeta(last) || {}).niveau || _ancRappelNiveau(d) || 1;
+  return { daysLeft, niveau, deadline };
+}
 // Reconstitue les champs runtime _rappel* d'un document rappel rechargé depuis Supabase
 function _applyRappelRuntime(d) {
   if (!d || d._rappel) return d;
@@ -7329,12 +7344,22 @@ function renderAnciennesList() {
             </select>
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
+              const dl = _rappelDeadlineInfo(d);
+              let dlChip = '';
+              if (dl) {
+                if (dl.daysLeft > 0) {
+                  dlChip = `<span title="Échéance du délai de 10 jours (${fmtDate(dl.deadline.toISOString().slice(0,10))})" style="font-size:10px;font-weight:800;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:2px 8px;">⏳ J-${dl.daysLeft}</span>`;
+                } else {
+                  const next = dl.niveau < 3 ? ` — passer au ${dl.niveau + 1}e rappel` : '';
+                  dlChip = `<span title="Le délai de 10 jours est dépassé" style="font-size:10px;font-weight:800;color:#fff;background:#dc2626;border-radius:10px;padding:2px 8px;">⏱ délai dépassé${next}</span>`;
+                }
+              }
               return `<select onchange="if(this.value){openRappelModal('${d.id}', parseInt(this.value,10));this.value='';}" title="Préparer un rappel de paiement" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid #dc2626;background:#fff;color:#b91c1c;cursor:pointer;">
                 <option value="">📄 Rappel…</option>
                 <option value="1">1er rappel</option>
                 <option value="2">2e rappel (+60 CHF)</option>
                 <option value="3">3e rappel (mise en demeure)</option>
-              </select>${niv ? `<span onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels enregistrés" style="font-size:10px;font-weight:800;color:${rapOpen ? '#fff' : '#b91c1c'};background:${rapOpen ? '#dc2626' : '#fee2e2'};border-radius:10px;padding:2px 8px;cursor:pointer;">rappel ${niv} fait ${rapOpen ? '▴' : '▾'}</span>` : ''}`;
+              </select>${niv ? `<span onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels enregistrés" style="font-size:10px;font-weight:800;color:${rapOpen ? '#fff' : '#b91c1c'};background:${rapOpen ? '#dc2626' : '#fee2e2'};border-radius:10px;padding:2px 8px;cursor:pointer;">rappel ${niv} fait ${rapOpen ? '▴' : '▾'}</span>` : ''}${dlChip}`;
             })() : ''}
             <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
             ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
