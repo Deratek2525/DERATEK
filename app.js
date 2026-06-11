@@ -3734,7 +3734,7 @@ function updateNavCounts() {
     !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
-  const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d) && !_isFactureFactArchived(d)).length;
+  const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d) && !_isAncienneFacture(d)).length;
   const nRapports = (DB.rapports || []).filter(r => !_isRapportFactArchived(r)).length;
   const nFactArchive = _factArchiveSets().length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
