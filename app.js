@@ -6137,7 +6137,7 @@ function downloadDocPDF(id, mode) {
 
   // Date d'émission, sous le filet, à droite ("Neuchâtel, le ...")
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
-  doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 7, { align: 'right' });
+  doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 5, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
