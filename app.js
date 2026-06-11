@@ -4418,8 +4418,12 @@ function _docNotesClean(d) {
     .replace(/\s*\[RAPPEL:\d(?:\|[^\]]*)?\]\s*/g, ' ')
     .replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[ENVDATE:[^\]]*\]\s*/g, ' ')
+    .replace(/\s*\[ORD:\d+\]\s*/g, ' ')
     .trim();
 }
+// Ordre manuel d'affichage dans Anciennes factures (glisser-déposer) — marqueur [ORD:n]
+function _ancOrd(d) { const m = String((d && d.notes) || '').match(/\[ORD:(\d+)\]/); return m ? parseInt(m[1], 10) : 999999; }
+function _setAncOrd(d, n) { if (!d) return; d.notes = String(d.notes || '').replace(/\s*\[ORD:\d+\]/g, ''); d.notes += (d.notes ? ' ' : '') + '[ORD:' + n + ']'; }
 // Date d'envoi d'une ancienne facture (marqueur [ENVDATE:ISO] dans notes)
 function _ancEnvoiDate(d) { const m = String((d && d.notes) || '').match(/\[ENVDATE:([^\]]*)\]/); return m ? m[1] : ''; }
 function _setAncEnvoiDate(d, iso) {
@@ -7307,7 +7311,7 @@ function renderAnciennesList() {
   if (!all.length) { box.innerHTML = ''; return; }
   // Les payées sont parties dans « Facturation archivée » → ici on n'affiche que les NON payées.
   const paidList = all.filter(d => d.statut === 'payee');
-  const shown = all.filter(d => d.statut !== 'payee').slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  const shown = all.filter(d => d.statut !== 'payee').slice().sort((a, b) => (_ancOrd(a) - _ancOrd(b)) || (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   const nPay = paidList.length;
   const totalPaye = paidList.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const totalNonPaye = shown.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
@@ -7350,7 +7354,8 @@ function renderAnciennesList() {
               <button class="btn btn-sm" style="background:#7f1d1d;color:#fff;font-weight:700;" onclick="ancDeleteDoc('${r.id}')" title="Supprimer ce rappel">🗑</button>
             </div>`; }).join('')}
           </div>` : '';
-        return `<div style="display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+        return `<div style="display:flex;flex-direction:column;gap:2px;" ondragover="ancDragOver(event)" ondrop="ancDrop(event,'${d.id}')"><div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+          <div draggable="true" ondragstart="ancDragStart(event,'${d.id}')" ondragend="ancDragEnd(event)" title="Glisser pour déplacer cette facture vers le haut ou le bas" style="cursor:grab;color:#9ca3af;font-size:16px;flex-shrink:0;padding:0 2px;user-select:none;">⠿</div>
           <div style="width:130px;flex-shrink:0;">
             <div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div>
             <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div>
@@ -7411,6 +7416,35 @@ function ancToggleRappels(id) {
   state.ancRappelsOpen = state.ancRappelsOpen || {};
   state.ancRappelsOpen[id] = !state.ancRappelsOpen[id];
   renderAnciennesList();
+}
+// --- Glisser-déposer : réordonner les anciennes factures (haut / bas) ---
+let _ancDragId = null;
+function ancDragStart(e, id) {
+  _ancDragId = id;
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
+}
+function ancDragEnd() { _ancDragId = null; }
+function ancDragOver(e) {
+  if (!_ancDragId) return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+}
+function ancDrop(e, targetId) {
+  e.preventDefault();
+  const dragId = _ancDragId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
+  _ancDragId = null;
+  if (!dragId || dragId === targetId) return;
+  const docs = DB.documents;
+  const ids = docs.filter(d => _isAncienneFacture(d) && d.statut !== 'payee')
+    .sort((a, b) => (_ancOrd(a) - _ancOrd(b)) || (b.dateDoc || '').localeCompare(a.dateDoc || ''))
+    .map(d => d.id);
+  const from = ids.indexOf(dragId), to = ids.indexOf(targetId);
+  if (from < 0 || to < 0) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);   // insère la ligne déplacée à la place de la cible
+  ids.forEach((id, i) => { const d = docs.find(x => x.id === id); if (d) _setAncOrd(d, i); });
+  DB.documents = docs;
+  renderAnciennesList();
+  toast('↕ Ordre mis à jour', '#2d9e6b');
 }
 function ancSetStatut(id, value) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
