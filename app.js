@@ -4417,7 +4417,15 @@ function _docNotesClean(d) {
     .replace(/\s*\[ARCHIVE\]\s*/g, ' ')
     .replace(/\s*\[RAPPEL:\d\]\s*/g, ' ')
     .replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]\s*/g, ' ')
+    .replace(/\s*\[ENVDATE:[^\]]*\]\s*/g, ' ')
     .trim();
+}
+// Date d'envoi d'une ancienne facture (marqueur [ENVDATE:ISO] dans notes)
+function _ancEnvoiDate(d) { const m = String((d && d.notes) || '').match(/\[ENVDATE:([^\]]*)\]/); return m ? m[1] : ''; }
+function _setAncEnvoiDate(d, iso) {
+  if (!d) return;
+  d.notes = String(d.notes || '').replace(/\s*\[ENVDATE:[^\]]*\]/g, '');
+  if (iso) d.notes += (d.notes ? ' ' : '') + '[ENVDATE:' + iso + ']';
 }
 // ---- Rappels SAUVEGARDÉS : un rappel généré est stocké comme document de type
 // facture, identifié par des marqueurs dans "notes" (survivent à Supabase). ----
@@ -7341,7 +7349,7 @@ function renderAnciennesList() {
             <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#1a2744'};background:${paye ? '#dcfce7' : '#1a2744'};color:${paye ? '#166534' : '#ffffff'};cursor:pointer;">
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
               <option value="envoyee" ${!paye ? 'selected' : ''}>📨 Facture envoyée</option>
-            </select>
+            </select>${(!paye && _ancEnvoiDate(d)) ? `<span title="Date d'envoi de la facture" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(_ancEnvoiDate(d))}</span>` : ''}
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
               const dl = _rappelDeadlineInfo(d);
@@ -7379,9 +7387,12 @@ function ancToggleRappels(id) {
 }
 function ancSetStatut(id, value) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
-  d.statut = value; DB.documents = docs;
+  d.statut = value;
+  // Marquée « envoyée » → on enregistre la date du jour d'envoi
+  if (value === 'envoyee') _setAncEnvoiDate(d, today());
+  DB.documents = docs;
   renderAnciennesList();
-  toast(value === 'payee' ? '✅ Marquée payée' : '⏳ Marquée non payée', '#2d9e6b');
+  toast(value === 'payee' ? '✅ Marquée payée' : '📨 Marquée envoyée le ' + (fmtDate(today()) || ''), '#2d9e6b');
 }
 function ancDeleteDoc(id) {
   const d = (DB.documents || []).find(x => x.id === id); if (!d) return;
