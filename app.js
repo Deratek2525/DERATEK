@@ -7286,13 +7286,13 @@ function renderAnciennesList() {
         const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id)
           .sort((a, b) => ((_rappelMeta(a) || {}).niveau || 0) - ((_rappelMeta(b) || {}).niveau || 0));
         const rappelsHtml = rappels.length ? `<div style="margin:2px 0 0 22px;display:flex;flex-direction:column;gap:4px;">
-            ${rappels.map(r => { const meta = _rappelMeta(r) || {}; return `<div style="display:flex;align-items:center;gap:10px;background:#fff5f5;border:1px solid #fecaca;border-left:3px solid #dc2626;border-radius:7px;padding:5px 10px;flex-wrap:wrap;">
-              <div style="font-size:11px;font-weight:800;color:#b91c1c;min-width:130px;">📄 ${RAPPEL_LABELS[meta.niveau] || ('RAPPEL ' + (meta.niveau || ''))}</div>
-              <div style="font-size:11px;color:var(--g600);flex:1;min-width:90px;">📅 ${fmtDate(r.dateDoc) || '—'}</div>
-              <div style="font-size:12px;font-weight:700;color:#b91c1c;min-width:90px;text-align:right;">${_displayMontant(r.total || 0)} CHF</div>
-              <button class="btn btn-ghost btn-sm" onclick="editDoc('${r.id}')" title="Rouvrir / modifier ce rappel">✏️</button>
-              <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${r.id}')" title="Télécharger le PDF du rappel">📥 PDF</button>
-              <button class="btn btn-red btn-sm btn-xs" onclick="ancDeleteDoc('${r.id}')" title="Supprimer ce rappel">🗑</button>
+            ${rappels.map(r => { const meta = _rappelMeta(r) || {}; return `<div style="display:flex;align-items:center;gap:10px;background:#dc2626;border:1px solid #dc2626;border-radius:7px;padding:6px 11px;flex-wrap:wrap;">
+              <div style="font-size:11px;font-weight:800;color:#fff;min-width:130px;">📄 ${RAPPEL_LABELS[meta.niveau] || ('RAPPEL ' + (meta.niveau || ''))}</div>
+              <div style="font-size:11px;color:#ffe4e4;flex:1;min-width:90px;">📅 ${fmtDate(r.dateDoc) || '—'}</div>
+              <div style="font-size:12px;font-weight:800;color:#fff;min-width:90px;text-align:right;">${_displayMontant(r.total || 0)} CHF</div>
+              <button class="btn btn-sm" style="background:#fff;color:#b91c1c;font-weight:700;" onclick="editDoc('${r.id}')" title="Rouvrir / modifier ce rappel">✏️</button>
+              <button class="btn btn-sm" style="background:#fff;color:#b91c1c;font-weight:700;" onclick="downloadDocPDF('${r.id}')" title="Télécharger le PDF du rappel">📥 PDF</button>
+              <button class="btn btn-sm" style="background:#7f1d1d;color:#fff;font-weight:700;" onclick="ancDeleteDoc('${r.id}')" title="Supprimer ce rappel">🗑</button>
             </div>`; }).join('')}
           </div>` : '';
         return `<div style="display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
