@@ -2705,9 +2705,15 @@ function _findOrCreateGerance(infos) {
   const existing = clients.find(c => (c.nom || '').toLowerCase() === nom.toLowerCase());
   if (existing) {
     const updates = {};
-    // On NE remplace JAMAIS le contact existant de la gérance : on complète seulement
-    // les champs vides. Le nom du gérant écrit sur le bon reste porté par le BON lui-même.
-    if (!existing.contact && infos.gerant_nom)      updates.contact = infos.gerant_nom;
+    // On NE remplace JAMAIS le contact existant : on AJOUTE le gérant du bon comme
+    // contact supplémentaire s'il n'y figure pas déjà (plusieurs gérants par gérance).
+    if (infos.gerant_nom) {
+      const g = String(infos.gerant_nom).trim();
+      const cur = String(existing.contact || '');
+      const curNames = cur.replace(/\[ROLE:[^\]]*\]/g, '').toLowerCase();
+      if (!cur) updates.contact = g;
+      else if (g && curNames.indexOf(g.toLowerCase()) === -1) updates.contact = cur + ' · ' + g;
+    }
     if (!existing.tel     && infos.gerant_tel)      updates.tel     = infos.gerant_tel;
     if (!existing.email   && infos.gerant_email)    updates.email   = infos.gerant_email;
     if (!existing.adresse && infos.gerance_adresse) updates.adresse = infos.gerance_adresse;
