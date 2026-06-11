@@ -7271,7 +7271,8 @@ function ancShowForm(infos) {
         <label class="form-label">Statut de la facture</label>
         <select class="form-input" id="anc-statut" style="font-size:13px;max-width:220px;">
           <option value="payee">Payée</option>
-          <option value="envoyee">Envoyée (non payée)</option>
+          <option value="envoyee">Facture envoyée</option>
+          <option value="impayee">Pas payée</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;">
