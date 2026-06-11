@@ -7349,7 +7349,7 @@ function renderAnciennesList() {
             <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#1a2744'};background:${paye ? '#dcfce7' : '#1a2744'};color:${paye ? '#166534' : '#ffffff'};cursor:pointer;">
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
               <option value="envoyee" ${!paye ? 'selected' : ''}>📨 Facture envoyée</option>
-            </select>${(!paye && _ancEnvoiDate(d)) ? `<span title="Date d'envoi de la facture" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(_ancEnvoiDate(d))}</span>` : ''}
+            </select>${!paye ? (() => { const ed = _ancEnvoiDate(d) || d.dateDoc; return ed ? `<span title="Date d'envoi de la facture (mise à jour quand tu re-sélectionnes « Facture envoyée »)" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(ed)}</span>` : ''; })() : ''}
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
               const dl = _rappelDeadlineInfo(d);
