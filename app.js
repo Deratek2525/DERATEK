@@ -7294,10 +7294,12 @@ function renderAnciennesList() {
         const bonNo = (notes.match(/Bon n°\s*([^·\n]+)/) || [])[1];
         const devNo = (notes.match(/Devis n°\s*([^·\n]+)/) || [])[1];
         const refs = [bonNo ? '📄 Bon ' + bonNo.trim() : '', devNo ? '📝 Devis ' + devNo.trim() : ''].filter(Boolean).join(' · ');
-        // Rappels sauvegardés rattachés à cette facture (listés sous la facture)
+        // Rappels sauvegardés rattachés à cette facture (listés sous la facture, repliables)
         const rappels = (DB.documents || []).filter(x => _isRappelDoc(x) && (_rappelMeta(x) || {}).srcId === d.id)
           .sort((a, b) => ((_rappelMeta(a) || {}).niveau || 0) - ((_rappelMeta(b) || {}).niveau || 0));
-        const rappelsHtml = rappels.length ? `<div style="margin:2px 0 0 22px;display:flex;flex-direction:column;gap:4px;">
+        state.ancRappelsOpen = state.ancRappelsOpen || {};
+        const rapOpen = !!state.ancRappelsOpen[d.id];
+        const rappelsHtml = (rappels.length && rapOpen) ? `<div style="margin:2px 0 0 22px;display:flex;flex-direction:column;gap:4px;">
             ${rappels.map(r => { const meta = _rappelMeta(r) || {}; return `<div style="display:flex;align-items:center;gap:10px;background:#dc2626;border:1px solid #dc2626;border-radius:7px;padding:6px 11px;flex-wrap:wrap;">
               <div style="font-size:11px;font-weight:800;color:#fff;min-width:130px;">📄 ${RAPPEL_LABELS[meta.niveau] || ('RAPPEL ' + (meta.niveau || ''))}</div>
               <div style="font-size:11px;color:#ffe4e4;flex:1;min-width:90px;">📅 ${fmtDate(r.dateDoc) || '—'}</div>
@@ -7334,6 +7336,7 @@ function renderAnciennesList() {
                 <option value="3">3e rappel (mise en demeure)</option>
               </select>${niv ? `<span style="font-size:10px;font-weight:800;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:2px 8px;">rappel ${niv} fait</span>` : ''}`;
             })() : ''}
+            ${rappels.length ? `<button onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels" style="font-size:11px;font-weight:800;padding:5px 9px;border-radius:6px;border:1.5px solid #dc2626;background:${rapOpen ? '#dc2626' : '#fff'};color:${rapOpen ? '#fff' : '#b91c1c'};cursor:pointer;">📄 ${rappels.length} rappel${rappels.length > 1 ? 's' : ''} ${rapOpen ? '▴' : '▾'}</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
             ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
             <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
@@ -7345,6 +7348,11 @@ function renderAnciennesList() {
     </div>`;
 }
 function ancSetFilter(v) { state.ancFilter = v || 'tous'; renderAnciennesList(); }
+function ancToggleRappels(id) {
+  state.ancRappelsOpen = state.ancRappelsOpen || {};
+  state.ancRappelsOpen[id] = !state.ancRappelsOpen[id];
+  renderAnciennesList();
+}
 function ancSetStatut(id, value) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
   d.statut = value; DB.documents = docs;
