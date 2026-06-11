@@ -7309,9 +7309,9 @@ function renderAnciennesList() {
           </div>
           <div style="min-width:100px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-            <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#f59e0b'};background:${paye ? '#dcfce7' : '#fef3c7'};color:${paye ? '#166534' : '#92400e'};cursor:pointer;">
+            <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#1a2744'};background:${paye ? '#dcfce7' : '#1a2744'};color:${paye ? '#166534' : '#ffffff'};cursor:pointer;">
               <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
-              <option value="envoyee" ${!paye ? 'selected' : ''}>⏳ Non payée</option>
+              <option value="envoyee" ${!paye ? 'selected' : ''}>📨 Facture envoyée</option>
             </select>
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
