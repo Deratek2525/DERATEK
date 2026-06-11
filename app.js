@@ -3735,6 +3735,7 @@ function updateNavCounts() {
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
   const nFact  = docs.filter(d => d.type === 'facture' && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d) && !_isAncienneFacture(d)).length;
+  const nAnc   = docs.filter(d => _isAncienneFacture(d) && d.statut !== 'payee').length;   // anciennes factures à encaisser
   const nRapports = (DB.rapports || []).filter(r => !_isRapportFactArchived(r)).length;
   const nFactArchive = _factArchiveSets().length;
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
@@ -3743,6 +3744,7 @@ function updateNavCounts() {
   set('nb-bons-termines-count', nT);
   set('nb-devis-count', nDevis);
   set('nb-factures-count', nFact);
+  set('nb-anciennes-count', nAnc);
   set('nb-fact-archive-count', nFactArchive);
   set('nb-rapports-count', nRapports);
   set('nb-clients-count', (DB.clients || []).length);
