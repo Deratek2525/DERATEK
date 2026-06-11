@@ -7334,9 +7334,8 @@ function renderAnciennesList() {
                 <option value="1">1er rappel</option>
                 <option value="2">2e rappel (+60 CHF)</option>
                 <option value="3">3e rappel (mise en demeure)</option>
-              </select>${niv ? `<span style="font-size:10px;font-weight:800;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:2px 8px;">rappel ${niv} fait</span>` : ''}`;
+              </select>${niv ? `<span onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels enregistrés" style="font-size:10px;font-weight:800;color:${rapOpen ? '#fff' : '#b91c1c'};background:${rapOpen ? '#dc2626' : '#fee2e2'};border-radius:10px;padding:2px 8px;cursor:pointer;">rappel ${niv} fait ${rapOpen ? '▴' : '▾'}</span>` : ''}`;
             })() : ''}
-            ${rappels.length ? `<button onclick="ancToggleRappels('${d.id}')" title="Afficher / masquer les rappels" style="font-size:11px;font-weight:800;padding:5px 9px;border-radius:6px;border:1.5px solid #dc2626;background:${rapOpen ? '#dc2626' : '#fff'};color:${rapOpen ? '#fff' : '#b91c1c'};cursor:pointer;">📄 ${rappels.length} rappel${rappels.length > 1 ? 's' : ''} ${rapOpen ? '▴' : '▾'}</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="ancAddClientFromDoc('${d.id}')" title="Enregistrer le destinataire dans les fiches clients">👥 + Client</button>
             ${d.locataireNom ? `<button class="btn btn-ghost btn-sm" onclick="ancAddLocataireFromDoc('${d.id}')" title="Enregistrer le locataire dans les fiches locataires">🏠 + Locataire</button>` : ''}
             <button class="btn btn-navy btn-sm" onclick="editDoc('${d.id}')" title="Modifier cette facture (pour la renvoyer)">✏️ Modifier</button>
