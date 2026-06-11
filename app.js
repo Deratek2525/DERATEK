@@ -6143,7 +6143,7 @@ function downloadDocPDF(id, mode) {
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
   doc.setFontSize(11);
-  let dy = 55;   // adresse du destinataire abaissée de 5 mm (alignement fenêtre enveloppe)
+  let dy = 59;   // adresse du destinataire alignée sur la ligne « N° TVA » (titleY 50 + 9)
   const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
