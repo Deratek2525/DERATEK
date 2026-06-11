@@ -306,7 +306,7 @@ function generatePDF(rapport, statut) {
     // Case Client = nom de la gérance + SON adresse (l'adresse de la gérance, pas celle d'intervention)
     const clientBloc = (rapport.clientNom || '') + (rapport.clientAdresse ? '\n' + rapport.clientAdresse : '');
     const infoPairs = [
-      { key: 'Technicien',            val: rapport.tech },
+      { key: 'Technicien',            val: rapport.tech + ((typeof _techTitreOf === 'function' && _techTitreOf(rapport.tech)) ? ' — ' + _techTitreOf(rapport.tech) : '') },
       { key: 'Client',                val: clientBloc },
       { key: 'N° Bon de commande',    val: rapport.bonCommande },
       { key: "Adresse d'intervention", val: interAdr },

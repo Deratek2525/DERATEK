@@ -1309,7 +1309,13 @@ function confirmDeleteRapport(id) {
 // RAPPORT EDITOR
 // ============================================================
 function populateTechSelect(sel, selected) {
-  sel.innerHTML = DB.techs.map(t => `<option value="${t}"${t === selected ? ' selected' : ''}>${t}</option>`).join('');
+  if (!sel) return;
+  const selNom = _techNom(selected);
+  sel.innerHTML = DB.techs.map(t => {
+    const nom = _techNom(t), titre = _techTitre(t);
+    const label = titre ? `${nom} — ${titre}` : nom;
+    return `<option value="${nom.replace(/"/g, '&quot;')}"${nom === selNom ? ' selected' : ''}>${label}</option>`;
+  }).join('');
 }
 function populateClientSelectRapport(selectedId) {
   $('r-client').innerHTML = '<option value="">-- Sélectionner un client --</option>' +
@@ -2077,15 +2083,35 @@ function printRapport() {
 // ============================================================
 // TECHNICIENS
 // ============================================================
+// --- Titres des techniciens (stockés dans le nom via marqueur [TITRE:…]) ---
+const TECH_TITRES = ['Technicien', 'Responsable', "Chef d'équipe", 'Manager', 'Gérant', 'Directeur'];
+function _techNom(t)   { return String(t || '').replace(/\s*\[TITRE:[^\]]*\]/, '').trim(); }
+function _techTitre(t) { const m = String(t || '').match(/\[TITRE:([^\]]*)\]/); return m ? m[1] : ''; }
+function _composeTech(nom, titre) { const n = String(nom || '').trim(); return (titre && titre.trim()) ? n + '[TITRE:' + titre.trim() + ']' : n; }
+// Titre d'un technicien à partir de son nom (recherche dans DB.techs)
+function _techTitreOf(name) { const n = _techNom(name).toLowerCase(); const t = (DB.techs || []).find(x => _techNom(x).toLowerCase() === n); return t ? _techTitre(t) : ''; }
+function setTechTitre(i, titre) {
+  const list = DB.techs; if (!list[i]) return;
+  list[i] = _composeTech(_techNom(list[i]), titre);
+  DB.techs = list;
+  renderTechList();
+  if ($('r-tech')) populateTechSelect($('r-tech'), $('r-tech').value);
+  if (typeof updatePDF === 'function') updatePDF();
+}
 function renderTechList() {
   const el = $('tech-list'); if (!el) return;
   const techs = DB.techs;
-  el.innerHTML = techs.length ? techs.map((t,i) => `
+  el.innerHTML = techs.length ? techs.map((t,i) => {
+    const nom = _techNom(t), titre = _techTitre(t);
+    const opts = '<option value="">— Titre —</option>' + TECH_TITRES.map(x => `<option value="${x}" ${x === titre ? 'selected' : ''}>${x}</option>`).join('');
+    return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--g50);border-radius:7px;margin-bottom:6px;">
-      <div class="av av-sm" style="background:var(--navy);">${initials(t)}</div>
-      <span style="flex:1;font-size:13px;font-weight:500;">${t}</span>
+      <div class="av av-sm" style="background:var(--navy);">${initials(nom)}</div>
+      <span style="flex:1;font-size:13px;font-weight:500;">${nom}</span>
+      <select onchange="setTechTitre(${i}, this.value)" title="Titre / fonction" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid #d1d5db;background:#fff;">${opts}</select>
       <button class="btn btn-ghost btn-xs" data-idx="${i}" onclick="deleteTech(this)">🗑</button>
-    </div>`).join('')
+    </div>`;
+  }).join('')
   : '<div style="color:var(--g400);font-size:12px;">Aucun technicien.</div>';
 }
 function openTechModal() { renderTechList(); openModal('modal-tech'); }
@@ -2093,16 +2119,16 @@ function addTech() {
   const inp = $('tech-new-name'); const name = inp.value.trim();
   if (!name) { toast('Saisissez un nom', '#e63946'); return; }
   const list = DB.techs;
-  if (list.includes(name)) { toast('Existe déjà', '#f4a623'); return; }
+  if (list.some(x => _techNom(x).toLowerCase() === name.toLowerCase())) { toast('Existe déjà', '#f4a623'); return; }
   list.push(name); DB.techs = list; inp.value = '';
   renderTechList();
-  populateTechSelect($('r-tech'), $('r-tech').value);
+  if ($('r-tech')) populateTechSelect($('r-tech'), $('r-tech').value);
   toast('Technicien ajouté ✓', '#2d9e6b');
 }
 function deleteTech(el) {
   const list = DB.techs; list.splice(parseInt(el.dataset.idx), 1); DB.techs = list;
   renderTechList();
-  populateTechSelect($('r-tech'), $('r-tech').value);
+  if ($('r-tech')) populateTechSelect($('r-tech'), $('r-tech').value);
   toast('Technicien supprimé', '#e63946');
 }
 
