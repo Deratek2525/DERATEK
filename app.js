@@ -6223,8 +6223,9 @@ function downloadDocPDF(id, mode) {
   // dans la fenêtre à côté de l'adresse du destinataire. On impose donc un plancher.
   const ENV_WINDOW_SAFE_Y = 103;   // mm — remonté de 1 cm à la demande
   const startY = Math.max(infoY + 3, dy + 5, ENV_WINDOW_SAFE_Y);
-  // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
-  const totalsH = (d.rabais || 0) > 0 ? 24 : 20;
+  // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse.
+  // Rappel : un seul total. Facture : ~23 mm (sans rabais) / ~28 mm (avec rabais).
+  const totalsH = d._rappel ? 14 : ((d.rabais || 0) > 0 ? 28 : 24);
   const lignes = d.lignes || [];
 
   // Géométrie du bulletin QR suisse : bande de 105 mm ancrée en bas d'une page.
@@ -6242,10 +6243,18 @@ function downloadDocPDF(id, mode) {
   // totaux, qui gardent un espacement normal), juste ce qu'il faut pour tenir sur UNE page. ---
   let _K = 1;
   if (isFacture) {
-    let needRows = 8.5;  // hauteur de l'en-tête du tableau
-    lignes.forEach(l => { needRows += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
-    const availRows = QR_NEED_TOP - startY - totalsH - 6;  // place pour les lignes (totaux réservés)
-    if (needRows > availRows && needRows <= availRows * 2.4) _K = Math.max(0.62, (availRows - 2) / needRows);
+    // Hauteur cumulée des RANGÉES seules (l'en-tête du tableau, 8.5 mm, n'est pas comprimé).
+    let rowsRaw = 0;
+    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
+    const headerH = 8.5;
+    // Place réellement disponible pour les rangées avant le bulletin QR (totaux réservés).
+    const availForRows = QR_NEED_TOP - startY - headerH - totalsH - 1;
+    // On comprime UNIQUEMENT ce qu'il faut pour garder le QR sur la page 1 dès qu'il
+    // y a la place. Si même comprimé au maximum ça ne tient pas → vraie 2e page.
+    if (rowsRaw > availForRows) {
+      const k = availForRows / rowsRaw;
+      if (k >= 0.55) _K = k;
+    }
   }
   LINE *= _K; PAD *= _K;
 
