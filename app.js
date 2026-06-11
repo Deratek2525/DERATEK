@@ -7346,10 +7346,17 @@ function renderAnciennesList() {
           </div>
           <div style="min-width:100px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-            <select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${paye ? '#22c55e' : '#1a2744'};background:${paye ? '#dcfce7' : '#1a2744'};color:${paye ? '#166534' : '#ffffff'};cursor:pointer;">
-              <option value="payee" ${paye ? 'selected' : ''}>✅ Payée</option>
-              <option value="envoyee" ${!paye ? 'selected' : ''}>📨 Facture envoyée</option>
-            </select>${!paye ? (() => { const ed = _ancEnvoiDate(d) || d.dateDoc; return ed ? `<span title="Date d'envoi de la facture (mise à jour quand tu re-sélectionnes « Facture envoyée »)" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(ed)}</span>` : ''; })() : ''}
+            ${(() => {
+              const stt = d.statut === 'payee' ? 'payee' : d.statut === 'impayee' ? 'impayee' : 'envoyee';
+              const bg = stt === 'payee' ? '#dcfce7' : stt === 'impayee' ? '#fef3c7' : '#1a2744';
+              const bd = stt === 'payee' ? '#22c55e' : stt === 'impayee' ? '#f59e0b' : '#1a2744';
+              const cl = stt === 'payee' ? '#166534' : stt === 'impayee' ? '#92400e' : '#ffffff';
+              return `<select onchange="ancSetStatut('${d.id}', this.value)" style="font-size:11px;font-weight:700;padding:5px 7px;border-radius:6px;border:1.5px solid ${bd};background:${bg};color:${cl};cursor:pointer;">
+                <option value="payee" ${stt === 'payee' ? 'selected' : ''}>✅ Payée</option>
+                <option value="envoyee" ${stt === 'envoyee' ? 'selected' : ''}>📨 Facture envoyée</option>
+                <option value="impayee" ${stt === 'impayee' ? 'selected' : ''}>⏳ Pas payée</option>
+              </select>${stt === 'envoyee' ? (() => { const ed = _ancEnvoiDate(d) || d.dateDoc; return ed ? `<span title="Date d'envoi de la facture (mise à jour quand tu re-sélectionnes « Facture envoyée »)" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(ed)}</span>` : ''; })() : ''}`;
+            })()}
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
               const dl = _rappelDeadlineInfo(d);
@@ -7392,7 +7399,10 @@ function ancSetStatut(id, value) {
   if (value === 'envoyee') _setAncEnvoiDate(d, today());
   DB.documents = docs;
   renderAnciennesList();
-  toast(value === 'payee' ? '✅ Marquée payée' : '📨 Marquée envoyée le ' + (fmtDate(today()) || ''), '#2d9e6b');
+  const msg = value === 'payee' ? '✅ Marquée payée'
+            : value === 'impayee' ? '⏳ Marquée pas payée'
+            : '📨 Marquée envoyée le ' + (fmtDate(today()) || '');
+  toast(msg, '#2d9e6b');
 }
 function ancDeleteDoc(id) {
   const d = (DB.documents || []).find(x => x.id === id); if (!d) return;
