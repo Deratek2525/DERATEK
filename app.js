@@ -6218,8 +6218,11 @@ function downloadDocPDF(id, mode) {
     return y + 8.5;
   };
 
-  // La table démarre sous le bloc infos (qui est déjà sous l'adresse).
-  const startY = Math.max(infoY + 3, dy + 5);
+  // La table démarre sous le bloc infos (qui est déjà sous l'adresse) ET, surtout,
+  // SOUS la fenêtre de l'enveloppe C5 : sinon le ruban bleu « Désignation » apparaît
+  // dans la fenêtre à côté de l'adresse du destinataire. On impose donc un plancher.
+  const ENV_WINDOW_SAFE_Y = 105;   // mm — bord bas d'une fenêtre d'enveloppe C5 standard
+  const startY = Math.max(infoY + 3, dy + 5, ENV_WINDOW_SAFE_Y);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse
   const totalsH = (d.rabais || 0) > 0 ? 24 : 20;
   const lignes = d.lignes || [];
