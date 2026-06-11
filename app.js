@@ -7351,18 +7351,18 @@ function renderAnciennesList() {
             </div>`; }).join('')}
           </div>` : '';
         return `<div style="display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
-          <div style="min-width:130px;">
+          <div style="width:130px;flex-shrink:0;">
             <div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div>
             <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc) || '—'}</div>
             ${refs ? `<div style="font-size:10px;color:var(--g400);">${refs}</div>` : ''}
           </div>
-          <div style="flex:1.6;min-width:190px;">
+          <div style="flex:0 0 320px;max-width:320px;min-width:0;">
             <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">🏢 Destinataire</div>
             <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom || '—'}</div>
             ${d.proprietaire ? `<div style="font-size:11px;color:var(--g600);">👤 Propriétaire : ${d.proprietaire}</div>` : ''}
             ${d.locataireNom ? `<div style="font-size:11px;color:var(--g600);">🏠 Locataire : ${d.locataireNom}${d.locataireAdresse ? ' · ' + d.locataireAdresse : ''}</div>` : ''}
           </div>
-          <div style="min-width:100px;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
+          <div style="width:110px;flex-shrink:0;text-align:right;"><div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(d.total || 0)} CHF</div></div>
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
             ${(() => {
               const stt = d.statut === 'payee' ? 'payee' : d.statut === 'impayee' ? 'impayee' : 'envoyee';
