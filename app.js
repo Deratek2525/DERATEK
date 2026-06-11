@@ -7293,12 +7293,19 @@ function renderAnciennesList() {
   const totalPaye = paidList.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const totalNonPaye = shown.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const nNonPay = shown.length;
+  // Détail par statut : envoyées vs pas payées
+  const envoyees = shown.filter(d => (d.statut || 'envoyee') !== 'impayee');
+  const pasPayees = shown.filter(d => d.statut === 'impayee');
+  const nEnv = envoyees.length, sEnv = envoyees.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  const nImp = pasPayees.length, sImp = pasPayees.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   box.innerHTML = `
     <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
       <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures à encaisser (${nNonPay}) · ${_displayMontant(totalNonPaye)} CHF</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#1a2744;font-weight:800;">📨 Factures envoyées</span> : <b>${nEnv}</b> · ${_displayMontant(sEnv)} CHF</div>
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#9a3412;font-weight:800;">⏳ Pas payées</span> : <b>${nImp}</b> · ${_displayMontant(sImp)} CHF</div>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">Total à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
         <div onclick="showScreen('fact-archive')" title="Voir les factures payées dans « Facturation archivée »" style="cursor:pointer;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé → Facturation archivée</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span> ↗</div>
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">⏳ Reste à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
       </div>
     </div>
     ${!shown.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">🎉 Toutes les anciennes factures sont payées et classées dans « Facturation archivée ».</div>` : ''}
