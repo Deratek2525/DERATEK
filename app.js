@@ -303,7 +303,15 @@ const fmtDate = d => { if (!d) return '—'; try { const [y,m,dd] = d.split('-')
 // Date locale au format YYYY-MM-DD (évite le décalage de fuseau de toISOString)
 const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today = () => localDateStr(new Date());
-const genId = () => `R-${new Date().getFullYear()}-${String(DB.rapports.length + 420).padStart(4,'0')}`;
+// Numéro de rapport = plus GRAND numéro existant + 1 (jamais le simple compte, qui
+// provoquait des collisions/écrasements après suppression ou avec des brouillons).
+const genId = () => {
+  const year = new Date().getFullYear();
+  const re = new RegExp('^R-' + year + '-(\\d+)$');
+  let max = 420;
+  (DB.rapports || []).forEach(r => { const m = re.exec(String(r && r.id || '')); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return `R-${year}-${String(max + 1).padStart(4, '0')}`;
+};
 const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Association:'#0ea5e9',Entreprise:'#e63946'}[t] || '#6b7280');
 // Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
 const GERANCE_PALETTE = [
