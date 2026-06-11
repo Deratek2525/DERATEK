@@ -4486,9 +4486,9 @@ function _setAncRappel(id, niveau) {
 function _factNorm(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
 // Une facture (non importée Excel) payée et rattachée à un bon
 function _isFactureFactArchived(d) {
-  // Toute facture PAYÉE (sauf anciennes factures importées) part dans « Facturation archivée »,
-  // qu'elle soit liée à un bon ou non.
-  return !!(d && d.type === 'facture' && (d.statut || '') === 'payee' && !_docIsArchive(d));
+  // Toute facture PAYÉE part dans « Facturation archivée », qu'elle soit liée à un bon
+  // ou non, ET y compris les anciennes factures importées. (Jamais les documents de rappel.)
+  return !!(d && d.type === 'facture' && (d.statut || '') === 'payee' && !_isRappelDoc(d));
 }
 // Un bon est archivé s'il a une facture payée liée OU si un de ses rapports a été
 // envoyé manuellement dans « Facturation archivée » (avant même la facture).
@@ -5446,7 +5446,7 @@ function renderDocuments() {
     const sumS = st => byS(st).reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
     // Les factures PAYÉES ne sont plus dans la liste (elles sont dans « Facturation archivée »).
     // On les recompte directement depuis toutes les factures pour le total encaissé.
-    const paidAll = (DB.documents || []).filter(x => x.type === 'facture' && (x.statut || '') === 'payee' && !_docIsArchive(x));
+    const paidAll = (DB.documents || []).filter(_isFactureFactArchived);
     const tBrouillon = sumS('brouillon'), tEnvoyee = sumS('envoyee'), tPayee = paidAll.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
     const chip = (val, label, n, col) => {
       const on = (sf === val);
@@ -7284,32 +7284,24 @@ function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
 // Liste des anciennes factures importées, conservée dans l'onglet (payée / non payée)
 function renderAnciennesList() {
   const box = $('anc-list'); if (!box) return;
-  const list = (DB.documents || []).filter(d => _docIsArchive(d) && (d.type || 'facture') === 'facture')
-    .slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
-  if (!list.length) { box.innerHTML = ''; return; }
-  const nPay = list.filter(d => d.statut === 'payee').length;
-  const totalTTC = list.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
-  const totalPaye = list.filter(d => d.statut === 'payee').reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
-  const totalNonPaye = totalTTC - totalPaye;
-  const nNonPay = list.length - nPay;
-  const sf = state.ancFilter || 'tous';
-  const shown = sf === 'impayees' ? list.filter(d => d.statut !== 'payee')
-              : sf === 'payees'   ? list.filter(d => d.statut === 'payee')
-              : list;
-  const fchip = (v, label, n, col) => `<button onclick="ancSetFilter('${v}')" style="font-size:12px;font-weight:700;padding:5px 11px;border-radius:18px;cursor:pointer;border:1.5px solid ${sf===v?col:'#d1d5db'};background:${sf===v?col:'#fff'};color:${sf===v?'#fff':'#374151'};">${label} (${n})</button>`;
+  const all = (DB.documents || []).filter(d => _docIsArchive(d) && (d.type || 'facture') === 'facture');
+  if (!all.length) { box.innerHTML = ''; return; }
+  // Les payées sont parties dans « Facturation archivée » → ici on n'affiche que les NON payées.
+  const paidList = all.filter(d => d.statut === 'payee');
+  const shown = all.filter(d => d.statut !== 'payee').slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  const nPay = paidList.length;
+  const totalPaye = paidList.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  const totalNonPaye = shown.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  const nNonPay = shown.length;
   box.innerHTML = `
     <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
-      <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures enregistrées (${list.length}) · total ${_displayMontant(totalTTC)} CHF</div>
+      <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures à encaisser (${nNonPay}) · ${_displayMontant(totalNonPaye)} CHF</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé (payées)</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span></div>
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">⏳ Reste à encaisser (non payées)</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${fchip('tous', 'Toutes', list.length, '#0d1b3e')}
-        ${fchip('impayees', '⏳ Impayées', nNonPay, '#b45309')}
-        ${fchip('payees', '✅ Payées', nPay, '#16a34a')}
+        <div onclick="showScreen('fact-archive')" title="Voir les factures payées dans « Facturation archivée »" style="cursor:pointer;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé → Facturation archivée</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span> ↗</div>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">⏳ Reste à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
       </div>
     </div>
+    ${!shown.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">🎉 Toutes les anciennes factures sont payées et classées dans « Facturation archivée ».</div>` : ''}
     <div style="display:flex;flex-direction:column;gap:6px;">
       ${shown.map(d => {
         const paye = d.statut === 'payee';
@@ -7399,7 +7391,9 @@ function ancSetStatut(id, value) {
   if (value === 'envoyee') _setAncEnvoiDate(d, today());
   DB.documents = docs;
   renderAnciennesList();
-  const msg = value === 'payee' ? '✅ Marquée payée'
+  if (typeof renderFactArchive === 'function') renderFactArchive();
+  if (typeof updateNavCounts === 'function') updateNavCounts();
+  const msg = value === 'payee' ? '✅ Payée → classée dans Facturation archivée'
             : value === 'impayee' ? '⏳ Marquée pas payée'
             : '📨 Marquée envoyée le ' + (fmtDate(today()) || '');
   toast(msg, '#2d9e6b');
