@@ -1430,8 +1430,22 @@ function onClientChange() {
     $('r-contact').value = _rapContactNom(c.contact) || '';
     const role = _rapContactRole(c.contact);
     if ($('r-contact-role')) $('r-contact-role').value = role || 'Gérant';
-    // NB : on ne remplit PAS l'adresse d'intervention avec l'adresse de la gérance
-    // (ce champ correspond au lieu d'intervention = locataire / immeuble).
+    // --- Adresse d'intervention ---
+    // Particulier / Entreprise : l'intervention a lieu CHEZ le client → on pré-remplit
+    //   l'adresse d'intervention avec SA propre adresse.
+    // Gérance (et autres) : l'adresse d'intervention est celle du locataire / immeuble (du bon),
+    //   PAS celle du client → on VIDE le champ pour ne jamais afficher l'adresse d'un autre client.
+    const estSite = (c.type === 'Particulier' || c.type === 'Entreprise');
+    if (estSite && (c.adresse || c.npa || c.ville)) {
+      if ($('r-adresse')) $('r-adresse').value = (c.adresse || '').trim();
+      if ($('r-npa'))     $('r-npa').value     = (c.npa || '').trim();
+      if ($('r-ville'))   $('r-ville').value   = (c.ville || '').trim();
+      if ($('r-avec-adresse')) $('r-avec-adresse').checked = true;
+    } else {
+      ['r-adresse', 'r-npa', 'r-ville'].forEach(fid => { const e = $(fid); if (e) e.value = ''; });
+      if ($('r-avec-adresse')) $('r-avec-adresse').checked = false;
+    }
+    if (typeof toggleAdresse === 'function') toggleAdresse();
   }
   updatePDF();
 }
