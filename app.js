@@ -7363,7 +7363,7 @@ function renderAnciennesList() {
               let dlChip = '';
               if (dl) {
                 if (dl.daysLeft > 0) {
-                  dlChip = `<span title="Échéance du délai de 10 jours (${fmtDate(dl.deadline.toISOString().slice(0,10))})" style="font-size:10px;font-weight:800;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:2px 8px;">⏳ J-${dl.daysLeft}</span>`;
+                  dlChip = `<span title="Échéance du délai de 10 jours (${fmtDate(dl.deadline.toISOString().slice(0,10))})" style="font-size:10px;font-weight:800;color:#422006;background:#facc15;border:1px solid #facc15;border-radius:10px;padding:2px 8px;">⏳ J-${dl.daysLeft}</span>`;
                 } else {
                   const next = dl.niveau < 3 ? ` — passer au ${dl.niveau + 1}e rappel` : '';
                   dlChip = `<span title="Le délai de 10 jours est dépassé" style="font-size:10px;font-weight:800;color:#fff;background:#dc2626;border-radius:10px;padding:2px 8px;">⏱ délai dépassé${next}</span>`;
