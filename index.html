@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260610ra">
+<link rel="stylesheet" href="./style.css?v=20260610rb">
 </head>
 <body>
 
@@ -1331,52 +1331,10 @@
         <iframe id="doc-pdf-preview" title="Aperçu de la facture" style="width:100%;flex:1;min-height:74vh;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;"></iframe>
       </div>
     </div>
-    <div class="modal-ft">
+    <div class="modal-ft" id="modal-doc-ft">
       <button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
       <button class="btn btn-ghost" onclick="saveDocBrouillon()" title="Enregistrer en brouillon pour le finir plus tard (rappel dans Factures)">💾 Brouillon — à finir</button>
       <button class="btn btn-navy" onclick="saveDoc()">✓ Enregistrer</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modale préparation rappel de paiement -->
-<div class="modal-bg" id="modal-rappel">
-  <div class="modal" style="max-width:620px;width:94vw;">
-    <div class="modal-hd">
-      <span class="modal-title" id="rappel-titre">Rappel de paiement</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-rappel')">✕</button>
-    </div>
-    <div class="modal-body" style="max-height:74vh;overflow:auto;">
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
-        <div style="flex:1;min-width:180px;">
-          <label class="form-label" style="font-weight:700;">Niveau de rappel</label>
-          <select id="rappel-niveau" class="form-input" onchange="rappelNiveauChange()" style="width:100%;">
-            <option value="1">1er rappel</option>
-            <option value="2">2e rappel (+60 CHF)</option>
-            <option value="3">3e rappel — mise en demeure</option>
-          </select>
-        </div>
-        <div style="width:160px;">
-          <label class="form-label" style="font-weight:700;">Date du rappel</label>
-          <input type="date" id="rappel-date" class="form-input" style="width:100%;">
-        </div>
-        <div style="width:130px;">
-          <label class="form-label" style="font-weight:700;">Frais (CHF)</label>
-          <input type="number" id="rappel-frais" class="form-input" step="1" min="0" style="width:100%;">
-        </div>
-      </div>
-      <div style="margin-bottom:12px;">
-        <label class="form-label" style="font-weight:700;">Texte du rappel</label>
-        <textarea id="rappel-texte" class="form-input" rows="5" style="width:100%;resize:vertical;"></textarea>
-      </div>
-      <div>
-        <label class="form-label" style="font-weight:700;">Infos complémentaires <span style="font-weight:400;color:#6b7280;">(optionnel — ajoutées sous le texte)</span></label>
-        <textarea id="rappel-infos" class="form-input" rows="3" placeholder="Ex. coordonnées de paiement, référence, contact, arrangement…" style="width:100%;resize:vertical;"></textarea>
-      </div>
-    </div>
-    <div class="modal-ft">
-      <button class="btn btn-ghost" onclick="closeModal('modal-rappel')">Annuler</button>
-      <button class="btn btn-navy" onclick="rappelGenerer()">📄 Générer le PDF</button>
     </div>
   </div>
 </div>
@@ -1388,10 +1346,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260610ra"></script>
-<script src="./footer_prestations.js?v=20260610ra"></script>
-<script src="./config.js?v=20260610ra"></script>
-<script src="./app.js?v=20260610ra"></script>
-<script src="./pdf.js?v=20260610ra"></script>
+<script src="./logo.js?v=20260610rb"></script>
+<script src="./footer_prestations.js?v=20260610rb"></script>
+<script src="./config.js?v=20260610rb"></script>
+<script src="./app.js?v=20260610rb"></script>
+<script src="./pdf.js?v=20260610rb"></script>
 
 </body></html>

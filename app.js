@@ -5008,7 +5008,9 @@ function renderDocEditor() {
   const d = _editingDoc;
   if (!d) return;
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
-  const titre = (d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '');
+  const titre = d._rappel
+    ? ('Rappel — Facture ' + (d.numero || ''))
+    : ((d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || ''));
   const prestaOpts = _docPrestaOptions([d.nuisible, d.nuisible2]);
   const lignesHtml = d.lignes.map((l, i) => `
     <tr>
@@ -5036,8 +5038,27 @@ function renderDocEditor() {
          <div style="font-size:13px;color:#7c2d12;white-space:pre-wrap;">${(d._bonNote).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
        </div>`
     : '';
+  const n = Math.min(3, Math.max(1, parseInt(d._rappelNiveau, 10) || 1));
+  const rappelHtml = d._rappel
+    ? `<div style="background:#fef2f2;border:1.5px solid #dc2626;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+         <div style="font-size:12px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;">📄 Options du rappel de paiement</div>
+         <div class="form-group" style="margin-bottom:10px;max-width:340px;">
+           <label class="form-label" style="font-weight:700;">Niveau de rappel</label>
+           <select class="form-input" onchange="rappelEditSetNiveau(this.value)" style="font-weight:600;">
+             <option value="1" ${n===1?'selected':''}>1er rappel</option>
+             <option value="2" ${n===2?'selected':''}>2e rappel (+60 CHF)</option>
+             <option value="3" ${n===3?'selected':''}>3e rappel — mise en demeure</option>
+           </select>
+         </div>
+         <div class="form-group" style="margin-bottom:0;">
+           <label class="form-label" style="font-weight:700;">Texte du rappel <span style="font-weight:400;color:#6b7280;">— modifiable, ajoute ici tes infos complémentaires</span></label>
+           <textarea class="form-input" rows="6" style="resize:vertical;font-size:13px;" oninput="_editingDoc._rappelTexte=this.value;_docPdfLive()">${(d._rappelTexte||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+         </div>
+       </div>`
+    : '';
   box.innerHTML = `
     ${noteHtml}
+    ${rappelHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div class="form-group" style="grid-column:1 / -1;">
         <label class="form-label">🏢 Bureau émetteur (adresse imprimée sur le document)</label>
@@ -5083,7 +5104,7 @@ function renderDocEditor() {
     <button class="btn btn-ghost btn-sm" onclick="addDocLigne()" style="margin-top:8px;">+ Ajouter une ligne</button>
     <div id="doc-summary" style="margin-top:14px;margin-left:auto;width:280px;font-size:13px;">${_docSummaryHtml(t, d)}</div>
     <div class="form-group" style="margin-top:10px;"><label class="form-label">Notes / conditions</label><textarea class="form-input" rows="2" oninput="_editingDoc.notes=this.value">${d.notes||''}</textarea></div>
-    ${d.type === 'facture' ? `
+    ${(d.type === 'facture' && !d._rappel) ? `
       <div style="margin-top:14px;border-top:1px dashed #ccc;padding-top:12px;">
         <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🇨🇭 Aperçu QR-facture</div>
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
@@ -5101,8 +5122,18 @@ function renderDocEditor() {
     ` : ''}
   `;
   const title = $('modal-doc-title'); if (title) title.textContent = titre;
+  // Boutons du pied de page : mode rappel → bouton « Générer le PDF du rappel »
+  const ft = $('modal-doc-ft');
+  if (ft) {
+    ft.innerHTML = d._rappel
+      ? `<button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
+         <button class="btn btn-navy" onclick="rappelGenererDepuisEditeur()">📄 Générer le PDF du rappel</button>`
+      : `<button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
+         <button class="btn btn-ghost" onclick="saveDocBrouillon()" title="Enregistrer en brouillon pour le finir plus tard (rappel dans Factures)">💾 Brouillon — à finir</button>
+         <button class="btn btn-navy" onclick="saveDoc()">✓ Enregistrer</button>`;
+  }
   // Génère l'aperçu QR pour les factures
-  if (d.type === 'facture') {
+  if (d.type === 'facture' && !d._rappel) {
     try {
       const debtor = { nom: d.clientNom, rue: d.clientAdresse, npa: d.clientNpa, ville: d.clientVille };
       const payload = _buildSpcPayload(t.total, 'Facture ' + (d.numero || ''), debtor, _docBureau(d));
@@ -5945,59 +5976,49 @@ const RAPPEL_TEXTES = {
   2: "Malgré notre premier rappel, la facture mentionnée ci-dessous demeure impayée. Nous vous prions de bien vouloir la régler dans un délai de 10 jours. Conformément à nos conditions, des frais de rappel de CHF 60.00 sont désormais ajoutés au montant dû.",
   3: "Malgré nos rappels précédents, la facture mentionnée ci-dessous demeure impayée. Par la présente, nous vous mettons formellement EN DEMEURE de régler le montant total ci-dessous dans un délai de 10 jours. À défaut de paiement dans ce délai, nous engagerons sans autre avis une procédure de recouvrement (poursuite), tous les frais en découlant étant à votre charge.",
 };
-// Ouvre la fenêtre de préparation du rappel (texte + infos modifiables avant génération)
-let _rappelDocId = null;
+// Ouvre la facture en mode RAPPEL dans le grand éditeur (avec aperçu PDF en direct),
+// pré-rempli avec le niveau choisi. L'utilisateur modifie tout puis génère le PDF.
 function openRappelModal(docId, niveau) {
   const src = (DB.documents || []).find(x => x.id === docId);
   if (!src) { toast('Facture introuvable', '#e63946'); return; }
-  _rappelDocId = docId;
   niveau = Math.min(3, Math.max(1, parseInt(niveau, 10) || 1));
-  if ($('rappel-titre')) $('rappel-titre').textContent = 'Rappel de paiement — Facture ' + (src.numero || '');
-  if ($('rappel-niveau')) $('rappel-niveau').value = String(niveau);
-  if ($('rappel-date')) $('rappel-date').value = today();
-  rappelNiveauChange();   // pré-remplit texte + frais
-  openModal('modal-rappel');
-}
-function rappelNiveauChange() {
-  const n = Math.min(3, Math.max(1, parseInt(($('rappel-niveau') || {}).value, 10) || 1));
-  if ($('rappel-texte')) $('rappel-texte').value = RAPPEL_TEXTES[n];
-  if ($('rappel-frais')) $('rappel-frais').value = (n >= 2 ? 60 : 0);
-}
-// Génère le PDF depuis la fenêtre (avec les ajouts éventuels de l'utilisateur)
-function rappelGenerer() {
-  const niveau = Math.min(3, Math.max(1, parseInt(($('rappel-niveau') || {}).value, 10) || 1));
-  const opts = {
-    texte: ($('rappel-texte') || {}).value || RAPPEL_TEXTES[niveau],
-    infos: ($('rappel-infos') || {}).value || '',
-    frais: parseFloat(($('rappel-frais') || {}).value) || 0,
-    dateR: ($('rappel-date') || {}).value || today(),
-  };
-  generateRappel(_rappelDocId, niveau, opts);
-  closeModal('modal-rappel');
-}
-// Construit et télécharge le PDF de rappel (niveau 1/2/3, avec options éditées)
-function generateRappel(docId, niveau, opts) {
-  opts = opts || {};
-  niveau = Math.min(3, Math.max(1, parseInt(niveau, 10) || 1));
-  const src = (DB.documents || []).find(x => x.id === docId);
-  if (!src) { toast('Facture introuvable', '#e63946'); return; }
   let baseTotal = parseFloat(src.total);
   if (!baseTotal || isNaN(baseTotal)) { try { baseTotal = _calcTotaux(src.lignes || [], src.tvaTaux, src.rabais).total || 0; } catch (e) { baseTotal = 0; } }
-  const frais = (opts.frais != null) ? (parseFloat(opts.frais) || 0) : (niveau >= 2 ? 60 : 0);
-  const texte = (opts.texte && opts.texte.trim()) ? opts.texte : RAPPEL_TEXTES[niveau];
-  const fullTexte = texte + (opts.infos && opts.infos.trim() ? ('\n\n' + opts.infos.trim()) : '');
+  const frais = niveau >= 2 ? 60 : 0;
   const r = JSON.parse(JSON.stringify(src));
   r._rappel = true;
+  r._rappelNiveau = niveau;
+  r._rappelSourceId = docId;
   r._rappelLabel = RAPPEL_LABELS[niveau];
-  r._rappelTexte = fullTexte;
-  r._rappelFactureDate = src.dateDoc;            // date de la facture d'origine (pour le sous-titre)
-  if (opts.dateR) r.dateDoc = opts.dateR;        // date d'émission du rappel (« Neuchâtel, le … »)
+  r._rappelTexte = RAPPEL_TEXTES[niveau];
+  r._rappelFactureDate = src.dateDoc;       // date de la facture d'origine (sous-titre du PDF)
+  r.dateDoc = today();                       // date d'émission du rappel (« Neuchâtel, le … »)
   r.lignes = [{ desc: 'Facture N° ' + (src.numero || '') + (src.dateDoc ? (' du ' + fmtDate(src.dateDoc)) : '') + ' — montant impayé', qte: 1, prix: baseTotal }];
   if (frais) r.lignes.push({ desc: 'Frais de rappel (' + niveau + 'e rappel)', qte: 1, prix: frais });
   r.tvaTaux = 0; r.rabais = 0; r.notes = '';
-  downloadDocPDF(r);
-  _setAncRappel(docId, niveau);   // mémorise le niveau atteint
-  toast('📄 ' + (RAPPEL_LABELS[niveau] || 'Rappel') + ' généré', '#2d9e6b');
+  _editingDoc = r;
+  openDocEditor();
+}
+// Changement de niveau depuis l'éditeur de rappel : met à jour le texte légal et les frais.
+function rappelEditSetNiveau(v) {
+  if (!_editingDoc) return;
+  const n = Math.min(3, Math.max(1, parseInt(v, 10) || 1));
+  _editingDoc._rappelNiveau = n;
+  _editingDoc._rappelLabel = RAPPEL_LABELS[n];
+  _editingDoc._rappelTexte = RAPPEL_TEXTES[n];
+  const frais = n >= 2 ? 60 : 0;
+  _editingDoc.lignes = (_editingDoc.lignes || []).filter(l => !/frais de rappel/i.test(l.desc || ''));
+  if (frais) _editingDoc.lignes.push({ desc: 'Frais de rappel (' + n + 'e rappel)', qte: 1, prix: frais });
+  renderDocEditor();
+}
+// Génère et télécharge le PDF du rappel depuis l'éditeur, puis mémorise le niveau atteint.
+function rappelGenererDepuisEditeur() {
+  if (!_editingDoc) return;
+  const niv = _editingDoc._rappelNiveau || 1;
+  downloadDocPDF(_editingDoc);
+  if (_editingDoc._rappelSourceId) _setAncRappel(_editingDoc._rappelSourceId, niv);
+  closeModal('modal-doc');
+  toast('📄 ' + (RAPPEL_LABELS[niv] || 'Rappel') + ' généré', '#2d9e6b');
 }
 
 function downloadDocPDF(id, mode) {
