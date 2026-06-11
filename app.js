@@ -4430,6 +4430,15 @@ function _setAncEnvoiDate(d, iso) {
 // ---- Rappels SAUVEGARDÉS : un rappel généré est stocké comme document de type
 // facture, identifié par des marqueurs dans "notes" (survivent à Supabase). ----
 function _isRappelDoc(d) { return /\[RAPPELDOC:\d\]/.test(String((d && d.notes) || '')); }
+// Une facture créée DANS l'app porte toujours un numéro « F-AAAA-… ». Toute facture
+// dont le numéro NE commence PAS par « F- » (ou marquée [ARCHIVE]) est une ANCIENNE
+// facture importée → sa place est dans l'onglet « Anciennes factures », pas « Factures ».
+function _isAncienneFacture(d) {
+  if (!d || d.type !== 'facture' || _isRappelDoc(d)) return false;
+  if (_docIsArchive(d)) return true;
+  const num = String(d.numero || '').trim();
+  return num !== '' && !/^f-/i.test(num);
+}
 function _rappelMeta(d) {
   const notes = String((d && d.notes) || '');
   const mN = notes.match(/\[RAPPELDOC:(\d)\]/);
@@ -5365,7 +5374,7 @@ function renderDocuments() {
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
   // Exclut les factures payées liées à un bon (parties dans « Facturation archivée »)
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d));
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d) && !_isAncienneFacture(d));
   const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';
@@ -7285,7 +7294,7 @@ function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
 // Liste des anciennes factures importées, conservée dans l'onglet (payée / non payée)
 function renderAnciennesList() {
   const box = $('anc-list'); if (!box) return;
-  const all = (DB.documents || []).filter(d => _docIsArchive(d) && (d.type || 'facture') === 'facture');
+  const all = (DB.documents || []).filter(d => _isAncienneFacture(d));
   if (!all.length) { box.innerHTML = ''; return; }
   // Les payées sont parties dans « Facturation archivée » → ici on n'affiche que les NON payées.
   const paidList = all.filter(d => d.statut === 'payee');
