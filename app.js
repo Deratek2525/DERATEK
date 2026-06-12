@@ -6808,6 +6808,7 @@ function renderDiagEditor() {
         <button class="btn ${_diagTool==='element'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('element')" title="Clique sur une poutre du schéma 3D : elle prend la couleur choisie et tu peux y attacher une annotation">🎯 Élément</button>
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn btn-navy btn-sm" type="button" onclick="openSchemaZoom()" title="Agrandir le schéma pour tracer confortablement (ou double-clic sur le schéma)">🔍 Plein écran</button>
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
         <select class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:5px 8px;" onchange="setDiagSchemaModele(this.value)" title="Choisir le modèle de schéma 3D (remplace le fond et efface les annotations)">
@@ -7617,6 +7618,12 @@ function initDiagSchema() {
     _diagBgDataUrl = c.toDataURL('image/png');
     if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
   }
+  _diagAttachDraw(c, ctx);
+  c.ondblclick = e => { e.preventDefault(); openSchemaZoom(); };
+}
+
+// Gestionnaires de dessin du schéma (partagés entre la vue normale et le plein écran)
+function _diagAttachDraw(c, ctx) {
   const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
   const start = e => {
     const p = pos(e);
@@ -7669,6 +7676,75 @@ function initDiagSchema() {
   };
   c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
   c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
+}
+
+// ---- Schéma en plein écran : grande vue pour tracer confortablement ----
+function openSchemaZoom() {
+  if (!_editingDiag) return;
+  let ov = $('schema-zoom-overlay');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'schema-zoom-overlay'; document.body.appendChild(ov); }
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(13,27,62,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:14px;max-width:1560px;width:100%;max-height:97vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-weight:800;color:var(--navy);font-size:14px;">🔍 ${_diagType(_editingDiag)==='rongeurs' ? 'Plan des locaux' : 'Schéma de la charpente'} — vue agrandie</div>
+        <button class="btn btn-navy btn-sm" type="button" onclick="closeSchemaZoom()">✓ Terminer</button>
+      </div>
+      <canvas id="diag-zoom-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div id="schema-zoom-tools" style="margin-top:8px;"></div>
+    </div>`;
+  _schemaZoomToolbar();
+  const c = $('diag-zoom-canvas');
+  const ctx = c.getContext('2d');
+  if (_editingDiag.schema) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
+    img.src = _editingDiag.schema;
+  } else {
+    if (_diagType(_editingDiag) === 'rongeurs') _drawPlanBase(ctx, c.width, c.height);
+    else _drawSchemaBase(ctx, c.width, c.height);
+    _editingDiag.schema = c.toDataURL('image/png');
+  }
+  _diagAttachDraw(c, ctx);
+}
+function _schemaZoomToolbar() {
+  const box = $('schema-zoom-tools'); if (!box) return;
+  const rg = _editingDiag && _diagType(_editingDiag) === 'rongeurs';
+  const colors = rg ? RONGEUR_COLORS : DIAG_COLORS;
+  box.innerHTML = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
+      ${colors.map(cc => `
+        <button type="button" title="${cc.label}" onclick="schemaZoomSetColor('${cc.hex}')"
+          style="width:24px;height:24px;border-radius:50%;cursor:pointer;background:${cc.hex};border:${_diagColor===cc.hex?'3px solid var(--navy)':'2px solid #e5e7eb'};"></button>`).join('')}
+      <span style="font-size:10px;color:var(--g400);">(${(colors.find(cc=>cc.hex===_diagColor)||{}).label||''})</span>
+      <span style="width:1px;height:20px;background:#e5e7eb;"></span>
+      <button class="btn ${_diagTool==='draw'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="schemaZoomSetTool('draw')">✏️ Dessin</button>
+      <button class="btn ${_diagTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="schemaZoomSetTool('text')">🔤 Texte</button>
+      ${!rg ? `<button class="btn ${_diagTool==='element'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="schemaZoomSetTool('element')">🎯 Élément</button>` : ''}
+      <span style="width:1px;height:20px;background:#e5e7eb;"></span>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="schemaZoomClear()">↺ Effacer les annotations</button>
+      <span style="font-size:11px;color:var(--g400);">Cercles, rectangles et traits sont automatiquement redressés.</span>
+    </div>`;
+}
+function schemaZoomSetColor(hex) { _diagColor = hex; _schemaZoomToolbar(); }
+function schemaZoomSetTool(t) { _diagTool = t; _schemaZoomToolbar(); }
+function schemaZoomClear() {
+  const c = $('diag-zoom-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  if (_diagBgDataUrl) {
+    const img = new Image();
+    img.onload = () => { ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height); if (_editingDiag) { _editingDiag.schema = c.toDataURL('image/png'); refreshDiagPreview(); } };
+    img.src = _diagBgDataUrl;
+  } else {
+    if (_editingDiag && _diagType(_editingDiag) === 'rongeurs') _drawPlanBase(ctx, c.width, c.height);
+    else _drawSchemaBase(ctx, c.width, c.height);
+    if (_editingDiag) { _editingDiag.schema = c.toDataURL('image/png'); refreshDiagPreview(); }
+  }
+}
+function closeSchemaZoom() {
+  const ov = $('schema-zoom-overlay'); if (ov) ov.remove();
+  renderDiagEditor();   // resynchronise la petite vue (canevas + barre d'outils)
 }
 // Importe une photo/image comme fond du schéma
 function loadSchemaImage(ev) {
@@ -8547,6 +8623,7 @@ function renderRongeursEditor() {
         <button class="btn ${_diagTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('text')">🔤 Texte</button>
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn btn-navy btn-sm" type="button" onclick="openSchemaZoom()" title="Agrandir le plan pour tracer confortablement (ou double-clic sur le plan)">🔍 Plein écran</button>
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / plan</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">📐 Plan quadrillé par défaut</button>
