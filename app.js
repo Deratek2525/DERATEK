@@ -7627,7 +7627,21 @@ function _genDiagPDF(d, mode) {
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
-  const yStrip = _diagDatesStrip(doc, d, headerFiletY + 9, M, CW);
+
+  // --- Bandeau titre (juste sous l'en-tête) -----------------------------
+  y = headerFiletY + 9;
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text('Insectes xylophages — bois & charpentes', M+6, y+12.4);
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
+
+  // Informations sur 2 colonnes (style rapport classique, enrichies du bon)
   y = _diagRows2Col(doc, [
     ['Technicien', d.noTech ? '' : d.tech],
     ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
@@ -7643,21 +7657,11 @@ function _genDiagPDF(d, mode) {
     ['Méthode d\'inspection', d.methode],
     ['Zones inspectées', d.zones],
     ['N° intervention', bi.bonNumero],
-  ], Math.max(yStrip, headerFiletY + 11), M, CW);
+  ], y, M, CW);
 
-  // --- Bandeau titre ----------------------------------------------------
-  y += 5;
-  ensure(22);
-  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
-  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
-  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text('Insectes xylophages — bois & charpentes', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
-  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
-  doc.setTextColor(0);
-  y += 21;
+  // Dates d'intervention bien visibles, sous la grille (à la place du ruban)
+  y = _diagDatesStrip(doc, d, y + 5, M, CW);
+  y += 1;
 
   // --- Synthèse : activité / gravité / étendue / humidité --------------
   const synth = [
@@ -8249,7 +8253,21 @@ function _genRongeursPDF(d, mode) {
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
-  const yStrip = _diagDatesStrip(doc, d, headerFiletY + 9, M, CW);
+
+  // Bandeau titre (juste sous l'en-tête)
+  y = headerFiletY + 9;
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text('Dératisation — détection & plan d\'action', M+6, y+12.4);
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
+
+  // Informations sur 2 colonnes (style rapport classique, enrichies du bon)
   y = _diagRows2Col(doc, [
     ['Technicien', d.noTech ? '' : d.tech],
     ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
@@ -8265,21 +8283,11 @@ function _genRongeursPDF(d, mode) {
     ['Zones d\'activité', d.zones],
     ['Points d\'entrée', d.elementsTouches],
     ['N° intervention', bi.bonNumero],
-  ], Math.max(yStrip, headerFiletY + 11), M, CW);
+  ], y, M, CW);
 
-  // Bandeau titre
-  y += 5;
-  ensure(22);
-  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
-  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
-  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text('Dératisation — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
-  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
-  doc.setTextColor(0);
-  y += 21;
+  // Dates d'intervention bien visibles, sous la grille (à la place du ruban)
+  y = _diagDatesStrip(doc, d, y + 5, M, CW);
+  y += 1;
 
   // Synthèse
   const postes = Array.isArray(d.postes) ? d.postes.filter(p => p && (p.emplacement || p.produit)) : [];
