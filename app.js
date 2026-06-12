@@ -6606,9 +6606,10 @@ const _DIAG_MARKERS = {
   rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
+  statut: 'STATUT',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6735,7 +6736,7 @@ function openNewDiagnostic() {
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
     dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
   };
@@ -7406,11 +7407,15 @@ function autoFillDiagFromBon(numero) {
   toast('✓ Rempli depuis le bon ' + bon.numero, '#2d9e6b');
   renderDiagEditor();
 }
-function saveDiag() {
+// statut : '' (inchangé), 'Brouillon' (continuer plus tard) ou 'Finalisé'.
+// keepOpen : enregistre sans fermer la modale.
+function saveDiag(statut, keepOpen) {
   if (!_editingDiag) return;
+  if (statut) _editingDiag.statut = statut;
+  if (!_editingDiag.statut) _editingDiag.statut = 'Brouillon';
   // L'image du schéma et les photos ne sont PAS stockées en base (espace) :
   // le PDF généré tient lieu d'archive. Les champs additionnels (méthode,
-  // zones, traitement, suivi) sont repliés dans la colonne "diagnostic".
+  // zones, traitement, suivi…) sont repliés dans la colonne "diagnostic".
   const toSave = _diagPack(JSON.parse(JSON.stringify(_editingDiag)));
   delete toSave.schema;
   delete toSave.photos;
@@ -7418,9 +7423,11 @@ function saveDiag() {
   const i = list.findIndex(x => x.id === toSave.id);
   if (i >= 0) list[i] = toSave; else list.push(toSave);
   DB.diagnostics = list;
-  toast('✓ Diagnostic enregistré (texte). Pense à télécharger le PDF pour garder le schéma.', '#2d9e6b');
-  closeModal('modal-diag');
   renderDiagnostics();
+  if (keepOpen) { toast('💾 Enregistré — tu peux continuer à travailler.', '#0f766e'); return; }
+  if (_editingDiag.statut === 'Finalisé') toast('✓ ' + (_diagType(_editingDiag)==='rongeurs'?'Rapport rongeurs':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b');
+  else toast('🕒 Enregistré comme brouillon — à reprendre plus tard.', '#d97706');
+  closeModal('modal-diag');
 }
 // Génère le PDF depuis l'éditeur ouvert (avec l'image du schéma en mémoire)
 function downloadCurrentDiagPDF() {
@@ -7440,16 +7447,29 @@ function confirmDeleteDiag(id, label) {
 }
 function renderDiagnostics() {
   const box = $('diagnostics-section'); if (!box) return;
-  const list = (DB.diagnostics || []).slice().sort((a,b)=>(b.dateDoc||'').localeCompare(a.dateDoc||''));
+  const stOf = d => { const m = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/); return m ? _decNote(m[1]) : ''; };
+  const list = (DB.diagnostics || []).slice().sort((a,b) => {
+    const ba = stOf(a)==='Brouillon' ? 0 : 1, bb = stOf(b)==='Brouillon' ? 0 : 1;
+    if (ba !== bb) return ba - bb;            // brouillons à reprendre en tête
+    return (b.dateDoc||'').localeCompare(a.dateDoc||'');
+  });
   if (!list.length) { box.innerHTML = ''; return; }
   box.innerHTML = `
     <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🔬 Diagnostics & rapports spéciaux (${list.length})</div>
     <div style="display:flex;flex-direction:column;gap:6px;">
-      ${list.map(d => { const rg = _diagType(d)==='rongeurs'; const ico = rg?'🐀':'🪵'; return `
+      ${list.map(d => {
+        const rg = _diagType(d)==='rongeurs'; const ico = rg?'🐀':'🪵';
+        const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/);
+        const st = stm ? _decNote(stm[1]) : '';
+        const stChip = st==='Brouillon'
+          ? '<span style="font-size:9.5px;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 7px;">🕒 Brouillon</span>'
+          : (st==='Finalisé' ? '<span style="font-size:9.5px;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:1px 7px;">✓ Finalisé</span>' : '');
+        return `
         <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${rg?'#5f6f81':'#8b4513'};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
           <div style="min-width:130px;">
             <div style="font-size:13px;font-weight:800;color:var(--navy);">${ico} ${d.numero||''}</div>
             <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+            ${stChip ? `<div style="margin-top:2px;">${stChip}</div>` : ''}
           </div>
           <div style="flex:1.4;min-width:150px;">
             <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
@@ -7965,7 +7985,7 @@ function openNewRongeurs() {
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
     traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
     rodenticides: [], actions: [], photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '',
     rodenticideAutre: '', postesNb: '', suiviRem: '',
     contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
     dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''

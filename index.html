@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260611tg">
+<link rel="stylesheet" href="./style.css?v=20260611th">
 </head>
 <body>
 
@@ -1319,7 +1319,9 @@
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('modal-diag')">Annuler</button>
       <button class="btn btn-green" onclick="downloadCurrentDiagPDF()">📥 Télécharger le PDF</button>
-      <button class="btn btn-navy" onclick="saveDiag()">✓ Enregistrer</button>
+      <button class="btn btn-ghost" onclick="saveDiag('', true)" title="Enregistrer sans fermer">💾 Sauvegarder</button>
+      <button class="btn btn-ghost" onclick="saveDiag('Brouillon')" title="Enregistrer comme brouillon et reprendre plus tard">🕒 Continuer plus tard</button>
+      <button class="btn btn-navy" onclick="saveDiag('Finalisé')">✓ Finaliser</button>
     </div>
   </div>
 </div>
@@ -1353,10 +1355,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260611tg"></script>
-<script src="./footer_prestations.js?v=20260611tg"></script>
-<script src="./config.js?v=20260611tg"></script>
-<script src="./app.js?v=20260611tg"></script>
-<script src="./pdf.js?v=20260611tg"></script>
+<script src="./logo.js?v=20260611th"></script>
+<script src="./footer_prestations.js?v=20260611th"></script>
+<script src="./config.js?v=20260611th"></script>
+<script src="./app.js?v=20260611th"></script>
+<script src="./pdf.js?v=20260611th"></script>
 
 </body></html>
