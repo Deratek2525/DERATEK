@@ -6606,10 +6606,10 @@ const _DIAG_MARKERS = {
   rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
-  statut: 'STATUT',
+  statut: 'STATUT', noSign: 'NOSIGN',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6866,13 +6866,48 @@ function renderDiagEditor() {
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
       <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
     </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;${d.noSign?'display:none;':''}">
+      <canvas id="diag-sign-canvas" width="400" height="140" style="width:min(400px,100%);height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSignature()">↺ Effacer</button>
+        <span style="font-size:11px;color:var(--g400);">Signe à la souris ou au doigt — la signature est insérée dans le PDF (non stockée en base).</span>
+      </div>
+    </div>
   `;
   const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
   initDiagSchema();
+  initDiagSignPad();
   renderDiagPhotos();
   box.oninput = () => refreshDiagPreview();
   _syncDiagPreviewPane();
   refreshDiagPreview();
+}
+
+// --- Pavé de signature numérique (en mémoire uniquement, insérée dans le PDF) ---
+function initDiagSignPad() {
+  const c = $('diag-sign-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  if (_editingDiag && _editingDiag.signature) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
+    img.src = _editingDiag.signature;
+  }
+  let drawing = false;
+  const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
+  const start = e => { drawing = true; const p = pos(e); ctx.strokeStyle = '#1a2744'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
+  const move = e => { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
+  const end = () => { if (!drawing) return; drawing = false; if (_editingDiag) { _editingDiag.signature = c.toDataURL('image/png'); refreshDiagPreview(); } };
+  c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
+  c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
+}
+function clearDiagSignature() {
+  const c = $('diag-sign-canvas'); if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  if (_editingDiag) { delete _editingDiag.signature; refreshDiagPreview(); }
 }
 
 // --- Photos de l'inspection (en mémoire uniquement, incluses dans le PDF) ---
@@ -7419,6 +7454,7 @@ function saveDiag(statut, keepOpen) {
   const toSave = _diagPack(JSON.parse(JSON.stringify(_editingDiag)));
   delete toSave.schema;
   delete toSave.photos;
+  delete toSave.signature;
   const list = DB.diagnostics;
   const i = list.findIndex(x => x.id === toSave.id);
   if (i >= 0) list[i] = toSave; else list.push(toSave);
@@ -7829,15 +7865,18 @@ function _genDiagPDF(d, mode) {
   }
 
   // --- Signature -----------------------------------------------------------
-  ensure(26);
-  y += 8;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
-  doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
-  doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
-  doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
-  doc.text('Signature', 120, y+15.5);
-  doc.setTextColor(0);
+  if (!d.noSign) {
+    ensure(32);
+    y += 8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+    doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
+    if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
+    doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+18, 186, y+18);
+    doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('Signature', 120, y+21.5);
+    doc.setTextColor(0);
+  }
 
   // --- Pied de page sur toutes les pages ------------------------------------
   const nb = doc.getNumberOfPages();
@@ -7893,7 +7932,7 @@ function refreshDiagPreview(now) {
 // ============================================================
 // RAPPORT SPÉCIAL RONGEURS (même table "diagnostics", numéros RG-)
 // ============================================================
-const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rats d\'égout', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot', 'Fouine'];
+const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rats d\'égout', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot', 'Fouine', 'Chauves-souris'];
 const RONGEURS_SIGNES = ['Déjections', 'Traces de gras (frottements)', 'Rongements / dégâts matériels', 'Terriers / galeries', 'Bruits (grattements)', 'Odeur d\'urine', 'Empreintes / coulées', 'Denrées entamées', 'Nids'];
 const RONGEURS_MATERIEL = [
   'Postes d\'appâtage sécurisés', 'Poste d\'appâtage sécurisé rats', 'Poste d\'appâtage sécurisé souris',
@@ -7967,6 +8006,13 @@ const RONGEURS_INFO = {
     indices: 'Apparitions près des écoulements, déjections de 17–20 mm, traces de gras autour des regards, bruits dans les colonnes',
     biologie: 'Excellent nageur, remonte les conduites verticales ; colonies importantes dans les réseaux',
     risque: 'Contamination (leptospirose), dégâts aux canalisations ; traitement en collaboration avec un contrôle des réseaux (clapets anti-retour, regards étanches)',
+  },
+  'Chauves-souris': {
+    latin: 'Chiroptera (pipistrelles et autres espèces)',
+    habitat: 'Combles, derrière les volets et bardages, fissures de façade — colonies estivales de mise bas',
+    indices: 'Guano sous les points de sortie (déjections friables qui s\'effritent, paillettes brillantes de restes d\'insectes), traces brunes aux ouvertures, cris au crépuscule',
+    biologie: 'Insectivores nocturnes, très utiles ; hibernation en hiver, colonies de mise bas en été',
+    risque: 'Toutes les espèces sont strictement protégées en Suisse (LPN) : aucun traitement ni capture — cohabitation ou exclusion douce uniquement hors période de reproduction, en accord avec le centre de coordination chauves-souris (CCO)',
   },
   'Fouine': {
     latin: 'Martes foina',
@@ -8187,9 +8233,19 @@ function renderRongeursEditor() {
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
       <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
     </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;${d.noSign?'display:none;':''}">
+      <canvas id="diag-sign-canvas" width="400" height="140" style="width:min(400px,100%);height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSignature()">↺ Effacer</button>
+        <span style="font-size:11px;color:var(--g400);">Signe à la souris ou au doigt — la signature est insérée dans le PDF (non stockée en base).</span>
+      </div>
+    </div>
   `;
   const t = $('modal-diag-title'); if (t) t.textContent = 'Rapport rongeurs ' + (d.numero||'');
   initDiagSchema();
+  initDiagSignPad();
   renderDiagPhotos();
   renderRongeursPostes();
   box.oninput = () => refreshDiagPreview();
@@ -8513,15 +8569,18 @@ function _genRongeursPDF(d, mode) {
   }
 
   // Signature
-  ensure(26);
-  y += 8;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
-  doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
-  doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
-  doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
-  doc.text('Signature', 120, y+15.5);
-  doc.setTextColor(0);
+  if (!d.noSign) {
+    ensure(32);
+    y += 8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+    doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
+    if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
+    doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+18, 186, y+18);
+    doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('Signature', 120, y+21.5);
+    doc.setTextColor(0);
+  }
 
   // Pied de page
   const nb = doc.getNumberOfPages();
