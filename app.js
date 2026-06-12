@@ -6724,13 +6724,22 @@ function renderDiagEditor() {
       </div>
       <div class="form-group"><label class="form-label">Zones inspectées</label><input class="form-input" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Ex. combles, cave, plancher rez"></div>
     </div>
-    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Observations / diagnostic détaillé</label><textarea class="form-input" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea></div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations / diagnostic détaillé</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea>
+    </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Traitement & suivi</div>
-    <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Traitement recommandé</label><textarea class="form-input" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea></div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Traitement recommandé</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea>
+    </div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / garantie</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle après 12 mois, garantie 10 ans"></div>
 
-    <div class="form-group"><label class="form-label">Conclusion / recommandations</label><textarea class="form-input" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea></div>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
+    </div>
   `;
   const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
   initDiagSchema();
@@ -6941,6 +6950,55 @@ function resetToDefaultSchema() {
   _drawSchemaBase(ctx, c.width, c.height);
   _diagBgDataUrl = c.toDataURL('image/png');
   if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
+}
+
+// Corrige un texte libre du diagnostic via Mistral (orthographe + formulation pro)
+const _DIAG_AI_LABELS = {
+  diagnostic: 'les observations du diagnostic',
+  traitement: 'le traitement recommandé',
+  conclusion: 'la conclusion / les recommandations',
+};
+async function diagAICorrect(field) {
+  const ta = $('diag-ta-' + field); if (!ta || !_editingDiag) return;
+  const btn = $('diag-ai-' + field);
+  const txt = (ta.value || '').trim();
+  if (!txt) { toast('✍️ Écris d\'abord quelques mots à corriger.', '#e6aa1e'); return; }
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) {
+    toast('⚠️ Clé Mistral non configurée.', '#e63946'); return;
+  }
+  const oldLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '🤖 Correction…'; }
+  try {
+    const systemPrompt =
+      "Tu es l'assistant d'une entreprise suisse d'antinuisibles (DERATEK). " +
+      "On te donne un texte brut destiné à un rapport de diagnostic d'insectes xylophages (bois/charpentes), " +
+      "plus précisément " + (_DIAG_AI_LABELS[field] || 'une section du rapport') + ". " +
+      "Corrige l'orthographe et la grammaire, et améliore la formulation pour un ton professionnel et factuel. " +
+      "CONSERVE toutes les informations telles quelles : mesures, pourcentages, dimensions, noms d'insectes, produits, prix en CHF, délais. " +
+      "N'invente AUCUNE information absente. Reste concis. " +
+      "Réponds UNIQUEMENT par le texte corrigé (texte simple, sans Markdown, sans préambule ni commentaire).";
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+      body: JSON.stringify({
+        model: DERATEK_CONFIG.mistral.model, max_tokens: 900, temperature: 0,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: txt }]
+      })
+    });
+    if (!response.ok) { let m = 'API ' + response.status; try { const e = await response.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(m); }
+    const data = await response.json();
+    let raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!raw) throw new Error('Réponse IA vide');
+    raw = raw.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
+    ta.value = raw;
+    _editingDiag[field] = raw;
+    toast('✓ Corrigé par l\'IA — relis avant d\'enregistrer.', '#2d9e6b');
+  } catch (err) {
+    console.error('Diag IA error:', err);
+    toast('⚠️ Erreur IA : ' + err.message, '#e63946');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldLabel; }
+  }
 }
 
 function onDiagClientSelect(id) {
