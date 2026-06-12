@@ -6580,9 +6580,9 @@ const INSECTES_BOIS_INFO = {
 // Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
 // repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
 // [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
-const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL' };
-const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL):[^\]]*\]/g;
+const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL', rodenticides: 'RODENT', actions: 'ACTIONS' };
+const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL|RODENT|ACTIONS):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -7469,6 +7469,13 @@ function _genDiagPDF(d) {
 const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot'];
 const RONGEURS_SIGNES = ['Déjections', 'Traces de gras (frottements)', 'Rongements / dégâts matériels', 'Terriers / galeries', 'Bruits (grattements)', 'Odeur d\'urine', 'Empreintes / coulées', 'Denrées entamées', 'Nids'];
 const RONGEURS_MATERIEL = ['Postes d\'appâtage sécurisés', 'Blocs hydrofuges', 'Pâte fraîche', 'Céréales / grains', 'Tapettes mécaniques', 'Postes à souris', 'Piège à capture vive', 'Plaques de glu', 'Grillage / colmatage', 'Caméra / endoscope'];
+const RONGEURS_RODENTICIDES = ['Brodifacoum', 'Bromadiolone', 'Difénacoum', 'Diféthialone', 'Flocoumafen'];
+const RONGEURS_ACTIONS = [
+  'Contrôle des consommations dans les postes d\'appâtage sécurisés',
+  'Remplacement des appâts consommés si nécessaire',
+  'Maintien du dispositif en place à titre préventif',
+  'Retrait des appâts et des dispositifs en fin de traitement',
+];
 const RONGEUR_COLORS = [
   { hex: '#e63946', label: 'Activité confirmée' },
   { hex: '#f4a261', label: 'À surveiller' },
@@ -7527,9 +7534,17 @@ function openNewRongeurs() {
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
-    traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [], photos: []
+    traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
+    rodenticides: [], actions: [], photos: []
   };
   renderDiagEditor(); openModal('modal-diag');
+}
+// Coche/décoche un élément d'une liste du rapport (générique)
+function toggleDiagList(field, nom, checked) {
+  if (!_editingDiag) return;
+  const set = new Set(_editingDiag[field] || []);
+  if (checked) set.add(nom); else set.delete(nom);
+  _editingDiag[field] = [...set];
 }
 function toggleRongeurSigne(nom, checked) {
   if (!_editingDiag) return;
@@ -7585,6 +7600,14 @@ function renderRongeursEditor() {
   const materielHtml = RONGEURS_MATERIEL.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d.materiel||[]).includes(n)?'checked':''} onchange="toggleRongeurMateriel('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const rodentHtml = RONGEURS_RODENTICIDES.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.rodenticides||[]).includes(n)?'checked':''} onchange="toggleDiagList('rodenticides','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const actionsHtml = RONGEURS_ACTIONS.map(n => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.actions||[]).includes(n)?'checked':''} onchange="toggleDiagList('actions','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
     </label>`).join('');
   box.innerHTML = `
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐀 Identification</div>
@@ -7660,6 +7683,12 @@ function renderRongeursEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧰 Matériel utilisé</div>
     <div style="margin-bottom:12px;">${materielHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">☠️ Rodenticide professionnel utilisé (à base de)</div>
+    <div style="margin-bottom:12px;">${rodentHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">✅ Mesures du traitement</div>
+    <div style="margin-bottom:12px;">${actionsHtml}</div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">🪤 Postes d'appâtage / pièges posés</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
@@ -7952,10 +7981,26 @@ function _genRongeursPDF(d) {
 
   // Plan de traitement & suivi
   const materiel = Array.isArray(d.materiel) ? d.materiel : [];
-  if (d.traitement || d.suivi || materiel.length) {
+  const rodenticides = Array.isArray(d.rodenticides) ? d.rodenticides : [];
+  const actions = Array.isArray(d.actions) ? d.actions : [];
+  // Ligne avec une vraie case cochée dessinée (☑)
+  const checkLine = (txt) => {
+    const lines = doc.splitTextToSize(String(txt), CW - 8);
+    ensure(lines.length*4.8 + 2);
+    doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.35);
+    doc.rect(M, y-3, 3.2, 3.2);
+    doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
+    doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.text(lines, M+5.5, y);
+    y += lines.length*4.8 + 1;
+  };
+  if (d.traitement || d.suivi || materiel.length || rodenticides.length || actions.length) {
     y += 2; section('Plan de traitement');
     if (materiel.length) { field('Matériel utilisé', materiel.join(', ')); y += 1; }
+    if (rodenticides.length) { field('Rodenticide', 'Professionnel à base de ' + rodenticides.join(', ')); y += 1; }
     para(d.traitement);
+    if (actions.length) { y += 1.5; actions.forEach(a => checkLine(a)); }
     if (d.suivi) { y += 1.5; field('Suivi / prochain passage', d.suivi); }
   }
 
