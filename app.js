@@ -6805,6 +6805,7 @@ function renderDiagEditor() {
         <span style="width:1px;height:20px;background:#e5e7eb;"></span>
         <button class="btn ${_diagTool==='draw'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('draw')">✏️ Dessin</button>
         <button class="btn ${_diagTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('text')">🔤 Texte</button>
+        <button class="btn ${_diagTool==='element'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('element')" title="Clique sur une poutre du schéma 3D : elle prend la couleur choisie et tu peux y attacher une annotation">🎯 Élément</button>
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
@@ -7150,6 +7151,43 @@ function setDiagTool(tool) { _diagTool = tool; renderDiagEditor(); }
 let _diagDrawing = false;
 let _diagStrokePts = [];
 let _diagSnapshot = null;
+// Élément de charpente le plus proche d'un clic (outil 🎯)
+function _diagNearestPart(p) {
+  let best = null, bestD = 10;
+  for (const s of _diagSchemaParts) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay;
+    const len2 = dx*dx + dy*dy; if (!len2) continue;
+    let t = ((p.x - s.ax)*dx + (p.y - s.ay)*dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(p.x - (s.ax + t*dx), p.y - (s.ay + t*dy)) - s.w/2;
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  return best;
+}
+// Colorie un élément cliqué et y attache une annotation en puce colorée
+function _diagAnnotateElement(ctx, c, part, p) {
+  ctx.strokeStyle = _diagColor; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = part.w + 2.6;
+  ctx.beginPath(); ctx.moveTo(part.ax, part.ay); ctx.lineTo(part.bx, part.by); ctx.stroke();
+  const txt = prompt('Annotation pour cet élément (laisser vide pour seulement le colorier) :');
+  if (txt && txt.trim()) {
+    const lx = Math.min(Math.max(p.x + 70, 70), c.width - 70);
+    const ly = Math.max(p.y - 44, 16);
+    ctx.strokeStyle = _diagColor; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.fillStyle = _diagColor;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.6, 0, Math.PI*2); ctx.fill();
+    ctx.font = 'bold 13px Arial';
+    const tw = ctx.measureText(txt.trim()).width, bw = tw + 16, bh = 20;
+    const bx = Math.min(Math.max(lx - bw/2, 4), c.width - bw - 4), by = Math.max(ly - bh/2, 2);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 10); else ctx.rect(bx, by, bw, bh);
+    ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(txt.trim(), bx + 8, by + 14.5);
+  }
+  if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+  refreshDiagPreview();
+}
 // Reconnaissance de forme (comme l'annotation iPhone) : un tracé fermé
 // approximativement rond devient une ellipse propre ; un trait presque
 // droit devient une ligne droite. Retourne null si tracé libre.
@@ -7198,8 +7236,11 @@ function setDiagSchemaModele(m) { _diagSchemaModele = m || '2pans'; resetToDefau
 // Dispatcher : dessine le gabarit choisi
 function _drawSchemaBase(ctx, W, H) { _drawCharpente(ctx, W, H, _diagSchemaModele); }
 
+// Registre des éléments dessinés (pour l'outil « 🎯 Élément » : clic → couleur + annotation)
+let _diagSchemaParts = [];
 // Moteur de dessin isométrique des gabarits de charpente
 function _drawCharpente(ctx, W, H, modele) {
+  _diagSchemaParts = [];
   ctx.clearRect(0, 0, W, H);
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
@@ -7219,6 +7260,7 @@ function _drawCharpente(ctx, W, H, modele) {
   ctx.fill();
 
   const beam = (a, b, w, pal) => {
+    _diagSchemaParts.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, w: w });
     ctx.strokeStyle = 'rgba(60,40,15,0.20)'; ctx.lineWidth = w + 2.5;
     ctx.beginPath(); ctx.moveTo(a.x + 2.5, a.y + 3); ctx.lineTo(b.x + 2.5, b.y + 3); ctx.stroke();
     const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
@@ -7459,6 +7501,13 @@ function initDiagSchema() {
   const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
   const start = e => {
     const p = pos(e);
+    if (_diagTool === 'element' && _diagSchemaParts.length) {
+      e.preventDefault();
+      const part = _diagNearestPart(p);
+      if (!part) { toast('Clique plus près d\'un élément de la charpente', '#e6aa1e'); return; }
+      _diagAnnotateElement(ctx, c, part, p);
+      return;
+    }
     if (_diagTool === 'text') {
       e.preventDefault();
       const txt = prompt('Texte à placer sur le schéma :');
@@ -7512,6 +7561,7 @@ function loadSchemaImage(ev) {
       const r = Math.min(c.width / img.width, c.height / img.height);
       const w = img.width * r, h = img.height * r;
       ctx.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
+      _diagSchemaParts = [];   // image importée : plus d'éléments cliquables
       _diagBgDataUrl = c.toDataURL('image/png');
       if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
       refreshDiagPreview();
