@@ -7242,17 +7242,31 @@ function _genDiagPDF(d) {
   const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne':[120,120,120], 'Mixte (active + ancienne)':[235,120,40] };
 
   // --- En-tête : logo + coordonnées, destinataire à droite -------------
-  const logoW = 60, logoH = logoW*199/900;
-  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',M,15,logoW,logoH); } catch(e){} }
-  let hy = 15+logoH+6;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,M,hy); hy+=4.6; });
-  doc.setTextColor(0); doc.setFontSize(11.5);
-  let dy = 62;
-  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),75).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+  // En-tête horizontal — identique aux factures (downloadDocPDF)
+  const logoW = 62, logoH = logoW*199/900;
+  const logoY = 13;
+  const headerFiletY = logoY + logoH + 5;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
+  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  const cy0 = logoY + 4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
+  doc.setTextColor(13,27,62);
+  try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
+  doc.setTextColor(0);
+  doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+  // Date à droite sous le filet (comme les factures)
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  // Destinataire à droite, même position que sur les factures
+  doc.setFontSize(11);
+  let dy = 59;
+  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
 
   // --- Bandeau titre ----------------------------------------------------
-  y = Math.max(hy, dy) + 6;
+  y = Math.max(dy, 80) + 4;
   ensure(22);
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
@@ -7733,17 +7747,31 @@ function _genRongeursPDF(d) {
   const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne (traces)':[120,120,120], 'Mixte':[235,120,40] };
 
   // En-tête
-  const logoW = 60, logoH = logoW*199/900;
-  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',M,15,logoW,logoH); } catch(e){} }
-  let hy = 15+logoH+6;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,M,hy); hy+=4.6; });
-  doc.setTextColor(0); doc.setFontSize(11.5);
-  let dy = 62;
-  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),75).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+  // En-tête horizontal — identique aux factures (downloadDocPDF)
+  const logoW = 62, logoH = logoW*199/900;
+  const logoY = 13;
+  const headerFiletY = logoY + logoH + 5;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
+  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  const cy0 = logoY + 4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
+  doc.setTextColor(13,27,62);
+  try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
+  doc.setTextColor(0);
+  doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+  // Date à droite sous le filet (comme les factures)
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  // Destinataire à droite, même position que sur les factures
+  doc.setFontSize(11);
+  let dy = 59;
+  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
 
   // Bandeau titre
-  y = Math.max(hy, dy) + 6;
+  y = Math.max(dy, 80) + 4;
   ensure(22);
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
