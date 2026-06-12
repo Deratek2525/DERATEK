@@ -6821,6 +6821,34 @@ let _diagTool = 'draw'; // 'draw' | 'text'
 function setDiagColor(hex) { _diagColor = hex; renderDiagEditor(); }
 function setDiagTool(tool) { _diagTool = tool; renderDiagEditor(); }
 let _diagDrawing = false;
+let _diagStrokePts = [];
+let _diagSnapshot = null;
+// Reconnaissance de forme (comme l'annotation iPhone) : un tracé fermé
+// approximativement rond devient une ellipse propre ; un trait presque
+// droit devient une ligne droite. Retourne null si tracé libre.
+function _diagRecognizeShape(pts) {
+  if (!pts || pts.length < 8) return null;
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const w = maxX-minX, h = maxY-minY;
+  const first = pts[0], last = pts[pts.length-1];
+  const dist = Math.hypot(last.x-first.x, last.y-first.y);
+  let pathLen = 0;
+  for (let i = 1; i < pts.length; i++) pathLen += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+  // Ligne droite : le chemin parcouru ≈ la distance directe
+  if (dist > 40 && pathLen / dist < 1.08) return { type:'line', x1:first.x, y1:first.y, x2:last.x, y2:last.y };
+  // Ellipse : tracé fermé, assez grand, points proches d'une ellipse inscrite
+  if (w < 24 || h < 24) return null;
+  const diag = Math.hypot(w, h);
+  if (dist > diag * 0.3) return null;          // pas refermé
+  if (pathLen < diag * 1.5) return null;        // trop court pour un tour complet
+  const cx = (minX+maxX)/2, cy = (minY+maxY)/2, a = w/2, b = h/2;
+  let sum = 0, sum2 = 0;
+  pts.forEach(p => { const r = Math.hypot((p.x-cx)/a, (p.y-cy)/b); sum += r; sum2 += r*r; });
+  const n = pts.length, mean = sum/n, sd = Math.sqrt(Math.max(0, sum2/n - mean*mean));
+  if (Math.abs(mean-1) < 0.28 && sd < 0.28) return { type:'ellipse', cx, cy, a, b };
+  return null;
+}
 function _drawSchemaBase(ctx, W, H) {
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
@@ -6915,10 +6943,28 @@ function initDiagSchema() {
       }
       return;
     }
-    _diagDrawing = true; ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault();
+    _diagDrawing = true;
+    _diagStrokePts = [p];
+    try { _diagSnapshot = ctx.getImageData(0, 0, c.width, c.height); } catch (err) { _diagSnapshot = null; }
+    ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault();
   };
-  const move = e => { if (!_diagDrawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
-  const end = () => { if (!_diagDrawing) return; _diagDrawing = false; if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); };
+  const move = e => { if (!_diagDrawing) return; const p = pos(e); _diagStrokePts.push(p); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
+  const end = () => {
+    if (!_diagDrawing) return;
+    _diagDrawing = false;
+    // Reconnaissance de forme : remplace le tracé brut par une forme propre
+    const shape = _diagRecognizeShape(_diagStrokePts);
+    if (shape && _diagSnapshot) {
+      ctx.putImageData(_diagSnapshot, 0, 0);
+      ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      if (shape.type === 'ellipse') ctx.ellipse(shape.cx, shape.cy, shape.a, shape.b, 0, 0, Math.PI*2);
+      else { ctx.moveTo(shape.x1, shape.y1); ctx.lineTo(shape.x2, shape.y2); }
+      ctx.stroke();
+    }
+    _diagStrokePts = []; _diagSnapshot = null;
+    if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+  };
   c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
   c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
 }
