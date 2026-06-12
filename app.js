@@ -7564,8 +7564,9 @@ function _genDiagPDF(d, mode) {
   // --- Helpers --------------------------------------------------------
   const newPage = () => { doc.addPage(); y = 20; };
   const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
-  const section = (titre) => {
-    ensure(14);
+  // keep = hauteur minimale de contenu à garder avec le titre (anti-titre orphelin)
+  const section = (titre, keep) => {
+    ensure(14 + (keep || 0));
     doc.setFillColor(BROWN[0],BROWN[1],BROWN[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
@@ -7723,7 +7724,7 @@ function _genDiagPDF(d, mode) {
   // --- Photos de l'inspection -------------------------------------------
   const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
-    y += 2; section('Photos de l\'inspection');
+    y += 2; section('Photos de l\'inspection', 62);
     const pw = (CW - 6) / 2, ph = 58;
     photos.forEach((p, i) => {
       const col = i % 2;
@@ -7735,7 +7736,7 @@ function _genDiagPDF(d, mode) {
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
-        doc.text(doc.splitTextToSize(cap, pw)[0]||'', px, y+ph+3.6);
+        doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
       if (col === 1 || i === photos.length-1) y += ph + 8;
@@ -7746,7 +7747,7 @@ function _genDiagPDF(d, mode) {
   // --- Fiches descriptives des insectes détectés -------------------------
   const fiches = (d.insectes||[]).filter(n => INSECTES_BOIS_INFO[n]);
   if (fiches.length) {
-    y += 2; section('Fiches des insectes détectés');
+    y += 2; section('Fiches des insectes détectés', 38);
     fiches.forEach(nom => {
       const f = INSECTES_BOIS_INFO[nom];
       // Hauteur estimée de la fiche pour la garder entière sur une page
@@ -7773,14 +7774,14 @@ function _genDiagPDF(d, mode) {
 
   // --- Traitement recommandé & suivi -------------------------------------
   if (d.traitement || d.suivi) {
-    y += 2; section('Traitement recommandé');
+    y += 2; section('Traitement recommandé', 12);
     para(d.traitement);
     if (d.suivi) { y += 1.5; field('Suivi / garantie', d.suivi); }
   }
 
   // --- Proposition de contrat annuel --------------------------------------
   if (d.contrat) {
-    y += 2; section('Proposition de contrat annuel');
+    y += 2; section('Proposition de contrat annuel', 18);
     para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
     y += 1.5;
     field('Passages annuels proposés', d.contratPassages);
@@ -8185,8 +8186,9 @@ function _genRongeursPDF(d, mode) {
 
   const newPage = () => { doc.addPage(); y = 20; };
   const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
-  const section = (titre) => {
-    ensure(14);
+  // keep = hauteur minimale de contenu à garder avec le titre (anti-titre orphelin)
+  const section = (titre, keep) => {
+    ensure(14 + (keep || 0));
     doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
@@ -8344,7 +8346,7 @@ function _genRongeursPDF(d, mode) {
   // Photos
   const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
-    y += 2; section('Photos de l\'inspection');
+    y += 2; section('Photos de l\'inspection', 62);
     const pw = (CW - 6) / 2, ph = 58;
     photos.forEach((p, i) => {
       const col = i % 2;
@@ -8356,7 +8358,7 @@ function _genRongeursPDF(d, mode) {
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
-        doc.text(doc.splitTextToSize(cap, pw)[0]||'', px, y+ph+3.6);
+        doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
       if (col === 1 || i === photos.length-1) y += ph + 8;
@@ -8366,7 +8368,7 @@ function _genRongeursPDF(d, mode) {
 
   // Tableau des postes d'appâtage / pièges
   if (postes.length) {
-    y += 2; section('Postes d\'appâtage / pièges posés');
+    y += 2; section('Postes d\'appâtage / pièges posés', 18);
     const c1 = M, c2 = M+14, c3 = M+105;
     const drawPostesHeader = () => {
       doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
@@ -8397,7 +8399,7 @@ function _genRongeursPDF(d, mode) {
   // Fiches des espèces détectées
   const fiches = (d.insectes||[]).filter(n => RONGEURS_INFO[n]);
   if (fiches.length) {
-    y += 2; section('Fiches des espèces détectées');
+    y += 2; section('Fiches des espèces détectées', 38);
     fiches.forEach(nom => {
       const f = RONGEURS_INFO[nom];
       doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
@@ -8438,7 +8440,7 @@ function _genRongeursPDF(d, mode) {
     y += lines.length*4.8 + 1;
   };
   if (d.traitement || d.suivi || materiel.length || rodenticides.length || actions.length) {
-    y += 2; section('Plan de traitement');
+    y += 2; section('Plan de traitement', 12);
     if (materiel.length) { field('Matériel utilisé', materiel.join(', ')); y += 1; }
     if (d.postesNb) { field('Nombre de postes d\'appâtage', String(d.postesNb)); y += 1; }
     const rodAucun = rodenticides.includes('Aucun rodenticide utilisé');
@@ -8453,13 +8455,13 @@ function _genRongeursPDF(d, mode) {
 
   // Prévention recommandée
   if (d.prevention) {
-    y += 2; section('Prévention recommandée');
+    y += 2; section('Prévention recommandée', 12);
     para(d.prevention);
   }
 
   // Proposition de contrat annuel
   if (d.contrat) {
-    y += 2; section('Proposition de contrat annuel');
+    y += 2; section('Proposition de contrat annuel', 18);
     para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
     y += 1.5;
     field('Passages annuels proposés', d.contratPassages);
