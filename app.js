@@ -6837,15 +6837,30 @@ function _diagRecognizeShape(pts) {
   for (let i = 1; i < pts.length; i++) pathLen += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
   // Ligne droite : le chemin parcouru ≈ la distance directe
   if (dist > 40 && pathLen / dist < 1.08) return { type:'line', x1:first.x, y1:first.y, x2:last.x, y2:last.y };
-  // Ellipse : tracé fermé, assez grand, points proches d'une ellipse inscrite
+  // Forme fermée, assez grande ? → ellipse ou rectangle
   if (w < 24 || h < 24) return null;
   const diag = Math.hypot(w, h);
   if (dist > diag * 0.3) return null;          // pas refermé
   if (pathLen < diag * 1.5) return null;        // trop court pour un tour complet
+  const n = pts.length;
+  // Score ellipse : distance normalisée des points à l'ellipse inscrite
   const cx = (minX+maxX)/2, cy = (minY+maxY)/2, a = w/2, b = h/2;
   let sum = 0, sum2 = 0;
   pts.forEach(p => { const r = Math.hypot((p.x-cx)/a, (p.y-cy)/b); sum += r; sum2 += r*r; });
-  const n = pts.length, mean = sum/n, sd = Math.sqrt(Math.max(0, sum2/n - mean*mean));
+  const mean = sum/n, sd = Math.sqrt(Math.max(0, sum2/n - mean*mean));
+  const ellErr = Math.abs(mean-1) + sd;
+  // Score rectangle : proximité des points au cadre + présence des 4 coins
+  const halfMin = Math.min(w, h) / 2;
+  let edgeSum = 0;
+  pts.forEach(p => { edgeSum += Math.min(Math.abs(p.x-minX), Math.abs(maxX-p.x), Math.abs(p.y-minY), Math.abs(maxY-p.y)); });
+  const edgeNorm = (edgeSum/n) / halfMin;
+  const rCorner = diag * 0.11;
+  let cornerMiss = 0;
+  [[minX,minY],[maxX,minY],[minX,maxY],[maxX,maxY]].forEach(cn => {
+    if (!pts.some(p => Math.hypot(p.x-cn[0], p.y-cn[1]) < rCorner)) cornerMiss++;
+  });
+  const rectErr = edgeNorm + cornerMiss * 0.5;
+  if (rectErr < 0.45 && rectErr < ellErr) return { type:'rect', x:minX, y:minY, w, h };
   if (Math.abs(mean-1) < 0.28 && sd < 0.28) return { type:'ellipse', cx, cy, a, b };
   return null;
 }
@@ -6959,6 +6974,7 @@ function initDiagSchema() {
       ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath();
       if (shape.type === 'ellipse') ctx.ellipse(shape.cx, shape.cy, shape.a, shape.b, 0, 0, Math.PI*2);
+      else if (shape.type === 'rect') ctx.rect(shape.x, shape.y, shape.w, shape.h);
       else { ctx.moveTo(shape.x1, shape.y1); ctx.lineTo(shape.x2, shape.y2); }
       ctx.stroke();
     }
