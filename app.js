@@ -1849,16 +1849,12 @@ function saveRapport(statut) {
       rdv: r.rdv ? fmtDate(r.rdv) : '—', garantie: r.garantie || '—',
       email: DERATEK_CONFIG.email.deratek, name: r.tech || 'DERATEK',
     };
+    // ENVOI INTERNE UNIQUEMENT : on force le destinataire sur info@deratek.ch.
+    // Aucun envoi au client / gérant pour le moment (désactivé volontairement).
+    params.email = DERATEK_CONFIG.email.deratek;
     emailjs.send(DERATEK_CONFIG.emailjs.serviceId, DERATEK_CONFIG.emailjs.templateId, params)
       .then(() => {
         toast('Rapport envoyé à ' + DERATEK_CONFIG.email.deratek + ' ✓', '#2d9e6b');
-        const clientEmail = r.email;
-        if (clientEmail && clientEmail !== DERATEK_CONFIG.email.deratek) {
-          const p2 = { ...params, email: clientEmail };
-          emailjs.send(DERATEK_CONFIG.emailjs.serviceId, DERATEK_CONFIG.emailjs.templateId, p2)
-            .then(() => toast('Email envoyé au client ✓', '#2d9e6b'))
-            .catch(() => toast('Envoi client échoué', '#f4a623'));
-        }
         setTimeout(() => showScreen('rapports'), 1200);
       })
       .catch(err => {
