@@ -7246,6 +7246,28 @@ function _diagRows2Col(doc, pairs, y, M, CW) {
   return y;
 }
 
+// Infos complémentaires tirées du bon enregistré (bonId) : n° de bon, gérant,
+// téléphone, email, adresse du client, tél/logement du locataire. Retourne
+// null si aucun bon n'est lié au rapport.
+function _diagBonInfo(d) {
+  if (typeof DB === 'undefined' || !d || !d.bonId) return null;
+  const bon = (DB.bons || []).find(b => b.id === d.bonId);
+  if (!bon) return null;
+  const cli = (bon.geranceId ? (DB.clients||[]).find(c => c.id === bon.geranceId) : null)
+           || (d.clientId ? (DB.clients||[]).find(c => c.id === d.clientId) : null);
+  const loc = bon.locataireId ? (DB.locataires||[]).find(l => l.id === bon.locataireId) : null;
+  const cleanContact = s => String(s||'').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+  return {
+    bonNumero: bon.numero || '',
+    gerant: bon.gerantNom || (cli ? cleanContact(cli.contact) : ''),
+    tel: bon.gerantTel || (cli ? (cli.tel || '') : ''),
+    email: bon.gerantEmail || (cli ? (cli.email || '') : ''),
+    clientAdresse: cli ? [cli.adresse, [cli.npa, cli.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') : '',
+    locTel: loc ? (loc.tel || '') : '',
+    logement: (loc ? (loc.adresse || '') : '') || (bon.immeuble || ''),
+  };
+}
+
 function _genDiagPDF(d, mode) {
   if (!d) { if (mode !== 'blob') toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
@@ -7317,15 +7339,24 @@ function _genDiagPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
-  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique)
+  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
+  // enrichies depuis le bon enregistré quand il y en a un)
+  const bi = _diagBonInfo(d) || {};
   y = _diagRows2Col(doc, [
-    ['Client', d.clientNom],
-    ['Locataire', d.locataireNom],
-    ['Adresse', d.locataireAdresse],
     ['Technicien', d.tech],
+    ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
+    ['N° bon de commande', bi.bonNumero],
+    ['Adresse d\'intervention', d.locataireAdresse],
+    ['Gérant', bi.gerant],
+    ['Téléphone', bi.tel],
+    ['Email', bi.email],
+    ['Locataire', d.locataireNom],
+    ['Tél. locataire', bi.locTel],
+    ['Logement', (bi.logement && bi.logement !== d.locataireAdresse) ? bi.logement : ''],
     ['Bâtiment / charpente', d.batiment],
     ['Méthode d\'inspection', d.methode],
     ['Zones inspectées', d.zones],
+    ['N° intervention', bi.bonNumero],
   ], headerFiletY + 11, M, CW);
 
   // --- Bandeau titre ----------------------------------------------------
@@ -7875,15 +7906,24 @@ function _genRongeursPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
-  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique)
+  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
+  // enrichies depuis le bon enregistré quand il y en a un)
+  const bi = _diagBonInfo(d) || {};
   y = _diagRows2Col(doc, [
-    ['Client', d.clientNom],
-    ['Locataire', d.locataireNom],
-    ['Adresse', d.locataireAdresse],
     ['Technicien', d.tech],
+    ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
+    ['N° bon de commande', bi.bonNumero],
+    ['Adresse d\'intervention', d.locataireAdresse],
+    ['Gérant', bi.gerant],
+    ['Téléphone', bi.tel],
+    ['Email', bi.email],
+    ['Locataire', d.locataireNom],
+    ['Tél. locataire', bi.locTel],
+    ['Logement', (bi.logement && bi.logement !== d.locataireAdresse) ? bi.logement : ''],
     ['Site / bâtiment', d.batiment],
     ['Zones d\'activité', d.zones],
     ['Points d\'entrée', d.elementsTouches],
+    ['N° intervention', bi.bonNumero],
   ], headerFiletY + 11, M, CW);
 
   // Bandeau titre
