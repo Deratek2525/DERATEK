@@ -7820,22 +7820,220 @@ function resetToDefaultSchema() {
   if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
   refreshDiagPreview();
 }
-// Fond "plan des locaux" quadrillé pour le rapport rongeurs
-function _drawPlanBase(ctx, W, H) {
+// Modèle de plan des locaux choisi (rapport rongeurs)
+let _diagPlanModele = 'soussol';
+function setDiagPlanModele(m) { _diagPlanModele = m || 'soussol'; resetToDefaultSchema(); }
+
+// Fond "plan des locaux" : dispatcher vers le gabarit choisi
+function _drawPlanBase(ctx, W, H) { _drawPlan(ctx, W, H, _diagPlanModele); }
+
+// Moteur de dessin des plans d'architecte (vue de dessus)
+function _drawPlan(ctx, W, H, modele) {
   ctx.clearRect(0, 0, W, H);
   const _k = W / 640;
   ctx.save(); ctx.scale(_k, _k);
   W = 640; H = 380;
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-  // Quadrillage léger
-  ctx.strokeStyle = '#e3e8f0'; ctx.lineWidth = 1;
-  for (let x = 0; x <= W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 0; y <= H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  // Contour des locaux
-  ctx.strokeStyle = '#9aa3b2'; ctx.lineWidth = 3;
-  ctx.strokeRect(W*0.08, H*0.10, W*0.84, H*0.78);
-  ctx.fillStyle = '#9aa3b2'; ctx.font = 'bold 13px Arial';
-  ctx.fillText('Plan des locaux — dessine les murs, pièces, zones d\'activité et postes', W*0.10, H*0.97);
+  // Papier + quadrillage discret
+  ctx.fillStyle = '#fdfdfb'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(148,163,184,0.18)'; ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 16) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y <= H; y += 16) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  const MUR = '#33415c', T = 8, t = 5;
+  const wall = (x, y, w, h) => { ctx.fillStyle = MUR; ctx.fillRect(x, y, w, h); };
+  const roomFill = (x, y, w, h, col) => { ctx.fillStyle = col || 'rgba(241,245,249,0.6)'; ctx.fillRect(x, y, w, h); };
+  const label = (txt, x, y, size, col) => {
+    ctx.fillStyle = col || '#475569'; ctx.font = '700 ' + (size || 11) + 'px Arial';
+    ctx.textAlign = 'center'; ctx.fillText(txt.toUpperCase(), x, y); ctx.textAlign = 'left';
+  };
+  const sub = (txt, x, y) => { ctx.fillStyle = '#94a3b8'; ctx.font = '600 9px Arial'; ctx.textAlign = 'center'; ctx.fillText(txt, x, y); ctx.textAlign = 'left'; };
+  // Ouverture blanche dans un mur + porte (battant + arc)
+  const gapH = (x, y, len) => { ctx.fillStyle = '#fdfdfb'; ctx.fillRect(x, y - 0.5, len, t + 1); };
+  const gapV = (x, y, len) => { ctx.fillStyle = '#fdfdfb'; ctx.fillRect(x - 0.5, y, t + 1, len); };
+  const door = (hx, hy, len, a0) => {
+    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(hx, hy, len, a0, a0 + Math.PI / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + len * Math.cos(a0), hy + len * Math.sin(a0)); ctx.stroke();
+  };
+  const winH = (x, y, len) => {
+    ctx.fillStyle = '#fdfdfb'; ctx.fillRect(x, y, len, T);
+    ctx.strokeStyle = '#2a6fdb'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, y + T * 0.32); ctx.lineTo(x + len, y + T * 0.32);
+    ctx.moveTo(x, y + T * 0.68); ctx.lineTo(x + len, y + T * 0.68); ctx.stroke();
+  };
+  const stairs = (x, y, w, h, n) => {
+    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(x, y, w, h);
+    for (let i = 1; i < n; i++) { const yy = y + h * i / n; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(x + w / 2, y + h - 6); ctx.lineTo(x + w / 2, y + 8);
+    ctx.lineTo(x + w / 2 - 4, y + 14); ctx.moveTo(x + w / 2, y + 8); ctx.lineTo(x + w / 2 + 4, y + 14); ctx.stroke();
+  };
+  const bins = (x, y) => {
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = '#cbd5e1'; ctx.fillRect(x + i * 24, y, 18, 18);
+      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.2; ctx.strokeRect(x + i * 24, y, 18, 18);
+      ctx.strokeStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(x + i * 24 + 4, y + 4); ctx.lineTo(x + i * 24 + 14, y + 14); ctx.moveTo(x + i * 24 + 14, y + 4); ctx.lineTo(x + i * 24 + 4, y + 14); ctx.stroke();
+    }
+  };
+  // Cartouche : flèche du nord + échelle + note
+  const cartouche = () => {
+    ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.4; ctx.fillStyle = '#475569';
+    ctx.beginPath(); ctx.arc(614, 40, 14, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(614, 50); ctx.lineTo(614, 32); ctx.lineTo(609, 40); ctx.closePath(); ctx.fill();
+    ctx.font = '700 10px Arial'; ctx.textAlign = 'center'; ctx.fillText('N', 614, 29); ctx.textAlign = 'left';
+    ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(22, 364); ctx.lineTo(82, 364); ctx.stroke();
+    ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(22, 360); ctx.lineTo(22, 368); ctx.moveTo(52, 361); ctx.lineTo(52, 367); ctx.moveTo(82, 360); ctx.lineTo(82, 368); ctx.stroke();
+    ctx.fillStyle = '#64748b'; ctx.font = '600 9px Arial'; ctx.fillText('≈ 2 m', 88, 367);
+    ctx.textAlign = 'right'; ctx.fillText('Plan schématique — sans échelle', 632, 372); ctx.textAlign = 'left';
+  };
+
+  const x0 = 70, y0 = 46, x1 = 570, y1 = 324;
+  const outer = () => {
+    wall(x0 - T, y0 - T, (x1 - x0) + 2 * T, T);
+    wall(x0 - T, y1, (x1 - x0) + 2 * T, T);
+    wall(x0 - T, y0 - T, T, (y1 - y0) + 2 * T);
+    wall(x1, y0 - T, T, (y1 - y0) + 2 * T);
+  };
+
+  if (modele === 'libre') {
+    ctx.strokeStyle = '#9aa3b2'; ctx.lineWidth = 3;
+    ctx.strokeRect(W * 0.08, H * 0.10, W * 0.84, H * 0.78);
+    ctx.fillStyle = '#9aa3b2'; ctx.font = 'bold 13px Arial';
+    ctx.fillText('Plan libre — dessine les murs, pièces, zones d\'activité et postes', W * 0.10, H * 0.97);
+  } else if (modele === 'appartement') {
+    roomFill(x0, y0, x1 - x0, y1 - y0);
+    const cY0 = 180, cY1 = 216;
+    roomFill(x0, cY0 + t, x1 - x0, cY1 - cY0 - 2 * t, 'rgba(226,232,240,0.7)');
+    outer();
+    wall(x0, cY0, x1 - x0, t); wall(x0, cY1 - t, x1 - x0, t);
+    wall(300, y0, t, cY0 - y0); wall(450, y0, t, cY0 - y0);
+    wall(320, cY1, t, y1 - cY1);
+    // fenêtres
+    winH(140, y0 - T, 60); winH(355, y0 - T, 50); winH(150, y1, 60); winH(420, y1, 60);
+    // entrée + portes intérieures
+    gapV(x0 - T + (T - t) / 2, 186, 26); door(x0, 212, 26, -Math.PI / 2);
+    gapH(160, cY0, 26); door(160, cY0, 26, -Math.PI / 2);
+    gapH(360, cY0, 26); door(360, cY0, 26, -Math.PI / 2);
+    gapH(495, cY0, 26); door(495, cY0, 26, -Math.PI / 2);
+    gapH(170, cY1 - t, 26); door(170, cY1, 26, 0);
+    gapH(420, cY1 - t, 26); door(420, cY1, 26, 0);
+    // cuisine : plan de travail + plaques
+    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(308, y0 + 2, 137, 22);
+    ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(308, y0 + 2, 137, 22);
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(394 + (i % 2) * 16, y0 + 9 + Math.floor(i / 2) * 9, 3.4, 0, Math.PI * 2); ctx.stroke(); }
+    // salle de bain : baignoire
+    ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(530, y0 + 6, 32, 70);
+    ctx.beginPath(); ctx.arc(546, y0 + 24, 9, 0, Math.PI * 2); ctx.stroke();
+    label('Séjour', 185, 120); label('Cuisine', 375, 120); label('Salle de bain', 510, 120, 10);
+    label('Couloir', 320, 202, 10, '#64748b');
+    label('Chambre 1', 195, 275); label('Chambre 2', 445, 275);
+    cartouche();
+  } else if (modele === 'resto') {
+    roomFill(x0, y0, x1 - x0, y1 - y0);
+    outer();
+    wall(300, y0, t, y1 - y0);                          // salle | partie technique
+    wall(300, 170, x1 - 300, t);                        // cuisine / dessous
+    wall(420, 170, t, y1 - 170);                        // plonge|réserve puis froide|poubelles
+    wall(300, 240, x1 - 300, t);
+    // portes
+    gapV(300, 100, 30); door(300 + t / 2, 130, 28, -Math.PI / 2);
+    gapV(300, 260, 26); door(300 + t / 2, 286, 24, -Math.PI / 2);
+    gapH(340, 170, 24); door(340, 170, 24, -Math.PI / 2);
+    gapH(470, 170, 24); door(470, 170, 24, -Math.PI / 2);
+    gapH(340, 240, 24); door(340, 240, 24, -Math.PI / 2);
+    gapH(470, 240, 24); door(470, 240, 24, -Math.PI / 2);
+    // entrée client double battant
+    gapH(150, y1, 52);
+    door(150, y1, 26, -Math.PI / 2); door(202, y1, 26, Math.PI);
+    winH(120, y0 - T, 70); winH(220, y0 - T, 50);
+    // cuisine : plans de travail + fourneaux
+    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(308, y0 + 2, 254, 20); ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(308, y0 + 2, 254, 20);
+    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(308, 130, 120, 18); ctx.strokeRect(308, 130, 120, 18);
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(478 + (i % 2) * 18, y0 + 8 + Math.floor(i / 2) * 8, 3.4, 0, Math.PI * 2); ctx.stroke(); }
+    // réserve : étagères
+    for (let yy = 188; yy <= 228; yy += 13) { ctx.strokeStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(434, yy); ctx.lineTo(560, yy); ctx.stroke(); }
+    // chambre froide : flocon
+    ctx.strokeStyle = '#2a6fdb'; ctx.lineWidth = 1.6;
+    for (let a = 0; a < 6; a++) { ctx.beginPath(); ctx.moveTo(360, 292); ctx.lineTo(360 + 12 * Math.cos(a * Math.PI / 3), 292 + 12 * Math.sin(a * Math.PI / 3)); ctx.stroke(); }
+    bins(465, 280);
+    // salle : tables rondes
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.3;
+    [[150, 120], [230, 200], [140, 265]].forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 16, 0, Math.PI * 2); ctx.stroke(); });
+    label('Salle', 185, 75); label('Cuisine', 430, 110);
+    label('Plonge', 360, 215, 10); label('Réserve sèche', 495, 182, 10);
+    label('Ch. froide', 360, 265, 10); label('Local poubelles', 495, 268, 10);
+    cartouche();
+  } else if (modele === 'exterieur') {
+    // Jardin
+    roomFill(30, 30, 580, 320, 'rgba(220,237,222,0.55)');
+    // Bâtiment
+    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(80, 60, 220, 140);
+    ctx.strokeStyle = MUR; ctx.lineWidth = 5; ctx.strokeRect(80, 60, 220, 140);
+    label('Bâtiment', 190, 135);
+    gapH(170, 197, 26); door(170, 200, 24, 0);
+    // terrasse
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]);
+    ctx.strokeRect(300, 130, 90, 70); ctx.setLineDash([]);
+    label('Terrasse', 345, 170, 10);
+    // haie (limite droite)
+    ctx.strokeStyle = '#5d8f63'; ctx.lineWidth = 2.4;
+    for (let y = 40; y < 340; y += 18) { ctx.beginPath(); ctx.arc(596, y + 9, 9, Math.PI * 0.6, Math.PI * 2.4); ctx.stroke(); }
+    label('Haie', 596, 356, 10, '#5d8f63');
+    // arbres
+    [[470, 90], [430, 250], [180, 280]].forEach(p => {
+      ctx.strokeStyle = '#5d8f63'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 20, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.stroke();
+    });
+    // conteneurs + compost + regards
+    bins(320, 70); label('Conteneurs', 352, 110, 10);
+    ctx.strokeStyle = '#7a5c3a'; ctx.lineWidth = 1.6; ctx.strokeRect(520, 290, 30, 30); label('Compost', 535, 336, 9, '#7a5c3a');
+    [[340, 230], [260, 310]].forEach(p => {
+      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 10, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p[0] - 7, p[1]); ctx.lineTo(p[0] + 7, p[1]); ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0], p[1] + 7); ctx.stroke();
+    });
+    label('Regard égout', 340, 256, 9); label('Regard', 260, 336, 9);
+    cartouche();
+  } else {
+    // ---- Sous-sol / caves (défaut) ----
+    roomFill(x0, y0, x1 - x0, y1 - y0);
+    const cY0 = 164, cY1 = 206;
+    roomFill(x0, cY0 + t, x1 - x0, cY1 - cY0 - 2 * t, 'rgba(226,232,240,0.7)');
+    outer();
+    wall(x0, cY0, x1 - x0, t); wall(x0, cY1 - t, x1 - x0, t);
+    wall(195, y0, t, cY0 - y0); wall(320, y0, t, cY0 - y0); wall(445, y0, t, cY0 - y0);
+    wall(240, cY1, t, y1 - cY1); wall(410, cY1, t, y1 - cY1);
+    wall(410, 268, x1 - 410, t);
+    // soupiraux (petites fenêtres)
+    winH(120, y0 - T, 36); winH(250, y0 - T, 36); winH(380, y0 - T, 36); winH(500, y0 - T, 36);
+    // portes couloir → pièces
+    gapH(120, cY0, 26); door(120, cY0, 26, -Math.PI / 2);
+    gapH(245, cY0, 26); door(245, cY0, 26, -Math.PI / 2);
+    gapH(370, cY0, 26); door(370, cY0, 26, -Math.PI / 2);
+    gapH(495, cY0, 26); door(495, cY0, 26, -Math.PI / 2);
+    gapH(140, cY1 - t, 26); door(140, cY1, 26, 0);
+    gapH(310, cY1 - t, 26); door(310, cY1, 26, 0);
+    gapH(430, cY1 - t, 26); door(430, cY1, 26, 0);
+    gapH(470, 268, 24); door(470, 268, 24, -Math.PI / 2);
+    // accès couloir (depuis l'extérieur, mur gauche)
+    gapV(x0 - T + (T - t) / 2, 172, 26); door(x0, 198, 26, -Math.PI / 2);
+    // escalier (en haut à droite du bloc bas)
+    stairs(465, 214, 40, 48, 8);
+    bins(440, 286);
+    // technique : chaudière (cercle) + boiler
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(110, 250, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeRect(140, 236, 24, 28);
+    label('Cave 1', 132, 110); label('Cave 2', 257, 110); label('Cave 3', 382, 110); label('Buanderie', 508, 110, 10);
+    label('Couloir de cave', 320, 190, 10, '#64748b');
+    label('Local technique', 150, 296, 10); sub('chaudière · boiler', 150, 310);
+    label('Cave 4', 325, 270); label('Escalier', 442, 232, 9);
+    label('Poubelles', 500, 312, 9);
+    cartouche();
+  }
   ctx.restore();
 }
 
@@ -8650,8 +8848,11 @@ function renderRongeursEditor() {
         <button class="btn btn-navy btn-sm" type="button" onclick="openSchemaZoom()" title="Agrandir le plan pour tracer confortablement (ou double-clic sur le plan)">🔍 Plein écran</button>
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / plan</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">📐 Plan quadrillé par défaut</button>
-        <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine les pièces, entoure les zones d'activité et marque les postes. La légende est ajoutée au PDF.</span>
+        <select class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:5px 8px;" onchange="setDiagPlanModele(this.value)" title="Choisir le modèle de plan (remplace le fond et efface les annotations)">
+          ${[['soussol','🏚 Sous-sol / caves'],['appartement','🏠 Appartement'],['resto','🍽 Restaurant / cuisine pro'],['exterieur','🌳 Extérieurs / jardin'],['libre','📐 Quadrillage libre']].map(o => `<option value="${o[0]}" ${_diagPlanModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()" title="Redessiner le modèle choisi">↻ Redessiner</button>
+        <span style="font-size:11px;color:var(--g400);align-self:center;">Entoure les zones d'activité et marque les postes par-dessus le plan. La légende est ajoutée au PDF.</span>
       </div>
     </div>
 
