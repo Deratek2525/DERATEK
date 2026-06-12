@@ -2749,35 +2749,31 @@ function _bonVal(key) { const el = $('bonf-' + key); return el ? el.value.trim()
 function _findOrCreateGerance(infos) {
   const nom = (infos.gerance_nom || '').trim();
   if (!nom) return null;
+  const gerant = (infos.gerant_nom || '').trim();
   const clients = DB.clients;
-  const existing = clients.find(c => (c.nom || '').toLowerCase() === nom.toLowerCase());
+  // UNE CARTE PAR PERSONNE : on cherche la fiche de CETTE gérance ET de CE gérant.
+  // Si le gérant est différent, on crée une NOUVELLE carte (même gérance, autre personne).
+  const existing = clients.find(c =>
+    (c.nom || '').toLowerCase() === nom.toLowerCase() &&
+    (!gerant || _rapContactNom(c.contact || '').toLowerCase() === gerant.toLowerCase())
+  );
   if (existing) {
     const updates = {};
-    // On NE remplace JAMAIS le contact existant : on AJOUTE le gérant du bon comme
-    // contact supplémentaire s'il n'y figure pas déjà (plusieurs gérants par gérance).
-    if (infos.gerant_nom) {
-      const g = String(infos.gerant_nom).trim();
-      const cur = String(existing.contact || '');
-      const curNames = cur.replace(/\[ROLE:[^\]]*\]/g, '').toLowerCase();
-      if (!cur) updates.contact = g;
-      else if (g && curNames.indexOf(g.toLowerCase()) === -1) updates.contact = cur + ' · ' + g;
-    }
-    if (!existing.tel     && infos.gerant_tel)      updates.tel     = infos.gerant_tel;
-    if (!existing.email   && infos.gerant_email)    updates.email   = infos.gerant_email;
-    if (!existing.adresse && infos.gerance_adresse) updates.adresse = infos.gerance_adresse;
-    if (!existing.npa     && infos.gerance_npa)     updates.npa     = infos.gerance_npa;
-    if (!existing.ville   && infos.gerance_ville)   updates.ville   = infos.gerance_ville;
-    if (Object.keys(updates).length) {
-      Object.assign(existing, updates);
-      DB.clients = clients;
-    }
+    if (!_rapContactNom(existing.contact) && gerant)  updates.contact = gerant;
+    if (!existing.tel     && infos.gerant_tel)        updates.tel     = infos.gerant_tel;
+    if (!existing.email   && infos.gerant_email)      updates.email   = infos.gerant_email;
+    if (!existing.adresse && infos.gerance_adresse)   updates.adresse = infos.gerance_adresse;
+    if (!existing.npa     && infos.gerance_npa)       updates.npa     = infos.gerance_npa;
+    if (!existing.ville   && infos.gerance_ville)     updates.ville   = infos.gerance_ville;
+    if (Object.keys(updates).length) { Object.assign(existing, updates); DB.clients = clients; }
     return existing;
   }
+  // Nouvelle carte dédiée à ce gérant (séparée automatiquement à l'import du bon)
   const newClient = {
     id: newId(),
     nom: nom,
     type: 'Gérance',
-    contact: infos.gerant_nom || '',
+    contact: gerant,
     tel:     infos.gerant_tel || '',
     email:   infos.gerant_email || '',
     web: '',
