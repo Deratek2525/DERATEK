@@ -6811,7 +6811,7 @@ function renderDiagEditor() {
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
         <select class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:5px 8px;" onchange="setDiagSchemaModele(this.value)" title="Choisir le modèle de schéma 3D (remplace le fond et efface les annotations)">
-          ${[['2pans','🪵 Charpente 2 pans'],['4pans','🏠 Toit 4 pans (croupe)'],['appentis','📐 Appentis 1 pan'],['combles','🛏 Combles aménagés'],['plancher','🟫 Plancher / solivage'],['parquet','🪵 Parquet (lames)']].map(o => `<option value="${o[0]}" ${_diagSchemaModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+          ${[['2pans','🪵 Charpente 2 pans'],['4pans','🏠 Toit 4 pans (croupe)'],['demicroupe','🇨🇭 Demi-croupe (bernois)'],['mansarde','🏛 Toit mansardé'],['chalet','⛰ Chalet à pannes'],['appentis','📐 Appentis 1 pan'],['combles','🛏 Combles aménagés'],['plancher','🟫 Plancher / solivage'],['parquet','🪵 Parquet (lames)']].map(o => `<option value="${o[0]}" ${_diagSchemaModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
         </select>
         <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()" title="Redessiner le modèle choisi">↻ Redessiner</button>
         <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine pour entourer les zones touchées ; en mode Texte, clique pour placer une note. La légende des couleurs est ajoutée automatiquement au PDF.</span>
@@ -7456,6 +7456,115 @@ function _drawCharpente(ctx, W, H, modele) {
     chip('Jambette', P(178, 14, 0), ox + 245, 200);
     chip('Arbalétrier', mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
     chip('Entrait', P(120, 0, 0), ox + 215, 262);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === 'mansarde') {
+    // ---- Toit mansardé (brisis + terrasson) ----
+    const BX = 38, BY = 62, RY = 86;          // point de bris, faîte
+    deck(YF); deckLinks(YF);
+    const mTruss = (z, pal, w) => {
+      beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                    // entrait
+      beam(P(105, 0, z), P(105, RY, z), w - 0.5, pal);             // poinçon
+      beam(P(BX, BY, z), P(X - BX, BY, z), w - 0.6, pal);          // faux-entrait (niveau de bris)
+      beam(P(0, 0, z), P(BX, BY, z), w, pal);                      // brisis g.
+      beam(P(X, 0, z), P(X - BX, BY, z), w, pal);                  // brisis d.
+      beam(P(BX, BY, z), P(105, RY, z), w, pal);                   // terrasson g.
+      beam(P(X - BX, BY, z), P(105, RY, z), w, pal);               // terrasson d.
+    };
+    mTruss(Z, PAL_BACK, 3.6);
+    face([P(0,0,0), P(0,0,Z), P(BX,BY,Z), P(BX,BY,0)], 'rgba(186,140,90,0.42)', 'rgba(160,118,72,0.24)');
+    face([P(X,0,0), P(X,0,Z), P(X-BX,BY,Z), P(X-BX,BY,0)], 'rgba(166,122,74,0.46)', 'rgba(140,100,58,0.26)');
+    face([P(BX,BY,0), P(BX,BY,Z), P(105,RY,Z), P(105,RY,0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.16)');
+    face([P(X-BX,BY,0), P(X-BX,BY,Z), P(105,RY,Z), P(105,RY,0)], 'rgba(196,152,100,0.36)', 'rgba(170,128,80,0.20)');
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);                    // sablières
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    beam(P(BX, BY, 0), P(BX, BY, Z), 4, PAL_DARK);                 // pannes de bris
+    beam(P(X - BX, BY, 0), P(X - BX, BY, Z), 4, PAL_DARK);
+    for (let z = 14; z <= Z - 14; z += 26) {
+      if ([0, Z/2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
+      beam(P(0, 0, z), P(BX, BY, z), 1.7, PAL_CHEV);
+      beam(P(X, 0, z), P(X - BX, BY, z), 1.7, PAL_CHEV);
+      beam(P(BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
+      beam(P(X - BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
+    }
+    beam(P(105, RY, 0), P(105, RY, Z), 5, PAL_DARK);               // faîtière
+    mTruss(Z / 2, PAL_MID, 4.2);
+    mTruss(0, PAL_FRONT, 5.2);
+    chip('Faîtière', mid(P(105,RY,0), P(105,RY,Z)), ox - 150, 24);
+    chip('Terrasson', P(71.5, 74, 60), ox - 25, 52);
+    chip('Panne de bris', mid(P(X-BX,BY,0), P(X-BX,BY,Z)), ox + 225, 76);
+    chip('Brisis', P(X - BX/2, BY/2, 0), ox + 250, 165);
+    chip('Faux-entrait', P(85, BY, 0), ox + 235, 120);
+    chip('Entrait', P(160, 0, 0), ox + 225, 255);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === 'demicroupe') {
+    // ---- 2 pans à demi-croupes (ferme bernoise) ----
+    const ZR0 = 40, ZR1 = 210;                 // faîtière raccourcie
+    const R0 = P(105, YR, ZR0), R1 = P(105, YR, ZR1);
+    deck(YF); deckLinks(YF);
+    // Pignon arrière (mur trapèze sous le niveau de demi-croupe)
+    face([P(0,0,Z), P(X,0,Z), P(157.5,46,Z), P(52.5,46,Z)], 'rgba(203,213,225,0.55)', 'rgba(173,186,204,0.45)');
+    truss(ZR1, PAL_BACK, 3.6);
+    face([P(0,0,0), P(0,0,Z), P(105,YR,ZR1), P(105,YR,ZR0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
+    face([P(X,0,0), P(X,0,Z), P(105,YR,ZR1), P(105,YR,ZR0)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
+    face([P(52.5,46,0), P(157.5,46,0), R0], 'rgba(205,168,118,0.45)', 'rgba(185,148,98,0.28)');
+    face([P(52.5,46,Z), P(157.5,46,Z), R1], 'rgba(165,124,76,0.32)', 'rgba(150,110,64,0.20)');
+    // Pignon avant (mur trapèze)
+    face([P(0,0,0), P(X,0,0), P(157.5,46,0), P(52.5,46,0)], 'rgba(226,232,240,0.72)', 'rgba(199,210,224,0.60)');
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    // Demi-fermes de pignon (jusqu'au niveau de croupe) + lierne
+    [[0, PAL_FRONT, 5], [Z, PAL_BACK, 3.6]].forEach(t => {
+      beam(P(0, 0, t[0]), P(X, 0, t[0]), t[2] + 1, t[1]);
+      beam(P(0, 0, t[0]), P(52.5, 46, t[0]), t[2], t[1]);
+      beam(P(X, 0, t[0]), P(157.5, 46, t[0]), t[2], t[1]);
+      beam(P(52.5, 46, t[0]), P(157.5, 46, t[0]), t[2] - 0.6, t[1]);
+    });
+    // Arêtiers des demi-croupes
+    beam(P(52.5, 46, 0), R0, 4.2, PAL_FRONT); beam(P(157.5, 46, 0), R0, 4.2, PAL_FRONT);
+    beam(P(52.5, 46, Z), R1, 3.6, PAL_BACK);  beam(P(157.5, 46, Z), R1, 3.6, PAL_BACK);
+    beam(P(105, YR, ZR0), P(105, YR, ZR1), 5, PAL_DARK);    // faîtière
+    truss(125, PAL_MID, 4.2);
+    truss(ZR0, PAL_FRONT, 5);
+    chip('Faîtière', mid(R0, R1), ox - 130, 24);
+    chip('Demi-croupe', mid(mid(P(52.5,46,0), P(157.5,46,0)), R0), ox + 215, 50);
+    chip('Arêtier', mid(P(157.5,46,0), R0), ox + 255, 110);
+    chip('Pignon', P(105, 20, 0), ox + 240, 215);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === 'chalet') {
+    // ---- Chalet alpin à pannes (Pfettendach), grands avant-toits ----
+    const D = 30;                              // débord des pannes
+    deck(YF); deckLinks(YF);
+    // Pignons en madriers (avant + arrière)
+    [[Z, 'rgba(187,148,100,0.80)'], [0, 'rgba(213,176,128,0.90)']].forEach(g => {
+      face([P(0,0,g[0]), P(X,0,g[0]), P(105,YR,g[0])], g[1], g[1]);
+      // lignes de madriers horizontales
+      ctx.strokeStyle = 'rgba(120,85,45,0.55)'; ctx.lineWidth = 1.2;
+      for (let yy = 12; yy < YR - 6; yy += 12) {
+        const xr = 105 * (1 - yy / YR);
+        const a = P(105 - xr, yy, g[0]), b = P(105 + xr, yy, g[0]);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    });
+    face([P(0,0,-D), P(0,0,Z+D), P(105,YR,Z+D), P(105,YR,-D)], 'rgba(226,190,140,0.30)', 'rgba(196,156,104,0.14)');
+    face([P(X,0,-D), P(X,0,Z+D), P(105,YR,Z+D), P(105,YR,-D)], 'rgba(176,132,82,0.38)', 'rgba(150,108,62,0.18)');
+    // Pannes débordantes : sablières, intermédiaires, faîtière
+    beam(P(0, 0, -D), P(0, 0, Z + D), 4.6, PAL_MID);
+    beam(P(X, 0, -D), P(X, 0, Z + D), 4.6, PAL_MID);
+    beam(P(52.5, 46, -D), P(52.5, 46, Z + D), 4.2, PAL_DARK);
+    beam(P(157.5, 46, -D), P(157.5, 46, Z + D), 4.2, PAL_DARK);
+    for (let z = -16; z <= Z + 16; z += 26) {
+      beam(P(0, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
+      beam(P(X, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
+    }
+    beam(P(105, YR, -D), P(105, YR, Z + D), 5.6, PAL_DARK);  // panne faîtière
+    chip('Panne faîtière', mid(P(105,YR,-D), P(105,YR,Z+D)), ox - 150, 22);
+    chip('Panne intermédiaire', mid(P(157.5,46,0), P(157.5,46,Z)), ox + 215, 76);
+    chip('Chevron', P(52.5, 46, 64), ox - 40, 54);
+    chip('Pignon en madriers', P(105, 30, 0), ox + 215, 185);
+    chip('Avant-toit (débord)', P(105, YR, -D + 4), ox + 218, 28);
     chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   } else {
