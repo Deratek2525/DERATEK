@@ -8124,7 +8124,7 @@ function renderRongeursEditor() {
       ${_diagTypeBureauFields(d)}
       <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Nuisible affiché dans le ruban du PDF</label>
         <select class="form-input" oninput="_editingDiag.ruban=this.value">
-          <option value="" ${!d.ruban?'selected':''}>Dératisation (par défaut)</option>
+          <option value="" ${!d.ruban?'selected':''}>Automatique (espèce cochée, sinon « Dératisation »)</option>
           ${['Rongeurs','Rats','Souris','Rat brun (surmulot)','Rats d\'égout','Rat noir','Souris domestique','Mulot','Campagnol','Loir / Lérot','Fouine','Chauves-souris'].map(o => `<option ${d.ruban===o?'selected':''}>${o}</option>`).join('')}
         </select>
       </div>
@@ -8350,7 +8350,8 @@ function _genRongeursPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text((d.ruban || 'Dératisation') + ' — détection & plan d\'action', M+6, y+12.4);
+  const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Dératisation');
+  doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
   doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
