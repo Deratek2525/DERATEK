@@ -4471,7 +4471,8 @@ function _displayMontant(a) {
 // Bureaux DERATEK : adresse émettrice sélectionnable par document (Neuchâtel = défaut).
 const BUREAUX = [
   { id: 'ne', label: 'Neuchâtel', rue: DERATEK_CONFIG.company.rue, npa: DERATEK_CONFIG.company.npa, ville: DERATEK_CONFIG.company.ville, tel: DERATEK_CONFIG.company.tel },
-  { id: 'la', label: 'Lausanne', rue: 'Ch. des Pyramides 7', npa: '1007', ville: 'Lausanne', tel: '021 552 66 72' }
+  { id: 'la', label: 'Lausanne', rue: 'Ch. des Pyramides 7', npa: '1007', ville: 'Lausanne', tel: '021 552 66 72' },
+  { id: 'be', label: 'Berne', rue: 'Neufeldstrasse 119', npa: '3012', ville: 'Berne', tel: DERATEK_CONFIG.company.tel }
 ];
 function _docBureau(d) {
   return BUREAUX.find(b => b.id === ((d && d.bureauId) || 'ne')) || BUREAUX[0];
@@ -6598,9 +6599,9 @@ const INSECTES_BOIS_INFO = {
 // Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
 // repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
 // [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
-const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL', rodenticides: 'RODENT', actions: 'ACTIONS' };
+const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL', rodenticides: 'RODENT', actions: 'ACTIONS', bureau: 'BUREAU', doctype: 'DOCTYPE', noPlan: 'NOPLAN', noPhotos: 'NOPHOTOS' };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL|RODENT|ACTIONS):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL|RODENT|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6625,6 +6626,51 @@ function _diagUnpack(d) {
   if (!Array.isArray(out.insectes)) out.insectes = [];
   return out;
 }
+// Zones d'activité proposées dans la liste déroulante (rapports bois & rongeurs)
+const ZONES_ACTIVITE = ['Cave', 'Couloirs de cave', 'Cuisine', 'Salle de bain', 'Chambre', 'Salon', 'Combles', 'Grenier', 'Local technique', 'Buanderie', 'Parking', 'Garage', 'Façade', 'Terrasse', 'Jardin', 'Toiture', 'Caisson de store', 'Gaines techniques', 'Parties communes', 'Appartement complet', 'Immeuble complet'];
+// Ajoute une zone choisie dans la liste au champ texte (cumulable, champ libre conservé)
+function diagAddZone(z) {
+  if (!_editingDiag || !z) return;
+  if (z === '__autre__') { const inp = $('diag-zones-input'); if (inp) inp.focus(); return; }
+  const cur = String(_editingDiag.zones || '').trim();
+  if (cur.split(',').map(s => s.trim().toLowerCase()).includes(z.toLowerCase())) return;
+  _editingDiag.zones = cur ? cur + ', ' + z : z;
+  const inp = $('diag-zones-input'); if (inp) inp.value = _editingDiag.zones;
+  refreshDiagPreview();
+}
+// Champ déroulant + champ libre des zones (HTML commun aux deux éditeurs)
+function _diagZonesField(d, label) {
+  return `<div class="form-group"><label class="form-label">${label}</label>
+    <select class="form-input" onchange="diagAddZone(this.value); this.selectedIndex=0;">
+      <option value="">— Ajouter une zone —</option>
+      ${ZONES_ACTIVITE.map(z => `<option>${z}</option>`).join('')}
+      <option value="__autre__">Autre zone (champ libre)…</option>
+    </select>
+    <input class="form-input" id="diag-zones-input" style="margin-top:5px;font-size:12px;" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Les zones choisies s'ajoutent ici — texte libre possible">
+  </div>`;
+}
+// Sélecteurs type de document (Rapport/Expertise) et bureau émetteur (HTML commun)
+function _diagTypeBureauFields(d) {
+  return `
+    <div class="form-group"><label class="form-label">Type de document</label>
+      <select class="form-input" oninput="_editingDiag.doctype=this.value">
+        <option ${d.doctype!=='Expertise'?'selected':''}>Rapport</option>
+        <option ${d.doctype==='Expertise'?'selected':''}>Expertise</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Bureau émetteur (adresse sur le PDF)</label>
+      <select class="form-input" oninput="_editingDiag.bureau=this.value">
+        ${BUREAUX.map(b => `<option value="${b.id}" ${(d.bureau||'ne')===b.id?'selected':''}>${b.label} — ${b.rue}, ${b.npa} ${b.ville}</option>`).join('')}
+      </select>
+    </div>`;
+}
+// Case à cocher d'affichage d'une section dans le PDF (plan / photos)
+function _diagSectionToggle(field, label) {
+  const off = !!(_editingDiag && _editingDiag[field]);
+  return `<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:${off?'var(--g400)':'var(--navy)'};cursor:pointer;margin-left:10px;">
+    <input type="checkbox" ${off?'':'checked'} onchange="_editingDiag.${field}=this.checked?'':'1'; renderDiagEditor();" style="accent-color:var(--navy);"> ${label}
+  </label>`;
+}
 let _editingDiag = null;
 
 // Type d'un document de la table diagnostics : 'bois' (DG-) ou 'rongeurs' (RG-)
@@ -6644,7 +6690,8 @@ function openNewDiagnostic() {
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: '',
-    methode: '', zones: '', traitement: '', suivi: '', photos: []
+    methode: '', zones: '', traitement: '', suivi: '', photos: [],
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: ''
   };
   renderDiagEditor(); openModal('modal-diag');
 }
@@ -6674,6 +6721,7 @@ function renderDiagEditor() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
       <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      ${_diagTypeBureauFields(d)}
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
@@ -6688,8 +6736,8 @@ function renderDiagEditor() {
     <div style="margin-bottom:8px;">${insectesHtml}</div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Éléments / bois touchés</label><textarea class="form-input" rows="2" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. poutres, solives, chevrons, lambris...">${d.elementsTouches||''}</textarea></div>
 
-    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">✏️ Schéma de la charpente (entoure les zones touchées)</div>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Schéma de la charpente ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
       <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
@@ -6710,11 +6758,12 @@ function renderDiagEditor() {
       </div>
     </div>
 
-    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📷 Photos de l'inspection</div>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">📷 Photo inspection ${_diagSectionToggle('noPhotos','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPhotos?'display:none;':''}">
       <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <input type="file" id="diag-photo-replace-file" accept="image/*" style="display:none" onchange="onDiagPhotoReplace(event)">
       <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
-      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF (non stockées en base — télécharge le PDF pour les garder).</span>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF avec date et auteur (non stockées en base — télécharge le PDF pour les garder).</span>
       <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
 
@@ -6748,7 +6797,7 @@ function renderDiagEditor() {
           <option ${d.methode==='Inspection complète (visuelle, sondage, humidimètre, endoscope)'?'selected':''}>Inspection complète (visuelle, sondage, humidimètre, endoscope)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Zones inspectées</label><input class="form-input" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Ex. combles, cave, plancher rez"></div>
+      ${_diagZonesField(d, 'Zones inspectées / zone d\'activité')}
     </div>
     <div class="form-group" style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations / diagnostic détaillé</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
@@ -6791,7 +6840,10 @@ function addDiagPhotos(ev) {
         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
         if (!_editingDiag) return;
         if (!Array.isArray(_editingDiag.photos)) _editingDiag.photos = [];
-        _editingDiag.photos.push({ data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '', use: true });
+        _editingDiag.photos.push({
+          data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '', use: true,
+          addedAt: today(), by: (_editingDiag.tech || '').trim()
+        });
         renderDiagPhotos();
       };
       img.src = e.target.result;
@@ -6806,7 +6858,48 @@ function removeDiagPhoto(i) {
   renderDiagPhotos();
 }
 function setDiagPhotoCaption(i, v) {
-  if (_editingDiag && _editingDiag.photos && _editingDiag.photos[i]) _editingDiag.photos[i].caption = v;
+  const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[i];
+  if (!p) return;
+  p.caption = v;
+  if (today() !== p.addedAt) p.modifiedAt = today();   // traçabilité de la modification
+}
+// Remplacement d'une photo (l'historique date/auteur est conservé et complété)
+let _diagReplaceIdx = -1;
+function replaceDiagPhoto(i) {
+  _diagReplaceIdx = i;
+  const inp = $('diag-photo-replace-file'); if (inp) inp.click();
+}
+function onDiagPhotoReplace(ev) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  const i = _diagReplaceIdx; _diagReplaceIdx = -1;
+  const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[i];
+  if (!p) { ev.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1000;
+      const r = Math.min(1, MAX / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      p.data = cv.toDataURL('image/jpeg', 0.82); p.w = cv.width; p.h = cv.height;
+      p.modifiedAt = today(); p.by = (_editingDiag.tech || p.by || '').trim();
+      renderDiagPhotos();
+      toast('✓ Photo remplacée', '#2d9e6b');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
+}
+// Ligne de traçabilité d'une photo : « ajoutée le … par … (modifiée le …) »
+function _diagPhotoMeta(p) {
+  if (!p) return '';
+  let m = p.addedAt ? 'ajoutée le ' + fmtDate(p.addedAt) : '';
+  if (p.by) m += (m ? ' par ' : 'par ') + p.by;
+  if (p.modifiedAt && p.modifiedAt !== p.addedAt) m += (m ? ' · ' : '') + 'modifiée le ' + fmtDate(p.modifiedAt);
+  return m;
 }
 function setDiagPhotoUse(i, checked) {
   if (_editingDiag && _editingDiag.photos && _editingDiag.photos[i]) { _editingDiag.photos[i].use = !!checked; renderDiagPhotos(); }
@@ -6818,12 +6911,15 @@ function renderDiagPhotos() {
     <div style="width:130px;">
       <div style="position:relative;">
         <img src="${p.data}" style="width:130px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
-        <button type="button" onclick="removeDiagPhoto(${i})" title="Retirer"
+        <button type="button" onclick="removeDiagPhoto(${i})" title="Supprimer la photo"
           style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
+        <button type="button" onclick="replaceDiagPhoto(${i})" title="Remplacer la photo"
+          style="position:absolute;top:3px;right:27px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(13,27,62,.85);color:#fff;font-size:10px;cursor:pointer;line-height:1;">🔄</button>
       </div>
       <label style="display:flex;align-items:center;gap:4px;font-size:10.5px;margin-top:3px;cursor:pointer;color:var(--g600);">
         <input type="checkbox" ${p.use!==false?'checked':''} onchange="setDiagPhotoUse(${i}, this.checked)" style="accent-color:var(--navy);"> Inclure au PDF
       </label>
+      <div style="font-size:9.5px;color:var(--g400);margin-top:2px;line-height:1.3;">${_diagPhotoMeta(p)}</div>
       <input class="form-input" style="margin-top:3px;font-size:11px;padding:4px 6px;" placeholder="Légende..."
         value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="setDiagPhotoCaption(${i}, this.value)">
     </div>`).join('');
@@ -7322,6 +7418,8 @@ function _genDiagPDF(d, mode) {
 
   // --- En-tête : logo + coordonnées, destinataire à droite -------------
   // En-tête horizontal — identique aux factures (downloadDocPDF)
+  // Bureau émetteur choisi dans le rapport (Neuchâtel par défaut)
+  const bu = (typeof BUREAUX !== 'undefined' && BUREAUX.find(b => b.id === d.bureau)) || { rue: co.rue, npa: co.npa, ville: co.ville, tel: co.tel };
   const logoW = 62, logoH = logoW*199/900;
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
@@ -7329,7 +7427,7 @@ function _genDiagPDF(d, mode) {
   else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
   try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
@@ -7337,7 +7435,7 @@ function _genDiagPDF(d, mode) {
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
   // Date à droite sous le filet (comme les factures)
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
-  doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
@@ -7365,13 +7463,11 @@ function _genDiagPDF(d, mode) {
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
-  doc.text('RAPPORT DE DIAGNOSTIC', M+6, y+6.8);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   doc.text('Insectes xylophages — bois & charpentes', M+6, y+12.4);
-  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255);
-  doc.text('N° ' + (d.numero||''), R-6, y+6.8, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
 
@@ -7415,7 +7511,7 @@ function _genDiagPDF(d, mode) {
   }
 
   // --- Schéma de la charpente + légende ---------------------------------
-  if (d.schema) {
+  if (d.schema && !d.noPlan) {
     const schemaH = 100;
     if (y + schemaH + 22 > MAX_Y) newPage();
     y += 3; section('Schéma de la charpente');
@@ -7438,7 +7534,7 @@ function _genDiagPDF(d, mode) {
   }
 
   // --- Photos de l'inspection -------------------------------------------
-  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
+  const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
     y += 2; section('Photos de l\'inspection');
     const pw = (CW - 6) / 2, ph = 58;
@@ -7449,13 +7545,13 @@ function _genDiagPDF(d, mode) {
       try {
         doc.addImage(p.data, 'JPEG', px, y, pw, ph);
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
-        if (p.caption) {
-          doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70);
-          doc.text(doc.splitTextToSize('Photo ' + (i+1) + ' — ' + p.caption, pw)[0]||'', px, y+ph+3.6);
-          doc.setTextColor(0);
-        }
+        const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
+        const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.text(doc.splitTextToSize(cap, pw)[0]||'', px, y+ph+3.6);
+        doc.setTextColor(0);
       } catch (e) {}
-      if (col === 1 || i === photos.length-1) y += ph + (photos[i].caption || (photos[i-col]||{}).caption ? 8 : 4);
+      if (col === 1 || i === photos.length-1) y += ph + 8;
     });
     y += 2;
   }
@@ -7513,7 +7609,7 @@ function _genDiagPDF(d, mode) {
   ensure(26);
   y += 8;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text(co.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+  doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
   doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
   doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
   doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
@@ -7643,7 +7739,8 @@ function openNewRongeurs() {
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
     traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
-    rodenticides: [], actions: [], photos: []
+    rodenticides: [], actions: [], photos: [],
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: ''
   };
   renderDiagEditor(); openModal('modal-diag');
 }
@@ -7723,6 +7820,7 @@ function renderRongeursEditor() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
       <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      ${_diagTypeBureauFields(d)}
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
@@ -7756,12 +7854,12 @@ function renderRongeursEditor() {
           <option ${d.gravite==='Critique (infestation massive)'?'selected':''}>Critique (infestation massive)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Zones d'activité</label><input class="form-input" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Ex. cave, local poubelles, cuisine"></div>
+      ${_diagZonesField(d, 'Zone d\'activité')}
       <div class="form-group"><label class="form-label">Points d'entrée détectés</label><input class="form-input" value="${(d.elementsTouches||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. passage de conduites, porte de cave non étanche"></div>
     </div>
 
-    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">✏️ Plan des locaux (zones d'activité & postes)</div>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Plan des locaux ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
       <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
@@ -7782,11 +7880,12 @@ function renderRongeursEditor() {
       </div>
     </div>
 
-    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📷 Photos de l'inspection</div>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">📷 Photo inspection ${_diagSectionToggle('noPhotos','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPhotos?'display:none;':''}">
       <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <input type="file" id="diag-photo-replace-file" accept="image/*" style="display:none" onchange="onDiagPhotoReplace(event)">
       <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
-      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF (non stockées en base).</span>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF avec date et auteur (non stockées en base).</span>
       <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
 
@@ -7889,6 +7988,8 @@ function _genRongeursPDF(d, mode) {
 
   // En-tête
   // En-tête horizontal — identique aux factures (downloadDocPDF)
+  // Bureau émetteur choisi dans le rapport (Neuchâtel par défaut)
+  const bu = (typeof BUREAUX !== 'undefined' && BUREAUX.find(b => b.id === d.bureau)) || { rue: co.rue, npa: co.npa, ville: co.ville, tel: co.tel };
   const logoW = 62, logoH = logoW*199/900;
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
@@ -7896,7 +7997,7 @@ function _genRongeursPDF(d, mode) {
   else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
   try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
@@ -7904,7 +8005,7 @@ function _genRongeursPDF(d, mode) {
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
   // Date à droite sous le filet (comme les factures)
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
-  doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
@@ -7932,13 +8033,11 @@ function _genRongeursPDF(d, mode) {
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
-  doc.text('RAPPORT SPÉCIAL RONGEURS', M+6, y+6.8);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   doc.text('Dératisation — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255);
-  doc.text('N° ' + (d.numero||''), R-6, y+6.8, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
 
@@ -7983,7 +8082,7 @@ function _genRongeursPDF(d, mode) {
   }
 
   // Plan des locaux + légende
-  if (d.schema) {
+  if (d.schema && !d.noPlan) {
     const schemaH = 100;
     if (y + schemaH + 22 > MAX_Y) newPage();
     y += 3; section('Plan des locaux');
@@ -8005,7 +8104,7 @@ function _genRongeursPDF(d, mode) {
   }
 
   // Photos
-  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
+  const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
     y += 2; section('Photos de l\'inspection');
     const pw = (CW - 6) / 2, ph = 58;
@@ -8016,13 +8115,13 @@ function _genRongeursPDF(d, mode) {
       try {
         doc.addImage(p.data, 'JPEG', px, y, pw, ph);
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
-        if (p.caption) {
-          doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70);
-          doc.text(doc.splitTextToSize('Photo ' + (i+1) + ' — ' + p.caption, pw)[0]||'', px, y+ph+3.6);
-          doc.setTextColor(0);
-        }
+        const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
+        const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.text(doc.splitTextToSize(cap, pw)[0]||'', px, y+ph+3.6);
+        doc.setTextColor(0);
       } catch (e) {}
-      if (col === 1 || i === photos.length-1) y += ph + (photos[i].caption || (photos[i-col]||{}).caption ? 8 : 4);
+      if (col === 1 || i === photos.length-1) y += ph + 8;
     });
     y += 2;
   }
@@ -8133,7 +8232,7 @@ function _genRongeursPDF(d, mode) {
   ensure(26);
   y += 8;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text(co.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+  doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
   doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
   doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
   doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
