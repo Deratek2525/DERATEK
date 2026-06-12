@@ -7339,6 +7339,26 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(0, 0, z), P(105, YR, z), w, pal);
     beam(P(X, 0, z), P(105, YR, z), w, pal);
   };
+  // Fenêtre de toit (Velux) découpée dans le pan gauche, avec chevêtre
+  const roofWindow = (x1, x2, z1, z2) => {
+    const yAt = x => YR * x / 105;
+    const A = P(x1, yAt(x1), z1), B = P(x2, yAt(x2), z1), C = P(x2, yAt(x2), z2), Dp = P(x1, yAt(x1), z2);
+    const g = ctx.createLinearGradient(A.x, A.y, C.x, C.y);
+    g.addColorStop(0, 'rgba(158,203,238,0.92)'); g.addColorStop(1, 'rgba(99,152,201,0.85)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.lineTo(C.x, C.y); ctx.lineTo(Dp.x, Dp.y); ctx.closePath(); ctx.fill();
+    // reflet du vitrage
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(A.x + (C.x - A.x) * 0.2, A.y + (C.y - A.y) * 0.2);
+    ctx.lineTo(A.x + (C.x - A.x) * 0.55, A.y + (C.y - A.y) * 0.55);
+    ctx.stroke();
+    // meneau central + cadre (chevêtre et chevrons d'enchevêtrure)
+    const zm = (z1 + z2) / 2;
+    beam(P(x1, yAt(x1), zm), P(x2, yAt(x2), zm), 2, PAL_DARK);
+    beam(A, B, 3.2, PAL_DARK); beam(Dp, C, 3.2, PAL_DARK);
+    beam(A, Dp, 3.2, PAL_DARK); beam(B, C, 3.2, PAL_DARK);
+  };
   // Ferme de combles aménagés (faux-entrait + jambettes, sans poinçon)
   const trussCombles = (z, pal, w) => {
     beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                 // entrait
@@ -7457,9 +7477,11 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
     beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
     chevrons2pans([0, Z/2, Z]);
+    roofWindow(34, 80, 150, 196);
     beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
     trussCombles(Z / 2, PAL_MID, 4.2);
     trussCombles(0, PAL_FRONT, 5.2);
+    chip('Fenêtre de toit', P(57, YR*57/105, 173), ox - 168, 80);
     chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
     chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
     chip('Faux-entrait', mid(P(66.2,58,0), P(143.8,58,0)), ox + 235, 95);
@@ -7588,9 +7610,11 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
     beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
     chevrons2pans([0, Z/2, Z]);
+    roofWindow(34, 80, 150, 196);
     beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
     truss(Z / 2, PAL_MID, 4.2);
     truss(0, PAL_FRONT, 5.2);
+    chip('Fenêtre de toit', P(57, YR*57/105, 173), ox - 168, 80);
     chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
     chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
     chip('Panne', mid(P(157.5,46,0), P(157.5,46,Z)), ox + 230, 88);
