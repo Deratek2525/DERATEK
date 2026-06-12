@@ -6794,7 +6794,7 @@ function renderDiagEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Schéma de la charpente ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
-      <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <canvas id="diag-schema-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
@@ -7115,10 +7115,10 @@ function renderDiagPhotos() {
   const box = $('diag-photos-box'); if (!box) return;
   const photos = (_editingDiag && _editingDiag.photos) || [];
   box.innerHTML = photos.map((p, i) => `
-    <div style="width:236px;">
+    <div style="width:310px;">
       <div style="position:relative;">
         <img src="${p.data}" onclick="openPhotoAnnotator(${i})" title="Cliquer pour agrandir et tracer sur la photo"
-          style="width:236px;height:160px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;cursor:crosshair;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
+          style="width:310px;height:210px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;cursor:crosshair;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
         <button type="button" onclick="removeDiagPhoto(${i})" title="Supprimer la photo"
           style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
         <button type="button" onclick="replaceDiagPhoto(${i})" title="Remplacer la photo"
@@ -7166,12 +7166,15 @@ function _diagNearestPart(p) {
 }
 // Colorie un élément cliqué et y attache une annotation en puce colorée
 function _diagAnnotateElement(ctx, c, part, p) {
+  // p et part sont en coordonnées logiques 640×380 → dessin mis à l'échelle
+  const k = c.width / 640;
+  ctx.save(); ctx.scale(k, k);
   ctx.strokeStyle = _diagColor; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.lineWidth = part.w + 2.6;
   ctx.beginPath(); ctx.moveTo(part.ax, part.ay); ctx.lineTo(part.bx, part.by); ctx.stroke();
   const txt = prompt('Annotation pour cet élément (laisser vide pour seulement le colorier) :');
   if (txt && txt.trim()) {
-    const lx = Math.min(Math.max(p.x + 70, 70), c.width - 70);
+    const lx = Math.min(Math.max(p.x + 70, 70), 640 - 70);
     const ly = Math.max(p.y - 44, 16);
     ctx.strokeStyle = _diagColor; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y); ctx.stroke();
@@ -7179,12 +7182,13 @@ function _diagAnnotateElement(ctx, c, part, p) {
     ctx.beginPath(); ctx.arc(p.x, p.y, 2.6, 0, Math.PI*2); ctx.fill();
     ctx.font = 'bold 13px Arial';
     const tw = ctx.measureText(txt.trim()).width, bw = tw + 16, bh = 20;
-    const bx = Math.min(Math.max(lx - bw/2, 4), c.width - bw - 4), by = Math.max(ly - bh/2, 2);
+    const bx = Math.min(Math.max(lx - bw/2, 4), 640 - bw - 4), by = Math.max(ly - bh/2, 2);
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 10); else ctx.rect(bx, by, bw, bh);
     ctx.fill();
     ctx.fillStyle = '#fff'; ctx.fillText(txt.trim(), bx + 8, by + 14.5);
   }
+  ctx.restore();
   if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
   refreshDiagPreview();
 }
@@ -7242,6 +7246,11 @@ let _diagSchemaParts = [];
 function _drawCharpente(ctx, W, H, modele) {
   _diagSchemaParts = [];
   ctx.clearRect(0, 0, W, H);
+  // Dessin en coordonnées logiques 640×380, mis à l'échelle du canevas réel
+  // (le registre des éléments cliquables reste en coordonnées logiques).
+  const _k = W / 640;
+  ctx.save(); ctx.scale(_k, _k);
+  W = 640; H = 380;
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
@@ -7590,6 +7599,7 @@ function _drawCharpente(ctx, W, H, modele) {
     chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   }
+  ctx.restore();
 }
 
 let _diagBgDataUrl = null;  // fond propre (schéma 3D ou photo importée), pour effacer les annotations
@@ -7612,17 +7622,21 @@ function initDiagSchema() {
     const p = pos(e);
     if (_diagTool === 'element' && _diagSchemaParts.length) {
       e.preventDefault();
-      const part = _diagNearestPart(p);
+      // Le registre des éléments est en coordonnées logiques 640×380
+      const kEl = c.width / 640;
+      const pl = { x: p.x / kEl, y: p.y / kEl };
+      const part = _diagNearestPart(pl);
       if (!part) { toast('Clique plus près d\'un élément de la charpente', '#e6aa1e'); return; }
-      _diagAnnotateElement(ctx, c, part, p);
+      _diagAnnotateElement(ctx, c, part, pl);
       return;
     }
+    const kTool = c.width / 640;   // épaisseurs proportionnelles au canevas
     if (_diagTool === 'text') {
       e.preventDefault();
       const txt = prompt('Texte à placer sur le schéma :');
       if (txt && txt.trim()) {
-        ctx.font = 'bold 16px Arial'; ctx.fillStyle = _diagColor;
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+        ctx.font = 'bold ' + Math.round(16 * kTool) + 'px Arial'; ctx.fillStyle = _diagColor;
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 * kTool; ctx.lineJoin = 'round';
         ctx.strokeText(txt.trim(), p.x, p.y); ctx.fillText(txt.trim(), p.x, p.y);
         if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
         refreshDiagPreview();
@@ -7632,7 +7646,7 @@ function initDiagSchema() {
     _diagDrawing = true;
     _diagStrokePts = [p];
     try { _diagSnapshot = ctx.getImageData(0, 0, c.width, c.height); } catch (err) { _diagSnapshot = null; }
-    ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault();
+    ctx.strokeStyle = _diagColor; ctx.lineWidth = 3 * kTool; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault();
   };
   const move = e => { if (!_diagDrawing) return; const p = pos(e); _diagStrokePts.push(p); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
   const end = () => {
@@ -7642,7 +7656,7 @@ function initDiagSchema() {
     const shape = _diagRecognizeShape(_diagStrokePts);
     if (shape && _diagSnapshot) {
       ctx.putImageData(_diagSnapshot, 0, 0);
-      ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = _diagColor; ctx.lineWidth = 3 * (c.width / 640); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath();
       if (shape.type === 'ellipse') ctx.ellipse(shape.cx, shape.cy, shape.a, shape.b, 0, 0, Math.PI*2);
       else if (shape.type === 'rect') ctx.rect(shape.x, shape.y, shape.w, shape.h);
@@ -7709,6 +7723,9 @@ function resetToDefaultSchema() {
 // Fond "plan des locaux" quadrillé pour le rapport rongeurs
 function _drawPlanBase(ctx, W, H) {
   ctx.clearRect(0, 0, W, H);
+  const _k = W / 640;
+  ctx.save(); ctx.scale(_k, _k);
+  W = 640; H = 380;
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
   // Quadrillage léger
   ctx.strokeStyle = '#e3e8f0'; ctx.lineWidth = 1;
@@ -7719,6 +7736,7 @@ function _drawPlanBase(ctx, W, H) {
   ctx.strokeRect(W*0.08, H*0.10, W*0.84, H*0.78);
   ctx.fillStyle = '#9aa3b2'; ctx.font = 'bold 13px Arial';
   ctx.fillText('Plan des locaux — dessine les murs, pièces, zones d\'activité et postes', W*0.10, H*0.97);
+  ctx.restore();
 }
 
 // Corrige un texte libre du diagnostic via Mistral (orthographe + formulation pro)
@@ -8255,7 +8273,7 @@ let _diagPreviewUrl = null;
 function _syncDiagPreviewPane() {
   const pane = $('diag-preview-pane'), box = $('modal-diag-box'), btn = $('diag-preview-btn');
   if (pane) pane.style.display = _diagPreviewOn ? 'block' : 'none';
-  if (box) box.style.maxWidth = _diagPreviewOn ? '1300px' : '740px';
+  if (box) box.style.maxWidth = _diagPreviewOn ? '1600px' : '1020px';
   if (btn) { btn.classList.toggle('btn-navy', _diagPreviewOn); btn.classList.toggle('btn-ghost', !_diagPreviewOn); }
 }
 function toggleDiagPreview() {
@@ -8516,7 +8534,7 @@ function renderRongeursEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Plan des locaux ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
-      <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <canvas id="diag-schema-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
