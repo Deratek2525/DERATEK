@@ -6810,7 +6810,7 @@ function renderDiagEditor() {
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
         <select class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:5px 8px;" onchange="setDiagSchemaModele(this.value)" title="Choisir le modèle de schéma 3D (remplace le fond et efface les annotations)">
-          ${[['2pans','🪵 Charpente 2 pans'],['4pans','🏠 Toit 4 pans (croupe)'],['appentis','📐 Appentis 1 pan'],['combles','🛏 Combles aménagés'],['plancher','🟫 Plancher / solivage']].map(o => `<option value="${o[0]}" ${_diagSchemaModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+          ${[['2pans','🪵 Charpente 2 pans'],['4pans','🏠 Toit 4 pans (croupe)'],['appentis','📐 Appentis 1 pan'],['combles','🛏 Combles aménagés'],['plancher','🟫 Plancher / solivage'],['parquet','🪵 Parquet (lames)']].map(o => `<option value="${o[0]}" ${_diagSchemaModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
         </select>
         <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()" title="Redessiner le modèle choisi">↻ Redessiner</button>
         <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine pour entourer les zones touchées ; en mode Texte, clique pour placer une note. La légende des couleurs est ajoutée automatiquement au PDF.</span>
@@ -7206,7 +7206,7 @@ function _drawCharpente(ctx, W, H, modele) {
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
-  const isPlancher = modele === 'plancher';
+  const isPlancher = modele === 'plancher' || modele === 'parquet';
   const s = isPlancher ? 1.5 : 1.25;
   const ox = W * 0.535, oy = isPlancher ? 170 : 108;
   const P = (x, y, z) => ({ x: ox + (x - z) * 0.866 * s, y: oy + (x + z) * 0.275 * s - y * s });
@@ -7297,7 +7297,38 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(X, 0, z), P(105, YR, z), w, pal);                  // arbalétrier d.
   };
 
-  if (modele === 'plancher') {
+  if (modele === 'parquet') {
+    // ---- Parquet (lames, lambourdes, plinthes) ----
+    // Plinthes (murs d'angle au fond)
+    face([P(0,0,0), P(0,0,Z), P(0,16,Z), P(0,16,0)], 'rgba(122,84,40,0.85)', 'rgba(94,61,24,0.85)');
+    face([P(0,0,Z), P(X,0,Z), P(X,16,Z), P(0,16,Z)], 'rgba(108,72,32,0.85)', 'rgba(86,55,22,0.85)');
+    // Surface du parquet
+    face([P(0,0,0), P(X,0,0), P(X,0,Z), P(0,0,Z)], 'rgba(228,196,148,0.95)', 'rgba(204,168,116,0.95)');
+    // Lames (rangées) + abouts décalés
+    ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(150,110,60,0.65)';
+    for (let x = 21; x < X; x += 21) {
+      const a = P(x, 0, 0), b = P(x, 0, Z);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.lineWidth = 1.1; ctx.strokeStyle = 'rgba(150,110,60,0.5)';
+    for (let i = 0; i < 10; i++) {
+      const dec = (i % 3) * 28;
+      for (let z = 20 + dec; z < Z - 6; z += 84) {
+        const a = P(i*21, 0, z), b = P((i+1)*21, 0, z);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    // Rives
+    beam(P(0, 0, 0), P(X, 0, 0), 3.6, PAL_FRONT);
+    beam(P(X, 0, 0), P(X, 0, Z), 3.2, PAL_MID);
+    // Lambourdes apparentes sous le bord avant
+    beam(P(0, -11, 6), P(X, -11, 6), 4.2, PAL_DARK);
+    for (let x = 16; x < X; x += 44) beam(P(x, -11, 2), P(x, 0, 2), 3.4, PAL_BACK);
+    chip('Plinthe', P(0, 10, 125), ox - 250, 60);
+    chip('Lames de parquet', P(105, 0, 125), ox + 60, 36);
+    chip('About / joint', P(115.5, 0, 48), ox + 235, 120);
+    chip('Lambourde', mid(P(0,-11,6), P(X,-11,6)), ox + 160, 270);
+  } else if (modele === 'plancher') {
     // ---- Solivage seul ----
     beam(P(0, 0, 0), P(0, 0, Z), 4.4, PAL_DARK);
     beam(P(X, 0, 0), P(X, 0, Z), 4.4, PAL_DARK);
