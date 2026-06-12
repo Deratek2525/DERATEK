@@ -6606,10 +6606,10 @@ const _DIAG_MARKERS = {
   rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
-  statut: 'STATUT', noSign: 'NOSIGN',
+  statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -8038,7 +8038,7 @@ function openNewRongeurs() {
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
     traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
     rodenticides: [], actions: [], photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', ruban: '',
     rodenticideAutre: '', postesNb: '', suiviRem: '',
     contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
     dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
@@ -8122,6 +8122,12 @@ function renderRongeursEditor() {
       <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
       ${_diagTypeBureauFields(d)}
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Nuisible affiché dans le ruban du PDF</label>
+        <select class="form-input" oninput="_editingDiag.ruban=this.value">
+          <option value="" ${!d.ruban?'selected':''}>Dératisation (par défaut)</option>
+          ${['Rongeurs','Rats','Souris','Rat brun (surmulot)','Rats d\'égout','Rat noir','Souris domestique','Mulot','Campagnol','Loir / Lérot','Fouine','Chauves-souris'].map(o => `<option ${d.ruban===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
@@ -8344,7 +8350,7 @@ function _genRongeursPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
-  doc.text('Dératisation — détection & plan d\'action', M+6, y+12.4);
+  doc.text((d.ruban || 'Dératisation') + ' — détection & plan d\'action', M+6, y+12.4);
   doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
