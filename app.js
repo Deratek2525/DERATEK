@@ -7240,6 +7240,12 @@ function _diagRecognizeShape(pts) {
   if (Math.abs(mean-1) < 0.28 && sd < 0.28) return { type:'ellipse', cx, cy, a, b };
   return null;
 }
+// ============================================================
+// MOTEUR DE SCHÉMA CHARPENTE — géométrie 3D + rendu WebGL (three.js)
+// avec repli axonométrique 2D si WebGL indisponible.
+// ============================================================
+let _diagSchemaParts = [];
+let _beamTag = 'Bois';
 // Modèle de charpente choisi pour le schéma 3D (rapport bois)
 let _diagSchemaModele = '2pans';
 function setDiagSchemaModele(m) { _diagSchemaModele = m || '2pans'; resetToDefaultSchema(); }
@@ -7247,138 +7253,26 @@ function setDiagSchemaModele(m) { _diagSchemaModele = m || '2pans'; resetToDefau
 // Dispatcher : dessine le gabarit choisi
 function _drawSchemaBase(ctx, W, H) { _drawCharpente(ctx, W, H, _diagSchemaModele); }
 
-// Registre des éléments dessinés (pour l'outil « 🎯 Élément » : clic → couleur + annotation)
-let _diagSchemaParts = [];
-let _beamTag = 'Bois';
-// Moteur de dessin isométrique des gabarits de charpente
-function _drawCharpente(ctx, W, H, modele) {
-  _diagSchemaParts = [];
-  ctx.clearRect(0, 0, W, H);
-  // Dessin en coordonnées logiques 640×380, mis à l'échelle du canevas réel
-  // (le registre des éléments cliquables reste en coordonnées logiques).
-  const _k = W / 640;
-  ctx.save(); ctx.scale(_k, _k);
-  W = 640; H = 380;
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-
-  const isPlancher = modele === 'plancher' || modele === 'parquet';
-  const s = isPlancher ? 1.5 : 1.25;
-  const ox = W * 0.535, oy = isPlancher ? 170 : 108;
-  const P = (x, y, z) => ({ x: ox + (x - z) * 0.866 * s, y: oy + (x + z) * 0.275 * s - y * s });
+// ---------- 1) GÉOMÉTRIE : les gabarits émettent des éléments 3D ----------
+function _collectCharpente(modele) {
+  const items = [], chips = [];
+  const P = (x, y, z) => ({ x: x, y: y, z: z });
+  const beam = (a, b, w, pal) => items.push({ t: 'seg', a: a, b: b, w: w, pal: pal, tag: _beamTag });
+  const line3 = (a, b, col, w) => items.push({ t: 'line', a: a, b: b, col: col, w: w || 1.2 });
+  const face = (pts, c1, c2) => items.push({ t: 'face', pts: pts, c1: c1, c2: c2 || c1 });
+  const chip = (txt, target, lx, ly) => chips.push({ txt: txt, target: target, lx: lx, ly: ly });
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
   const X = 210, Z = 250, YR = 92, YF = -26;
+  const isPlancher = modele === 'plancher' || modele === 'parquet';
+  const ox = 342.4;   // repère horizontal des étiquettes (espace 640×380)
 
-  // Ombre au sol en dégradé radial (douce et réaliste)
-  {
-    const shx = ox - 28, shy = oy + (X + Z) * 0.275 * s * 0.62 + (isPlancher ? 14 : 40);
-    ctx.save();
-    ctx.translate(shx, shy); ctx.scale(1, 32 / 270);
-    const sg = ctx.createRadialGradient(0, 0, 12, 0, 0, 270);
-    sg.addColorStop(0, 'rgba(15,23,42,0.17)');
-    sg.addColorStop(0.7, 'rgba(15,23,42,0.08)');
-    sg.addColorStop(1, 'rgba(15,23,42,0)');
-    ctx.fillStyle = sg;
-    ctx.beginPath(); ctx.arc(0, 0, 270, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  // Poutre « rendu CAO » : vrai prisme 3D — face latérale (dégradé), face
-  // supérieure claire, chants d'extrémité, veines du bois, arêtes marquées.
-  const beam = (a, b, w, pal) => {
-    _diagSchemaParts.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, w: w, tag: _beamTag });
-    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
-    let nx = -dy / L, ny = dx / L;
-    if (ny < 0) { nx = -nx; ny = -ny; }          // normale orientée vers le bas
-    const hw = w / 2;
-    const ex = -w * 0.40, ey = -w * 0.52;        // extrusion vers la lumière
-    // Pièces fines (chevrons, liteaux…) : simple trait dégradé, plus léger
-    if (w < 2.6) {
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(50,33,12,0.15)'; ctx.lineWidth = w + 1.6;
-      ctx.beginPath(); ctx.moveTo(a.x + 1.6, a.y + 2.2); ctx.lineTo(b.x + 1.6, b.y + 2.2); ctx.stroke();
-      const gs = ctx.createLinearGradient(a.x - nx * w, a.y - ny * w, a.x + nx * w, a.y + ny * w);
-      gs.addColorStop(0, pal[0]); gs.addColorStop(1, pal[2]);
-      ctx.strokeStyle = gs; ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      return;
-    }
-    const A1 = { x: a.x - nx * hw, y: a.y - ny * hw }, B1 = { x: b.x - nx * hw, y: b.y - ny * hw };
-    const A2 = { x: a.x + nx * hw, y: a.y + ny * hw }, B2 = { x: b.x + nx * hw, y: b.y + ny * hw };
-    const quad = (p1, p2, p3, p4, fill) => {
-      ctx.fillStyle = fill;
-      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath(); ctx.fill();
-    };
-    // ombre portée douce
-    ctx.lineCap = 'butt';
-    ctx.strokeStyle = 'rgba(50,33,12,0.14)'; ctx.lineWidth = w + 3;
-    ctx.beginPath(); ctx.moveTo(a.x + 2.6, a.y + 3.6); ctx.lineTo(b.x + 2.6, b.y + 3.6); ctx.stroke();
-    // face latérale (corps)
-    const g = ctx.createLinearGradient(A1.x, A1.y, A2.x, A2.y);
-    g.addColorStop(0, pal[1]); g.addColorStop(1, pal[2]);
-    quad(A1, B1, B2, A2, g);
-    // veines du bois sur la face latérale
-    ctx.strokeStyle = 'rgba(70,45,15,0.20)'; ctx.lineWidth = Math.max(0.6, w * 0.08);
-    [0.32, 0.64].forEach(t => {
-      ctx.beginPath();
-      ctx.moveTo(A1.x + (A2.x - A1.x) * t, A1.y + (A2.y - A1.y) * t);
-      ctx.lineTo(B1.x + (B2.x - B1.x) * t, B1.y + (B2.y - B1.y) * t);
-      ctx.stroke();
-    });
-    // face supérieure (claire, côté lumière)
-    quad(A1, B1, { x: B1.x + ex, y: B1.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[0]);
-    // chants d'extrémité
-    quad(B1, B2, { x: B2.x + ex, y: B2.y + ey }, { x: B1.x + ex, y: B1.y + ey }, pal[1]);
-    quad(A1, A2, { x: A2.x + ex, y: A2.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[1]);
-    // arêtes
-    ctx.strokeStyle = 'rgba(58,37,12,0.45)'; ctx.lineWidth = 0.7;
-    ctx.beginPath(); ctx.moveTo(A1.x, A1.y); ctx.lineTo(B1.x, B1.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(A2.x, A2.y); ctx.lineTo(B2.x, B2.y); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.moveTo(A1.x + ex, A1.y + ey); ctx.lineTo(B1.x + ex, B1.y + ey); ctx.stroke();
-  };
   const PAL_FRONT = ['#cf9a5e', '#a9742f', '#7c5318'];
   const PAL_MID   = ['#b98a4e', '#956427', '#6e4815'];
   const PAL_BACK  = ['#a37843', '#825621', '#5e3d11'];
   const PAL_DARK  = ['#8d6536', '#6e4a1b', '#4e330c'];
   const PAL_CHEV  = ['#dcae77', '#bd8e51', '#9a6c2e'];
 
-  const face = (pts, c1, c2) => {
-    const g = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[2].x, pts[2].y);
-    g.addColorStop(0, c1); g.addColorStop(1, c2);
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.closePath(); ctx.fill();
-  };
-  const chip = (txt, target, lx, ly) => {
-    ctx.strokeStyle = 'rgba(100,116,139,0.85)'; ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(target.x, target.y); ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(target.x, target.y, 3.1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#64748b';
-    ctx.beginPath(); ctx.arc(target.x, target.y, 2.1, 0, Math.PI * 2); ctx.fill();
-    ctx.font = 'bold 11px Arial';
-    const tw = ctx.measureText(txt).width, bw = tw + 14, bh = 18;
-    const bx = lx - bw / 2, by = ly - bh / 2;
-    ctx.save();
-    ctx.shadowColor = 'rgba(13,27,62,0.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
-    ctx.fillStyle = '#0d1b3e';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 9); else ctx.rect(bx, by, bw, bh);
-    ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx + 0.5, by + 0.5, bw - 1, bh - 1, 8.5); else ctx.rect(bx, by, bw, bh);
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.fillText(txt, bx + 7, by + 12.5);
-  };
-  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-
-  // Plancher de solives (commun à plusieurs gabarits)
+  // Plancher de solives (commun)
   const deck = (yf) => {
     _beamTag = 'Poutre porteuse';
     beam(P(0, yf, 0), P(0, yf, Z), 3, PAL_DARK);
@@ -7393,7 +7287,6 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(0, yf, 0), P(0, 0, 0), 2.4, PAL_MID); beam(P(X, yf, 0), P(X, 0, 0), 2.4, PAL_MID);
     beam(P(0, yf, Z), P(0, 0, Z), 2.2, PAL_BACK); beam(P(X, yf, Z), P(X, 0, Z), 2.2, PAL_BACK);
   };
-  // Chevrons sur les 2 pans (en sautant l'emplacement des fermes)
   const chevrons2pans = (skip) => {
     _beamTag = 'Chevron';
     for (let z = 14; z <= Z - 14; z += 26) {
@@ -7402,7 +7295,6 @@ function _drawCharpente(ctx, W, H, modele) {
       beam(P(X, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
     }
   };
-  // Ferme traditionnelle complète
   const truss = (z, pal, w) => {
     _beamTag = 'Poutre principale';
     beam(P(0, 0, z), P(X, 0, z), w + 1, pal);
@@ -7415,74 +7307,50 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(0, 0, z), P(105, YR, z), w, pal);
     beam(P(X, 0, z), P(105, YR, z), w, pal);
   };
-  // Fenêtre de toit (Velux) découpée dans le pan gauche, avec chevêtre
-  const roofWindow = (x1, x2, z1, z2) => {
-    const yAt = x => YR * x / 105;
-    const A = P(x1, yAt(x1), z1), B = P(x2, yAt(x2), z1), C = P(x2, yAt(x2), z2), Dp = P(x1, yAt(x1), z2);
-    const g = ctx.createLinearGradient(A.x, A.y, C.x, C.y);
-    g.addColorStop(0, 'rgba(158,203,238,0.92)'); g.addColorStop(1, 'rgba(99,152,201,0.85)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.lineTo(C.x, C.y); ctx.lineTo(Dp.x, Dp.y); ctx.closePath(); ctx.fill();
-    // reflet du vitrage
-    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(A.x + (C.x - A.x) * 0.2, A.y + (C.y - A.y) * 0.2);
-    ctx.lineTo(A.x + (C.x - A.x) * 0.55, A.y + (C.y - A.y) * 0.55);
-    ctx.stroke();
-    // meneau central + cadre (chevêtre et chevrons d'enchevêtrure)
-    _beamTag = 'Encadrement bois';
-    const zm = (z1 + z2) / 2;
-    beam(P(x1, yAt(x1), zm), P(x2, yAt(x2), zm), 2, PAL_DARK);
-    beam(A, B, 3.2, PAL_DARK); beam(Dp, C, 3.2, PAL_DARK);
-    beam(A, Dp, 3.2, PAL_DARK); beam(B, C, 3.2, PAL_DARK);
-  };
-  // Ferme de combles aménagés (faux-entrait + jambettes, sans poinçon)
   const trussCombles = (z, pal, w) => {
     _beamTag = 'Poutre principale';
-    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                 // entrait
+    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);
     _beamTag = 'Jambette';
-    beam(P(32, 0, z), P(32, 28, z), w - 1.4, pal);            // jambette g.
-    beam(P(178, 0, z), P(178, 28, z), w - 1.4, pal);          // jambette d.
+    beam(P(32, 0, z), P(32, 28, z), w - 1.4, pal);
+    beam(P(178, 0, z), P(178, 28, z), w - 1.4, pal);
     _beamTag = 'Faux-entrait';
-    beam(P(66.2, 58, z), P(143.8, 58, z), w - 0.8, pal);      // faux-entrait
+    beam(P(66.2, 58, z), P(143.8, 58, z), w - 0.8, pal);
     _beamTag = 'Arbalétrier';
-    beam(P(0, 0, z), P(105, YR, z), w, pal);                  // arbalétrier g.
-    beam(P(X, 0, z), P(105, YR, z), w, pal);                  // arbalétrier d.
+    beam(P(0, 0, z), P(105, YR, z), w, pal);
+    beam(P(X, 0, z), P(105, YR, z), w, pal);
+  };
+  // Fenêtre de toit (Velux) avec chevêtre, dans le pan gauche
+  const roofWindow = (x1, x2, z1, z2) => {
+    const yAt = x => YR * x / 105;
+    const A = P(x1, yAt(x1) + 0.8, z1), B = P(x2, yAt(x2) + 0.8, z1), C = P(x2, yAt(x2) + 0.8, z2), Dp = P(x1, yAt(x1) + 0.8, z2);
+    face([A, B, C, Dp], 'rgba(126,176,219,0.62)', 'rgba(96,148,198,0.5)');
+    const zm = (z1 + z2) / 2;
+    _beamTag = 'Encadrement bois';
+    beam(P(x1, yAt(x1), zm), P(x2, yAt(x2), zm), 2.6, PAL_DARK);
+    beam(A, B, 3.2, PAL_DARK); beam(Dp, C, 3.2, PAL_DARK);
+    beam(A, Dp, 3.2, PAL_DARK); beam(B, C, 3.2, PAL_DARK);
   };
 
   if (modele === 'parquet') {
     // ---- Parquet (lames, lambourdes, plinthes) ----
-    // Plinthes (murs d'angle au fond)
-    face([P(0,0,0), P(0,0,Z), P(0,16,Z), P(0,16,0)], 'rgba(122,84,40,0.85)', 'rgba(94,61,24,0.85)');
-    face([P(0,0,Z), P(X,0,Z), P(X,16,Z), P(0,16,Z)], 'rgba(108,72,32,0.85)', 'rgba(86,55,22,0.85)');
-    // Surface du parquet
-    face([P(0,0,0), P(X,0,0), P(X,0,Z), P(0,0,Z)], 'rgba(228,196,148,0.95)', 'rgba(204,168,116,0.95)');
-    // Lames (rangées) + abouts décalés
-    ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(150,110,60,0.65)';
-    for (let x = 21; x < X; x += 21) {
-      const a = P(x, 0, 0), b = P(x, 0, Z);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    ctx.lineWidth = 1.1; ctx.strokeStyle = 'rgba(150,110,60,0.5)';
+    face([P(0, 0, 0), P(0, 0, Z), P(0, 16, Z), P(0, 16, 0)], 'rgba(122,84,40,0.92)');
+    face([P(0, 0, Z), P(X, 0, Z), P(X, 16, Z), P(0, 16, Z)], 'rgba(108,72,32,0.92)');
+    face([P(0, 0, 0), P(X, 0, 0), P(X, 0, Z), P(0, 0, Z)], 'rgba(228,196,148,0.97)', 'rgba(204,168,116,0.97)');
+    for (let x = 21; x < X; x += 21) line3(P(x, 0.5, 0), P(x, 0.5, Z), 'rgba(150,110,60,0.85)', 1.1);
     for (let i = 0; i < 10; i++) {
       const dec = (i % 3) * 28;
-      for (let z = 20 + dec; z < Z - 6; z += 84) {
-        const a = P(i*21, 0, z), b = P((i+1)*21, 0, z);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      }
+      for (let z = 20 + dec; z < Z - 6; z += 84) line3(P(i * 21, 0.5, z), P((i + 1) * 21, 0.5, z), 'rgba(150,110,60,0.7)', 1);
     }
-    // Rives
     _beamTag = 'Plancher bois';
     beam(P(0, 0, 0), P(X, 0, 0), 3.6, PAL_FRONT);
     beam(P(X, 0, 0), P(X, 0, Z), 3.2, PAL_MID);
-    // Lambourdes apparentes sous le bord avant
     _beamTag = 'Lambourde';
     beam(P(0, -11, 6), P(X, -11, 6), 4.2, PAL_DARK);
     for (let x = 16; x < X; x += 44) beam(P(x, -11, 2), P(x, 0, 2), 3.4, PAL_BACK);
     chip('Plinthe', P(0, 10, 125), ox - 250, 60);
     chip('Lames de parquet', P(105, 0, 125), ox + 60, 36);
     chip('About / joint', P(115.5, 0, 48), ox + 235, 120);
-    chip('Lambourde', mid(P(0,-11,6), P(X,-11,6)), ox + 160, 270);
+    chip('Lambourde', mid(P(0, -11, 6), P(X, -11, 6)), ox + 160, 270);
   } else if (modele === 'plancher') {
     // ---- Solivage seul ----
     _beamTag = 'Poutre porteuse';
@@ -7490,47 +7358,47 @@ function _drawCharpente(ctx, W, H, modele) {
     beam(P(X, 0, 0), P(X, 0, Z), 4.4, PAL_DARK);
     beam(P(0, 0, Z), P(X, 0, Z), 4, PAL_BACK);
     _beamTag = 'Poutre principale';
-    beam(P(105, -7, 0), P(105, -7, Z), 6.2, PAL_DARK);        // poutre maîtresse
+    beam(P(105, -7, 0), P(105, -7, Z), 6.2, PAL_DARK);
     _beamTag = 'Solive';
     for (let z = 12; z <= Z - 12; z += 22) beam(P(0, 0, z), P(X, 0, z), 2.6, PAL_MID);
     _beamTag = 'Poutre porteuse';
     beam(P(0, 0, 0), P(X, 0, 0), 4.6, PAL_FRONT);
-    chip('Muralière', mid(P(0,0,0), P(0,0,Z)), ox - 250, 90);
+    chip('Muralière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 250, 90);
     chip('Solive', P(105, 0, 56), ox + 130, 56);
-    chip('Poutre maîtresse', mid(P(105,-7,0), P(105,-7,Z)), ox - 150, 290);
+    chip('Poutre maîtresse', mid(P(105, -7, 0), P(105, -7, Z)), ox - 150, 290);
     chip('Rive / chevêtre', P(160, 0, 0), ox + 230, 230);
   } else if (modele === 'appentis') {
     // ---- Toit 1 pan ----
     const YH = 70, YB = 14;
     const yAt = x => YH - (YH - YB) * (x / X);
     deck(YF); deckLinks(YF);
-    [0, Z/2, Z].forEach((z, i) => {
+    [0, Z / 2, Z].forEach((z, i) => {
       const pal = i === 2 ? PAL_BACK : (i === 1 ? PAL_MID : PAL_FRONT);
       const w = i === 2 ? 3.4 : (i === 1 ? 4 : 5);
       _beamTag = 'Poutre principale';
-      beam(P(0, 0, z), P(X, 0, z), w, pal);                  // entrait
+      beam(P(0, 0, z), P(X, 0, z), w, pal);
       _beamTag = 'Montant bois';
-      beam(P(0, 0, z), P(0, YH, z), w - 0.6, pal);           // poteau haut
-      beam(P(X, 0, z), P(X, YB, z), w - 0.6, pal);           // poteau bas
+      beam(P(0, 0, z), P(0, YH, z), w - 0.6, pal);
+      beam(P(X, 0, z), P(X, YB, z), w - 0.6, pal);
       _beamTag = 'Arbalétrier';
-      beam(P(0, YH, z), P(X, YB, z), w, pal);                // arba (pente)
+      beam(P(0, YH, z), P(X, YB, z), w, pal);
     });
-    face([P(0,YH,0), P(0,YH,Z), P(X,YB,Z), P(X,YB,0)], 'rgba(226,190,140,0.32)', 'rgba(186,146,96,0.16)');
+    face([P(0, YH, 0), P(0, YH, Z), P(X, YB, Z), P(X, YB, 0)], 'rgba(226,190,140,0.32)', 'rgba(186,146,96,0.16)');
     _beamTag = 'Chevron';
     for (let z = 14; z <= Z - 14; z += 26) {
-      if ([0, Z/2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
+      if ([0, Z / 2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
       beam(P(0, YH, z), P(X, YB, z), 1.7, PAL_CHEV);
     }
     _beamTag = 'Panne sablière';
-    beam(P(0, YH, 0), P(0, YH, Z), 4.4, PAL_DARK);           // sablière haute
-    beam(P(X, YB, 0), P(X, YB, Z), 4.4, PAL_DARK);           // sablière basse
+    beam(P(0, YH, 0), P(0, YH, Z), 4.4, PAL_DARK);
+    beam(P(X, YB, 0), P(X, YB, Z), 4.4, PAL_DARK);
     _beamTag = 'Panne intermédiaire';
-    beam(P(70, yAt(70), 0), P(70, yAt(70), Z), 3.4, PAL_MID);   // panne
+    beam(P(70, yAt(70), 0), P(70, yAt(70), Z), 3.4, PAL_MID);
     beam(P(140, yAt(140), 0), P(140, yAt(140), Z), 3.4, PAL_MID);
-    chip('Sablière haute', mid(P(0,YH,0), P(0,YH,Z)), ox - 215, 30);
-    chip('Panne', mid(P(70,yAt(70),0), P(70,yAt(70),Z)), ox - 90, 60);
+    chip('Sablière haute', mid(P(0, YH, 0), P(0, YH, Z)), ox - 215, 30);
+    chip('Panne', mid(P(70, yAt(70), 0), P(70, yAt(70), Z)), ox - 90, 60);
     chip('Chevron', P(105, yAt(105), 40), ox + 150, 30);
-    chip('Sablière basse', mid(P(X,YB,0), P(X,YB,Z)), ox + 240, 150);
+    chip('Sablière basse', mid(P(X, YB, 0), P(X, YB, Z)), ox + 240, 150);
     chip('Poteau', P(0, 35, 0), ox - 250, 175);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   } else if (modele === '4pans') {
@@ -7538,123 +7406,45 @@ function _drawCharpente(ctx, W, H, modele) {
     const R0 = P(105, YR, 62), R1 = P(105, YR, 188);
     deck(YF); deckLinks(YF);
     truss(188, PAL_BACK, 3.6);
-    face([P(0,0,0), P(0,0,Z), P(105,YR,188), P(105,YR,62)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
-    face([P(X,0,0), P(X,0,Z), P(105,YR,188), P(105,YR,62)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
-    face([P(0,0,0), P(X,0,0), R0], 'rgba(205,168,118,0.40)', 'rgba(185,148,98,0.25)');
-    face([P(0,0,Z), P(X,0,Z), R1], 'rgba(165,124,76,0.30)', 'rgba(150,110,64,0.18)');
+    face([P(0, 0, 0), P(0, 0, Z), P(105, YR, 188), P(105, YR, 62)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
+    face([P(X, 0, 0), P(X, 0, Z), P(105, YR, 188), P(105, YR, 62)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
+    face([P(0, 0, 0), P(X, 0, 0), R0], 'rgba(205,168,118,0.40)', 'rgba(185,148,98,0.25)');
+    face([P(0, 0, Z), P(X, 0, Z), R1], 'rgba(165,124,76,0.30)', 'rgba(150,110,64,0.18)');
     _beamTag = 'Panne sablière';
     beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
     beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
     beam(P(0, 0, 0), P(X, 0, 0), 4.2, PAL_FRONT);
     beam(P(0, 0, Z), P(X, 0, Z), 3.6, PAL_BACK);
-    _beamTag = 'Arêtier';
     _beamTag = 'Panne faîtière';
-    beam(P(105, YR, 62), P(105, YR, 188), 5, PAL_DARK);       // faîtière
+    beam(P(105, YR, 62), P(105, YR, 188), 5, PAL_DARK);
     _beamTag = 'Arêtier';
-    beam(P(0, 0, 0), R0, 4.4, PAL_FRONT);                     // arêtiers
+    beam(P(0, 0, 0), R0, 4.4, PAL_FRONT);
     beam(P(X, 0, 0), R0, 4.4, PAL_FRONT);
     beam(P(0, 0, Z), R1, 3.8, PAL_BACK);
     beam(P(X, 0, Z), R1, 3.8, PAL_BACK);
     truss(125, PAL_MID, 4.2);
     truss(62, PAL_FRONT, 5);
     chip('Faîtière', mid(R0, R1), ox - 130, 26);
-    chip('Arêtier', mid(P(X,0,0), R0), ox + 190, 40);
-    chip('Croupe', mid(mid(P(0,0,0), P(X,0,0)), R0), ox + 240, 120);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Arêtier', mid(P(X, 0, 0), R0), ox + 190, 40);
+    chip('Croupe', mid(mid(P(0, 0, 0), P(X, 0, 0)), R0), ox + 240, 120);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
     chip('Entrait', P(160, 0, 62), ox + 230, 255);
-    chip('Solives', P(40, YF, 110), ox - 255, 280);
-  } else if (modele === 'combles') {
-    // ---- Combles aménagés ----
-    deck(YF); deckLinks(YF);
-    trussCombles(Z, PAL_BACK, 3.6);
-    face([P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
-    face([P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
-    _beamTag = 'Panne sablière';
-    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
-    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
-    _beamTag = 'Panne intermédiaire';
-    beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
-    beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
-    chevrons2pans([0, Z/2, Z]);
-    roofWindow(34, 80, 150, 196);
-    _beamTag = 'Panne faîtière';
-    beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
-    trussCombles(Z / 2, PAL_MID, 4.2);
-    trussCombles(0, PAL_FRONT, 5.2);
-    chip('Fenêtre de toit', P(57, YR*57/105, 173), ox - 168, 80);
-    chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
-    chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
-    chip('Faux-entrait', mid(P(66.2,58,0), P(143.8,58,0)), ox + 235, 95);
-    chip('Jambette', P(178, 14, 0), ox + 245, 200);
-    chip('Arbalétrier', mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
-    chip('Entrait', P(120, 0, 0), ox + 215, 262);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
-    chip('Solives', P(40, YF, 110), ox - 255, 280);
-  } else if (modele === 'mansarde') {
-    // ---- Toit mansardé (brisis + terrasson) ----
-    const BX = 38, BY = 62, RY = 86;          // point de bris, faîte
-    deck(YF); deckLinks(YF);
-    const mTruss = (z, pal, w) => {
-      _beamTag = 'Poutre principale';
-      beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                    // entrait
-      _beamTag = 'Poinçon';
-      beam(P(105, 0, z), P(105, RY, z), w - 0.5, pal);             // poinçon
-      _beamTag = 'Faux-entrait';
-      beam(P(BX, BY, z), P(X - BX, BY, z), w - 0.6, pal);          // faux-entrait (niveau de bris)
-      _beamTag = 'Arbalétrier';
-      beam(P(0, 0, z), P(BX, BY, z), w, pal);                      // brisis g.
-      beam(P(X, 0, z), P(X - BX, BY, z), w, pal);                  // brisis d.
-      beam(P(BX, BY, z), P(105, RY, z), w, pal);                   // terrasson g.
-      beam(P(X - BX, BY, z), P(105, RY, z), w, pal);               // terrasson d.
-    };
-    mTruss(Z, PAL_BACK, 3.6);
-    face([P(0,0,0), P(0,0,Z), P(BX,BY,Z), P(BX,BY,0)], 'rgba(186,140,90,0.42)', 'rgba(160,118,72,0.24)');
-    face([P(X,0,0), P(X,0,Z), P(X-BX,BY,Z), P(X-BX,BY,0)], 'rgba(166,122,74,0.46)', 'rgba(140,100,58,0.26)');
-    face([P(BX,BY,0), P(BX,BY,Z), P(105,RY,Z), P(105,RY,0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.16)');
-    face([P(X-BX,BY,0), P(X-BX,BY,Z), P(105,RY,Z), P(105,RY,0)], 'rgba(196,152,100,0.36)', 'rgba(170,128,80,0.20)');
-    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);                    // sablières
-    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
-    _beamTag = 'Panne intermédiaire';
-    beam(P(BX, BY, 0), P(BX, BY, Z), 4, PAL_DARK);                 // pannes de bris
-    beam(P(X - BX, BY, 0), P(X - BX, BY, Z), 4, PAL_DARK);
-    _beamTag = 'Chevron';
-    for (let z = 14; z <= Z - 14; z += 26) {
-      if ([0, Z/2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
-      beam(P(0, 0, z), P(BX, BY, z), 1.7, PAL_CHEV);
-      beam(P(X, 0, z), P(X - BX, BY, z), 1.7, PAL_CHEV);
-      beam(P(BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
-      beam(P(X - BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
-    }
-    _beamTag = 'Panne faîtière';
-    beam(P(105, RY, 0), P(105, RY, Z), 5, PAL_DARK);               // faîtière
-    mTruss(Z / 2, PAL_MID, 4.2);
-    mTruss(0, PAL_FRONT, 5.2);
-    chip('Faîtière', mid(P(105,RY,0), P(105,RY,Z)), ox - 150, 24);
-    chip('Terrasson', P(71.5, 74, 60), ox - 25, 52);
-    chip('Panne de bris', mid(P(X-BX,BY,0), P(X-BX,BY,Z)), ox + 225, 76);
-    chip('Brisis', P(X - BX/2, BY/2, 0), ox + 250, 165);
-    chip('Faux-entrait', P(85, BY, 0), ox + 235, 120);
-    chip('Entrait', P(160, 0, 0), ox + 225, 255);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   } else if (modele === 'demicroupe') {
     // ---- 2 pans à demi-croupes (ferme bernoise) ----
-    const ZR0 = 40, ZR1 = 210;                 // faîtière raccourcie
+    const ZR0 = 40, ZR1 = 210;
     const R0 = P(105, YR, ZR0), R1 = P(105, YR, ZR1);
     deck(YF); deckLinks(YF);
-    // Pignon arrière (mur trapèze sous le niveau de demi-croupe)
-    face([P(0,0,Z), P(X,0,Z), P(157.5,46,Z), P(52.5,46,Z)], 'rgba(203,213,225,0.55)', 'rgba(173,186,204,0.45)');
+    face([P(0, 0, Z), P(X, 0, Z), P(157.5, 46, Z), P(52.5, 46, Z)], 'rgba(203,213,225,0.6)', 'rgba(173,186,204,0.5)');
     truss(ZR1, PAL_BACK, 3.6);
-    face([P(0,0,0), P(0,0,Z), P(105,YR,ZR1), P(105,YR,ZR0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
-    face([P(X,0,0), P(X,0,Z), P(105,YR,ZR1), P(105,YR,ZR0)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
-    face([P(52.5,46,0), P(157.5,46,0), R0], 'rgba(205,168,118,0.45)', 'rgba(185,148,98,0.28)');
-    face([P(52.5,46,Z), P(157.5,46,Z), R1], 'rgba(165,124,76,0.32)', 'rgba(150,110,64,0.20)');
-    // Pignon avant (mur trapèze)
-    face([P(0,0,0), P(X,0,0), P(157.5,46,0), P(52.5,46,0)], 'rgba(226,232,240,0.72)', 'rgba(199,210,224,0.60)');
+    face([P(0, 0, 0), P(0, 0, Z), P(105, YR, ZR1), P(105, YR, ZR0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
+    face([P(X, 0, 0), P(X, 0, Z), P(105, YR, ZR1), P(105, YR, ZR0)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
+    face([P(52.5, 46, 0), P(157.5, 46, 0), R0], 'rgba(205,168,118,0.45)', 'rgba(185,148,98,0.28)');
+    face([P(52.5, 46, Z), P(157.5, 46, Z), R1], 'rgba(165,124,76,0.32)', 'rgba(150,110,64,0.20)');
+    face([P(0, 0, 0), P(X, 0, 0), P(157.5, 46, 0), P(52.5, 46, 0)], 'rgba(226,232,240,0.78)', 'rgba(199,210,224,0.66)');
     _beamTag = 'Panne sablière';
     beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
     beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
-    // Demi-fermes de pignon (jusqu'au niveau de croupe) + lierne
     [[0, PAL_FRONT, 5], [Z, PAL_BACK, 3.6]].forEach(t => {
       _beamTag = 'Poutre principale';
       beam(P(0, 0, t[0]), P(X, 0, t[0]), t[2] + 1, t[1]);
@@ -7664,38 +7454,80 @@ function _drawCharpente(ctx, W, H, modele) {
       _beamTag = 'Faux-entrait';
       beam(P(52.5, 46, t[0]), P(157.5, 46, t[0]), t[2] - 0.6, t[1]);
     });
-    // Arêtiers des demi-croupes
     _beamTag = 'Arêtier';
     beam(P(52.5, 46, 0), R0, 4.2, PAL_FRONT); beam(P(157.5, 46, 0), R0, 4.2, PAL_FRONT);
-    beam(P(52.5, 46, Z), R1, 3.6, PAL_BACK);  beam(P(157.5, 46, Z), R1, 3.6, PAL_BACK);
+    beam(P(52.5, 46, Z), R1, 3.6, PAL_BACK); beam(P(157.5, 46, Z), R1, 3.6, PAL_BACK);
     _beamTag = 'Panne faîtière';
-    beam(P(105, YR, ZR0), P(105, YR, ZR1), 5, PAL_DARK);    // faîtière
+    beam(P(105, YR, ZR0), P(105, YR, ZR1), 5, PAL_DARK);
     truss(125, PAL_MID, 4.2);
     truss(ZR0, PAL_FRONT, 5);
     chip('Faîtière', mid(R0, R1), ox - 130, 24);
-    chip('Demi-croupe', mid(mid(P(52.5,46,0), P(157.5,46,0)), R0), ox + 215, 50);
-    chip('Arêtier', mid(P(157.5,46,0), R0), ox + 255, 110);
+    chip('Demi-croupe', mid(mid(P(52.5, 46, 0), P(157.5, 46, 0)), R0), ox + 215, 50);
+    chip('Arêtier', mid(P(157.5, 46, 0), R0), ox + 255, 110);
     chip('Pignon', P(105, 20, 0), ox + 240, 215);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === 'mansarde') {
+    // ---- Toit mansardé (brisis + terrasson) ----
+    const BX = 38, BY = 62, RY = 86;
+    deck(YF); deckLinks(YF);
+    const mTruss = (z, pal, w) => {
+      _beamTag = 'Poutre principale';
+      beam(P(0, 0, z), P(X, 0, z), w + 1, pal);
+      _beamTag = 'Poinçon';
+      beam(P(105, 0, z), P(105, RY, z), w - 0.5, pal);
+      _beamTag = 'Faux-entrait';
+      beam(P(BX, BY, z), P(X - BX, BY, z), w - 0.6, pal);
+      _beamTag = 'Arbalétrier';
+      beam(P(0, 0, z), P(BX, BY, z), w, pal);
+      beam(P(X, 0, z), P(X - BX, BY, z), w, pal);
+      beam(P(BX, BY, z), P(105, RY, z), w, pal);
+      beam(P(X - BX, BY, z), P(105, RY, z), w, pal);
+    };
+    mTruss(Z, PAL_BACK, 3.6);
+    face([P(0, 0, 0), P(0, 0, Z), P(BX, BY, Z), P(BX, BY, 0)], 'rgba(186,140,90,0.42)', 'rgba(160,118,72,0.24)');
+    face([P(X, 0, 0), P(X, 0, Z), P(X - BX, BY, Z), P(X - BX, BY, 0)], 'rgba(166,122,74,0.46)', 'rgba(140,100,58,0.26)');
+    face([P(BX, BY, 0), P(BX, BY, Z), P(105, RY, Z), P(105, RY, 0)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.16)');
+    face([P(X - BX, BY, 0), P(X - BX, BY, Z), P(105, RY, Z), P(105, RY, 0)], 'rgba(196,152,100,0.36)', 'rgba(170,128,80,0.20)');
+    _beamTag = 'Panne sablière';
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    _beamTag = 'Panne intermédiaire';
+    beam(P(BX, BY, 0), P(BX, BY, Z), 4, PAL_DARK);
+    beam(P(X - BX, BY, 0), P(X - BX, BY, Z), 4, PAL_DARK);
+    _beamTag = 'Chevron';
+    for (let z = 14; z <= Z - 14; z += 26) {
+      if ([0, Z / 2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
+      beam(P(0, 0, z), P(BX, BY, z), 1.7, PAL_CHEV);
+      beam(P(X, 0, z), P(X - BX, BY, z), 1.7, PAL_CHEV);
+      beam(P(BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
+      beam(P(X - BX, BY, z), P(105, RY, z), 1.7, PAL_CHEV);
+    }
+    _beamTag = 'Panne faîtière';
+    beam(P(105, RY, 0), P(105, RY, Z), 5, PAL_DARK);
+    mTruss(Z / 2, PAL_MID, 4.2);
+    mTruss(0, PAL_FRONT, 5.2);
+    chip('Faîtière', mid(P(105, RY, 0), P(105, RY, Z)), ox - 150, 24);
+    chip('Terrasson', P(71.5, 74, 60), ox - 25, 52);
+    chip('Panne de bris', mid(P(X - BX, BY, 0), P(X - BX, BY, Z)), ox + 225, 76);
+    chip('Brisis', P(X - BX / 2, BY / 2, 0), ox + 250, 165);
+    chip('Faux-entrait', P(85, BY, 0), ox + 235, 120);
+    chip('Entrait', P(160, 0, 0), ox + 225, 255);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   } else if (modele === 'chalet') {
-    // ---- Chalet alpin à pannes (Pfettendach), grands avant-toits ----
-    const D = 30;                              // débord des pannes
+    // ---- Chalet alpin à pannes (grands avant-toits, pignons madriers) ----
+    const D = 30;
     deck(YF); deckLinks(YF);
-    // Pignons en madriers (avant + arrière)
-    [[Z, 'rgba(187,148,100,0.80)'], [0, 'rgba(213,176,128,0.90)']].forEach(g => {
-      face([P(0,0,g[0]), P(X,0,g[0]), P(105,YR,g[0])], g[1], g[1]);
-      // lignes de madriers horizontales
-      ctx.strokeStyle = 'rgba(120,85,45,0.55)'; ctx.lineWidth = 1.2;
+    [[Z, 'rgba(187,148,100,0.92)', 1.5], [0, 'rgba(213,176,128,0.97)', -1.5]].forEach(g => {
+      face([P(0, 0, g[0]), P(X, 0, g[0]), P(105, YR, g[0])], g[1]);
       for (let yy = 12; yy < YR - 6; yy += 12) {
         const xr = 105 * (1 - yy / YR);
-        const a = P(105 - xr, yy, g[0]), b = P(105 + xr, yy, g[0]);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        line3(P(105 - xr, yy, g[0] + g[2]), P(105 + xr, yy, g[0] + g[2]), 'rgba(120,85,45,0.8)', 1.3);
       }
     });
-    face([P(0,0,-D), P(0,0,Z+D), P(105,YR,Z+D), P(105,YR,-D)], 'rgba(226,190,140,0.30)', 'rgba(196,156,104,0.14)');
-    face([P(X,0,-D), P(X,0,Z+D), P(105,YR,Z+D), P(105,YR,-D)], 'rgba(176,132,82,0.38)', 'rgba(150,108,62,0.18)');
-    // Pannes débordantes : sablières, intermédiaires, faîtière
+    face([P(0, 0, -D), P(0, 0, Z + D), P(105, YR, Z + D), P(105, YR, -D)], 'rgba(226,190,140,0.30)', 'rgba(196,156,104,0.14)');
+    face([P(X, 0, -D), P(X, 0, Z + D), P(105, YR, Z + D), P(105, YR, -D)], 'rgba(176,132,82,0.38)', 'rgba(150,108,62,0.18)');
     _beamTag = 'Panne sablière';
     beam(P(0, 0, -D), P(0, 0, Z + D), 4.6, PAL_MID);
     beam(P(X, 0, -D), P(X, 0, Z + D), 4.6, PAL_MID);
@@ -7708,43 +7540,297 @@ function _drawCharpente(ctx, W, H, modele) {
       beam(P(X, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
     }
     _beamTag = 'Panne faîtière';
-    beam(P(105, YR, -D), P(105, YR, Z + D), 5.6, PAL_DARK);  // panne faîtière
-    chip('Panne faîtière', mid(P(105,YR,-D), P(105,YR,Z+D)), ox - 150, 22);
-    chip('Panne intermédiaire', mid(P(157.5,46,0), P(157.5,46,Z)), ox + 215, 76);
+    beam(P(105, YR, -D), P(105, YR, Z + D), 5.6, PAL_DARK);
+    chip('Panne faîtière', mid(P(105, YR, -D), P(105, YR, Z + D)), ox - 150, 22);
+    chip('Panne intermédiaire', mid(P(157.5, 46, 0), P(157.5, 46, Z)), ox + 215, 76);
     chip('Chevron', P(52.5, 46, 64), ox - 40, 54);
     chip('Pignon en madriers', P(105, 30, 0), ox + 215, 185);
     chip('Avant-toit (débord)', P(105, YR, -D + 4), ox + 218, 28);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
-  } else {
-    // ---- Charpente traditionnelle 2 pans (défaut) ----
+  } else if (modele === 'combles') {
+    // ---- Combles aménagés ----
     deck(YF); deckLinks(YF);
-    truss(Z, PAL_BACK, 3.6);
-    face([P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
-    face([P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
+    trussCombles(Z, PAL_BACK, 3.6);
+    face([P(0, 0, 0), P(0, 0, Z), P(105, YR, Z), P(105, YR, 0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
+    face([P(X, 0, 0), P(X, 0, Z), P(105, YR, Z), P(105, YR, 0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
     _beamTag = 'Panne sablière';
     beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
     beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
     _beamTag = 'Panne intermédiaire';
     beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
     beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
-    chevrons2pans([0, Z/2, Z]);
+    chevrons2pans([0, Z / 2, Z]);
+    roofWindow(34, 80, 150, 196);
+    _beamTag = 'Panne faîtière';
+    beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
+    trussCombles(Z / 2, PAL_MID, 4.2);
+    trussCombles(0, PAL_FRONT, 5.2);
+    chip('Fenêtre de toit', P(57, YR * 57 / 105, 173), ox - 168, 80);
+    chip('Faîtière', mid(P(105, YR, 0), P(105, YR, Z)), ox - 150, 26);
+    chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
+    chip('Faux-entrait', mid(P(66.2, 58, 0), P(143.8, 58, 0)), ox + 235, 95);
+    chip('Jambette', P(178, 14, 0), ox + 245, 200);
+    chip('Arbalétrier', mid(P(0, 0, 0), P(105, YR, 0)), ox + 40, 22);
+    chip('Entrait', P(120, 0, 0), ox + 215, 262);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else {
+    // ---- Charpente traditionnelle 2 pans (défaut) ----
+    deck(YF); deckLinks(YF);
+    truss(Z, PAL_BACK, 3.6);
+    face([P(0, 0, 0), P(0, 0, Z), P(105, YR, Z), P(105, YR, 0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
+    face([P(X, 0, 0), P(X, 0, Z), P(105, YR, Z), P(105, YR, 0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
+    _beamTag = 'Panne sablière';
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    _beamTag = 'Panne intermédiaire';
+    beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
+    beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
+    chevrons2pans([0, Z / 2, Z]);
     roofWindow(34, 80, 150, 196);
     _beamTag = 'Panne faîtière';
     beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
     truss(Z / 2, PAL_MID, 4.2);
     truss(0, PAL_FRONT, 5.2);
-    chip('Fenêtre de toit', P(57, YR*57/105, 173), ox - 168, 80);
-    chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
+    chip('Fenêtre de toit', P(57, YR * 57 / 105, 173), ox - 168, 80);
+    chip('Faîtière', mid(P(105, YR, 0), P(105, YR, Z)), ox - 150, 26);
     chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
-    chip('Panne', mid(P(157.5,46,0), P(157.5,46,Z)), ox + 230, 88);
-    chip('Arbalétrier', mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
+    chip('Panne', mid(P(157.5, 46, 0), P(157.5, 46, Z)), ox + 230, 88);
+    chip('Arbalétrier', mid(P(0, 0, 0), P(105, YR, 0)), ox + 40, 22);
     chip('Poinçon', P(105, 64, 0), ox + 250, 160);
     chip('Entrait / Poutre', P(160, 0, 0), ox + 230, 255);
-    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Sablière', mid(P(0, 0, 0), P(0, 0, Z)), ox - 262, 140);
     chip('Solives', P(40, YF, 110), ox - 255, 280);
   }
+  return { items: items, chips: chips, isPlancher: isPlancher };
+}
+
+// ---------- 2) RENDU ----------
+function _parseRgba(s) {
+  const m = String(s).match(/rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[, ]+([\d.]+))?\)/);
+  if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+  return { r: 200, g: 200, b: 200, a: 1 };
+}
+
+function _drawCharpente(ctx, W, H, modele) {
+  const col = _collectCharpente(modele);
+  _diagSchemaParts = [];
+  ctx.clearRect(0, 0, W, H);
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  let proj = null;
+  if (typeof window !== 'undefined' && window.THREE) {
+    try { proj = _charpenteRender3D(ctx, W, H, col); }
+    catch (e) { console.warn('Rendu 3D indisponible, repli 2D :', e); proj = null; }
+  }
+  if (!proj) proj = _charpenteRender2D(ctx, W, H, col);
+  // Étiquettes + registre des éléments cliquables (espace logique 640×380)
+  const k = W / 640;
+  ctx.save(); ctx.scale(k, k);
+  col.items.forEach(it => {
+    if (it.t !== 'seg') return;
+    const a = proj(it.a), b = proj(it.b);
+    _diagSchemaParts.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, w: Math.max(it.w, 4), tag: it.tag });
+  });
+  col.chips.forEach(cp => _drawChip640(ctx, cp.txt, proj(cp.target), cp.lx, cp.ly));
   ctx.restore();
+}
+
+// Étiquette « pro » (espace 640×380)
+function _drawChip640(ctx, txt, target, lx, ly) {
+  ctx.strokeStyle = 'rgba(100,116,139,0.85)'; ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(target.x, target.y); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(target.x, target.y, 3.1, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#64748b';
+  ctx.beginPath(); ctx.arc(target.x, target.y, 2.1, 0, Math.PI * 2); ctx.fill();
+  ctx.font = 'bold 11px Arial';
+  const tw = ctx.measureText(txt).width, bw = tw + 14, bh = 18;
+  const bx = lx - bw / 2, by = ly - bh / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(13,27,62,0.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#0d1b3e';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 9); else ctx.rect(bx, by, bw, bh);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(bx + 0.5, by + 0.5, bw - 1, bh - 1, 8.5); else ctx.rect(bx, by, bw, bh);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(txt, bx + 7, by + 12.5);
+}
+
+// --- Rendu 3D WebGL (three.js) : vraie lumière, vraies ombres, vrai bois ---
+let _threeRenderer = null;
+function _charpenteRender3D(ctx, W, H, col) {
+  if (!_threeRenderer) {
+    const cv = document.createElement('canvas');
+    _threeRenderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    _threeRenderer.shadowMap.enabled = true;
+    _threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
+  const renderer = _threeRenderer;
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.52));
+  scene.add(new THREE.HemisphereLight(0xe9eef8, 0xc9a268, 0.38));
+  const sun = new THREE.DirectionalLight(0xfff3e0, 0.95);
+  sun.position.set(150, 360, 230);
+  sun.castShadow = true;
+  sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+  sun.shadow.camera.left = -340; sun.shadow.camera.right = 340;
+  sun.shadow.camera.top = 340; sun.shadow.camera.bottom = -340;
+  sun.shadow.camera.near = 10; sun.shadow.camera.far = 1200;
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.0012;
+  scene.add(sun);
+  const groundY = (col.isPlancher ? -16 : -30);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.ShadowMaterial({ opacity: 0.17 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = groundY; ground.receiveShadow = true;
+  scene.add(ground);
+
+  const xAxis = new THREE.Vector3(1, 0, 0);
+  const box = new THREE.Box3();
+  col.items.forEach((it, i) => {
+    if (it.t === 'seg' || it.t === 'line') {
+      const a = new THREE.Vector3(it.a.x, it.a.y, it.a.z);
+      const b = new THREE.Vector3(it.b.x, it.b.y, it.b.z);
+      box.expandByPoint(a); box.expandByPoint(b);
+      const dir = b.clone().sub(a); const len = dir.length(); if (len < 0.01) return;
+      const w = it.t === 'seg' ? Math.max(it.w * 1.15, 1.9) : 1.0;
+      const geo = new THREE.BoxGeometry(len + w * 0.5, w, w * 0.82);
+      let cstr;
+      if (it.t === 'seg') cstr = it.pal[1];
+      else { const m = _parseRgba(it.col); cstr = 'rgb(' + (m.r | 0) + ',' + (m.g | 0) + ',' + (m.b | 0) + ')'; }
+      const c = new THREE.Color(cstr);
+      if (it.t === 'seg') c.offsetHSL(0, 0.02, (((i * 73) % 17) / 17 - 0.5) * 0.06);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: c, roughness: 0.74, metalness: 0 }));
+      mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+      mesh.quaternion.setFromUnitVectors(xAxis, dir.normalize());
+      if (it.t === 'seg') { mesh.castShadow = true; mesh.receiveShadow = true; }
+      scene.add(mesh);
+    } else if (it.t === 'face') {
+      const pts = it.pts.map(p => new THREE.Vector3(p.x, p.y, p.z));
+      pts.forEach(p => box.expandByPoint(p));
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      geo.setIndex(pts.length === 3 ? [0, 1, 2] : [0, 1, 2, 0, 2, 3]);
+      geo.computeVertexNormals();
+      const m = _parseRgba(it.c1);
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(m.r / 255, m.g / 255, m.b / 255),
+        transparent: m.a < 0.95, opacity: Math.min(m.a + 0.05, 1),
+        side: THREE.DoubleSide, roughness: 0.92, metalness: 0,
+        depthWrite: m.a >= 0.7,
+      });
+      scene.add(new THREE.Mesh(geo, mat));
+    }
+  });
+
+  // Caméra orthographique, cadrage exact par projection des coins
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const radius = 0.5 * Math.hypot(size.x, size.z);
+  const cam = new THREE.OrthographicCamera(-160 * (640 / 380), 160 * (640 / 380), 160, -160, -2000, 4000);
+  const d = radius * 2.2 + 150;
+  cam.position.set(center.x + d * 0.72, center.y + d * 0.62, center.z + d * 0.88);
+  cam.lookAt(center.x, center.y - 2, center.z);
+  cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+  let mx = 0, my = 0;
+  [[box.min.x, box.min.y, box.min.z], [box.max.x, box.min.y, box.min.z],
+   [box.min.x, box.max.y, box.min.z], [box.min.x, box.min.y, box.max.z],
+   [box.max.x, box.max.y, box.min.z], [box.max.x, box.min.y, box.max.z],
+   [box.min.x, box.max.y, box.max.z], [box.max.x, box.max.y, box.max.z]].forEach(c0 => {
+    const v = new THREE.Vector3(c0[0], c0[1], c0[2]).project(cam);
+    mx = Math.max(mx, Math.abs(v.x)); my = Math.max(my, Math.abs(v.y));
+  });
+  const f = Math.max(mx, my) * 1.14;
+  cam.left *= f; cam.right *= f; cam.top *= f; cam.bottom *= f;
+  cam.updateProjectionMatrix();
+
+  renderer.setClearColor(0x000000, 0);
+  renderer.render(scene, cam);
+  ctx.drawImage(renderer.domElement, 0, 0, W, H);
+  scene.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(mm => mm.dispose());
+  });
+  return p => {
+    const v = new THREE.Vector3(p.x, p.y, p.z).project(cam);
+    return { x: (v.x * 0.5 + 0.5) * 640, y: (-v.y * 0.5 + 0.5) * 380 };
+  };
+}
+
+// --- Repli 2D axonométrique (sans WebGL) : prismes dessinés à la main ---
+function _charpenteRender2D(ctx, W, H, col) {
+  const k = W / 640;
+  const s = col.isPlancher ? 1.5 : 1.25;
+  const ox = 640 * 0.535, oy = col.isPlancher ? 170 : 108;
+  const proj = p => ({ x: ox + (p.x - p.z) * 0.866 * s, y: oy + (p.x + p.z) * 0.275 * s - p.y * s });
+  ctx.save(); ctx.scale(k, k);
+  // ombre au sol
+  const shx = ox - 28, shy = oy + (210 + 250) * 0.275 * s * 0.62 + (col.isPlancher ? 14 : 40);
+  ctx.save();
+  ctx.translate(shx, shy); ctx.scale(1, 32 / 270);
+  const sg = ctx.createRadialGradient(0, 0, 12, 0, 0, 270);
+  sg.addColorStop(0, 'rgba(15,23,42,0.17)'); sg.addColorStop(0.7, 'rgba(15,23,42,0.08)'); sg.addColorStop(1, 'rgba(15,23,42,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(0, 0, 270, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  col.items.forEach(it => {
+    if (it.t === 'face') {
+      const pts = it.pts.map(proj);
+      const g = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[2].x, pts[2].y);
+      g.addColorStop(0, it.c1); g.addColorStop(1, it.c2);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath(); ctx.fill();
+    } else if (it.t === 'line') {
+      const a = proj(it.a), b = proj(it.b);
+      ctx.strokeStyle = it.col; ctx.lineWidth = it.w; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else {
+      const a = proj(it.a), b = proj(it.b), w = it.w, pal = it.pal;
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      let nx = -dy / L, ny = dx / L;
+      if (ny < 0) { nx = -nx; ny = -ny; }
+      const hw = w / 2, ex = -w * 0.40, ey = -w * 0.52;
+      if (w < 2.6) {
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(50,33,12,0.15)'; ctx.lineWidth = w + 1.6;
+        ctx.beginPath(); ctx.moveTo(a.x + 1.6, a.y + 2.2); ctx.lineTo(b.x + 1.6, b.y + 2.2); ctx.stroke();
+        const gs = ctx.createLinearGradient(a.x - nx * w, a.y - ny * w, a.x + nx * w, a.y + ny * w);
+        gs.addColorStop(0, pal[0]); gs.addColorStop(1, pal[2]);
+        ctx.strokeStyle = gs; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        return;
+      }
+      const A1 = { x: a.x - nx * hw, y: a.y - ny * hw }, B1 = { x: b.x - nx * hw, y: b.y - ny * hw };
+      const A2 = { x: a.x + nx * hw, y: a.y + ny * hw }, B2 = { x: b.x + nx * hw, y: b.y + ny * hw };
+      const quad = (p1, p2, p3, p4, fill) => {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath(); ctx.fill();
+      };
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = 'rgba(50,33,12,0.14)'; ctx.lineWidth = w + 3;
+      ctx.beginPath(); ctx.moveTo(a.x + 2.6, a.y + 3.6); ctx.lineTo(b.x + 2.6, b.y + 3.6); ctx.stroke();
+      const g = ctx.createLinearGradient(A1.x, A1.y, A2.x, A2.y);
+      g.addColorStop(0, pal[1]); g.addColorStop(1, pal[2]);
+      quad(A1, B1, B2, A2, g);
+      quad(A1, B1, { x: B1.x + ex, y: B1.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[0]);
+      quad(B1, B2, { x: B2.x + ex, y: B2.y + ey }, { x: B1.x + ex, y: B1.y + ey }, pal[1]);
+      quad(A1, A2, { x: A2.x + ex, y: A2.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[1]);
+      ctx.strokeStyle = 'rgba(58,37,12,0.45)'; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(A1.x, A1.y); ctx.lineTo(B1.x, B1.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(A2.x, A2.y); ctx.lineTo(B2.x, B2.y); ctx.stroke();
+    }
+  });
+  ctx.restore();
+  return proj;
 }
 
 let _diagBgDataUrl = null;  // fond propre (schéma 3D ou photo importée), pour effacer les annotations
