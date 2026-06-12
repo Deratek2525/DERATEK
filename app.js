@@ -1633,6 +1633,17 @@ function _rapContactRole(contact) {
 function _rapContactNom(contact) {
   return String(contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
 }
+// Normalise un nom de personne pour comparaison (ignore M./Mme/Monsieur…, ponctuation,
+// accents et espaces multiples) → évite les doublons de fiches gérant.
+function _normPerson(s) {
+  return String(s || '')
+    .replace(/\[ROLE:[^\]]*\]/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // enlève les accents
+    .replace(/\b(m|mme|mr|mlle|monsieur|madame|mademoiselle)\b\.?/gi, ' ')
+    .replace(/[.,;]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim().toLowerCase();
+}
 function _composeRapContact(role, nom) {
   const n = String(nom || '').trim();
   const r = String(role || '').trim();
@@ -2753,9 +2764,10 @@ function _findOrCreateGerance(infos) {
   const clients = DB.clients;
   // UNE CARTE PAR PERSONNE : on cherche la fiche de CETTE gérance ET de CE gérant.
   // Si le gérant est différent, on crée une NOUVELLE carte (même gérance, autre personne).
+  const gN = _normPerson(gerant);
   const existing = clients.find(c =>
     (c.nom || '').toLowerCase() === nom.toLowerCase() &&
-    (!gerant || _rapContactNom(c.contact || '').toLowerCase() === gerant.toLowerCase())
+    (!gN || _normPerson(c.contact || '') === gN)
   );
   if (existing) {
     const updates = {};
