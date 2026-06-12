@@ -7199,6 +7199,35 @@ function downloadDiagPDF(id) {
   const u = _diagUnpack(d);
   if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else _genDiagPDF(u);
 }
+// Grille d'informations sur 2 colonnes au-dessus du ruban — même style que le
+// rapport d'intervention classique (rows2col de pdf.js) : libellé gris en
+// majuscules, valeur en gras, rangées alternées grisées. Retourne le nouveau y.
+function _diagRows2Col(doc, pairs, y, M, CW) {
+  const items = (pairs || []).filter(p => p && p[1]);
+  if (!items.length) return y;
+  const gap = 6, colW = (CW - gap) / 2, colTextW = colW - 6;
+  for (let i = 0; i < items.length; i += 2) {
+    const left = items[i], right = items[i+1];
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    const lL = doc.splitTextToSize(String(left[1]), colTextW);
+    const rL = right ? doc.splitTextToSize(String(right[1]), colTextW) : [];
+    const cellH = Math.max(8, lL.length*5 + 5, rL.length*5 + 5);
+    if ((Math.floor(i/2) % 2) === 1) { doc.setFillColor(249,250,251); doc.rect(M, y, CW, cellH, 'F'); }
+    const cell = (it, lines, x) => {
+      doc.setTextColor(107,114,128); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.text(String(it[0]).toUpperCase(), x+2, y+4);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(31,41,55);
+      doc.text(lines, x+2, y+9);
+    };
+    cell(left, lL, M);
+    if (right) cell(right, rL, M + colW + gap);
+    doc.setDrawColor(229,231,235); doc.setLineWidth(0.2); doc.line(M, y+cellH, M+CW, y+cellH);
+    y += cellH;
+  }
+  doc.setTextColor(0);
+  return y;
+}
+
 function _genDiagPDF(d, mode) {
   if (!d) { if (mode !== 'blob') toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
@@ -7270,13 +7299,19 @@ function _genDiagPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
-  // Destinataire à droite, même position que sur les factures
-  doc.setFontSize(11);
-  let dy = 59;
-  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique)
+  y = _diagRows2Col(doc, [
+    ['Client', d.clientNom],
+    ['Locataire', d.locataireNom],
+    ['Adresse', d.locataireAdresse],
+    ['Technicien', d.tech],
+    ['Bâtiment / charpente', d.batiment],
+    ['Méthode d\'inspection', d.methode],
+    ['Zones inspectées', d.zones],
+  ], headerFiletY + 11, M, CW);
 
   // --- Bandeau titre ----------------------------------------------------
-  y = Math.max(dy, 80) + 4;
+  y += 5;
   ensure(22);
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
@@ -7290,28 +7325,6 @@ function _genDiagPDF(d, mode) {
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
   doc.setTextColor(0);
   y += 21;
-
-  // --- Encadré infos (technicien / bâtiment / bon / méthode / zones) ---
-  const infoPairs = [
-    ['Technicien', d.tech], ['Bâtiment / charpente', d.batiment],
-    ['Méthode d\'inspection', d.methode], ['Zones inspectées', d.zones],
-  ].filter(p => p[1]);
-  if (infoPairs.length) {
-    const rows = Math.ceil(infoPairs.length/2);
-    const boxH = rows*9 + 4;
-    ensure(boxH + 4);
-    doc.setFillColor(244,245,248); doc.setDrawColor(225,228,238);
-    doc.roundedRect(M, y, CW, boxH, 2, 2, 'FD');
-    infoPairs.forEach((p, i) => {
-      const cx = M + 5 + (i%2)*(CW/2), cy = y + 7 + Math.floor(i/2)*9;
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
-      doc.text(p[0].toUpperCase(), cx, cy-3);
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-      doc.text(doc.splitTextToSize(String(p[1]), CW/2-10)[0]||'', cx, cy+1);
-    });
-    doc.setTextColor(0);
-    y += boxH + 6;
-  } else { y += 2; }
 
   // --- Synthèse : activité / gravité / étendue / humidité --------------
   const synth = [
@@ -7844,13 +7857,19 @@ function _genRongeursPDF(d, mode) {
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((co.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setTextColor(0);
-  // Destinataire à droite, même position que sur les factures
-  doc.setFontSize(11);
-  let dy = 59;
-  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+  // Informations sur 2 colonnes au-dessus du ruban (style rapport classique)
+  y = _diagRows2Col(doc, [
+    ['Client', d.clientNom],
+    ['Locataire', d.locataireNom],
+    ['Adresse', d.locataireAdresse],
+    ['Technicien', d.tech],
+    ['Site / bâtiment', d.batiment],
+    ['Zones d\'activité', d.zones],
+    ['Points d\'entrée', d.elementsTouches],
+  ], headerFiletY + 11, M, CW);
 
   // Bandeau titre
-  y = Math.max(dy, 80) + 4;
+  y += 5;
   ensure(22);
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
@@ -7864,28 +7883,6 @@ function _genRongeursPDF(d, mode) {
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
   doc.setTextColor(0);
   y += 21;
-
-  // Encadré infos
-  const infoPairs = [
-    ['Technicien', d.tech], ['Site / bâtiment', d.batiment],
-    ['Zones d\'activité', d.zones], ['Points d\'entrée', d.elementsTouches],
-  ].filter(p => p[1]);
-  if (infoPairs.length) {
-    const rows = Math.ceil(infoPairs.length/2);
-    const boxH = rows*9 + 4;
-    ensure(boxH + 4);
-    doc.setFillColor(244,245,248); doc.setDrawColor(225,228,238);
-    doc.roundedRect(M, y, CW, boxH, 2, 2, 'FD');
-    infoPairs.forEach((p, i) => {
-      const cx = M + 5 + (i%2)*(CW/2), cy = y + 7 + Math.floor(i/2)*9;
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
-      doc.text(p[0].toUpperCase(), cx, cy-3);
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-      doc.text(doc.splitTextToSize(String(p[1]), CW/2-10)[0]||'', cx, cy+1);
-    });
-    doc.setTextColor(0);
-    y += boxH + 6;
-  } else { y += 2; }
 
   // Synthèse
   const postes = Array.isArray(d.postes) ? d.postes.filter(p => p && (p.emplacement || p.produit)) : [];
