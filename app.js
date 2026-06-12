@@ -6794,7 +6794,7 @@ function renderDiagEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Schéma de la charpente ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
-      <canvas id="diag-schema-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <canvas id="diag-schema-canvas" width="2048" height="1216" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
@@ -7263,22 +7263,53 @@ function _drawCharpente(ctx, W, H, modele) {
   const P = (x, y, z) => ({ x: ox + (x - z) * 0.866 * s, y: oy + (x + z) * 0.275 * s - y * s });
   const X = 210, Z = 250, YR = 92, YF = -26;
 
-  // Ombre au sol
-  ctx.fillStyle = 'rgba(15,23,42,0.10)';
-  ctx.beginPath();
-  ctx.ellipse(ox - 28, oy + (X + Z) * 0.275 * s * 0.62 + (isPlancher ? 14 : 40), 270, 32, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Ombre au sol en dégradé radial (douce et réaliste)
+  {
+    const shx = ox - 28, shy = oy + (X + Z) * 0.275 * s * 0.62 + (isPlancher ? 14 : 40);
+    ctx.save();
+    ctx.translate(shx, shy); ctx.scale(1, 32 / 270);
+    const sg = ctx.createRadialGradient(0, 0, 12, 0, 0, 270);
+    sg.addColorStop(0, 'rgba(15,23,42,0.17)');
+    sg.addColorStop(0.7, 'rgba(15,23,42,0.08)');
+    sg.addColorStop(1, 'rgba(15,23,42,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.arc(0, 0, 270, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 
+  // Poutre « pro » : ombre douce 2 passes, corps cylindrique (dégradé
+  // perpendiculaire à la poutre), veines du bois, arête lumineuse.
   const beam = (a, b, w, pal) => {
     _diagSchemaParts.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, w: w });
-    ctx.strokeStyle = 'rgba(60,40,15,0.20)'; ctx.lineWidth = w + 2.5;
-    ctx.beginPath(); ctx.moveTo(a.x + 2.5, a.y + 3); ctx.lineTo(b.x + 2.5, b.y + 3); ctx.stroke();
-    const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-    g.addColorStop(0, pal[0]); g.addColorStop(0.5, pal[1]); g.addColorStop(1, pal[2]);
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+    const nx = -dy / L, ny = dx / L;            // normale (perpendiculaire)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // ombre portée douce (2 passes)
+    ctx.strokeStyle = 'rgba(50,33,12,0.08)'; ctx.lineWidth = w + 5;
+    ctx.beginPath(); ctx.moveTo(a.x + 3.4, a.y + 4.4); ctx.lineTo(b.x + 3.4, b.y + 4.4); ctx.stroke();
+    ctx.strokeStyle = 'rgba(50,33,12,0.16)'; ctx.lineWidth = w + 2;
+    ctx.beginPath(); ctx.moveTo(a.x + 2, a.y + 2.6); ctx.lineTo(b.x + 2, b.y + 2.6); ctx.stroke();
+    // corps : dégradé perpendiculaire → volume cylindrique
+    const g = ctx.createLinearGradient(a.x - nx * w * 0.6, a.y - ny * w * 0.6, a.x + nx * w * 0.6, a.y + ny * w * 0.6);
+    g.addColorStop(0, pal[0]); g.addColorStop(0.45, pal[1]); g.addColorStop(1, pal[2]);
     ctx.strokeStyle = g; ctx.lineWidth = w;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = Math.max(1, w * 0.26);
-    ctx.beginPath(); ctx.moveTo(a.x - 0.8, a.y - w * 0.30); ctx.lineTo(b.x - 0.8, b.y - w * 0.30); ctx.stroke();
+    // veines du bois (fines lignes internes)
+    if (w >= 3) {
+      ctx.strokeStyle = 'rgba(74,48,16,0.22)'; ctx.lineWidth = Math.max(0.6, w * 0.10);
+      [-0.18, 0.16].forEach(o => {
+        ctx.beginPath();
+        ctx.moveTo(a.x + nx * w * o, a.y + ny * w * o);
+        ctx.lineTo(b.x + nx * w * o, b.y + ny * w * o);
+        ctx.stroke();
+      });
+    }
+    // arête lumineuse
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)'; ctx.lineWidth = Math.max(0.8, w * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(a.x - nx * w * 0.30, a.y - ny * w * 0.30);
+    ctx.lineTo(b.x - nx * w * 0.30, b.y - ny * w * 0.30);
+    ctx.stroke();
   };
   const PAL_FRONT = ['#cf9a5e', '#a9742f', '#7c5318'];
   const PAL_MID   = ['#b98a4e', '#956427', '#6e4815'];
@@ -7295,17 +7326,26 @@ function _drawCharpente(ctx, W, H, modele) {
     ctx.closePath(); ctx.fill();
   };
   const chip = (txt, target, lx, ly) => {
-    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.1;
+    ctx.strokeStyle = 'rgba(100,116,139,0.85)'; ctx.lineWidth = 1.1;
     ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(target.x, target.y); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(target.x, target.y, 3.1, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#64748b';
-    ctx.beginPath(); ctx.arc(target.x, target.y, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(target.x, target.y, 2.1, 0, Math.PI * 2); ctx.fill();
     ctx.font = 'bold 11px Arial';
     const tw = ctx.measureText(txt).width, bw = tw + 14, bh = 18;
     const bx = lx - bw / 2, by = ly - bh / 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(13,27,62,0.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
     ctx.fillStyle = '#0d1b3e';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 9); else ctx.rect(bx, by, bw, bh);
     ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx + 0.5, by + 0.5, bw - 1, bh - 1, 8.5); else ctx.rect(bx, by, bw, bh);
+    ctx.stroke();
     ctx.fillStyle = '#fff';
     ctx.fillText(txt, bx + 7, by + 12.5);
   };
@@ -7714,7 +7754,7 @@ function openSchemaZoom() {
         <div style="font-weight:800;color:var(--navy);font-size:14px;">🔍 ${_diagType(_editingDiag)==='rongeurs' ? 'Plan des locaux' : 'Schéma de la charpente'} — vue agrandie</div>
         <button class="btn btn-navy btn-sm" type="button" onclick="closeSchemaZoom()">✓ Terminer</button>
       </div>
-      <canvas id="diag-zoom-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <canvas id="diag-zoom-canvas" width="2048" height="1216" style="width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <div id="schema-zoom-tools" style="margin-top:8px;"></div>
     </div>`;
   _schemaZoomToolbar();
@@ -8832,7 +8872,7 @@ function renderRongeursEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">✏️ Plan des locaux ${_diagSectionToggle('noPlan','Afficher dans le PDF')}</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPlan?'display:none;':''}">
-      <canvas id="diag-schema-canvas" width="1024" height="608" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <canvas id="diag-schema-canvas" width="2048" height="1216" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
