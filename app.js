@@ -6522,6 +6522,87 @@ function downloadDocPDF(id, mode) {
 // RAPPORT DIAGNOSTIC INSECTES DU BOIS
 // ============================================================
 const INSECTES_BOIS = ['Capricornes des maisons', 'Vrillettes (petite/grosse)', 'Lyctus', 'Termites', 'Fourmis charpentières', 'Sirex', 'Hespérophanes'];
+
+// Fiches descriptives des insectes xylophages — incluses automatiquement
+// dans le PDF pour chaque insecte coché dans le diagnostic.
+const INSECTES_BOIS_INFO = {
+  'Capricornes des maisons': {
+    latin: 'Hylotrupes bajulus',
+    bois: 'Résineux (sapin, épicéa, pin) — aubier des charpentes',
+    indices: "Trous d'envol ovales de 6 à 10 mm, galeries remplies de vermoulure tassée, surface du bois souvent intacte en apparence, grignotement parfois audible",
+    cycle: 'Larve active 3 à 10 ans dans le bois avant l\'envol de l\'adulte (juin–août)',
+    risque: 'Peut compromettre la résistance mécanique de la charpente ; traitement indispensable dès détection',
+  },
+  'Vrillettes (petite/grosse)': {
+    latin: 'Anobium punctatum / Xestobium rufovillosum',
+    bois: 'Feuillus et résineux ; la grosse vrillette préfère les bois humides ou dégradés par des champignons (chêne ancien)',
+    indices: "Trous d'envol ronds de 1 à 3 mm (petite) ou 2,5 à 4 mm (grosse), vermoulure granuleuse s'écoulant des trous, bois criblé",
+    cycle: 'Larve 2 à 4 ans, davantage en bois sec',
+    risque: "Affaiblissement progressif ; la grosse vrillette révèle souvent un problème d'humidité à traiter en parallèle",
+  },
+  'Lyctus': {
+    latin: 'Lyctus brunneus / Lyctus linearis',
+    bois: "Feuillus riches en amidon : aubier de chêne, frêne, châtaignier, bois exotiques (parquets, menuiseries récentes)",
+    indices: "Trous d'envol ronds de 1 à 2 mm, vermoulure très fine semblable à du talc",
+    cycle: 'Cycle court : 8 à 12 mois',
+    risque: "Réduit l'aubier en poudre ; propagation rapide dans les bois mis en œuvre récemment",
+  },
+  'Termites': {
+    latin: 'Reticulitermes spp.',
+    bois: 'Tous bois et matériaux cellulosiques, en progression depuis le sol',
+    indices: "Pas de trous d'envol visibles : bois feuilleté vidé de l'intérieur, cordonnets terreux, surface intacte",
+    cycle: 'Colonie pérenne de plusieurs milliers à millions d\'individus',
+    risque: 'Dégâts structurels majeurs et rapides ; traitement spécialisé de la zone entière requis',
+  },
+  'Fourmis charpentières': {
+    latin: 'Camponotus spp.',
+    bois: 'Bois humides, tendres ou déjà dégradés',
+    indices: 'Galeries lisses et propres (sans vermoulure interne), sciure grossière rejetée à proximité, ouvrières visibles',
+    cycle: 'Colonie installée plusieurs années, essaimage au printemps',
+    risque: "Ne mangent pas le bois mais le creusent pour nicher ; révèlent presque toujours un problème d'humidité",
+  },
+  'Sirex': {
+    latin: 'Sirex / Urocerus spp. (guêpes du bois)',
+    bois: 'Résineux, généralement infestés avant la mise en œuvre du bois',
+    indices: "Trous d'envol parfaitement circulaires de 4 à 7 mm, galeries fourrées de vermoulure compacte",
+    cycle: 'Larve 1 à 3 ans',
+    risque: 'Pas de réinfestation du bois sec mis en œuvre ; dégâts limités mais trous inesthétiques',
+  },
+  'Hespérophanes': {
+    latin: 'Trichoferus holosericeus',
+    bois: 'Feuillus : chêne, peuplier, arbres fruitiers',
+    indices: "Trous d'envol ovales de 3 à 7 mm, vermoulure fine et tassée — l'équivalent du capricorne pour les feuillus",
+    cycle: 'Larve 2 à 5 ans',
+    risque: 'Peut affaiblir fortement les éléments porteurs en feuillus',
+  },
+};
+
+// Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
+// repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
+// [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
+const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI' };
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI):[^\]]*\]/g;
+function _diagPack(d) {
+  let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
+  for (const k of Object.keys(_DIAG_MARKERS)) {
+    const v = d[k];
+    if (v && String(v).trim()) txt += '\n[' + _DIAG_MARKERS[k] + ':' + _encNote(v) + ']';
+    delete d[k];
+  }
+  d.diagnostic = txt;
+  return d;
+}
+function _diagUnpack(d) {
+  const out = JSON.parse(JSON.stringify(d));
+  const src = String(out.diagnostic || '');
+  for (const k of Object.keys(_DIAG_MARKERS)) {
+    const m = src.match(new RegExp('\\[' + _DIAG_MARKERS[k] + ':([^\\]]*)\\]'));
+    out[k] = m ? _decNote(m[1]) : (out[k] || '');
+  }
+  out.diagnostic = src.replace(_DIAG_MARKER_RE, '').trim();
+  if (!Array.isArray(out.insectes)) out.insectes = [];
+  return out;
+}
 let _editingDiag = null;
 
 function _nextDiagNumero() {
@@ -6537,14 +6618,15 @@ function openNewDiagnostic() {
     id: newId(), numero: _nextDiagNumero(), dateDoc: today(), tech: '',
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
-    activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: ''
+    activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: '',
+    methode: '', zones: '', traitement: '', suivi: '', photos: []
   };
   renderDiagEditor(); openModal('modal-diag');
 }
 function editDiag(id) {
   const d = (DB.diagnostics || []).find(x => x.id === id); if (!d) return;
-  _editingDiag = JSON.parse(JSON.stringify(d));
-  if (!Array.isArray(_editingDiag.insectes)) _editingDiag.insectes = [];
+  _editingDiag = _diagUnpack(d);
+  _editingDiag.photos = [];
   renderDiagEditor(); openModal('modal-diag');
 }
 function toggleDiagInsecte(nom, checked) {
@@ -6584,12 +6666,30 @@ function renderDiagEditor() {
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
       <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
       <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
+        ${DIAG_COLORS.map(c => `
+          <button type="button" title="${c.label}" onclick="setDiagColor('${c.hex}')"
+            style="width:24px;height:24px;border-radius:50%;cursor:pointer;background:${c.hex};border:${_diagColor===c.hex?'3px solid var(--navy)':'2px solid #e5e7eb'};"></button>`).join('')}
+        <span style="font-size:10px;color:var(--g400);">(${(DIAG_COLORS.find(c=>c.hex===_diagColor)||{}).label||''})</span>
+        <span style="width:1px;height:20px;background:#e5e7eb;"></span>
+        <button class="btn ${_diagTool==='draw'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('draw')">✏️ Dessin</button>
+        <button class="btn ${_diagTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('text')">🔤 Texte</button>
+      </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">🪵 Schéma 3D par défaut</button>
-        <span style="font-size:11px;color:var(--g400);align-self:center;">Importe une photo de la charpente, puis dessine pour entourer les zones touchées.</span>
+        <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine pour entourer les zones touchées ; en mode Texte, clique pour placer une note. La légende des couleurs est ajoutée automatiquement au PDF.</span>
       </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📷 Photos de l'inspection</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF (non stockées en base — télécharge le PDF pour les garder).</span>
+      <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔬 Diagnostic</div>
@@ -6613,15 +6713,90 @@ function renderDiagEditor() {
       </div>
       <div class="form-group"><label class="form-label">Étendue / surface concernée</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
       <div class="form-group"><label class="form-label">Taux d'humidité du bois</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%"></div>
+      <div class="form-group"><label class="form-label">Méthode d'inspection</label>
+        <select class="form-input" oninput="_editingDiag.methode=this.value">
+          <option value="" ${!d.methode?'selected':''}>-- Choisir --</option>
+          <option ${d.methode==='Inspection visuelle'?'selected':''}>Inspection visuelle</option>
+          <option ${d.methode==='Visuelle + sondage mécanique'?'selected':''}>Visuelle + sondage mécanique</option>
+          <option ${d.methode==='Visuelle + sondage + humidimètre'?'selected':''}>Visuelle + sondage + humidimètre</option>
+          <option ${d.methode==='Inspection complète (visuelle, sondage, humidimètre, endoscope)'?'selected':''}>Inspection complète (visuelle, sondage, humidimètre, endoscope)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Zones inspectées</label><input class="form-input" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Ex. combles, cave, plancher rez"></div>
     </div>
-    <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Observations / diagnostic détaillé</label><textarea class="form-input" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea></div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Observations / diagnostic détaillé</label><textarea class="form-input" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea></div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Traitement & suivi</div>
+    <div class="form-group" style="margin-bottom:8px;"><label class="form-label">Traitement recommandé</label><textarea class="form-input" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea></div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / garantie</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle après 12 mois, garantie 10 ans"></div>
+
     <div class="form-group"><label class="form-label">Conclusion / recommandations</label><textarea class="form-input" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea></div>
   `;
   const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
   initDiagSchema();
+  renderDiagPhotos();
+}
+
+// --- Photos de l'inspection (en mémoire uniquement, incluses dans le PDF) ---
+function addDiagPhotos(ev) {
+  const files = [...(ev.target.files || [])]; if (!files.length) return;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        // Réduction à 1000 px max pour limiter le poids du PDF
+        const MAX = 1000;
+        const r = Math.min(1, MAX / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        if (!_editingDiag) return;
+        if (!Array.isArray(_editingDiag.photos)) _editingDiag.photos = [];
+        _editingDiag.photos.push({ data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '' });
+        renderDiagPhotos();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  ev.target.value = '';
+}
+function removeDiagPhoto(i) {
+  if (!_editingDiag || !Array.isArray(_editingDiag.photos)) return;
+  _editingDiag.photos.splice(i, 1);
+  renderDiagPhotos();
+}
+function setDiagPhotoCaption(i, v) {
+  if (_editingDiag && _editingDiag.photos && _editingDiag.photos[i]) _editingDiag.photos[i].caption = v;
+}
+function renderDiagPhotos() {
+  const box = $('diag-photos-box'); if (!box) return;
+  const photos = (_editingDiag && _editingDiag.photos) || [];
+  box.innerHTML = photos.map((p, i) => `
+    <div style="width:130px;">
+      <div style="position:relative;">
+        <img src="${p.data}" style="width:130px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">
+        <button type="button" onclick="removeDiagPhoto(${i})" title="Retirer"
+          style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      <input class="form-input" style="margin-top:4px;font-size:11px;padding:4px 6px;" placeholder="Légende..."
+        value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="setDiagPhotoCaption(${i}, this.value)">
+    </div>`).join('');
 }
 
 // --- Schéma de charpente annotable ---
+// Couleurs d'annotation (la légende est imprimée automatiquement dans le PDF)
+const DIAG_COLORS = [
+  { hex: '#e63946', label: 'Infestation active' },
+  { hex: '#f4a261', label: 'À surveiller' },
+  { hex: '#2a6fdb', label: 'Humidité' },
+  { hex: '#2d9e6b', label: 'Sain / traité' },
+];
+let _diagColor = '#e63946';
+let _diagTool = 'draw'; // 'draw' | 'text'
+function setDiagColor(hex) { _diagColor = hex; renderDiagEditor(); }
+function setDiagTool(tool) { _diagTool = tool; renderDiagEditor(); }
 let _diagDrawing = false;
 function _drawSchemaBase(ctx, W, H) {
   ctx.clearRect(0, 0, W, H);
@@ -6703,7 +6878,21 @@ function initDiagSchema() {
     if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
   }
   const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
-  const start = e => { _diagDrawing = true; const p = pos(e); ctx.strokeStyle = '#e63946'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
+  const start = e => {
+    const p = pos(e);
+    if (_diagTool === 'text') {
+      e.preventDefault();
+      const txt = prompt('Texte à placer sur le schéma :');
+      if (txt && txt.trim()) {
+        ctx.font = 'bold 16px Arial'; ctx.fillStyle = _diagColor;
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+        ctx.strokeText(txt.trim(), p.x, p.y); ctx.fillText(txt.trim(), p.x, p.y);
+        if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+      }
+      return;
+    }
+    _diagDrawing = true; ctx.strokeStyle = _diagColor; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault();
+  };
   const move = e => { if (!_diagDrawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
   const end = () => { if (!_diagDrawing) return; _diagDrawing = false; if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); };
   c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
@@ -6778,10 +6967,12 @@ function autoFillDiagFromBon(numero) {
 }
 function saveDiag() {
   if (!_editingDiag) return;
-  // L'image du schéma n'est PAS stockée en base (pour économiser l'espace) :
-  // le PDF généré + envoyé par mail tient lieu d'archive de l'image.
-  const toSave = JSON.parse(JSON.stringify(_editingDiag));
+  // L'image du schéma et les photos ne sont PAS stockées en base (espace) :
+  // le PDF généré tient lieu d'archive. Les champs additionnels (méthode,
+  // zones, traitement, suivi) sont repliés dans la colonne "diagnostic".
+  const toSave = _diagPack(JSON.parse(JSON.stringify(_editingDiag)));
   delete toSave.schema;
+  delete toSave.photos;
   const list = DB.diagnostics;
   const i = list.findIndex(x => x.id === toSave.id);
   if (i >= 0) list[i] = toSave; else list.push(toSave);
@@ -6827,6 +7018,7 @@ function renderDiagnostics() {
             <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Insectes</div>
             <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
           </div>
+          ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
             <button class="btn btn-ghost btn-sm" onclick="editDiag('${d.id}')" title="Modifier">✏️</button>
             <button class="btn btn-ghost btn-sm" onclick="downloadDiagPDF('${d.id}')" title="PDF">📥 PDF</button>
@@ -6839,7 +7031,7 @@ function renderDiagnostics() {
 function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
-  _genDiagPDF(d);
+  _genDiagPDF(_diagUnpack(d));
 }
 function _genDiagPDF(d) {
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
@@ -6847,54 +7039,256 @@ function _genDiagPDF(d) {
   const co = DERATEK_CONFIG.company;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
-  // En-tête logo + coordonnées
+  const M = 20, R = 190, CW = R - M;            // marges gauche/droite, largeur utile
+  const NAVY = [13,27,62], BROWN = [139,69,19], GREY = [110,110,110];
+  const MAX_Y = 270;                             // plancher avant pied de page
+  let y = 0;
+
+  // --- Helpers --------------------------------------------------------
+  const newPage = () => { doc.addPage(); y = 20; };
+  const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
+  const section = (titre) => {
+    ensure(14);
+    doc.setFillColor(BROWN[0],BROWN[1],BROWN[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.text(titre, M+4.5, y);
+    doc.setDrawColor(BROWN[0],BROWN[1],BROWN[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
+    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  };
+  const field = (lbl, val, indent) => {
+    if (!val) return;
+    const x = indent || M;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
+    const lines = doc.splitTextToSize(String(val), R - vx - 2);
+    ensure(Math.max(lines.length*4.8, 5.5) + 2);
+    doc.setTextColor(60);
+    doc.text(lbl + ' :', x, y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.text(lines, vx, y);
+    y += Math.max(lines.length*4.8, 5.5);
+  };
+  const para = (txt) => {
+    if (!txt) return;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+  };
+  const badge = (txt, rgb, x, yy) => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const w = doc.getTextWidth(txt) + 6;
+    doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+    doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
+    doc.setTextColor(255); doc.text(txt, x+3, yy);
+    doc.setTextColor(0);
+    return w;
+  };
+  const GRAV_RGB = { 'Faible':[45,158,107], 'Modérée':[230,170,30], 'Importante':[235,120,40], 'Critique (structure menacée)':[230,57,70] };
+  const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne':[120,120,120], 'Mixte (active + ancienne)':[235,120,40] };
+
+  // --- En-tête : logo + coordonnées, destinataire à droite -------------
   const logoW = 60, logoH = logoW*199/900;
-  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,15,logoW,logoH); } catch(e){} }
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',M,15,logoW,logoH); } catch(e){} }
   let hy = 15+logoH+6;
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40);
-  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,20,hy); hy+=4.6; });
-  doc.setTextColor(0);
-  // Destinataire
-  doc.setFontSize(11.5); let dy=62;
-  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),80).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
-  // Titre
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(13,27,62);
-  doc.text('RAPPORT DIAGNOSTIC — INSECTES DU BOIS', 20, 92);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(80);
-  let y = 99;
-  doc.text('N° ' + (d.numero||'') + '   •   Date : ' + (fmtDate(d.dateDoc)||''), 20, y); y+=5;
-  if (d.tech) { doc.text('Technicien : ' + d.tech, 20, y); y+=5; }
-  if (d.batiment) { doc.text('Bâtiment / charpente : ' + d.batiment, 20, y); y+=5; }
-  doc.setTextColor(0);
-  y += 4;
-  const section = (titre) => { doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(13,27,62); doc.text(titre, 20, y); doc.setDrawColor(139,69,19); doc.setLineWidth(0.4); doc.line(20, y+1.5, 190, y+1.5); y+=7; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10); };
-  const field = (lbl, val) => { if(!val) return; doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text(lbl+' :', 20, y); doc.setFont('helvetica','normal'); const lines = doc.splitTextToSize(String(val), 145); doc.text(lines, 62, y); y += Math.max(lines.length*4.8, 5.5); };
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,M,hy); hy+=4.6; });
+  doc.setTextColor(0); doc.setFontSize(11.5);
+  let dy = 62;
+  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),75).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
 
-  section('Insectes détectés & éléments touchés');
-  field('Insectes', (d.insectes||[]).join(', '));
-  field('Éléments / bois', d.elementsTouches);
-  y += 3;
-  section('Diagnostic');
-  field('Activité', d.activite);
-  field('Gravité', d.gravite);
-  field('Étendue', d.etendue);
-  field('Humidité du bois', d.humidite);
-  if (d.diagnostic) { y+=1; doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text('Observations :',20,y);y+=5; doc.setFont('helvetica','normal'); doc.splitTextToSize(d.diagnostic,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
+  // --- Bandeau titre ----------------------------------------------------
+  y = Math.max(hy, dy) + 6;
+  ensure(22);
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text('RAPPORT DE DIAGNOSTIC', M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text('Insectes xylophages — bois & charpentes', M+6, y+12.4);
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text('N° ' + (d.numero||''), R-6, y+6.8, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
 
-  // Schéma de la charpente (image annotée)
-  if (d.schema) {
-    if (y > 200) { doc.addPage(); y = 20; }
-    y += 4; section('Schéma de la charpente');
-    try { doc.addImage(d.schema, 'PNG', 20, y, 170, 100); y += 104; } catch (e) {}
+  // --- Encadré infos (technicien / bâtiment / bon / méthode / zones) ---
+  const infoPairs = [
+    ['Technicien', d.tech], ['Bâtiment / charpente', d.batiment],
+    ['Méthode d\'inspection', d.methode], ['Zones inspectées', d.zones],
+  ].filter(p => p[1]);
+  if (infoPairs.length) {
+    const rows = Math.ceil(infoPairs.length/2);
+    const boxH = rows*9 + 4;
+    ensure(boxH + 4);
+    doc.setFillColor(244,245,248); doc.setDrawColor(225,228,238);
+    doc.roundedRect(M, y, CW, boxH, 2, 2, 'FD');
+    infoPairs.forEach((p, i) => {
+      const cx = M + 5 + (i%2)*(CW/2), cy = y + 7 + Math.floor(i/2)*9;
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(p[0].toUpperCase(), cx, cy-3);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+      doc.text(doc.splitTextToSize(String(p[1]), CW/2-10)[0]||'', cx, cy+1);
+    });
+    doc.setTextColor(0);
+    y += boxH + 6;
+  } else { y += 2; }
+
+  // --- Synthèse : activité / gravité / étendue / humidité --------------
+  const synth = [
+    ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
+    ['GRAVITÉ', d.gravite, GRAV_RGB[d.gravite]],
+    ['ÉTENDUE', d.etendue, null],
+    ['HUMIDITÉ DU BOIS', d.humidite, null],
+  ];
+  if (synth.some(s => s[1])) {
+    ensure(20);
+    const colW = CW/4;
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y, CW, 15, 2, 2, 'D');
+    synth.forEach((s, i) => {
+      const cx = M + i*colW + 4;
+      if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(s[0], cx, y+5);
+      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (s[2]) { badge(String(s[1]).replace(' (structure menacée)',''), s[2], cx, y+11.2); }
+      else {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
+      }
+    });
+    doc.setTextColor(0);
+    y += 21;
   }
 
-  if (d.conclusion) { y+=4; section('Conclusion / recommandations'); doc.splitTextToSize(d.conclusion,170).forEach(ln=>{doc.text(ln,20,y);y+=4.8;}); }
+  // --- Constatations ----------------------------------------------------
+  section('Constatations');
+  field('Insectes détectés', (d.insectes||[]).join(', '));
+  field('Éléments / bois touchés', d.elementsTouches);
+  if (d.diagnostic) {
+    y += 1.5;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
+    para(d.diagnostic);
+  }
 
-  // Signature
-  y = Math.max(y+14, 250);
-  doc.setFontSize(9); doc.setTextColor(80);
-  doc.text('DERATEK Professional Pest Control', 20, y);
-  doc.text('Signature : ______________________', 120, y);
+  // --- Schéma de la charpente + légende ---------------------------------
+  if (d.schema) {
+    const schemaH = 100;
+    if (y + schemaH + 22 > MAX_Y) newPage();
+    y += 3; section('Schéma de la charpente');
+    try {
+      doc.addImage(d.schema, 'PNG', M, y, 170, schemaH);
+      doc.setDrawColor(225,228,238); doc.rect(M, y, 170, schemaH, 'D');
+      y += schemaH + 5;
+      // Légende des couleurs d'annotation
+      let lx = M;
+      DIAG_COLORS.forEach(c => {
+        const rgb = [parseInt(c.hex.slice(1,3),16), parseInt(c.hex.slice(3,5),16), parseInt(c.hex.slice(5,7),16)];
+        doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.circle(lx+1.5, y-1.2, 1.5, 'F');
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70);
+        doc.text(c.label, lx+4.5, y);
+        lx += 4.5 + doc.getTextWidth(c.label) + 8;
+      });
+      doc.setTextColor(0);
+      y += 6;
+    } catch (e) {}
+  }
+
+  // --- Photos de l'inspection -------------------------------------------
+  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data) : [];
+  if (photos.length) {
+    y += 2; section('Photos de l\'inspection');
+    const pw = (CW - 6) / 2, ph = 58;
+    photos.forEach((p, i) => {
+      const col = i % 2;
+      if (col === 0 && y + ph + 8 > MAX_Y) newPage();
+      const px = M + col*(pw+6);
+      try {
+        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
+        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        if (p.caption) {
+          doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70);
+          doc.text(doc.splitTextToSize('Photo ' + (i+1) + ' — ' + p.caption, pw)[0]||'', px, y+ph+3.6);
+          doc.setTextColor(0);
+        }
+      } catch (e) {}
+      if (col === 1 || i === photos.length-1) y += ph + (photos[i].caption || (photos[i-col]||{}).caption ? 8 : 4);
+    });
+    y += 2;
+  }
+
+  // --- Fiches descriptives des insectes détectés -------------------------
+  const fiches = (d.insectes||[]).filter(n => INSECTES_BOIS_INFO[n]);
+  if (fiches.length) {
+    y += 2; section('Fiches des insectes détectés');
+    fiches.forEach(nom => {
+      const f = INSECTES_BOIS_INFO[nom];
+      // Hauteur estimée de la fiche pour la garder entière sur une page
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      const estH = 13 + [f.bois, f.indices, f.cycle, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
+      ensure(Math.min(estH, 75));
+      doc.setFillColor(247,242,235);
+      doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      const nomW = doc.getTextWidth(nom);
+      doc.setTextColor(BROWN[0],BROWN[1],BROWN[2]);
+      doc.text(nom, M+3, y+3.6);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.text(f.latin, M+3+nomW+4, y+3.6);
+      doc.setTextColor(0);
+      y += 10;
+      field('Bois attaqués', f.bois, M+3);
+      field('Indices typiques', f.indices, M+3);
+      field('Cycle de vie', f.cycle, M+3);
+      field('Risque', f.risque, M+3);
+      y += 3;
+    });
+  }
+
+  // --- Traitement recommandé & suivi -------------------------------------
+  if (d.traitement || d.suivi) {
+    y += 2; section('Traitement recommandé');
+    para(d.traitement);
+    if (d.suivi) { y += 1.5; field('Suivi / garantie', d.suivi); }
+  }
+
+  // --- Conclusion (encadré) ----------------------------------------------
+  if (d.conclusion) {
+    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const boxH = lines.length*4.9 + 8;
+    if (y + boxH + 12 > MAX_Y) newPage();
+    y += 2; section('Conclusion / recommandations');
+    doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    doc.setTextColor(0);
+    y += boxH + 4;
+  }
+
+  // --- Signature -----------------------------------------------------------
+  ensure(26);
+  y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+  doc.text(co.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+  doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
+  doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
+  doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+  doc.text('Signature', 120, y+15.5);
+  doc.setTextColor(0);
+
+  // --- Pied de page sur toutes les pages ------------------------------------
+  const nb = doc.getNumberOfPages();
+  for (let i = 1; i <= nb; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(BROWN[0],BROWN[1],BROWN[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
+    doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
+    doc.setTextColor(0);
+  }
+
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
 }
