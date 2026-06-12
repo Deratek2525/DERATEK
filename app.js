@@ -6580,9 +6580,9 @@ const INSECTES_BOIS_INFO = {
 // Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
 // repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
 // [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
-const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV' };
-const _DIAG_JSON_KEYS = new Set(['signes', 'postes']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV):[^\]]*\]/g;
+const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL' };
+const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel']);   // tableaux/objets → JSON dans le marqueur
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6770,7 +6770,7 @@ function addDiagPhotos(ev) {
         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
         if (!_editingDiag) return;
         if (!Array.isArray(_editingDiag.photos)) _editingDiag.photos = [];
-        _editingDiag.photos.push({ data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '' });
+        _editingDiag.photos.push({ data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '', use: true });
         renderDiagPhotos();
       };
       img.src = e.target.result;
@@ -6787,17 +6787,23 @@ function removeDiagPhoto(i) {
 function setDiagPhotoCaption(i, v) {
   if (_editingDiag && _editingDiag.photos && _editingDiag.photos[i]) _editingDiag.photos[i].caption = v;
 }
+function setDiagPhotoUse(i, checked) {
+  if (_editingDiag && _editingDiag.photos && _editingDiag.photos[i]) { _editingDiag.photos[i].use = !!checked; renderDiagPhotos(); }
+}
 function renderDiagPhotos() {
   const box = $('diag-photos-box'); if (!box) return;
   const photos = (_editingDiag && _editingDiag.photos) || [];
   box.innerHTML = photos.map((p, i) => `
     <div style="width:130px;">
       <div style="position:relative;">
-        <img src="${p.data}" style="width:130px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">
+        <img src="${p.data}" style="width:130px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
         <button type="button" onclick="removeDiagPhoto(${i})" title="Retirer"
           style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
       </div>
-      <input class="form-input" style="margin-top:4px;font-size:11px;padding:4px 6px;" placeholder="Légende..."
+      <label style="display:flex;align-items:center;gap:4px;font-size:10.5px;margin-top:3px;cursor:pointer;color:var(--g600);">
+        <input type="checkbox" ${p.use!==false?'checked':''} onchange="setDiagPhotoUse(${i}, this.checked)" style="accent-color:var(--navy);"> Inclure au PDF
+      </label>
+      <input class="form-input" style="margin-top:3px;font-size:11px;padding:4px 6px;" placeholder="Légende..."
         value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="setDiagPhotoCaption(${i}, this.value)">
     </div>`).join('');
 }
@@ -7284,7 +7290,7 @@ function _genDiagPDF(d) {
   }
 
   // --- Photos de l'inspection -------------------------------------------
-  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data) : [];
+  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
     y += 2; section('Photos de l\'inspection');
     const pw = (CW - 6) / 2, ph = 58;
@@ -7386,6 +7392,7 @@ function _genDiagPDF(d) {
 // ============================================================
 const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot'];
 const RONGEURS_SIGNES = ['Déjections', 'Traces de gras (frottements)', 'Rongements / dégâts matériels', 'Terriers / galeries', 'Bruits (grattements)', 'Odeur d\'urine', 'Empreintes / coulées', 'Denrées entamées', 'Nids'];
+const RONGEURS_MATERIEL = ['Postes d\'appâtage sécurisés', 'Blocs hydrofuges', 'Pâte fraîche', 'Céréales / grains', 'Tapettes mécaniques', 'Postes à souris', 'Piège à capture vive', 'Plaques de glu', 'Grillage / colmatage', 'Caméra / endoscope'];
 const RONGEUR_COLORS = [
   { hex: '#e63946', label: 'Activité confirmée' },
   { hex: '#f4a261', label: 'À surveiller' },
@@ -7444,7 +7451,7 @@ function openNewRongeurs() {
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
-    traitement: '', suivi: '', prevention: '', signes: [], postes: [], photos: []
+    traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [], photos: []
   };
   renderDiagEditor(); openModal('modal-diag');
 }
@@ -7453,6 +7460,12 @@ function toggleRongeurSigne(nom, checked) {
   const set = new Set(_editingDiag.signes || []);
   if (checked) set.add(nom); else set.delete(nom);
   _editingDiag.signes = [...set];
+}
+function toggleRongeurMateriel(nom, checked) {
+  if (!_editingDiag) return;
+  const set = new Set(_editingDiag.materiel || []);
+  if (checked) set.add(nom); else set.delete(nom);
+  _editingDiag.materiel = [...set];
 }
 // --- Postes d'appâtage / pièges ---
 function addRongeurPoste() {
@@ -7492,6 +7505,10 @@ function renderRongeursEditor() {
   const signesHtml = RONGEURS_SIGNES.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d.signes||[]).includes(n)?'checked':''} onchange="toggleRongeurSigne('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const materielHtml = RONGEURS_MATERIEL.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.materiel||[]).includes(n)?'checked':''} onchange="toggleRongeurMateriel('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
     </label>`).join('');
   box.innerHTML = `
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐀 Identification</div>
@@ -7564,6 +7581,9 @@ function renderRongeursEditor() {
       <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF (non stockées en base).</span>
       <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
     </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧰 Matériel utilisé</div>
+    <div style="margin-bottom:12px;">${materielHtml}</div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">🪤 Postes d'appâtage / pièges posés</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
@@ -7761,7 +7781,7 @@ function _genRongeursPDF(d) {
   }
 
   // Photos
-  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data) : [];
+  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
   if (photos.length) {
     y += 2; section('Photos de l\'inspection');
     const pw = (CW - 6) / 2, ph = 58;
@@ -7841,8 +7861,10 @@ function _genRongeursPDF(d) {
   }
 
   // Plan de traitement & suivi
-  if (d.traitement || d.suivi) {
+  const materiel = Array.isArray(d.materiel) ? d.materiel : [];
+  if (d.traitement || d.suivi || materiel.length) {
     y += 2; section('Plan de traitement');
+    if (materiel.length) { field('Matériel utilisé', materiel.join(', ')); y += 1; }
     para(d.traitement);
     if (d.suivi) { y += 1.5; field('Suivi / prochain passage', d.suivi); }
   }
