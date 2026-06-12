@@ -6752,6 +6752,9 @@ function renderDiagEditor() {
   const t = $('modal-diag-title'); if (t) t.textContent = 'Diagnostic bois ' + (d.numero||'');
   initDiagSchema();
   renderDiagPhotos();
+  box.oninput = () => refreshDiagPreview();
+  _syncDiagPreviewPane();
+  refreshDiagPreview();
 }
 
 // --- Photos de l'inspection (en mémoire uniquement, incluses dans le PDF) ---
@@ -6806,6 +6809,7 @@ function renderDiagPhotos() {
       <input class="form-input" style="margin-top:3px;font-size:11px;padding:4px 6px;" placeholder="Légende..."
         value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="setDiagPhotoCaption(${i}, this.value)">
     </div>`).join('');
+  refreshDiagPreview();
 }
 
 // --- Schéma de charpente annotable ---
@@ -6955,6 +6959,7 @@ function initDiagSchema() {
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
         ctx.strokeText(txt.trim(), p.x, p.y); ctx.fillText(txt.trim(), p.x, p.y);
         if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+        refreshDiagPreview();
       }
       return;
     }
@@ -6980,6 +6985,7 @@ function initDiagSchema() {
     }
     _diagStrokePts = []; _diagSnapshot = null;
     if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+    refreshDiagPreview();
   };
   c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
   c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
@@ -7000,6 +7006,7 @@ function loadSchemaImage(ev) {
       ctx.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
       _diagBgDataUrl = c.toDataURL('image/png');
       if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
+      refreshDiagPreview();
       toast('✓ Image chargée — dessine pour entourer les zones', '#2d9e6b');
     };
     img.src = e.target.result;
@@ -7013,11 +7020,13 @@ function clearDiagSchema() {
   const ctx = c.getContext('2d');
   if (_diagBgDataUrl) {
     const img = new Image();
-    img.onload = () => { ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height); if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); };
+    img.onload = () => { ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height); if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png'); refreshDiagPreview(); };
     img.src = _diagBgDataUrl;
   } else {
-    _drawSchemaBase(ctx, c.width, c.height);
+    if (_editingDiag && _diagType(_editingDiag) === 'rongeurs') _drawPlanBase(ctx, c.width, c.height);
+    else _drawSchemaBase(ctx, c.width, c.height);
     if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
+    refreshDiagPreview();
   }
 }
 // Revient au fond par défaut (schéma 3D charpente, ou plan quadrillé pour les rongeurs)
@@ -7028,6 +7037,7 @@ function resetToDefaultSchema() {
   else _drawSchemaBase(ctx, c.width, c.height);
   _diagBgDataUrl = c.toDataURL('image/png');
   if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
+  refreshDiagPreview();
 }
 // Fond "plan des locaux" quadrillé pour le rapport rongeurs
 function _drawPlanBase(ctx, W, H) {
@@ -7189,8 +7199,8 @@ function downloadDiagPDF(id) {
   const u = _diagUnpack(d);
   if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else _genDiagPDF(u);
 }
-function _genDiagPDF(d) {
-  if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
+function _genDiagPDF(d, mode) {
+  if (!d) { if (mode !== 'blob') toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   const co = DERATEK_CONFIG.company;
   const { jsPDF } = window.jspdf;
@@ -7459,8 +7469,44 @@ function _genDiagPDF(d) {
     doc.setTextColor(0);
   }
 
+  if (mode === 'blob') return doc.output('blob');
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
+}
+
+// ---- Aperçu PDF en direct (diagnostic bois & rapport rongeurs) ----
+let _diagPreviewOn = false;
+let _diagPreviewTimer = null;
+let _diagPreviewUrl = null;
+function _syncDiagPreviewPane() {
+  const pane = $('diag-preview-pane'), box = $('modal-diag-box'), btn = $('diag-preview-btn');
+  if (pane) pane.style.display = _diagPreviewOn ? 'block' : 'none';
+  if (box) box.style.maxWidth = _diagPreviewOn ? '1300px' : '740px';
+  if (btn) { btn.classList.toggle('btn-navy', _diagPreviewOn); btn.classList.toggle('btn-ghost', !_diagPreviewOn); }
+}
+function toggleDiagPreview() {
+  _diagPreviewOn = !_diagPreviewOn;
+  _syncDiagPreviewPane();
+  if (_diagPreviewOn) refreshDiagPreview(true);
+}
+function refreshDiagPreview(now) {
+  if (!_diagPreviewOn || !_editingDiag) return;
+  clearTimeout(_diagPreviewTimer);
+  _diagPreviewTimer = setTimeout(() => {
+    if (!_diagPreviewOn || !_editingDiag) return;
+    const c = $('diag-schema-canvas');
+    if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
+    try {
+      const blob = _diagType(_editingDiag) === 'rongeurs'
+        ? _genRongeursPDF(_editingDiag, 'blob')
+        : _genDiagPDF(_editingDiag, 'blob');
+      if (!blob) return;
+      const ifr = $('diag-pdf-preview'); if (!ifr) return;
+      if (_diagPreviewUrl) { try { URL.revokeObjectURL(_diagPreviewUrl); } catch (e) {} }
+      _diagPreviewUrl = URL.createObjectURL(blob);
+      ifr.src = _diagPreviewUrl + '#toolbar=0&navpanes=0&view=FitH';
+    } catch (err) { console.warn('Aperçu PDF diag :', err); }
+  }, now === true ? 0 : 700);
 }
 
 // ============================================================
@@ -7583,6 +7629,7 @@ function renderRongeursPostes() {
       <input class="form-input" style="flex:1;font-size:12px;padding:5px 8px;" placeholder="Produit / piège (ex. bloc brodifacoum, tapette...)" value="${(p.produit||'').replace(/"/g,'&quot;')}" oninput="setRongeurPoste(${i},'produit',this.value)">
       <button type="button" class="btn btn-ghost btn-sm" onclick="removeRongeurPoste(${i})" title="Retirer" style="padding:3px 8px;">✕</button>
     </div>`).join('') || '<div style="font-size:11px;color:var(--g400);">Aucun poste — clique sur « + Ajouter un poste ».</div>';
+  refreshDiagPreview();
 }
 
 function renderRongeursEditor() {
@@ -7722,10 +7769,13 @@ function renderRongeursEditor() {
   initDiagSchema();
   renderDiagPhotos();
   renderRongeursPostes();
+  box.oninput = () => refreshDiagPreview();
+  _syncDiagPreviewPane();
+  refreshDiagPreview();
 }
 
-function _genRongeursPDF(d) {
-  if (!d) { toast('Rapport introuvable', '#e63946'); return; }
+function _genRongeursPDF(d, mode) {
+  if (!d) { if (mode !== 'blob') toast('Rapport introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
   const co = DERATEK_CONFIG.company;
   const { jsPDF } = window.jspdf;
@@ -8046,6 +8096,7 @@ function _genRongeursPDF(d) {
     doc.setTextColor(0);
   }
 
+  if (mode === 'blob') return doc.output('blob');
   doc.save('rapport-rongeurs-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF rapport rongeurs téléchargé', '#2d9e6b');
 }

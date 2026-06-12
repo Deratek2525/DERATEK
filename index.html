@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260611sx">
+<link rel="stylesheet" href="./style.css?v=20260611sy">
 </head>
 <body>
 
@@ -1304,12 +1304,18 @@
 
 <!-- Modale éditeur diagnostic bois -->
 <div class="modal-bg" id="modal-diag">
-  <div class="modal" style="max-width:740px;">
+  <div class="modal" style="max-width:740px;" id="modal-diag-box">
     <div class="modal-hd">
       <span class="modal-title" id="modal-diag-title">Diagnostic bois</span>
+      <button class="btn btn-ghost btn-sm" id="diag-preview-btn" onclick="toggleDiagPreview()">👁 Aperçu PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-diag')">✕</button>
     </div>
-    <div class="modal-body" id="modal-diag-body"></div>
+    <div class="modal-body" style="display:flex;gap:14px;align-items:stretch;">
+      <div id="modal-diag-body" style="flex:1;min-width:0;"></div>
+      <div id="diag-preview-pane" style="display:none;flex:1;min-width:0;position:sticky;top:0;">
+        <iframe id="diag-pdf-preview" title="Aperçu PDF" style="width:100%;height:100%;min-height:72vh;border:1px solid #e5e7eb;border-radius:8px;background:#f4f5f8;"></iframe>
+      </div>
+    </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('modal-diag')">Annuler</button>
       <button class="btn btn-green" onclick="downloadCurrentDiagPDF()">📥 Télécharger le PDF</button>
@@ -1347,10 +1353,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="./logo.js?v=20260611sx"></script>
-<script src="./footer_prestations.js?v=20260611sx"></script>
-<script src="./config.js?v=20260611sx"></script>
-<script src="./app.js?v=20260611sx"></script>
-<script src="./pdf.js?v=20260611sx"></script>
+<script src="./logo.js?v=20260611sy"></script>
+<script src="./footer_prestations.js?v=20260611sy"></script>
+<script src="./config.js?v=20260611sy"></script>
+<script src="./app.js?v=20260611sy"></script>
+<script src="./pdf.js?v=20260611sy"></script>
 
 </body></html>
