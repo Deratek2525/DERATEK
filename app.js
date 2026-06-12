@@ -7284,39 +7284,59 @@ function _drawCharpente(ctx, W, H, modele) {
     ctx.restore();
   }
 
-  // Poutre « pro » : ombre douce 2 passes, corps cylindrique (dégradé
-  // perpendiculaire à la poutre), veines du bois, arête lumineuse.
+  // Poutre « rendu CAO » : vrai prisme 3D — face latérale (dégradé), face
+  // supérieure claire, chants d'extrémité, veines du bois, arêtes marquées.
   const beam = (a, b, w, pal) => {
     _diagSchemaParts.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, w: w, tag: _beamTag });
     const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
-    const nx = -dy / L, ny = dx / L;            // normale (perpendiculaire)
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    // ombre portée douce (2 passes)
-    ctx.strokeStyle = 'rgba(50,33,12,0.08)'; ctx.lineWidth = w + 5;
-    ctx.beginPath(); ctx.moveTo(a.x + 3.4, a.y + 4.4); ctx.lineTo(b.x + 3.4, b.y + 4.4); ctx.stroke();
-    ctx.strokeStyle = 'rgba(50,33,12,0.16)'; ctx.lineWidth = w + 2;
-    ctx.beginPath(); ctx.moveTo(a.x + 2, a.y + 2.6); ctx.lineTo(b.x + 2, b.y + 2.6); ctx.stroke();
-    // corps : dégradé perpendiculaire → volume cylindrique
-    const g = ctx.createLinearGradient(a.x - nx * w * 0.6, a.y - ny * w * 0.6, a.x + nx * w * 0.6, a.y + ny * w * 0.6);
-    g.addColorStop(0, pal[0]); g.addColorStop(0.45, pal[1]); g.addColorStop(1, pal[2]);
-    ctx.strokeStyle = g; ctx.lineWidth = w;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    // veines du bois (fines lignes internes)
-    if (w >= 3) {
-      ctx.strokeStyle = 'rgba(74,48,16,0.22)'; ctx.lineWidth = Math.max(0.6, w * 0.10);
-      [-0.18, 0.16].forEach(o => {
-        ctx.beginPath();
-        ctx.moveTo(a.x + nx * w * o, a.y + ny * w * o);
-        ctx.lineTo(b.x + nx * w * o, b.y + ny * w * o);
-        ctx.stroke();
-      });
+    let nx = -dy / L, ny = dx / L;
+    if (ny < 0) { nx = -nx; ny = -ny; }          // normale orientée vers le bas
+    const hw = w / 2;
+    const ex = -w * 0.40, ey = -w * 0.52;        // extrusion vers la lumière
+    // Pièces fines (chevrons, liteaux…) : simple trait dégradé, plus léger
+    if (w < 2.6) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(50,33,12,0.15)'; ctx.lineWidth = w + 1.6;
+      ctx.beginPath(); ctx.moveTo(a.x + 1.6, a.y + 2.2); ctx.lineTo(b.x + 1.6, b.y + 2.2); ctx.stroke();
+      const gs = ctx.createLinearGradient(a.x - nx * w, a.y - ny * w, a.x + nx * w, a.y + ny * w);
+      gs.addColorStop(0, pal[0]); gs.addColorStop(1, pal[2]);
+      ctx.strokeStyle = gs; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      return;
     }
-    // arête lumineuse
-    ctx.strokeStyle = 'rgba(255,255,255,0.42)'; ctx.lineWidth = Math.max(0.8, w * 0.18);
-    ctx.beginPath();
-    ctx.moveTo(a.x - nx * w * 0.30, a.y - ny * w * 0.30);
-    ctx.lineTo(b.x - nx * w * 0.30, b.y - ny * w * 0.30);
-    ctx.stroke();
+    const A1 = { x: a.x - nx * hw, y: a.y - ny * hw }, B1 = { x: b.x - nx * hw, y: b.y - ny * hw };
+    const A2 = { x: a.x + nx * hw, y: a.y + ny * hw }, B2 = { x: b.x + nx * hw, y: b.y + ny * hw };
+    const quad = (p1, p2, p3, p4, fill) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath(); ctx.fill();
+    };
+    // ombre portée douce
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = 'rgba(50,33,12,0.14)'; ctx.lineWidth = w + 3;
+    ctx.beginPath(); ctx.moveTo(a.x + 2.6, a.y + 3.6); ctx.lineTo(b.x + 2.6, b.y + 3.6); ctx.stroke();
+    // face latérale (corps)
+    const g = ctx.createLinearGradient(A1.x, A1.y, A2.x, A2.y);
+    g.addColorStop(0, pal[1]); g.addColorStop(1, pal[2]);
+    quad(A1, B1, B2, A2, g);
+    // veines du bois sur la face latérale
+    ctx.strokeStyle = 'rgba(70,45,15,0.20)'; ctx.lineWidth = Math.max(0.6, w * 0.08);
+    [0.32, 0.64].forEach(t => {
+      ctx.beginPath();
+      ctx.moveTo(A1.x + (A2.x - A1.x) * t, A1.y + (A2.y - A1.y) * t);
+      ctx.lineTo(B1.x + (B2.x - B1.x) * t, B1.y + (B2.y - B1.y) * t);
+      ctx.stroke();
+    });
+    // face supérieure (claire, côté lumière)
+    quad(A1, B1, { x: B1.x + ex, y: B1.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[0]);
+    // chants d'extrémité
+    quad(B1, B2, { x: B2.x + ex, y: B2.y + ey }, { x: B1.x + ex, y: B1.y + ey }, pal[1]);
+    quad(A1, A2, { x: A2.x + ex, y: A2.y + ey }, { x: A1.x + ex, y: A1.y + ey }, pal[1]);
+    // arêtes
+    ctx.strokeStyle = 'rgba(58,37,12,0.45)'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(A1.x, A1.y); ctx.lineTo(B1.x, B1.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(A2.x, A2.y); ctx.lineTo(B2.x, B2.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(A1.x + ex, A1.y + ey); ctx.lineTo(B1.x + ex, B1.y + ey); ctx.stroke();
   };
   const PAL_FRONT = ['#cf9a5e', '#a9742f', '#7c5318'];
   const PAL_MID   = ['#b98a4e', '#956427', '#6e4815'];
@@ -7772,7 +7792,8 @@ function highlightWoodElement(name) {
   let ov = $('diag-hl-canvas');
   if (!ov) { ov = document.createElement('canvas'); ov.id = 'diag-hl-canvas'; host.appendChild(ov); }
   ov.width = c.width; ov.height = c.height;
-  ov.style.cssText = 'position:absolute;left:' + c.offsetLeft + 'px;top:' + c.offsetTop + 'px;width:' + c.clientWidth + 'px;height:' + c.clientHeight + 'px;pointer-events:none;opacity:1;transition:opacity .7s;';
+  const hr = host.getBoundingClientRect(), cr = c.getBoundingClientRect();
+  ov.style.cssText = 'position:absolute;left:' + (cr.left - hr.left) + 'px;top:' + (cr.top - hr.top) + 'px;width:' + cr.width + 'px;height:' + cr.height + 'px;pointer-events:none;opacity:1;transition:opacity .7s;z-index:5;';
   const k = c.width / 640;
   const octx = ov.getContext('2d');
   octx.clearRect(0, 0, ov.width, ov.height);
