@@ -6599,9 +6599,16 @@ const INSECTES_BOIS_INFO = {
 // Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
 // repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
 // [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
-const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL', rodenticides: 'RODENT', actions: 'ACTIONS', bureau: 'BUREAU', doctype: 'DOCTYPE', noPlan: 'NOPLAN', noPhotos: 'NOPHOTOS' };
+const _DIAG_MARKERS = {
+  methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES',
+  postes: 'POSTES', prevention: 'PREV', materiel: 'MATERIEL', rodenticides: 'RODENT', actions: 'ACTIONS',
+  bureau: 'BUREAU', doctype: 'DOCTYPE', noPlan: 'NOPLAN', noPhotos: 'NOPHOTOS', noTech: 'NOTECH',
+  rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
+  contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
+  dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
+};
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV|MATERIEL|RODENT|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6664,6 +6671,43 @@ function _diagTypeBureauFields(d) {
       </select>
     </div>`;
 }
+// Champ technicien avec case « afficher sur le PDF » (décochable)
+function _diagTechField(d) {
+  return `<div class="form-group">
+    <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Technicien</label>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--g600);cursor:pointer;" title="Décocher pour ne pas afficher le technicien sur le PDF">
+        <input type="checkbox" ${d.noTech?'':'checked'} onchange="_editingDiag.noTech=this.checked?'':'1'; refreshDiagPreview();" style="accent-color:var(--navy);"> sur le PDF
+      </label>
+    </div>
+    <input class="form-input" value="${(d.tech||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.tech=this.value">
+  </div>`;
+}
+// Dates d'intervention (1ʳᵉ/2ᵉ/3ᵉ + prochain passage) — zone visible en haut du PDF
+function _diagDatesFields(d) {
+  const f = (k, lbl) => `<div class="form-group"><label class="form-label">${lbl}</label><input class="form-input" type="date" value="${d[k]||''}" oninput="_editingDiag.${k}=this.value"></div>`;
+  return `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📅 Dates d'intervention (affichées en haut du PDF)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+    ${f('dateInt1','1ʳᵉ intervention')}${f('dateInt2','2ᵉ intervention')}${f('dateInt3','3ᵉ intervention')}${f('dateProchain','Prochain passage prévu')}
+  </div>`;
+}
+// Proposition de contrat annuel (case + champs détaillés)
+function _diagContratFields(d) {
+  return `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">
+    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" ${d.contrat?'checked':''} onchange="_editingDiag.contrat=this.checked?'1':''; renderDiagEditor();" style="accent-color:var(--navy);"> 📄 Proposition de contrat annuel
+    </label>
+  </div>
+  ${d.contrat ? `
+  <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:14px;background:#fafbfc;">
+    <div style="font-size:11px;color:var(--g600);margin-bottom:8px;font-style:italic;">« Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles. » (texte ajouté automatiquement au PDF)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Nombre de passages annuels proposés</label><input class="form-input" value="${(d.contratPassages||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.contratPassages=this.value" placeholder="Ex. 4 passages par an"></div>
+      <div class="form-group"><label class="form-label">Montant estimatif</label><input class="form-input" value="${(d.contratMontant||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.contratMontant=this.value" placeholder="Ex. CHF 1'200.– / an"></div>
+      <div class="form-group"><label class="form-label">Zones concernées</label><input class="form-input" value="${(d.contratZones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.contratZones=this.value" placeholder="Ex. caves, local poubelles, extérieurs"></div>
+      <div class="form-group"><label class="form-label">Remarques particulières</label><input class="form-input" value="${(d.contratRem||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.contratRem=this.value"></div>
+    </div>
+  </div>` : '<div style="margin-bottom:10px;"></div>'}`;
+}
 // Case à cocher d'affichage d'une section dans le PDF (plan / photos)
 function _diagSectionToggle(field, label) {
   const off = !!(_editingDiag && _editingDiag[field]);
@@ -6691,7 +6735,9 @@ function openNewDiagnostic() {
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: ''
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '',
+    suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
+    dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
   };
   renderDiagEditor(); openModal('modal-diag');
 }
@@ -6726,11 +6772,13 @@ function renderDiagEditor() {
         <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
       </div>
-      <div class="form-group"><label class="form-label">Technicien</label><input class="form-input" value="${(d.tech||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.tech=this.value"></div>
+      ${_diagTechField(d)}
       <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
       <div class="form-group"><label class="form-label">Bâtiment / charpente concernée</label><input class="form-input" value="${(d.batiment||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. charpente combles, villa"></div>
       <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
     </div>
+
+    ${_diagDatesFields(d)}
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐛 Insectes détectés & éléments touchés</div>
     <div style="margin-bottom:8px;">${insectesHtml}</div>
@@ -6810,6 +6858,8 @@ function renderDiagEditor() {
       <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea>
     </div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / garantie</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle après 12 mois, garantie 10 ans"></div>
+
+    ${_diagContratFields(d)}
 
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
@@ -7477,6 +7527,29 @@ function _diagBonInfo(d) {
   };
 }
 
+// Bandeau bien visible des dates d'intervention en haut de la page 1
+function _diagDatesStrip(doc, d, y, M, CW) {
+  const items = [
+    ['1RE INTERVENTION', d.dateInt1], ['2E INTERVENTION', d.dateInt2],
+    ['3E INTERVENTION', d.dateInt3], ['PROCHAIN PASSAGE', d.dateProchain],
+  ].filter(p => p[1]);
+  if (!items.length) return y;
+  const h = 13;
+  doc.setFillColor(255, 248, 230); doc.setDrawColor(244, 166, 35); doc.setLineWidth(0.4);
+  doc.roundedRect(M, y, CW, h, 2, 2, 'FD');
+  const colW = CW / items.length;
+  items.forEach((it, i) => {
+    const x = M + i*colW + 5;
+    if (i) { doc.setDrawColor(240, 220, 170); doc.setLineWidth(0.3); doc.line(M + i*colW, y+2.5, M + i*colW, y+h-2.5); }
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(160, 115, 20);
+    doc.text(it[0], x, y+4.6);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(13,27,62);
+    doc.text(fmtDate(it[1]) || '', x, y+10.3);
+  });
+  doc.setTextColor(0);
+  return y + h + 4;
+}
+
 function _genDiagPDF(d, mode) {
   if (!d) { if (mode !== 'blob') toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
@@ -7553,8 +7626,9 @@ function _genDiagPDF(d, mode) {
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
+  const yStrip = _diagDatesStrip(doc, d, headerFiletY + 9, M, CW);
   y = _diagRows2Col(doc, [
-    ['Technicien', d.tech],
+    ['Technicien', d.noTech ? '' : d.tech],
     ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
     ['N° bon de commande', bi.bonNumero],
     ['Adresse d\'intervention', d.locataireAdresse],
@@ -7568,7 +7642,7 @@ function _genDiagPDF(d, mode) {
     ['Méthode d\'inspection', d.methode],
     ['Zones inspectées', d.zones],
     ['N° intervention', bi.bonNumero],
-  ], headerFiletY + 11, M, CW);
+  ], Math.max(yStrip, headerFiletY + 11), M, CW);
 
   // --- Bandeau titre ----------------------------------------------------
   y += 5;
@@ -7704,6 +7778,17 @@ function _genDiagPDF(d, mode) {
     if (d.suivi) { y += 1.5; field('Suivi / garantie', d.suivi); }
   }
 
+  // --- Proposition de contrat annuel --------------------------------------
+  if (d.contrat) {
+    y += 2; section('Proposition de contrat annuel');
+    para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
+    y += 1.5;
+    field('Passages annuels proposés', d.contratPassages);
+    field('Montant estimatif', d.contratMontant);
+    field('Zones concernées', d.contratZones);
+    field('Remarques', d.contratRem);
+  }
+
   // --- Conclusion (encadré) ----------------------------------------------
   if (d.conclusion) {
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
@@ -7723,7 +7808,7 @@ function _genDiagPDF(d, mode) {
   y += 8;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
   doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
-  doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
+  doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
   doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
   doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
   doc.text('Signature', 120, y+15.5);
@@ -7783,10 +7868,18 @@ function refreshDiagPreview(now) {
 // ============================================================
 // RAPPORT SPÉCIAL RONGEURS (même table "diagnostics", numéros RG-)
 // ============================================================
-const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot'];
+const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rats d\'égout', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot', 'Fouine'];
 const RONGEURS_SIGNES = ['Déjections', 'Traces de gras (frottements)', 'Rongements / dégâts matériels', 'Terriers / galeries', 'Bruits (grattements)', 'Odeur d\'urine', 'Empreintes / coulées', 'Denrées entamées', 'Nids'];
-const RONGEURS_MATERIEL = ['Postes d\'appâtage sécurisés', 'Blocs hydrofuges', 'Pâte fraîche', 'Céréales / grains', 'Tapettes mécaniques', 'Postes à souris', 'Piège à capture vive', 'Plaques de glu', 'Grillage / colmatage', 'Caméra / endoscope'];
-const RONGEURS_RODENTICIDES = ['Brodifacoum', 'Bromadiolone', 'Difénacoum', 'Diféthialone', 'Flocoumafen'];
+const RONGEURS_MATERIEL = [
+  'Postes d\'appâtage sécurisés', 'Poste d\'appâtage sécurisé rats', 'Poste d\'appâtage sécurisé souris',
+  'Boîtes d\'appâtage sécurisées', 'Tunnel Speed Break Pro Rats', 'Tunnel Speed Break Pro Souris',
+  'Blocs hydrofuges', 'Pâte fraîche', 'Céréales / grains',
+  'Pièges mécaniques', 'Tapettes mécaniques', 'Postes à souris', 'Piège à capture vive', 'Plaques de glu',
+  'Percement de trous 5 mm au plafond', 'Percement de trous 5 mm dans les zones techniques',
+  'Injection de produit dans les cavités', 'Grillage / colmatage', 'Caméra / endoscope',
+];
+const RONGEURS_RODENTICIDES = ['Wax Block', 'Talon Inject Pro', 'Racumin Injection', 'Brodifacoum', 'Bromadiolone', 'Difénacoum', 'Diféthialone', 'Flocoumafen', 'Aucun rodenticide utilisé'];
+const SUIVI_OPTIONS = ['Traitement résolu', 'Traitement en cours', 'Prochain passage à prévoir', 'Deuxième passage à prévoir', 'Troisième passage à prévoir', 'Contrôle de suivi à prévoir', 'Détection à prévoir', 'Surveillance recommandée', 'Dossier à clôturer', 'Proposition de contrat annuel recommandée'];
 const RONGEURS_ACTIONS = [
   'Contrôle des consommations dans les postes d\'appâtage sécurisés',
   'Remplacement des appâts consommés si nécessaire',
@@ -7843,6 +7936,20 @@ const RONGEURS_INFO = {
     biologie: 'Nocturne, hibernant ; 1 portée par an',
     risque: 'Espèce protégée : pas de rodenticide — capture et exclusion (grillager les accès) uniquement',
   },
+  'Rats d\'égout': {
+    latin: 'Rattus norvegicus (population des canalisations)',
+    habitat: 'Réseaux d\'égouts et canalisations, remontées par les sauts de loup, colonnes de chute et regards défectueux',
+    indices: 'Apparitions près des écoulements, déjections de 17–20 mm, traces de gras autour des regards, bruits dans les colonnes',
+    biologie: 'Excellent nageur, remonte les conduites verticales ; colonies importantes dans les réseaux',
+    risque: 'Contamination (leptospirose), dégâts aux canalisations ; traitement en collaboration avec un contrôle des réseaux (clapets anti-retour, regards étanches)',
+  },
+  'Fouine': {
+    latin: 'Martes foina',
+    habitat: 'Combles, granges, garages — active la nuit, gîte dans les isolations de toiture',
+    indices: 'Bruits nocturnes forts (courses, cris), déjections torsadées à restes de poils/noyaux, restes de proies, isolation éventrée, câbles de voiture rongés',
+    biologie: 'Carnivore solitaire et territorial, nocturne ; 1 portée par an au printemps',
+    risque: 'Dégâts importants à l\'isolation et aux câbles ; pas de rodenticide — exclusion, répulsifs et capture selon la réglementation cantonale (animal protégé par la loi sur la chasse)',
+  },
 };
 
 function openNewRongeurs() {
@@ -7853,7 +7960,10 @@ function openNewRongeurs() {
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
     traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
     rodenticides: [], actions: [], photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: ''
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '',
+    rodenticideAutre: '', postesNb: '', suiviRem: '',
+    contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
+    dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
   };
   renderDiagEditor(); openModal('modal-diag');
 }
@@ -7938,11 +8048,13 @@ function renderRongeursEditor() {
         <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
         <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
       </div>
-      <div class="form-group"><label class="form-label">Technicien</label><input class="form-input" value="${(d.tech||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.tech=this.value"></div>
+      ${_diagTechField(d)}
       <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
       <div class="form-group"><label class="form-label">Site / bâtiment concerné</label><input class="form-input" value="${(d.batiment||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. immeuble locatif, restaurant, cave"></div>
       <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
     </div>
+
+    ${_diagDatesFields(d)}
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐭 Espèces détectées</div>
     <div style="margin-bottom:10px;">${especesHtml}</div>
@@ -8006,13 +8118,16 @@ function renderRongeursEditor() {
     <div style="margin-bottom:12px;">${materielHtml}</div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">☠️ Rodenticide professionnel utilisé (à base de)</div>
-    <div style="margin-bottom:12px;">${rodentHtml}</div>
+    <div style="margin-bottom:4px;">${rodentHtml}</div>
+    <div class="form-group" style="margin-bottom:12px;max-width:360px;"><input class="form-input" style="font-size:12px;" value="${(d.rodenticideAutre||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.rodenticideAutre=this.value" placeholder="Autre produit (champ libre)"></div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">✅ Mesures du traitement</div>
     <div style="margin-bottom:12px;">${actionsHtml}</div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">🪤 Postes d'appâtage / pièges posés</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <div class="form-group" style="margin-bottom:8px;max-width:240px;"><label class="form-label">Nombre de postes d'appâtage</label><input class="form-input" type="number" min="0" step="1" value="${String(d.postesNb||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.postesNb=this.value" placeholder="Ex. 6"></div>
+      <div style="font-size:11px;color:var(--g400);margin-bottom:6px;">Le détail ci-dessous est facultatif — le nombre seul suffit pour le PDF.</div>
       <div id="rongeur-postes-box" style="margin-bottom:6px;"></div>
       <button class="btn btn-navy btn-sm" type="button" onclick="addRongeurPoste()">+ Ajouter un poste</button>
     </div>
@@ -8027,12 +8142,21 @@ function renderRongeursEditor() {
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Plan de traitement</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
       <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. pose de postes sécurisés en cave et local poubelles, contrôle à J+15...">${d.traitement||''}</textarea>
     </div>
-    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle des postes à J+15, puis mensuel"></div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label>
+      <select class="form-input" oninput="_editingDiag.suivi=this.value">
+        <option value="" ${!d.suivi?'selected':''}>-- Choisir --</option>
+        ${SUIVI_OPTIONS.map(o => `<option ${d.suivi===o?'selected':''}>${o}</option>`).join('')}
+        ${d.suivi && !SUIVI_OPTIONS.includes(d.suivi) ? `<option selected>${d.suivi.replace(/</g,'&lt;')}</option>` : ''}
+      </select>
+      <input class="form-input" style="margin-top:5px;font-size:12px;" value="${(d.suiviRem||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suiviRem=this.value" placeholder="Remarque complémentaire (champ libre)">
+    </div>
 
     <div class="form-group" style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Prévention recommandée</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-prevention" onclick="diagAICorrect('prevention')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
       <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value" placeholder="Ex. colmater le passage de conduites, fermer les portes de cave, gestion des déchets...">${d.prevention||''}</textarea>
     </div>
+
+    ${_diagContratFields(d)}
 
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
@@ -8123,8 +8247,9 @@ function _genRongeursPDF(d, mode) {
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
+  const yStrip = _diagDatesStrip(doc, d, headerFiletY + 9, M, CW);
   y = _diagRows2Col(doc, [
-    ['Technicien', d.tech],
+    ['Technicien', d.noTech ? '' : d.tech],
     ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
     ['N° bon de commande', bi.bonNumero],
     ['Adresse d\'intervention', d.locataireAdresse],
@@ -8138,7 +8263,7 @@ function _genRongeursPDF(d, mode) {
     ['Zones d\'activité', d.zones],
     ['Points d\'entrée', d.elementsTouches],
     ['N° intervention', bi.bonNumero],
-  ], headerFiletY + 11, M, CW);
+  ], Math.max(yStrip, headerFiletY + 11), M, CW);
 
   // Bandeau titre
   y += 5;
@@ -8160,7 +8285,7 @@ function _genRongeursPDF(d, mode) {
     ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
     ['NIVEAU D\'INFESTATION', d.gravite, GRAV_RGB[d.gravite]],
     ['ESPÈCES', (d.insectes||[]).length ? (d.insectes||[]).length + ' détectée(s)' : '', null],
-    ['POSTES POSÉS', postes.length ? String(postes.length) : '', null],
+    ['POSTES POSÉS', d.postesNb ? String(d.postesNb) : (postes.length ? String(postes.length) : ''), null],
   ];
   if (synth.some(s => s[1])) {
     ensure(20);
@@ -8315,16 +8440,32 @@ function _genRongeursPDF(d, mode) {
   if (d.traitement || d.suivi || materiel.length || rodenticides.length || actions.length) {
     y += 2; section('Plan de traitement');
     if (materiel.length) { field('Matériel utilisé', materiel.join(', ')); y += 1; }
-    if (rodenticides.length) { field('Rodenticide', 'Professionnel à base de ' + rodenticides.join(', ')); y += 1; }
+    if (d.postesNb) { field('Nombre de postes d\'appâtage', String(d.postesNb)); y += 1; }
+    const rodAucun = rodenticides.includes('Aucun rodenticide utilisé');
+    const rodList = rodenticides.filter(r => r !== 'Aucun rodenticide utilisé');
+    if (rodAucun) { field('Rodenticide', 'Aucun rodenticide utilisé'); y += 1; }
+    else if (rodList.length || d.rodenticideAutre) { field('Rodenticide', 'Professionnel à base de ' + [...rodList, d.rodenticideAutre].filter(Boolean).join(', ')); y += 1; }
     para(d.traitement);
     if (actions.length) { y += 1.5; actions.forEach(a => checkLine(a)); }
-    if (d.suivi) { y += 1.5; field('Suivi / prochain passage', d.suivi); }
+    const suiviTxt = [d.suivi, d.suiviRem].filter(Boolean).join(' — ');
+    if (suiviTxt) { y += 1.5; field('Suivi / prochain passage', suiviTxt); }
   }
 
   // Prévention recommandée
   if (d.prevention) {
     y += 2; section('Prévention recommandée');
     para(d.prevention);
+  }
+
+  // Proposition de contrat annuel
+  if (d.contrat) {
+    y += 2; section('Proposition de contrat annuel');
+    para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
+    y += 1.5;
+    field('Passages annuels proposés', d.contratPassages);
+    field('Montant estimatif', d.contratMontant);
+    field('Zones concernées', d.contratZones);
+    field('Remarques', d.contratRem);
   }
 
   // Conclusion (encadré)
@@ -8346,7 +8487,7 @@ function _genRongeursPDF(d, mode) {
   y += 8;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
   doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
-  doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
+  doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
   doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
   doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
   doc.text('Signature', 120, y+15.5);
