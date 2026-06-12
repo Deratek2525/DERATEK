@@ -7190,68 +7190,105 @@ function _diagRecognizeShape(pts) {
 }
 function _drawSchemaBase(ctx, W, H) {
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  // Fond dégradé doux
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  // Décalage de profondeur (effet isométrique)
-  const dx = W * 0.26, dy = -H * 0.16;
-  const wood = '#8a5a28', woodDark = '#5e3c16';
-  const L = (x1,y1,x2,y2,col,lw) => { ctx.strokeStyle=col; ctx.lineWidth=lw; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
-  const off = (p) => ({ x: p.x + dx, y: p.y + dy });
 
-  // Ferme avant (king-post truss)
-  const Lf = { x: W*0.10, y: H*0.66 };           // base gauche
-  const Rf = { x: W*0.62, y: H*0.66 };           // base droite
-  const Af = { x: (Lf.x+Rf.x)/2, y: H*0.30 };    // faîte (apex)
-  const Mf = { x: (Lf.x+Rf.x)/2, y: Lf.y };      // pied du poinçon
-  // Ferme arrière (décalée)
-  const Lb = off(Lf), Rb = off(Rf), Ab = off(Af), Mb = off(Mf);
+  // Projection isométrique : (x = largeur, y = hauteur, z = profondeur)
+  const s = 1.25, ox = W * 0.535, oy = 108;
+  const P = (x, y, z) => ({ x: ox + (x - z) * 0.866 * s, y: oy + (x + z) * 0.275 * s - y * s });
+  const X = 210, Z = 250, YR = 92, YF = -26;   // largeur, profondeur, faîte, plancher
 
-  // Pans de toiture (faces) légèrement teintés pour le volume
-  ctx.fillStyle = 'rgba(180,130,70,0.12)';
-  ctx.beginPath(); ctx.moveTo(Lf.x,Lf.y); ctx.lineTo(Af.x,Af.y); ctx.lineTo(Ab.x,Ab.y); ctx.lineTo(Lb.x,Lb.y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(150,100,50,0.18)';
-  ctx.beginPath(); ctx.moveTo(Rf.x,Rf.y); ctx.lineTo(Af.x,Af.y); ctx.lineTo(Ab.x,Ab.y); ctx.lineTo(Rb.x,Rb.y); ctx.closePath(); ctx.fill();
+  // Ombre portée au sol
+  ctx.fillStyle = 'rgba(15,23,42,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(ox - 28, oy + (X + Z) * 0.275 * s * 0.62 + 40, 270, 32, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Pannes (lignes de liaison avant→arrière) : faîtière + sablières + arbalétriers
-  L(Af.x,Af.y, Ab.x,Ab.y, woodDark, 4);          // faîtière
-  L(Lf.x,Lf.y, Lb.x,Lb.y, wood, 3.5);            // sablière gauche
-  L(Rf.x,Rf.y, Rb.x,Rb.y, wood, 3.5);            // sablière droite
-  L(Mf.x,Mf.y, Mb.x,Mb.y, wood, 3);              // entrait liaison
+  // Poutre 3D : ombre + corps en dégradé bois + arête lumineuse
+  const beam = (a, b, w, pal) => {
+    ctx.strokeStyle = 'rgba(60,40,15,0.20)'; ctx.lineWidth = w + 2.5;
+    ctx.beginPath(); ctx.moveTo(a.x + 2.5, a.y + 3); ctx.lineTo(b.x + 2.5, b.y + 3); ctx.stroke();
+    const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    g.addColorStop(0, pal[0]); g.addColorStop(0.5, pal[1]); g.addColorStop(1, pal[2]);
+    ctx.strokeStyle = g; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = Math.max(1, w * 0.26);
+    ctx.beginPath(); ctx.moveTo(a.x - 0.8, a.y - w * 0.30); ctx.lineTo(b.x - 0.8, b.y - w * 0.30); ctx.stroke();
+  };
+  const PAL_FRONT = ['#cf9a5e', '#a9742f', '#7c5318'];
+  const PAL_MID   = ['#b98a4e', '#956427', '#6e4815'];
+  const PAL_BACK  = ['#a37843', '#825621', '#5e3d11'];
+  const PAL_DARK  = ['#8d6536', '#6e4a1b', '#4e330c'];
 
-  // Ferme arrière
-  L(Lb.x,Lb.y, Ab.x,Ab.y, wood, 3); L(Ab.x,Ab.y, Rb.x,Rb.y, wood, 3); L(Lb.x,Lb.y, Rb.x,Rb.y, wood, 3);
-  L(Ab.x,Ab.y, Mb.x,Mb.y, wood, 2.5);
+  // Une ferme complète (entrait, arbalétriers, poinçon, jambes de force)
+  const truss = (z, pal, w) => {
+    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                       // entrait
+    beam(P(105, 46, z), P(52.5, 0, z), w - 1.2, pal);               // jambe gauche
+    beam(P(105, 46, z), P(157.5, 0, z), w - 1.2, pal);              // jambe droite
+    beam(P(105, 0, z), P(105, YR, z), w - 0.5, pal);                // poinçon
+    beam(P(0, 0, z), P(105, YR, z), w, pal);                        // arbalétrier g.
+    beam(P(X, 0, z), P(105, YR, z), w, pal);                        // arbalétrier d.
+  };
 
-  // Ferme avant (par-dessus)
-  L(Lf.x,Lf.y, Af.x,Af.y, woodDark, 4.5);        // arbalétrier gauche
-  L(Af.x,Af.y, Rf.x,Rf.y, woodDark, 4.5);        // arbalétrier droit
-  L(Lf.x,Lf.y, Rf.x,Rf.y, woodDark, 5);          // entrait / poutre
-  L(Af.x,Af.y, Mf.x,Mf.y, woodDark, 3.5);        // poinçon
-  // Jambes de force avant
-  const midPost = { x: Af.x, y: (Af.y+Mf.y)/2 };
-  L(midPost.x,midPost.y, Lf.x+(Rf.x-Lf.x)*0.22, Lf.y, woodDark, 3);
-  L(midPost.x,midPost.y, Lf.x+(Rf.x-Lf.x)*0.78, Rf.y, woodDark, 3);
+  // Plancher (solives) sous les entraits
+  beam(P(0, YF, 0), P(0, YF, Z), 3, PAL_DARK);
+  beam(P(X, YF, 0), P(X, YF, Z), 3, PAL_DARK);
+  for (let z = 15; z <= Z - 15; z += 44) beam(P(0, YF, z), P(X, YF, z), 2.4, PAL_BACK);
+  beam(P(0, YF, 0), P(X, YF, 0), 3.2, PAL_MID);
+  beam(P(0, YF, 0), P(0, 0, 0), 2.4, PAL_MID); beam(P(X, YF, 0), P(X, 0, 0), 2.4, PAL_MID);
+  beam(P(0, YF, Z), P(0, 0, Z), 2.2, PAL_BACK); beam(P(X, YF, Z), P(X, 0, Z), 2.2, PAL_BACK);
 
-  // Solives : grille de plancher sous l'entrait (profondeur)
-  ctx.strokeStyle = wood; ctx.lineWidth = 2;
-  const floorDrop = H*0.16;
-  const Lf2 = {x:Lf.x, y:Lf.y+floorDrop}, Rf2 = {x:Rf.x, y:Rf.y+floorDrop};
-  const Lb2 = off(Lf2), Rb2 = off(Rf2);
-  // contour du plancher
-  ctx.beginPath(); ctx.moveTo(Lf2.x,Lf2.y); ctx.lineTo(Rf2.x,Rf2.y); ctx.lineTo(Rb2.x,Rb2.y); ctx.lineTo(Lb2.x,Lb2.y); ctx.closePath(); ctx.stroke();
-  // solives transversales
-  for (let i=1;i<6;i++){ const tx=i/6; const a={x:Lf2.x+(Rf2.x-Lf2.x)*tx,y:Lf2.y+(Rf2.y-Lf2.y)*tx}; const b=off(a); L(a.x,a.y,b.x,b.y,wood,1.8); }
-  // poutres avant/arrière du plancher
-  L(Lf2.x,Lf2.y, Lf.x,Lf.y, wood,2); L(Rf2.x,Rf2.y, Rf.x,Rf.y, wood,2);
+  // Ferme arrière (derrière les pans translucides)
+  truss(Z, PAL_BACK, 3.6);
 
-  // Étiquettes
-  ctx.fillStyle = '#0d1b3e'; ctx.font = 'bold 13px Arial';
-  ctx.fillText('Faîtière', (Af.x+Ab.x)/2 - 18, (Af.y+Ab.y)/2 - 8);
-  ctx.fillText('Arbalétrier', Lf.x + 6, (Lf.y+Af.y)/2 - 8);
-  ctx.fillText('Poinçon', Af.x + 6, midPost.y);
-  ctx.fillText('Entrait / Poutre', (Lf.x+Rf.x)/2 - 40, Lf.y + 16);
-  ctx.fillText('Pannes', (Rf.x+Rb.x)/2 - 6, (Rf.y+Rb.y)/2 - 6);
-  ctx.fillText('Solives', Lf2.x + 4, (Lf2.y+Lb2.y)/2 + 16);
+  // Pans de toiture translucides (volume)
+  const face = (pA, pB, pC, pD, c1, c2) => {
+    const g = ctx.createLinearGradient(pA.x, pA.y, pC.x, pC.y);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.lineTo(pC.x, pC.y); ctx.lineTo(pD.x, pD.y); ctx.closePath(); ctx.fill();
+  };
+  face(P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0), 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
+  face(P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0), 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
+
+  // Éléments longitudinaux : sablières, pannes, faîtière
+  beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);            // sablière gauche
+  beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);            // sablière droite
+  beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);    // panne gauche
+  beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);  // panne droite
+  beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);       // faîtière
+
+  // Fermes intermédiaire et avant
+  truss(Z / 2, PAL_MID, 4.2);
+  truss(0, PAL_FRONT, 5.2);
+
+  // Étiquettes modernes : puce arrondie + ligne de rappel
+  const chip = (txt, target, lx, ly) => {
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(target.x, target.y); ctx.stroke();
+    ctx.fillStyle = '#64748b';
+    ctx.beginPath(); ctx.arc(target.x, target.y, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.font = 'bold 11px Arial';
+    const tw = ctx.measureText(txt).width, bw = tw + 14, bh = 18;
+    const bx = lx - bw / 2, by = ly - bh / 2;
+    ctx.fillStyle = '#0d1b3e';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 9); else ctx.rect(bx, by, bw, bh);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(txt, bx + 7, by + 12.5);
+  };
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  chip('Faîtière',        mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
+  chip('Panne',           mid(P(157.5,46,0), P(157.5,46,Z)), ox + 230, 88);
+  chip('Arbalétrier',     mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
+  chip('Poinçon',         P(105, 64, 0), ox + 250, 160);
+  chip('Entrait / Poutre', P(160, 0, 0), ox + 230, 255);
+  chip('Sablière',        mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+  chip('Solives',         P(40, YF, 110), ox - 255, 280);
 }
 let _diagBgDataUrl = null;  // fond propre (schéma 3D ou photo importée), pour effacer les annotations
 function initDiagSchema() {
