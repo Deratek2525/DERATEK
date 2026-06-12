@@ -3953,8 +3953,15 @@ function renderBonCard(b, solid) {
                 })()}
                 ${(() => {
                   const fait = _bonRapFait(b);
-                  const rapStyle = fait ? 'border:1.5px solid #16a34a;background:#16a34a;color:#fff;' : '';
-                  return `<button class="btn ${fait ? 'btn-sm' : 'btn-ghost btn-sm'}" onclick="createRapportFromBon('${b.id}')" title="Créer un rapport d'intervention depuis ce bon" style="font-weight:700;${rapStyle}">📋 Rapport</button>
+                  const rapStyle = fait
+                    ? 'border:1.5px solid #16a34a;background:#16a34a;color:#fff;'
+                    : 'border:1.5px solid #d1d5db;background:#fff;color:#374151;';
+                  return `<select onchange="createRapportTypeFromBon('${b.id}', this.value); this.selectedIndex=0;" title="Créer un rapport depuis ce bon — choisir le type" style="font-weight:700;font-size:12px;${rapStyle}border-radius:6px;padding:5.5px 4px;cursor:pointer;max-width:118px;">
+                  <option value="" selected>📋 Rapport ▾</option>
+                  <option value="general">📋 Rapport général</option>
+                  <option value="bois">🪵 Insectes du bois</option>
+                  <option value="rongeurs">🐀 Rongeurs</option>
+                </select>
                 <button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#16a34a' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
                 })()}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
@@ -4852,6 +4859,17 @@ function createDevisFromClient(id)   { createDocFromClient(id, 'devis'); }
 function createFactureFromClient(id) { createDocFromClient(id, 'facture'); }
 
 // Ouvre un NOUVEAU rapport d'intervention pré-rempli depuis un bon de travaux
+// Liste déroulante « 📋 Rapport ▾ » d'un bon : crée le rapport du type choisi,
+// pré-rempli depuis le bon (général = rapport d'intervention classique).
+function createRapportTypeFromBon(bonId, type) {
+  if (!type) return;
+  if (type === 'general') { createRapportFromBon(bonId); return; }
+  const bon = (DB.bons || []).find(b => b.id === bonId);
+  if (!bon) { toast('Bon introuvable', '#e63946'); return; }
+  if (type === 'rongeurs') openNewRongeurs(); else openNewDiagnostic();
+  autoFillDiagFromBon(bon.numero || '');
+}
+
 function createRapportFromBon(bonId) {
   const bon = (DB.bons || []).find(b => b.id === bonId);
   if (!bon) { toast('Bon introuvable', '#e63946'); return; }
