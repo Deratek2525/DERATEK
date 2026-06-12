@@ -6709,6 +6709,13 @@ function _diagContratFields(d) {
     </div>
   </div>` : '<div style="margin-bottom:10px;"></div>'}`;
 }
+// Agrandit la zone de texte pendant la frappe (revient à la taille normale en sortant)
+function diagTaAutoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight + 4, 420) + 'px';
+}
+function diagTaShrink(el) { if (el) el.style.height = ''; }
 // Case à cocher d'affichage d'une section dans le PDF (plan / photos)
 function _diagSectionToggle(field, label) {
   const off = !!(_editingDiag && _editingDiag[field]);
@@ -6850,13 +6857,13 @@ function renderDiagEditor() {
     </div>
     <div class="form-group" style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations / diagnostic détaillé</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.diagnostic||''}</textarea>
     </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Traitement & suivi</div>
     <div class="form-group" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Traitement recommandé</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. bûchage des parties vermoulues, traitement par injection + pulvérisation (produit certifié)...">${d.traitement||''}</textarea>
     </div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / garantie</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle après 12 mois, garantie 10 ans"></div>
 
@@ -6864,7 +6871,7 @@ function renderDiagEditor() {
 
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.conclusion||''}</textarea>
     </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign','Afficher dans le PDF')}</div>
@@ -8205,13 +8212,13 @@ function renderRongeursEditor() {
 
     <div class="form-group" style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations détaillées</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.diagnostic||''}</textarea>
     </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Plan de traitement & suivi</div>
     <div class="form-group" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Plan de traitement</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. pose de postes sécurisés en cave et local poubelles, contrôle à J+15...">${d.traitement||''}</textarea>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. pose de postes sécurisés en cave et local poubelles, contrôle à J+15...">${d.traitement||''}</textarea>
     </div>
     <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label>
       <select class="form-input" oninput="_editingDiag.suivi=this.value">
@@ -8224,14 +8231,14 @@ function renderRongeursEditor() {
 
     <div class="form-group" style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Prévention recommandée</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-prevention" onclick="diagAICorrect('prevention')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value" placeholder="Ex. colmater le passage de conduites, fermer les portes de cave, gestion des déchets...">${d.prevention||''}</textarea>
+      <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. colmater le passage de conduites, fermer les portes de cave, gestion des déchets...">${d.prevention||''}</textarea>
     </div>
 
     ${_diagContratFields(d)}
 
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
-      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.conclusion||''}</textarea>
     </div>
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign','Afficher dans le PDF')}</div>
