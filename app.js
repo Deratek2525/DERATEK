@@ -6893,6 +6893,116 @@ function onDiagPhotoReplace(ev) {
   reader.readAsDataURL(file);
   ev.target.value = '';
 }
+// --- Annotation d'une photo : grande vue où l'on peut tracer dessus ---
+// (mêmes outils que le plan : couleurs, dessin avec reconnaissance de forme, texte)
+let _photoAnnIdx = -1, _photoAnnColor = '#e63946', _photoAnnTool = 'draw';
+let _photoAnnDrawing = false, _photoAnnPts = [], _photoAnnSnap = null;
+function openPhotoAnnotator(i) {
+  const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[i]; if (!p) return;
+  _photoAnnIdx = i;
+  if (!p.orig) p.orig = p.data;   // original conservé pour « Effacer les annotations »
+  let ov = $('photo-ann-overlay');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'photo-ann-overlay'; document.body.appendChild(ov); }
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(13,27,62,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:14px;max-width:980px;width:100%;max-height:96vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-weight:800;color:var(--navy);font-size:14px;">✏️ Annoter la photo ${i+1} — trace directement sur l'image</div>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="closePhotoAnnotator(false)">✕</button>
+      </div>
+      <canvas id="photo-ann-canvas" style="width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;cursor:crosshair;touch-action:none;background:#f4f5f8;"></canvas>
+      <div id="photo-ann-tools" style="margin-top:8px;"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="photoAnnReset()">↺ Effacer les annotations</button>
+        <button class="btn btn-ghost" type="button" onclick="closePhotoAnnotator(false)">Annuler</button>
+        <button class="btn btn-navy" type="button" onclick="closePhotoAnnotator(true)">✓ Valider les annotations</button>
+      </div>
+    </div>`;
+  _photoAnnToolbar();
+  const c = $('photo-ann-canvas');
+  c.width = p.w || 1000; c.height = p.h || 700;
+  const ctx = c.getContext('2d');
+  const img = new Image();
+  img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
+  img.src = p.data;
+  const lw = Math.max(3, c.width / 210);
+  const pos = e => { const r = c.getBoundingClientRect(); const tt = e.touches ? e.touches[0] : e; return { x: (tt.clientX - r.left) * (c.width / r.width), y: (tt.clientY - r.top) * (c.height / r.height) }; };
+  const start = e => {
+    const pt = pos(e);
+    if (_photoAnnTool === 'text') {
+      e.preventDefault();
+      const txt = prompt('Texte à placer sur la photo :');
+      if (txt && txt.trim()) {
+        ctx.font = 'bold ' + Math.round(c.width/34) + 'px Arial'; ctx.fillStyle = _photoAnnColor;
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(3, c.width/280); ctx.lineJoin = 'round';
+        ctx.strokeText(txt.trim(), pt.x, pt.y); ctx.fillText(txt.trim(), pt.x, pt.y);
+      }
+      return;
+    }
+    _photoAnnDrawing = true; _photoAnnPts = [pt];
+    try { _photoAnnSnap = ctx.getImageData(0, 0, c.width, c.height); } catch (err) { _photoAnnSnap = null; }
+    ctx.strokeStyle = _photoAnnColor; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(pt.x, pt.y); e.preventDefault();
+  };
+  const move = e => { if (!_photoAnnDrawing) return; const pt = pos(e); _photoAnnPts.push(pt); ctx.lineTo(pt.x, pt.y); ctx.stroke(); e.preventDefault(); };
+  const end = () => {
+    if (!_photoAnnDrawing) return;
+    _photoAnnDrawing = false;
+    const shape = _diagRecognizeShape(_photoAnnPts);
+    if (shape && _photoAnnSnap) {
+      ctx.putImageData(_photoAnnSnap, 0, 0);
+      ctx.strokeStyle = _photoAnnColor; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      if (shape.type === 'ellipse') ctx.ellipse(shape.cx, shape.cy, shape.a, shape.b, 0, 0, Math.PI*2);
+      else if (shape.type === 'rect') ctx.rect(shape.x, shape.y, shape.w, shape.h);
+      else { ctx.moveTo(shape.x1, shape.y1); ctx.lineTo(shape.x2, shape.y2); }
+      ctx.stroke();
+    }
+    _photoAnnPts = []; _photoAnnSnap = null;
+  };
+  c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
+  c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end;
+}
+function _photoAnnToolbar() {
+  const box = $('photo-ann-tools'); if (!box) return;
+  const colors = (_editingDiag && _diagType(_editingDiag) === 'rongeurs') ? RONGEUR_COLORS : DIAG_COLORS;
+  box.innerHTML = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
+      ${colors.map(c => `
+        <button type="button" title="${c.label}" onclick="photoAnnSetColor('${c.hex}')"
+          style="width:24px;height:24px;border-radius:50%;cursor:pointer;background:${c.hex};border:${_photoAnnColor===c.hex?'3px solid var(--navy)':'2px solid #e5e7eb'};"></button>`).join('')}
+      <span style="font-size:10px;color:var(--g400);">(${(colors.find(c=>c.hex===_photoAnnColor)||{}).label||''})</span>
+      <span style="width:1px;height:20px;background:#e5e7eb;"></span>
+      <button class="btn ${_photoAnnTool==='draw'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="photoAnnSetTool('draw')">✏️ Dessin</button>
+      <button class="btn ${_photoAnnTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="photoAnnSetTool('text')">🔤 Texte</button>
+      <span style="font-size:11px;color:var(--g400);">Cercles, rectangles et traits sont automatiquement redressés.</span>
+    </div>`;
+}
+function photoAnnSetColor(hex) { _photoAnnColor = hex; _photoAnnToolbar(); }
+function photoAnnSetTool(t) { _photoAnnTool = t; _photoAnnToolbar(); }
+function photoAnnReset() {
+  const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[_photoAnnIdx];
+  const c = $('photo-ann-canvas'); if (!p || !c) return;
+  const ctx = c.getContext('2d');
+  const img = new Image();
+  img.onload = () => { ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height); };
+  img.src = p.orig || p.data;
+}
+function closePhotoAnnotator(save) {
+  const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[_photoAnnIdx];
+  const c = $('photo-ann-canvas');
+  if (save && p && c) {
+    p.data = c.toDataURL('image/jpeg', 0.85);
+    p.modifiedAt = today();
+    if ((_editingDiag.tech || '').trim()) p.by = _editingDiag.tech.trim();
+    renderDiagPhotos();
+    toast('✓ Annotations enregistrées sur la photo', '#2d9e6b');
+  }
+  const ov = $('photo-ann-overlay'); if (ov) ov.remove();
+  _photoAnnIdx = -1;
+}
+
 // Ligne de traçabilité d'une photo : « ajoutée le … par … (modifiée le …) »
 function _diagPhotoMeta(p) {
   if (!p) return '';
@@ -6908,13 +7018,16 @@ function renderDiagPhotos() {
   const box = $('diag-photos-box'); if (!box) return;
   const photos = (_editingDiag && _editingDiag.photos) || [];
   box.innerHTML = photos.map((p, i) => `
-    <div style="width:130px;">
+    <div style="width:236px;">
       <div style="position:relative;">
-        <img src="${p.data}" style="width:130px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
+        <img src="${p.data}" onclick="openPhotoAnnotator(${i})" title="Cliquer pour agrandir et tracer sur la photo"
+          style="width:236px;height:160px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;cursor:crosshair;${p.use===false?'opacity:.35;filter:grayscale(60%);':''}">
         <button type="button" onclick="removeDiagPhoto(${i})" title="Supprimer la photo"
-          style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
+          style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(230,57,70,.92);color:#fff;font-size:11px;cursor:pointer;line-height:1;">✕</button>
         <button type="button" onclick="replaceDiagPhoto(${i})" title="Remplacer la photo"
-          style="position:absolute;top:3px;right:27px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(13,27,62,.85);color:#fff;font-size:10px;cursor:pointer;line-height:1;">🔄</button>
+          style="position:absolute;top:4px;right:30px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(13,27,62,.85);color:#fff;font-size:10px;cursor:pointer;line-height:1;">🔄</button>
+        <button type="button" onclick="openPhotoAnnotator(${i})" title="Agrandir et tracer sur la photo"
+          style="position:absolute;bottom:4px;right:4px;height:22px;border-radius:11px;border:none;background:rgba(13,27,62,.85);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;line-height:1;padding:0 9px;">✏️ Tracer</button>
       </div>
       <label style="display:flex;align-items:center;gap:4px;font-size:10.5px;margin-top:3px;cursor:pointer;color:var(--g600);">
         <input type="checkbox" ${p.use!==false?'checked':''} onchange="setDiagPhotoUse(${i}, this.checked)" style="accent-color:var(--navy);"> Inclure au PDF
