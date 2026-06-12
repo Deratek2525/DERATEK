@@ -6580,12 +6580,14 @@ const INSECTES_BOIS_INFO = {
 // Champs additionnels du diagnostic stockés SANS nouvelle colonne Supabase :
 // repliés dans la colonne texte "diagnostic" via des marqueurs invisibles
 // [METHODE:b64] [ZONES:b64] [TRAIT:b64] [SUIVI:b64] (convention du projet).
-const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI' };
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI):[^\]]*\]/g;
+const _DIAG_MARKERS = { methode: 'METHODE', zones: 'ZONES', traitement: 'TRAIT', suivi: 'SUIVI', signes: 'SIGNES', postes: 'POSTES', prevention: 'PREV' };
+const _DIAG_JSON_KEYS = new Set(['signes', 'postes']);   // tableaux/objets → JSON dans le marqueur
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVI|SIGNES|POSTES|PREV):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
-    const v = d[k];
+    let v = d[k];
+    if (v && _DIAG_JSON_KEYS.has(k)) v = (Array.isArray(v) && !v.length) ? '' : JSON.stringify(v);
     if (v && String(v).trim()) txt += '\n[' + _DIAG_MARKERS[k] + ':' + _encNote(v) + ']';
     delete d[k];
   }
@@ -6597,7 +6599,9 @@ function _diagUnpack(d) {
   const src = String(out.diagnostic || '');
   for (const k of Object.keys(_DIAG_MARKERS)) {
     const m = src.match(new RegExp('\\[' + _DIAG_MARKERS[k] + ':([^\\]]*)\\]'));
-    out[k] = m ? _decNote(m[1]) : (out[k] || '');
+    let v = m ? _decNote(m[1]) : (out[k] || '');
+    if (_DIAG_JSON_KEYS.has(k)) { try { v = v ? JSON.parse(v) : []; } catch (e) { v = []; } if (!Array.isArray(v)) v = []; }
+    out[k] = v;
   }
   out.diagnostic = src.replace(_DIAG_MARKER_RE, '').trim();
   if (!Array.isArray(out.insectes)) out.insectes = [];
@@ -6605,12 +6609,15 @@ function _diagUnpack(d) {
 }
 let _editingDiag = null;
 
-function _nextDiagNumero() {
+// Type d'un document de la table diagnostics : 'bois' (DG-) ou 'rongeurs' (RG-)
+function _diagType(d) { return ((d && d.numero) || '').startsWith('RG-') ? 'rongeurs' : 'bois'; }
+function _nextDiagNumero(prefix) {
+  prefix = prefix || 'DG';
   const year = new Date().getFullYear();
-  const list = (DB.diagnostics || []).filter(d => (d.numero||'').includes('-' + year + '-'));
+  const list = (DB.diagnostics || []).filter(d => (d.numero||'').startsWith(prefix + '-' + year + '-'));
   let max = 0;
   list.forEach(d => { const m = (d.numero||'').match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
-  return `DG-${year}-${String(max+1).padStart(3,'0')}`;
+  return `${prefix}-${year}-${String(max+1).padStart(3,'0')}`;
 }
 
 function openNewDiagnostic() {
@@ -6637,6 +6644,7 @@ function toggleDiagInsecte(nom, checked) {
 }
 function renderDiagEditor() {
   const d = _editingDiag; if (!d) return;
+  if (_diagType(d) === 'rongeurs') return renderRongeursEditor();
   const box = $('modal-diag-body'); if (!box) return;
   const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
   const insectesHtml = INSECTES_BOIS.map(n => `
@@ -6882,7 +6890,8 @@ function initDiagSchema() {
     img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
     img.src = _editingDiag.schema;
   } else {
-    _drawSchemaBase(ctx, c.width, c.height);
+    if (_editingDiag && _diagType(_editingDiag) === 'rongeurs') _drawPlanBase(ctx, c.width, c.height);
+    else _drawSchemaBase(ctx, c.width, c.height);
     _diagBgDataUrl = c.toDataURL('image/png');
     if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
   }
@@ -6943,13 +6952,28 @@ function clearDiagSchema() {
     if (_editingDiag) _editingDiag.schema = c.toDataURL('image/png');
   }
 }
-// Revient au schéma 3D dessiné par défaut
+// Revient au fond par défaut (schéma 3D charpente, ou plan quadrillé pour les rongeurs)
 function resetToDefaultSchema() {
   const c = $('diag-schema-canvas'); if (!c) return;
   const ctx = c.getContext('2d');
-  _drawSchemaBase(ctx, c.width, c.height);
+  if (_editingDiag && _diagType(_editingDiag) === 'rongeurs') _drawPlanBase(ctx, c.width, c.height);
+  else _drawSchemaBase(ctx, c.width, c.height);
   _diagBgDataUrl = c.toDataURL('image/png');
   if (_editingDiag) _editingDiag.schema = _diagBgDataUrl;
+}
+// Fond "plan des locaux" quadrillé pour le rapport rongeurs
+function _drawPlanBase(ctx, W, H) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  // Quadrillage léger
+  ctx.strokeStyle = '#e3e8f0'; ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y <= H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // Contour des locaux
+  ctx.strokeStyle = '#9aa3b2'; ctx.lineWidth = 3;
+  ctx.strokeRect(W*0.08, H*0.10, W*0.84, H*0.78);
+  ctx.fillStyle = '#9aa3b2'; ctx.font = 'bold 13px Arial';
+  ctx.fillText('Plan des locaux — dessine les murs, pièces, zones d\'activité et postes', W*0.10, H*0.97);
 }
 
 // Corrige un texte libre du diagnostic via Mistral (orthographe + formulation pro)
@@ -6957,6 +6981,7 @@ const _DIAG_AI_LABELS = {
   diagnostic: 'les observations du diagnostic',
   traitement: 'le traitement recommandé',
   conclusion: 'la conclusion / les recommandations',
+  prevention: 'les recommandations de prévention',
 };
 async function diagAICorrect(field) {
   const ta = $('diag-ta-' + field); if (!ta || !_editingDiag) return;
@@ -6971,7 +6996,10 @@ async function diagAICorrect(field) {
   try {
     const systemPrompt =
       "Tu es l'assistant d'une entreprise suisse d'antinuisibles (DERATEK). " +
-      "On te donne un texte brut destiné à un rapport de diagnostic d'insectes xylophages (bois/charpentes), " +
+      "On te donne un texte brut destiné à " +
+      (_diagType(_editingDiag) === 'rongeurs'
+        ? "un rapport spécial rongeurs (dératisation), "
+        : "un rapport de diagnostic d'insectes xylophages (bois/charpentes), ") +
       "plus précisément " + (_DIAG_AI_LABELS[field] || 'une section du rapport') + ". " +
       "Corrige l'orthographe et la grammaire, et améliore la formulation pour un ton professionnel et factuel. " +
       "CONSERVE toutes les informations telles quelles : mesures, pourcentages, dimensions, noms d'insectes, produits, prix en CHF, délais. " +
@@ -7044,7 +7072,8 @@ function downloadCurrentDiagPDF() {
   if (!_editingDiag) return;
   const c = $('diag-schema-canvas');
   if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
-  _genDiagPDF(_editingDiag);
+  if (_diagType(_editingDiag) === 'rongeurs') _genRongeursPDF(_editingDiag);
+  else _genDiagPDF(_editingDiag);
 }
 function confirmDeleteDiag(id, label) {
   $('confirm-msg').textContent = `Supprimer le diagnostic "${label}" ?`;
@@ -7059,12 +7088,12 @@ function renderDiagnostics() {
   const list = (DB.diagnostics || []).slice().sort((a,b)=>(b.dateDoc||'').localeCompare(a.dateDoc||''));
   if (!list.length) { box.innerHTML = ''; return; }
   box.innerHTML = `
-    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🪵 Diagnostics bois (${list.length})</div>
+    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🔬 Diagnostics & rapports spéciaux (${list.length})</div>
     <div style="display:flex;flex-direction:column;gap:6px;">
-      ${list.map(d => `
-        <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid #8b4513;border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+      ${list.map(d => { const rg = _diagType(d)==='rongeurs'; const ico = rg?'🐀':'🪵'; return `
+        <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${rg?'#5f6f81':'#8b4513'};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
           <div style="min-width:130px;">
-            <div style="font-size:13px;font-weight:800;color:var(--navy);">🪵 ${d.numero||''}</div>
+            <div style="font-size:13px;font-weight:800;color:var(--navy);">${ico} ${d.numero||''}</div>
             <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
           </div>
           <div style="flex:1.4;min-width:150px;">
@@ -7073,7 +7102,7 @@ function renderDiagnostics() {
             ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
           </div>
           <div style="flex:1.6;min-width:170px;">
-            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Insectes</div>
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${rg?'Espèces':'Insectes'}</div>
             <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
           </div>
           ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
@@ -7083,13 +7112,14 @@ function renderDiagnostics() {
             <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
           </div>
         </div>
-      `).join('')}
+      `; }).join('')}
     </div>`;
 }
 function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
-  _genDiagPDF(_diagUnpack(d));
+  const u = _diagUnpack(d);
+  if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else _genDiagPDF(u);
 }
 function _genDiagPDF(d) {
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
@@ -7349,6 +7379,518 @@ function _genDiagPDF(d) {
 
   doc.save('diagnostic-bois-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF diagnostic téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// RAPPORT SPÉCIAL RONGEURS (même table "diagnostics", numéros RG-)
+// ============================================================
+const RONGEURS_ESPECES = ['Rat brun (surmulot)', 'Rat noir', 'Souris domestique', 'Mulot', 'Campagnol', 'Loir / Lérot'];
+const RONGEURS_SIGNES = ['Déjections', 'Traces de gras (frottements)', 'Rongements / dégâts matériels', 'Terriers / galeries', 'Bruits (grattements)', 'Odeur d\'urine', 'Empreintes / coulées', 'Denrées entamées', 'Nids'];
+const RONGEUR_COLORS = [
+  { hex: '#e63946', label: 'Activité confirmée' },
+  { hex: '#f4a261', label: 'À surveiller' },
+  { hex: '#2a6fdb', label: 'Poste / piège' },
+  { hex: '#2d9e6b', label: 'RAS / sécurisé' },
+];
+// Fiches descriptives des espèces — incluses dans le PDF pour chaque espèce cochée
+const RONGEURS_INFO = {
+  'Rat brun (surmulot)': {
+    latin: 'Rattus norvegicus',
+    habitat: 'Caves, égouts, terriers extérieurs, niveaux bas — excellent nageur',
+    indices: 'Déjections en capsule de 17–20 mm, traces de gras le long des plinthes, terriers avec déblais, coulées marquées',
+    biologie: '250–500 g ; néophobe (méfiant envers les nouveautés) ; jusqu\'à 5–7 portées par an de 6–12 petits',
+    risque: 'Dégâts matériels importants (câbles, isolation), contamination des denrées, vecteur de leptospirose et salmonelles',
+  },
+  'Rat noir': {
+    latin: 'Rattus rattus',
+    habitat: 'Combles, greniers, faux plafonds — grimpeur agile, niveaux hauts',
+    indices: 'Déjections fusiformes de 8–12 mm dispersées, traces de gras sur poutres et câbles, bruits en hauteur la nuit',
+    biologie: '150–250 g, plus fin et plus agile que le surmulot ; 3–6 portées par an',
+    risque: 'Dégâts aux toitures et isolations, contamination des stocks ; souvent en hauteur, postes à placer en conséquence',
+  },
+  'Souris domestique': {
+    latin: 'Mus musculus',
+    habitat: 'Intérieur des bâtiments : cuisines, doublages, arrière-cuisines, réserves',
+    indices: 'Déjections de 3–8 mm en grand nombre, grignotages multiples, odeur d\'urine caractéristique, nids en matériaux déchiquetés',
+    biologie: '15–30 g ; curieuse (contrairement aux rats) ; reproduction très rapide : 5–10 portées par an',
+    risque: 'Contamination étendue des denrées (grignote partout par petites quantités), dégâts électriques',
+  },
+  'Mulot': {
+    latin: 'Apodemus sylvaticus',
+    habitat: 'Extérieur (jardins, champs) ; entre dans les caves, garages et réserves à l\'automne',
+    indices: 'Réserves de graines cachées, déjections proches de celles de la souris, présence saisonnière',
+    biologie: 'Grands yeux et grandes oreilles, excellent sauteur ; 2–4 portées par an',
+    risque: 'Dégâts aux stocks et semences ; intrusion généralement saisonnière — l\'exclusion suffit souvent',
+  },
+  'Campagnol': {
+    latin: 'Microtus spp. / Arvicola terrestris',
+    habitat: 'Extérieur : pelouses, jardins, vergers — galeries superficielles',
+    indices: 'Monticules de terre aplatis, galeries à fleur de sol, végétaux sectionnés au ras',
+    biologie: 'Herbivore strict, actif jour et nuit toute l\'année',
+    risque: 'Dégâts aux racines, bulbes et jeunes arbres ; rarement à l\'intérieur des bâtiments',
+  },
+  'Loir / Lérot': {
+    latin: 'Glis glis / Eliomys quercinus',
+    habitat: 'Combles, isolations de toiture, cabanons — actif la nuit, hiberne d\'octobre à avril',
+    indices: 'Bruits nocturnes très marqués (courses, roulements), déjections groupées, isolation déplacée en boules',
+    biologie: 'Nocturne, hibernant ; 1 portée par an',
+    risque: 'Espèce protégée : pas de rodenticide — capture et exclusion (grillager les accès) uniquement',
+  },
+};
+
+function openNewRongeurs() {
+  _editingDiag = {
+    id: newId(), numero: _nextDiagNumero('RG'), dateDoc: today(), tech: '',
+    clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
+    batiment: '', bonId: '', insectes: [], elementsTouches: '',
+    activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
+    traitement: '', suivi: '', prevention: '', signes: [], postes: [], photos: []
+  };
+  renderDiagEditor(); openModal('modal-diag');
+}
+function toggleRongeurSigne(nom, checked) {
+  if (!_editingDiag) return;
+  const set = new Set(_editingDiag.signes || []);
+  if (checked) set.add(nom); else set.delete(nom);
+  _editingDiag.signes = [...set];
+}
+// --- Postes d'appâtage / pièges ---
+function addRongeurPoste() {
+  if (!_editingDiag) return;
+  if (!Array.isArray(_editingDiag.postes)) _editingDiag.postes = [];
+  _editingDiag.postes.push({ emplacement: '', produit: '' });
+  renderRongeursPostes();
+}
+function removeRongeurPoste(i) {
+  if (!_editingDiag || !Array.isArray(_editingDiag.postes)) return;
+  _editingDiag.postes.splice(i, 1);
+  renderRongeursPostes();
+}
+function setRongeurPoste(i, k, v) {
+  if (_editingDiag && _editingDiag.postes && _editingDiag.postes[i]) _editingDiag.postes[i][k] = v;
+}
+function renderRongeursPostes() {
+  const box = $('rongeur-postes-box'); if (!box) return;
+  const postes = (_editingDiag && _editingDiag.postes) || [];
+  box.innerHTML = postes.map((p, i) => `
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;">
+      <span style="font-size:11px;font-weight:800;color:var(--navy);min-width:26px;">N°${i+1}</span>
+      <input class="form-input" style="flex:1.3;font-size:12px;padding:5px 8px;" placeholder="Emplacement (ex. cave, local poubelles...)" value="${(p.emplacement||'').replace(/"/g,'&quot;')}" oninput="setRongeurPoste(${i},'emplacement',this.value)">
+      <input class="form-input" style="flex:1;font-size:12px;padding:5px 8px;" placeholder="Produit / piège (ex. bloc brodifacoum, tapette...)" value="${(p.produit||'').replace(/"/g,'&quot;')}" oninput="setRongeurPoste(${i},'produit',this.value)">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="removeRongeurPoste(${i})" title="Retirer" style="padding:3px 8px;">✕</button>
+    </div>`).join('') || '<div style="font-size:11px;color:var(--g400);">Aucun poste — clique sur « + Ajouter un poste ».</div>';
+}
+
+function renderRongeursEditor() {
+  const d = _editingDiag; if (!d) return;
+  const box = $('modal-diag-body'); if (!box) return;
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const especesHtml = RONGEURS_ESPECES.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.insectes||[]).includes(n)?'checked':''} onchange="toggleDiagInsecte('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const signesHtml = RONGEURS_SIGNES.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.signes||[]).includes(n)?'checked':''} onchange="toggleRongeurSigne('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  box.innerHTML = `
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐀 Identification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      <div class="form-group"><label class="form-label">Client (gérance)</label>
+        <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
+        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
+      </div>
+      <div class="form-group"><label class="form-label">Technicien</label><input class="form-input" value="${(d.tech||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.tech=this.value"></div>
+      <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Site / bâtiment concerné</label><input class="form-input" value="${(d.batiment||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. immeuble locatif, restaurant, cave"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐭 Espèces détectées</div>
+    <div style="margin-bottom:10px;">${especesHtml}</div>
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔎 Signes observés</div>
+    <div style="margin-bottom:12px;">${signesHtml}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+      <div class="form-group"><label class="form-label">Activité de l'infestation</label>
+        <select class="form-input" oninput="_editingDiag.activite=this.value">
+          <option value="" ${!d.activite?'selected':''}>-- Choisir --</option>
+          <option ${d.activite==='Active'?'selected':''}>Active</option>
+          <option ${d.activite==='Ancienne (traces)'?'selected':''}>Ancienne (traces)</option>
+          <option ${d.activite==='Mixte'?'selected':''}>Mixte</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Niveau d'infestation</label>
+        <select class="form-input" oninput="_editingDiag.gravite=this.value">
+          <option value="" ${!d.gravite?'selected':''}>-- Choisir --</option>
+          <option ${d.gravite==='Faible'?'selected':''}>Faible</option>
+          <option ${d.gravite==='Modérée'?'selected':''}>Modérée</option>
+          <option ${d.gravite==='Importante'?'selected':''}>Importante</option>
+          <option ${d.gravite==='Critique (infestation massive)'?'selected':''}>Critique (infestation massive)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Zones d'activité</label><input class="form-input" value="${(d.zones||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.zones=this.value" placeholder="Ex. cave, local poubelles, cuisine"></div>
+      <div class="form-group"><label class="form-label">Points d'entrée détectés</label><input class="form-input" value="${(d.elementsTouches||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. passage de conduites, porte de cave non étanche"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">✏️ Plan des locaux (zones d'activité & postes)</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <canvas id="diag-schema-canvas" width="640" height="380" style="width:100%;height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <input type="file" id="diag-schema-file" accept="image/*" style="display:none" onchange="loadSchemaImage(event)">
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;font-weight:700;color:var(--g600);">Couleur :</span>
+        ${RONGEUR_COLORS.map(c => `
+          <button type="button" title="${c.label}" onclick="setDiagColor('${c.hex}')"
+            style="width:24px;height:24px;border-radius:50%;cursor:pointer;background:${c.hex};border:${_diagColor===c.hex?'3px solid var(--navy)':'2px solid #e5e7eb'};"></button>`).join('')}
+        <span style="font-size:10px;color:var(--g400);">(${(RONGEUR_COLORS.find(c=>c.hex===_diagColor)||{}).label||''})</span>
+        <span style="width:1px;height:20px;background:#e5e7eb;"></span>
+        <button class="btn ${_diagTool==='draw'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('draw')">✏️ Dessin</button>
+        <button class="btn ${_diagTool==='text'?'btn-navy':'btn-ghost'} btn-sm" type="button" onclick="setDiagTool('text')">🔤 Texte</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / plan</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">📐 Plan quadrillé par défaut</button>
+        <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine les pièces, entoure les zones d'activité et marque les postes. La légende est ajoutée au PDF.</span>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📷 Photos de l'inspection</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF (non stockées en base).</span>
+      <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">🪤 Postes d'appâtage / pièges posés</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;">
+      <div id="rongeur-postes-box" style="margin-bottom:6px;"></div>
+      <button class="btn btn-navy btn-sm" type="button" onclick="addRongeurPoste()">+ Ajouter un poste</button>
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations détaillées</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value">${d.diagnostic||''}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Plan de traitement & suivi</div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Plan de traitement</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value" placeholder="Ex. pose de postes sécurisés en cave et local poubelles, contrôle à J+15...">${d.traitement||''}</textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label><input class="form-input" value="${(d.suivi||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suivi=this.value" placeholder="Ex. contrôle des postes à J+15, puis mensuel"></div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Prévention recommandée</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-prevention" onclick="diagAICorrect('prevention')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value" placeholder="Ex. colmater le passage de conduites, fermer les portes de cave, gestion des déchets...">${d.prevention||''}</textarea>
+    </div>
+
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value">${d.conclusion||''}</textarea>
+    </div>
+  `;
+  const t = $('modal-diag-title'); if (t) t.textContent = 'Rapport rongeurs ' + (d.numero||'');
+  initDiagSchema();
+  renderDiagPhotos();
+  renderRongeursPostes();
+}
+
+function _genRongeursPDF(d) {
+  if (!d) { toast('Rapport introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const M = 20, R = 190, CW = R - M;
+  const NAVY = [13,27,62], SLATE = [95,111,129], GREY = [110,110,110];
+  const MAX_Y = 270;
+  let y = 0;
+
+  const newPage = () => { doc.addPage(); y = 20; };
+  const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
+  const section = (titre) => {
+    ensure(14);
+    doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.text(titre, M+4.5, y);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
+    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  };
+  const field = (lbl, val, indent) => {
+    if (!val) return;
+    const x = indent || M;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
+    const lines = doc.splitTextToSize(String(val), R - vx - 2);
+    ensure(Math.max(lines.length*4.8, 5.5) + 2);
+    doc.setTextColor(60);
+    doc.text(lbl + ' :', x, y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.text(lines, vx, y);
+    y += Math.max(lines.length*4.8, 5.5);
+  };
+  const para = (txt) => {
+    if (!txt) return;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+  };
+  const badge = (txt, rgb, x, yy) => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const w = doc.getTextWidth(txt) + 6;
+    doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+    doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
+    doc.setTextColor(255); doc.text(txt, x+3, yy);
+    doc.setTextColor(0);
+    return w;
+  };
+  const GRAV_RGB = { 'Faible':[45,158,107], 'Modérée':[230,170,30], 'Importante':[235,120,40], 'Critique (infestation massive)':[230,57,70] };
+  const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne (traces)':[120,120,120], 'Mixte':[235,120,40] };
+
+  // En-tête
+  const logoW = 60, logoH = logoW*199/900;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',M,15,logoW,logoH); } catch(e){} }
+  let hy = 15+logoH+6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40);
+  [co.rue, `${co.npa} ${co.ville}`, 'Tél. '+co.tel, co.tva, co.email].forEach(l=>{ doc.text(l,M,hy); hy+=4.6; });
+  doc.setTextColor(0); doc.setFontSize(11.5);
+  let dy = 62;
+  [d.clientNom, d.locataireNom, d.locataireAdresse].filter(Boolean).forEach(l=>{ doc.splitTextToSize(String(l),75).forEach(ln=>{doc.text(ln,120,dy);dy+=5.2;}); });
+
+  // Bandeau titre
+  y = Math.max(hy, dy) + 6;
+  ensure(22);
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text('RAPPORT SPÉCIAL RONGEURS', M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text('Dératisation — détection & plan d\'action', M+6, y+12.4);
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text('N° ' + (d.numero||''), R-6, y+6.8, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+12.4, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
+
+  // Encadré infos
+  const infoPairs = [
+    ['Technicien', d.tech], ['Site / bâtiment', d.batiment],
+    ['Zones d\'activité', d.zones], ['Points d\'entrée', d.elementsTouches],
+  ].filter(p => p[1]);
+  if (infoPairs.length) {
+    const rows = Math.ceil(infoPairs.length/2);
+    const boxH = rows*9 + 4;
+    ensure(boxH + 4);
+    doc.setFillColor(244,245,248); doc.setDrawColor(225,228,238);
+    doc.roundedRect(M, y, CW, boxH, 2, 2, 'FD');
+    infoPairs.forEach((p, i) => {
+      const cx = M + 5 + (i%2)*(CW/2), cy = y + 7 + Math.floor(i/2)*9;
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(p[0].toUpperCase(), cx, cy-3);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+      doc.text(doc.splitTextToSize(String(p[1]), CW/2-10)[0]||'', cx, cy+1);
+    });
+    doc.setTextColor(0);
+    y += boxH + 6;
+  } else { y += 2; }
+
+  // Synthèse
+  const postes = Array.isArray(d.postes) ? d.postes.filter(p => p && (p.emplacement || p.produit)) : [];
+  const synth = [
+    ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
+    ['NIVEAU D\'INFESTATION', d.gravite, GRAV_RGB[d.gravite]],
+    ['ESPÈCES', (d.insectes||[]).length ? (d.insectes||[]).length + ' détectée(s)' : '', null],
+    ['POSTES POSÉS', postes.length ? String(postes.length) : '', null],
+  ];
+  if (synth.some(s => s[1])) {
+    ensure(20);
+    const colW = CW/4;
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y, CW, 15, 2, 2, 'D');
+    synth.forEach((s, i) => {
+      const cx = M + i*colW + 4;
+      if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(s[0], cx, y+5);
+      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
+      else {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
+      }
+    });
+    doc.setTextColor(0);
+    y += 21;
+  }
+
+  // Constatations
+  section('Constatations');
+  field('Espèces détectées', (d.insectes||[]).join(', '));
+  field('Signes observés', (d.signes||[]).join(', '));
+  if (d.diagnostic) {
+    y += 1.5;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
+    para(d.diagnostic);
+  }
+
+  // Plan des locaux + légende
+  if (d.schema) {
+    const schemaH = 100;
+    if (y + schemaH + 22 > MAX_Y) newPage();
+    y += 3; section('Plan des locaux');
+    try {
+      doc.addImage(d.schema, 'PNG', M, y, 170, schemaH);
+      doc.setDrawColor(225,228,238); doc.rect(M, y, 170, schemaH, 'D');
+      y += schemaH + 5;
+      let lx = M;
+      RONGEUR_COLORS.forEach(c => {
+        const rgb = [parseInt(c.hex.slice(1,3),16), parseInt(c.hex.slice(3,5),16), parseInt(c.hex.slice(5,7),16)];
+        doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.circle(lx+1.5, y-1.2, 1.5, 'F');
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70);
+        doc.text(c.label, lx+4.5, y);
+        lx += 4.5 + doc.getTextWidth(c.label) + 8;
+      });
+      doc.setTextColor(0);
+      y += 6;
+    } catch (e) {}
+  }
+
+  // Photos
+  const photos = Array.isArray(d.photos) ? d.photos.filter(p => p && p.data) : [];
+  if (photos.length) {
+    y += 2; section('Photos de l\'inspection');
+    const pw = (CW - 6) / 2, ph = 58;
+    photos.forEach((p, i) => {
+      const col = i % 2;
+      if (col === 0 && y + ph + 8 > MAX_Y) newPage();
+      const px = M + col*(pw+6);
+      try {
+        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
+        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        if (p.caption) {
+          doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70);
+          doc.text(doc.splitTextToSize('Photo ' + (i+1) + ' — ' + p.caption, pw)[0]||'', px, y+ph+3.6);
+          doc.setTextColor(0);
+        }
+      } catch (e) {}
+      if (col === 1 || i === photos.length-1) y += ph + (photos[i].caption || (photos[i-col]||{}).caption ? 8 : 4);
+    });
+    y += 2;
+  }
+
+  // Tableau des postes d'appâtage / pièges
+  if (postes.length) {
+    y += 2; section('Postes d\'appâtage / pièges posés');
+    const c1 = M, c2 = M+14, c3 = M+105;
+    const drawPostesHeader = () => {
+      doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+      doc.rect(M, y-4, CW, 6.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255);
+      doc.text('N°', c1+2, y); doc.text('Emplacement', c2+2, y); doc.text('Produit / piège', c3+2, y);
+      doc.setTextColor(0);
+      y += 5;
+    };
+    ensure(8);
+    drawPostesHeader();
+    postes.forEach((p, i) => {
+      const lines1 = doc.splitTextToSize(String(p.emplacement||'—'), c3-c2-6);
+      const lines2 = doc.splitTextToSize(String(p.produit||'—'), R-c3-6);
+      const rowH = Math.max(lines1.length, lines2.length)*4.6 + 2.4;
+      if (y + rowH + 2 > MAX_Y) { newPage(); drawPostesHeader(); }
+      if (i % 2 === 0) { doc.setFillColor(246,247,250); doc.rect(M, y-3.4, CW, rowH, 'F'); }
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
+      doc.setFont('helvetica','normal');
+      doc.text(lines1, c2+2, y);
+      doc.text(lines2, c3+2, y);
+      y += rowH;
+    });
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3); doc.line(M, y-2.8, R, y-2.8);
+    y += 4;
+  }
+
+  // Fiches des espèces détectées
+  const fiches = (d.insectes||[]).filter(n => RONGEURS_INFO[n]);
+  if (fiches.length) {
+    y += 2; section('Fiches des espèces détectées');
+    fiches.forEach(nom => {
+      const f = RONGEURS_INFO[nom];
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
+      ensure(Math.min(estH, 75));
+      doc.setFillColor(238,241,246);
+      doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      const nomW = doc.getTextWidth(nom);
+      doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+      doc.text(nom, M+3, y+3.6);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.text(f.latin, M+3+nomW+4, y+3.6);
+      doc.setTextColor(0);
+      y += 10;
+      field('Habitat', f.habitat, M+3);
+      field('Indices typiques', f.indices, M+3);
+      field('Biologie', f.biologie, M+3);
+      field('Risque', f.risque, M+3);
+      y += 3;
+    });
+  }
+
+  // Plan de traitement & suivi
+  if (d.traitement || d.suivi) {
+    y += 2; section('Plan de traitement');
+    para(d.traitement);
+    if (d.suivi) { y += 1.5; field('Suivi / prochain passage', d.suivi); }
+  }
+
+  // Prévention recommandée
+  if (d.prevention) {
+    y += 2; section('Prévention recommandée');
+    para(d.prevention);
+  }
+
+  // Conclusion (encadré)
+  if (d.conclusion) {
+    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const boxH = lines.length*4.9 + 8;
+    if (y + boxH + 12 > MAX_Y) newPage();
+    y += 2; section('Conclusion / recommandations');
+    doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    doc.setTextColor(0);
+    y += boxH + 4;
+  }
+
+  // Signature
+  ensure(26);
+  y += 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+  doc.text(co.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+  doc.text('DERATEK' + (d.tech ? ' — ' + d.tech : ''), 120, y);
+  doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+12, 186, y+12);
+  doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+  doc.text('Signature', 120, y+15.5);
+  doc.setTextColor(0);
+
+  // Pied de page
+  const nb = doc.getNumberOfPages();
+  for (let i = 1; i <= nb; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
+    doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
+    doc.setTextColor(0);
+  }
+
+  doc.save('rapport-rongeurs-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
+  toast('✓ PDF rapport rongeurs téléchargé', '#2d9e6b');
 }
 
 // ============================================================
