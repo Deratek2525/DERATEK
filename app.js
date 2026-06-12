@@ -6809,7 +6809,10 @@ function renderDiagEditor() {
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-schema-file').click()">📷 Importer une image / photo</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSchema()">↺ Effacer les annotations</button>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()">🪵 Schéma 3D par défaut</button>
+        <select class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:5px 8px;" onchange="setDiagSchemaModele(this.value)" title="Choisir le modèle de schéma 3D (remplace le fond et efface les annotations)">
+          ${[['2pans','🪵 Charpente 2 pans'],['4pans','🏠 Toit 4 pans (croupe)'],['appentis','📐 Appentis 1 pan'],['combles','🛏 Combles aménagés'],['plancher','🟫 Plancher / solivage']].map(o => `<option value="${o[0]}" ${_diagSchemaModele===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="resetToDefaultSchema()" title="Redessiner le modèle choisi">↻ Redessiner</button>
         <span style="font-size:11px;color:var(--g400);align-self:center;">Dessine pour entourer les zones touchées ; en mode Texte, clique pour placer une note. La légende des couleurs est ajoutée automatiquement au PDF.</span>
       </div>
     </div>
@@ -7188,26 +7191,33 @@ function _diagRecognizeShape(pts) {
   if (Math.abs(mean-1) < 0.28 && sd < 0.28) return { type:'ellipse', cx, cy, a, b };
   return null;
 }
-function _drawSchemaBase(ctx, W, H) {
+// Modèle de charpente choisi pour le schéma 3D (rapport bois)
+let _diagSchemaModele = '2pans';
+function setDiagSchemaModele(m) { _diagSchemaModele = m || '2pans'; resetToDefaultSchema(); }
+
+// Dispatcher : dessine le gabarit choisi
+function _drawSchemaBase(ctx, W, H) { _drawCharpente(ctx, W, H, _diagSchemaModele); }
+
+// Moteur de dessin isométrique des gabarits de charpente
+function _drawCharpente(ctx, W, H, modele) {
   ctx.clearRect(0, 0, W, H);
-  // Fond dégradé doux
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#fbfcfe'); bg.addColorStop(1, '#e9eef5');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
-  // Projection isométrique : (x = largeur, y = hauteur, z = profondeur)
-  const s = 1.25, ox = W * 0.535, oy = 108;
+  const isPlancher = modele === 'plancher';
+  const s = isPlancher ? 1.5 : 1.25;
+  const ox = W * 0.535, oy = isPlancher ? 170 : 108;
   const P = (x, y, z) => ({ x: ox + (x - z) * 0.866 * s, y: oy + (x + z) * 0.275 * s - y * s });
-  const X = 210, Z = 250, YR = 92, YF = -26;   // largeur, profondeur, faîte, plancher
+  const X = 210, Z = 250, YR = 92, YF = -26;
 
-  // Ombre portée au sol
+  // Ombre au sol
   ctx.fillStyle = 'rgba(15,23,42,0.10)';
   ctx.beginPath();
-  ctx.ellipse(ox - 28, oy + (X + Z) * 0.275 * s * 0.62 + 40, 270, 32, 0, 0, Math.PI * 2);
+  ctx.ellipse(ox - 28, oy + (X + Z) * 0.275 * s * 0.62 + (isPlancher ? 14 : 40), 270, 32, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Poutre 3D : ombre + corps en dégradé bois + arête lumineuse
   const beam = (a, b, w, pal) => {
     ctx.strokeStyle = 'rgba(60,40,15,0.20)'; ctx.lineWidth = w + 2.5;
     ctx.beginPath(); ctx.moveTo(a.x + 2.5, a.y + 3); ctx.lineTo(b.x + 2.5, b.y + 3); ctx.stroke();
@@ -7222,50 +7232,16 @@ function _drawSchemaBase(ctx, W, H) {
   const PAL_MID   = ['#b98a4e', '#956427', '#6e4815'];
   const PAL_BACK  = ['#a37843', '#825621', '#5e3d11'];
   const PAL_DARK  = ['#8d6536', '#6e4a1b', '#4e330c'];
+  const PAL_CHEV  = ['#dcae77', '#bd8e51', '#9a6c2e'];
 
-  // Une ferme complète (entrait, arbalétriers, poinçon, jambes de force)
-  const truss = (z, pal, w) => {
-    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                       // entrait
-    beam(P(105, 46, z), P(52.5, 0, z), w - 1.2, pal);               // jambe gauche
-    beam(P(105, 46, z), P(157.5, 0, z), w - 1.2, pal);              // jambe droite
-    beam(P(105, 0, z), P(105, YR, z), w - 0.5, pal);                // poinçon
-    beam(P(0, 0, z), P(105, YR, z), w, pal);                        // arbalétrier g.
-    beam(P(X, 0, z), P(105, YR, z), w, pal);                        // arbalétrier d.
-  };
-
-  // Plancher (solives) sous les entraits
-  beam(P(0, YF, 0), P(0, YF, Z), 3, PAL_DARK);
-  beam(P(X, YF, 0), P(X, YF, Z), 3, PAL_DARK);
-  for (let z = 15; z <= Z - 15; z += 44) beam(P(0, YF, z), P(X, YF, z), 2.4, PAL_BACK);
-  beam(P(0, YF, 0), P(X, YF, 0), 3.2, PAL_MID);
-  beam(P(0, YF, 0), P(0, 0, 0), 2.4, PAL_MID); beam(P(X, YF, 0), P(X, 0, 0), 2.4, PAL_MID);
-  beam(P(0, YF, Z), P(0, 0, Z), 2.2, PAL_BACK); beam(P(X, YF, Z), P(X, 0, Z), 2.2, PAL_BACK);
-
-  // Ferme arrière (derrière les pans translucides)
-  truss(Z, PAL_BACK, 3.6);
-
-  // Pans de toiture translucides (volume)
-  const face = (pA, pB, pC, pD, c1, c2) => {
-    const g = ctx.createLinearGradient(pA.x, pA.y, pC.x, pC.y);
+  const face = (pts, c1, c2) => {
+    const g = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[2].x, pts[2].y);
     g.addColorStop(0, c1); g.addColorStop(1, c2);
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.lineTo(pC.x, pC.y); ctx.lineTo(pD.x, pD.y); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath(); ctx.fill();
   };
-  face(P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0), 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
-  face(P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0), 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
-
-  // Éléments longitudinaux : sablières, pannes, faîtière
-  beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);            // sablière gauche
-  beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);            // sablière droite
-  beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);    // panne gauche
-  beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);  // panne droite
-  beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);       // faîtière
-
-  // Fermes intermédiaire et avant
-  truss(Z / 2, PAL_MID, 4.2);
-  truss(0, PAL_FRONT, 5.2);
-
-  // Étiquettes modernes : puce arrondie + ligne de rappel
   const chip = (txt, target, lx, ly) => {
     ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.1;
     ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(target.x, target.y); ctx.stroke();
@@ -7282,14 +7258,158 @@ function _drawSchemaBase(ctx, W, H) {
     ctx.fillText(txt, bx + 7, by + 12.5);
   };
   const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-  chip('Faîtière',        mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
-  chip('Panne',           mid(P(157.5,46,0), P(157.5,46,Z)), ox + 230, 88);
-  chip('Arbalétrier',     mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
-  chip('Poinçon',         P(105, 64, 0), ox + 250, 160);
-  chip('Entrait / Poutre', P(160, 0, 0), ox + 230, 255);
-  chip('Sablière',        mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
-  chip('Solives',         P(40, YF, 110), ox - 255, 280);
+
+  // Plancher de solives (commun à plusieurs gabarits)
+  const deck = (yf) => {
+    beam(P(0, yf, 0), P(0, yf, Z), 3, PAL_DARK);
+    beam(P(X, yf, 0), P(X, yf, Z), 3, PAL_DARK);
+    for (let z = 15; z <= Z - 15; z += 44) beam(P(0, yf, z), P(X, yf, z), 2.4, PAL_BACK);
+    beam(P(0, yf, 0), P(X, yf, 0), 3.2, PAL_MID);
+  };
+  const deckLinks = (yf) => {
+    beam(P(0, yf, 0), P(0, 0, 0), 2.4, PAL_MID); beam(P(X, yf, 0), P(X, 0, 0), 2.4, PAL_MID);
+    beam(P(0, yf, Z), P(0, 0, Z), 2.2, PAL_BACK); beam(P(X, yf, Z), P(X, 0, Z), 2.2, PAL_BACK);
+  };
+  // Chevrons sur les 2 pans (en sautant l'emplacement des fermes)
+  const chevrons2pans = (skip) => {
+    for (let z = 14; z <= Z - 14; z += 26) {
+      if (skip.some(zz => Math.abs(z - zz) < 9)) continue;
+      beam(P(0, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
+      beam(P(X, 0, z), P(105, YR, z), 1.7, PAL_CHEV);
+    }
+  };
+  // Ferme traditionnelle complète
+  const truss = (z, pal, w) => {
+    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);
+    beam(P(105, 46, z), P(52.5, 0, z), w - 1.2, pal);
+    beam(P(105, 46, z), P(157.5, 0, z), w - 1.2, pal);
+    beam(P(105, 0, z), P(105, YR, z), w - 0.5, pal);
+    beam(P(0, 0, z), P(105, YR, z), w, pal);
+    beam(P(X, 0, z), P(105, YR, z), w, pal);
+  };
+  // Ferme de combles aménagés (faux-entrait + jambettes, sans poinçon)
+  const trussCombles = (z, pal, w) => {
+    beam(P(0, 0, z), P(X, 0, z), w + 1, pal);                 // entrait
+    beam(P(32, 0, z), P(32, 28, z), w - 1.4, pal);            // jambette g.
+    beam(P(178, 0, z), P(178, 28, z), w - 1.4, pal);          // jambette d.
+    beam(P(66.2, 58, z), P(143.8, 58, z), w - 0.8, pal);      // faux-entrait
+    beam(P(0, 0, z), P(105, YR, z), w, pal);                  // arbalétrier g.
+    beam(P(X, 0, z), P(105, YR, z), w, pal);                  // arbalétrier d.
+  };
+
+  if (modele === 'plancher') {
+    // ---- Solivage seul ----
+    beam(P(0, 0, 0), P(0, 0, Z), 4.4, PAL_DARK);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.4, PAL_DARK);
+    beam(P(0, 0, Z), P(X, 0, Z), 4, PAL_BACK);
+    beam(P(105, -7, 0), P(105, -7, Z), 6.2, PAL_DARK);        // poutre maîtresse
+    for (let z = 12; z <= Z - 12; z += 22) beam(P(0, 0, z), P(X, 0, z), 2.6, PAL_MID);
+    beam(P(0, 0, 0), P(X, 0, 0), 4.6, PAL_FRONT);
+    chip('Muralière', mid(P(0,0,0), P(0,0,Z)), ox - 250, 90);
+    chip('Solive', P(105, 0, 56), ox + 130, 56);
+    chip('Poutre maîtresse', mid(P(105,-7,0), P(105,-7,Z)), ox - 150, 290);
+    chip('Rive / chevêtre', P(160, 0, 0), ox + 230, 230);
+  } else if (modele === 'appentis') {
+    // ---- Toit 1 pan ----
+    const YH = 70, YB = 14;
+    const yAt = x => YH - (YH - YB) * (x / X);
+    deck(YF); deckLinks(YF);
+    [0, Z/2, Z].forEach((z, i) => {
+      const pal = i === 2 ? PAL_BACK : (i === 1 ? PAL_MID : PAL_FRONT);
+      const w = i === 2 ? 3.4 : (i === 1 ? 4 : 5);
+      beam(P(0, 0, z), P(X, 0, z), w, pal);                  // entrait
+      beam(P(0, 0, z), P(0, YH, z), w - 0.6, pal);           // poteau haut
+      beam(P(X, 0, z), P(X, YB, z), w - 0.6, pal);           // poteau bas
+      beam(P(0, YH, z), P(X, YB, z), w, pal);                // arba (pente)
+    });
+    face([P(0,YH,0), P(0,YH,Z), P(X,YB,Z), P(X,YB,0)], 'rgba(226,190,140,0.32)', 'rgba(186,146,96,0.16)');
+    for (let z = 14; z <= Z - 14; z += 26) {
+      if ([0, Z/2, Z].some(zz => Math.abs(z - zz) < 9)) continue;
+      beam(P(0, YH, z), P(X, YB, z), 1.7, PAL_CHEV);
+    }
+    beam(P(0, YH, 0), P(0, YH, Z), 4.4, PAL_DARK);           // sablière haute
+    beam(P(X, YB, 0), P(X, YB, Z), 4.4, PAL_DARK);           // sablière basse
+    beam(P(70, yAt(70), 0), P(70, yAt(70), Z), 3.4, PAL_MID);   // panne
+    beam(P(140, yAt(140), 0), P(140, yAt(140), Z), 3.4, PAL_MID);
+    chip('Sablière haute', mid(P(0,YH,0), P(0,YH,Z)), ox - 215, 30);
+    chip('Panne', mid(P(70,yAt(70),0), P(70,yAt(70),Z)), ox - 90, 60);
+    chip('Chevron', P(105, yAt(105), 40), ox + 150, 30);
+    chip('Sablière basse', mid(P(X,YB,0), P(X,YB,Z)), ox + 240, 150);
+    chip('Poteau', P(0, 35, 0), ox - 250, 175);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === '4pans') {
+    // ---- Toit 4 pans (croupes) ----
+    const R0 = P(105, YR, 62), R1 = P(105, YR, 188);
+    deck(YF); deckLinks(YF);
+    truss(188, PAL_BACK, 3.6);
+    face([P(0,0,0), P(0,0,Z), P(105,YR,188), P(105,YR,62)], 'rgba(226,190,140,0.32)', 'rgba(196,156,104,0.15)');
+    face([P(X,0,0), P(X,0,Z), P(105,YR,188), P(105,YR,62)], 'rgba(176,132,82,0.40)', 'rgba(150,108,62,0.20)');
+    face([P(0,0,0), P(X,0,0), R0], 'rgba(205,168,118,0.40)', 'rgba(185,148,98,0.25)');
+    face([P(0,0,Z), P(X,0,Z), R1], 'rgba(165,124,76,0.30)', 'rgba(150,110,64,0.18)');
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    beam(P(0, 0, 0), P(X, 0, 0), 4.2, PAL_FRONT);
+    beam(P(0, 0, Z), P(X, 0, Z), 3.6, PAL_BACK);
+    beam(P(105, YR, 62), P(105, YR, 188), 5, PAL_DARK);       // faîtière
+    beam(P(0, 0, 0), R0, 4.4, PAL_FRONT);                     // arêtiers
+    beam(P(X, 0, 0), R0, 4.4, PAL_FRONT);
+    beam(P(0, 0, Z), R1, 3.8, PAL_BACK);
+    beam(P(X, 0, Z), R1, 3.8, PAL_BACK);
+    truss(125, PAL_MID, 4.2);
+    truss(62, PAL_FRONT, 5);
+    chip('Faîtière', mid(R0, R1), ox - 130, 26);
+    chip('Arêtier', mid(P(X,0,0), R0), ox + 190, 40);
+    chip('Croupe', mid(mid(P(0,0,0), P(X,0,0)), R0), ox + 240, 120);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Entrait', P(160, 0, 62), ox + 230, 255);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else if (modele === 'combles') {
+    // ---- Combles aménagés ----
+    deck(YF); deckLinks(YF);
+    trussCombles(Z, PAL_BACK, 3.6);
+    face([P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
+    face([P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
+    beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
+    chevrons2pans([0, Z/2, Z]);
+    beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
+    trussCombles(Z / 2, PAL_MID, 4.2);
+    trussCombles(0, PAL_FRONT, 5.2);
+    chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
+    chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
+    chip('Faux-entrait', mid(P(66.2,58,0), P(143.8,58,0)), ox + 235, 95);
+    chip('Jambette', P(178, 14, 0), ox + 245, 200);
+    chip('Arbalétrier', mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
+    chip('Entrait', P(120, 0, 0), ox + 215, 262);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  } else {
+    // ---- Charpente traditionnelle 2 pans (défaut) ----
+    deck(YF); deckLinks(YF);
+    truss(Z, PAL_BACK, 3.6);
+    face([P(0,0,0), P(0,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(226,190,140,0.34)', 'rgba(196,156,104,0.16)');
+    face([P(X,0,0), P(X,0,Z), P(105,YR,Z), P(105,YR,0)], 'rgba(176,132,82,0.42)', 'rgba(150,108,62,0.22)');
+    beam(P(0, 0, 0), P(0, 0, Z), 4.2, PAL_MID);
+    beam(P(X, 0, 0), P(X, 0, Z), 4.2, PAL_MID);
+    beam(P(52.5, 46, 0), P(52.5, 46, Z), 3.4, PAL_MID);
+    beam(P(157.5, 46, 0), P(157.5, 46, Z), 3.4, PAL_MID);
+    chevrons2pans([0, Z/2, Z]);
+    beam(P(105, YR, 0), P(105, YR, Z), 5, PAL_DARK);
+    truss(Z / 2, PAL_MID, 4.2);
+    truss(0, PAL_FRONT, 5.2);
+    chip('Faîtière', mid(P(105,YR,0), P(105,YR,Z)), ox - 150, 26);
+    chip('Chevron', P(52.5, 46, 40), ox - 30, 56);
+    chip('Panne', mid(P(157.5,46,0), P(157.5,46,Z)), ox + 230, 88);
+    chip('Arbalétrier', mid(P(0,0,0), P(105,YR,0)), ox + 40, 22);
+    chip('Poinçon', P(105, 64, 0), ox + 250, 160);
+    chip('Entrait / Poutre', P(160, 0, 0), ox + 230, 255);
+    chip('Sablière', mid(P(0,0,0), P(0,0,Z)), ox - 262, 140);
+    chip('Solives', P(40, YF, 110), ox - 255, 280);
+  }
 }
+
 let _diagBgDataUrl = null;  // fond propre (schéma 3D ou photo importée), pour effacer les annotations
 function initDiagSchema() {
   const c = $('diag-schema-canvas'); if (!c) return;
