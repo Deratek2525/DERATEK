@@ -122,6 +122,7 @@ const DB = {
   _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] },
   _pending:    new Set(),
   _processing: false,
+  _notifyOnSync: {},   // ex. { rapports: '✓ Rapport enregistré dans le cloud' } → toast vert après succès réel
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
   // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
@@ -190,6 +191,7 @@ const DB = {
 
   async _sync(table) {
     if (!sb) return;
+    let _syncFailed = false;
     const oldArr = this._lastSync[table] || [];
     const newArr = this._cache[table] || [];
 
@@ -253,11 +255,18 @@ const DB = {
         break; // erreur non liée à une colonne → on arrête
       }
       if (!ok && lastErr) {
+        _syncFailed = true;
         console.warn(table, 'upsert', lastErr);
         if (typeof toast === 'function') toast('Erreur de sauvegarde Supabase : ' + lastErr.message, '#e63946');
       }
     }
     this._lastSync[table] = JSON.parse(JSON.stringify(newArr));
+    // Confirmation « enregistré dans le cloud » : uniquement si l'envoi a réussi
+    if (!_syncFailed && this._notifyOnSync && this._notifyOnSync[table]) {
+      const _msg = this._notifyOnSync[table];
+      delete this._notifyOnSync[table];
+      if (typeof toast === 'function') toast(_msg, '#2d9e6b');
+    }
   },
 
   _resetCache() {
@@ -1747,6 +1756,16 @@ function rReadDates() {
 // ============================================================
 // SAVE RAPPORT
 // ============================================================
+// Sécurité : avertit si on ferme/recharge l'app alors qu'un enregistrement vers
+// Supabase n'est pas terminé (évite de perdre un rapport tout juste créé).
+window.addEventListener('beforeunload', function (e) {
+  if (DB._processing || (DB._pending && DB._pending.size > 0)) {
+    e.preventDefault();
+    e.returnValue = 'Une sauvegarde est en cours. Patiente une seconde avant de fermer pour ne rien perdre.';
+    return e.returnValue;
+  }
+});
+
 function saveRapport(statut) {
   const nuisibles = [];
   document.querySelectorAll('#tab-nuisibles input[type=checkbox]:checked').forEach(c => nuisibles.push(c.value));
@@ -1793,6 +1812,8 @@ function saveRapport(statut) {
   const i = list.findIndex(x => x.id === state.editingRapportId);
   if (i >= 0) list[i] = r; else list.push(r);
   DB.rapports = list; state.editingRapportId = r.id;
+  DB._notifyOnSync = DB._notifyOnSync || {};
+  DB._notifyOnSync.rapports = '✓ Rapport enregistré dans le cloud';
   $('edit-id').textContent = r.id;
 
   // Rapport finalisé → le bon de commande lié passe automatiquement à « ✅ Terminé »
