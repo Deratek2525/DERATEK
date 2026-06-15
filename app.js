@@ -6606,10 +6606,10 @@ const _DIAG_MARKERS = {
   rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
-  statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN',
+  statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN', noHum: 'NOHUM',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6741,7 +6741,7 @@ function openNewDiagnostic() {
     id: newId(), numero: _nextDiagNumero(), dateDoc: today(), tech: '',
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
-    activite: '', etendue: '', humidite: '', gravite: '', diagnostic: '', conclusion: '',
+    activite: '', etendue: '', humidite: '', noHum: '', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
     bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
@@ -6854,14 +6854,17 @@ function renderDiagEditor() {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Étendue / surface concernée</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
-      <div class="form-group"><label class="form-label">Taux d'humidité du bois</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Taux d'humidité du bois ${_diagSectionToggle('noHum','Afficher dans le PDF')}</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%" ${d.noHum?'style="display:none;"':''}></div>
       <div class="form-group"><label class="form-label">Méthode d'inspection</label>
         <select class="form-input" oninput="_editingDiag.methode=this.value">
           <option value="" ${!d.methode?'selected':''}>-- Choisir --</option>
           <option ${d.methode==='Inspection visuelle'?'selected':''}>Inspection visuelle</option>
           <option ${d.methode==='Visuelle + sondage mécanique'?'selected':''}>Visuelle + sondage mécanique</option>
           <option ${d.methode==='Visuelle + sondage + humidimètre'?'selected':''}>Visuelle + sondage + humidimètre</option>
+          <option ${d.methode==='Visuelle + détection acoustique (appareil)'?'selected':''}>Visuelle + détection acoustique (appareil)</option>
+          <option ${d.methode==='Visuelle + sondage + détection acoustique'?'selected':''}>Visuelle + sondage + détection acoustique</option>
           <option ${d.methode==='Inspection complète (visuelle, sondage, humidimètre, endoscope)'?'selected':''}>Inspection complète (visuelle, sondage, humidimètre, endoscope)</option>
+          <option ${d.methode==='Inspection complète (visuelle, sondage, humidimètre, endoscope, acoustique)'?'selected':''}>Inspection complète (visuelle, sondage, humidimètre, endoscope, acoustique)</option>
         </select>
       </div>
       ${_diagZonesField(d, 'Zones inspectées / zone d\'activité')}
@@ -8649,11 +8652,11 @@ function _genDiagPDF(d, mode) {
     ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
     ['GRAVITÉ', d.gravite, GRAV_RGB[d.gravite]],
     ['ÉTENDUE', d.etendue, null],
-    ['HUMIDITÉ DU BOIS', d.humidite, null],
   ];
+  if (!d.noHum) synth.push(['HUMIDITÉ DU BOIS', d.humidite, null]);
   if (synth.some(s => s[1])) {
     ensure(20);
-    const colW = CW/4;
+    const colW = CW/synth.length;
     doc.setDrawColor(225,228,238); doc.setLineWidth(0.3);
     doc.roundedRect(M, y, CW, 15, 2, 2, 'D');
     synth.forEach((s, i) => {
