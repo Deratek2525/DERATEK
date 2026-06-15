@@ -5292,9 +5292,9 @@ function renderDocEditor() {
       </div>
       <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" id="doc-bon-numero" value="${(d._bonNumeroSaisi||'').replace(/"/g,'&quot;')}" placeholder="Tape le n° du bon puis Entrée" onchange="autoFillDocFromBon(this.value)" onblur="autoFillDocFromBon(this.value)"></div>
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDoc.dateDoc=this.value"></div>
-      <div class="form-group"><label class="form-label">Rabais (%)</label><input class="form-input" type="number" step="0.1" value="${d.rabais||0}" oninput="_editingDoc.rabais=parseFloat(this.value)||0;renderDocEditor()"></div>
-      <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="_editingDoc.tvaTaux=parseFloat(this.value)||0;renderDocEditor()"></div>
-      <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">🔍 Déduction expertise (CHF) — déduite avant TVA</label><input class="form-input" type="number" step="0.01" min="0" value="${d.expertise||0}" oninput="_editingDoc.expertise=parseFloat(this.value)||0;renderDocEditor()" placeholder="Ex. 150 — montant de l'expertise à créditer si le devis est accepté"></div>
+      <div class="form-group"><label class="form-label">Rabais (%)</label><input class="form-input" type="number" step="0.1" value="${d.rabais||0}" oninput="docSetMontantField('rabais',this.value)"></div>
+      <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="docSetMontantField('tvaTaux',this.value)"></div>
+      <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">🔍 Déduction expertise (CHF) — déduite avant TVA</label><input class="form-input" type="number" step="0.01" min="0" value="${d.expertise||0}" oninput="docSetMontantField('expertise',this.value)" placeholder="Ex. 150 — montant de l'expertise à créditer si le devis est accepté"></div>
     </div>
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
     <table style="width:100%;border-collapse:collapse;">
@@ -5399,6 +5399,24 @@ function updateDocLigne(i, field, val) {
       if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
     } catch (e) {}
   }
+}
+// Met à jour rabais / TVA / expertise SANS reconstruire l'éditeur (garde le focus à la frappe)
+function docSetMontantField(field, val) {
+  if (!_editingDoc) return;
+  _editingDoc[field] = parseFloat(val) || 0;
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais, _editingDoc.expertise);
+  const sum = $('doc-summary');
+  if (sum) sum.innerHTML = _docSummaryHtml(t, _editingDoc);
+  if (_editingDoc.type === 'facture') {
+    try {
+      const debtorNom = (_editingDoc.proprietaire||'').trim() ? _editingDoc.proprietaire : _editingDoc.clientNom;
+      const payload = _buildSpcPayload(t.total, 'Facture ' + (_editingDoc.numero||''), { nom: debtorNom, rue: _editingDoc.clientAdresse, npa: _editingDoc.clientNpa, ville: _editingDoc.clientVille });
+      const url = _makeQrDataUrl(payload);
+      const prev = $('doc-qr-preview');
+      if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
+    } catch (e) {}
+  }
+  if (typeof _docPdfLive === 'function') _docPdfLive();
 }
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
