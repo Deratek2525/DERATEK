@@ -2573,7 +2573,7 @@ function _rapportObjForPdf(r) {
     locataire: loc.nom || '', locataireTel: loc.tel || '', locataireEmail: loc.email || '', locataireAdresse: loc.adresse || '',
     showPrix: true, showDuree: true, showRdv: true, showGarantie: true, showGarantieNote: true, showPrecautions: true,
     volume: '', photoComments: ['', '', '', '', '', ''], materiels: [], materielComment: '',
-    garantieNote: '', showSigClient: true, sigLocataire: '',
+    garantieNote: '', showSigClient: false, sigLocataire: '',
     nuisibles: r.nuisibles || [], description: meta.descClean || r.description || '',
     nbPassages: _rapNbPassages(r), datesInterv: _rapDates(r),
     niveau: r.niveau || '', superficie: r.superficie || '', pieces: r.pieces || '', zones: r.zones || '',
@@ -6764,7 +6764,7 @@ function openNewDiagnostic() {
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     activite: '', etendue: '', humidite: '', noHum: '', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', noSign: '1',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
     dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
   };
@@ -8980,7 +8980,7 @@ function openNewRongeurs() {
     activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
     traitement: '', suivi: '', prevention: '', signes: [], postes: [], materiel: [],
     rodenticides: [], actions: [], photos: [],
-    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', ruban: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', ruban: '', noSign: '1',
     rodenticideAutre: '', postesNb: '', suiviRem: '',
     contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
     dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
