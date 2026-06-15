@@ -3805,6 +3805,7 @@ function updateNavCounts() {
     const s = b.statut || '';
     if (s === 'termine') nT++;
     else if (s === 'en-cours') nE++;
+    else if (s === 'demande-devis') { /* comptés dans le bouton Devis (« à deviser »), pas dans Bons actifs — cohérent avec la liste */ }
     else nA++;
   });
   const docs = DB.documents || [];
