@@ -4512,6 +4512,7 @@ function _docNotesClean(d) {
     .replace(/\s*\[RAPPEL(?:DOC|SRC|FD|TXT):[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[ENVDATE:[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[ORD:\d+\]\s*/g, ' ')
+    .replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ')
     .trim();
 }
 // Ordre manuel d'affichage dans Anciennes factures (glisser-déposer) — marqueur [ORD:n]
@@ -4801,19 +4802,28 @@ function _nextDocNumero(type) {
 }
 
 // --- Calcul des totaux à partir des lignes (avec rabais avant TVA) ---
-function _calcTotaux(lignes, tvaTaux, rabaisTaux) {
+function _calcTotaux(lignes, tvaTaux, rabaisTaux, expertise) {
   const r2 = n => Math.round(n * 100) / 100;
   const sousTotal = (lignes || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0), 0);
   const rabaisMontant = sousTotal * ((parseFloat(rabaisTaux) || 0) / 100);
-  const net = sousTotal - rabaisMontant;
+  const exp = parseFloat(expertise) || 0;          // déduction expertise (avant TVA, après rabais)
+  const net = sousTotal - rabaisMontant - exp;
   const tva = net * ((parseFloat(tvaTaux) || 0) / 100);
   return {
     sousTotal: r2(sousTotal),
     rabaisMontant: r2(rabaisMontant),
+    expertise: r2(exp),
     net: r2(net),
     tvaMontant: r2(tva),
     total: r2(net + tva)
   };
+}
+// Montant de l'expertise à déduire : champ mémoire d.expertise, sinon marqueur [EXPERT:n] dans notes
+function _docExpertise(d) {
+  if (!d) return 0;
+  if (d.expertise !== undefined && d.expertise !== null && d.expertise !== '') return parseFloat(d.expertise) || 0;
+  const m = String(d.notes || '').match(/\[EXPERT:([0-9.]+)\]/);
+  return m ? (parseFloat(m[1]) || 0) : 0;
 }
 
 // --- État de l'éditeur de devis en cours ---
@@ -5021,6 +5031,9 @@ function editDoc(id) {
   _editingDoc = JSON.parse(JSON.stringify(d));
   if (!_editingDoc.lignes || !_editingDoc.lignes.length) _editingDoc.lignes = [{ desc: '', qte: 1, prix: 0 }];
   if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
+  // Déduction expertise : on lit le marqueur [EXPERT:n] et on le retire de la note affichée
+  _editingDoc.expertise = _docExpertise(_editingDoc);
+  _editingDoc.notes = String(_editingDoc.notes || '').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
   // Réparation : on prend comme cible le sous-total recalculé depuis le TOTAL TTC stocké
   // (plus fiable que le sous-total HT que l'IA peut avoir mal extrait)
   const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0), 0);
@@ -5031,7 +5044,8 @@ function editDoc(id) {
   let cibleSousTotal = sousTotalStocke;
   if (totalStocke > 0) {
     const facteur = (1 - rabaisTaux/100) * (1 + tvaTauxDoc/100);
-    const sousTotalDepuisTtc = totalStocke / facteur;
+    // On réintègre l'expertise déduite pour retrouver le vrai sous-total des lignes
+    const sousTotalDepuisTtc = (totalStocke + (parseFloat(_editingDoc.expertise)||0) * (1 + tvaTauxDoc/100)) / facteur;
     // Si la somme actuelle ne s'aligne ni au sous-total stocké ni à celui calculé depuis le TTC,
     // on privilégie le TTC qui est l'info la plus fiable du PDF
     if (Math.abs(sommeLignes - sousTotalDepuisTtc) > 1) {
@@ -5194,7 +5208,7 @@ function deletePrestation(id) {
 function renderDocEditor() {
   const d = _editingDoc;
   if (!d) return;
-  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
+  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais, d.expertise);
   const titre = d._rappel
     ? ('Rappel — Facture ' + (d.numero || ''))
     : ((d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || ''));
@@ -5280,6 +5294,7 @@ function renderDocEditor() {
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDoc.dateDoc=this.value"></div>
       <div class="form-group"><label class="form-label">Rabais (%)</label><input class="form-input" type="number" step="0.1" value="${d.rabais||0}" oninput="_editingDoc.rabais=parseFloat(this.value)||0;renderDocEditor()"></div>
       <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="_editingDoc.tvaTaux=parseFloat(this.value)||0;renderDocEditor()"></div>
+      <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">🔍 Déduction expertise (CHF) — déduite avant TVA</label><input class="form-input" type="number" step="0.01" min="0" value="${d.expertise||0}" oninput="_editingDoc.expertise=parseFloat(this.value)||0;renderDocEditor()" placeholder="Ex. 150 — montant de l'expertise à créditer si le devis est accepté"></div>
     </div>
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
     <table style="width:100%;border-collapse:collapse;">
@@ -5354,8 +5369,9 @@ function _docPdfLive() {
 function _docSummaryHtml(t, d) {
   return `
     <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Sous-total HT</span><b>${_displayMontant(t.sousTotal)} CHF</b></div>
-    ${(d.rabais||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Rabais ${d.rabais}%</span><span>− ${_displayMontant(t.rabaisMontant)} CHF</span></div>
-    <div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Net HT</span><b>${_displayMontant(t.net)} CHF</b></div>` : ''}
+    ${(d.rabais||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Rabais ${d.rabais}%</span><span>− ${_displayMontant(t.rabaisMontant)} CHF</span></div>` : ''}
+    ${(t.expertise||0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:#e63946;"><span>Déduction expertise</span><span>− ${_displayMontant(t.expertise)} CHF</span></div>` : ''}
+    ${((d.rabais||0) > 0 || (t.expertise||0) > 0) ? `<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Net HT</span><b>${_displayMontant(t.net)} CHF</b></div>` : ''}
     <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--g600);"><span>TVA ${d.tvaTaux}%</span><span>${_displayMontant(t.tvaMontant)} CHF</span></div>
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:2px solid var(--navy);font-size:15px;font-weight:800;color:var(--navy);"><span>Total TTC</span><span>${_displayMontant(t.total)} CHF</span></div>`;
 }
@@ -5370,7 +5386,7 @@ function updateDocLigne(i, field, val) {
   const l = _editingDoc.lignes[i];
   const cell = $('lt-' + i);
   if (cell) cell.textContent = _displayMontant((parseFloat(l.qte)||0) * (parseFloat(l.prix)||0));
-  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais);
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais, _editingDoc.expertise);
   const sum = $('doc-summary');
   if (sum) sum.innerHTML = _docSummaryHtml(t, _editingDoc);
   // Met à jour aussi l'aperçu QR (facture) sans reconstruire les champs
@@ -5397,14 +5413,23 @@ function saveDocBrouillon() {
 }
 function saveDoc() {
   if (!_editingDoc) return;
-  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais);
+  const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais, _editingDoc.expertise);
   _editingDoc.sousTotal = t.sousTotal;
   _editingDoc.rabaisMontant = t.rabaisMontant;
   _editingDoc.tvaMontant = t.tvaMontant;
   _editingDoc.total = t.total;
+  // Déduction expertise → persistée via le marqueur invisible [EXPERT:n] dans notes
+  // (pas de nouvelle colonne Supabase). On retire d'abord un éventuel ancien marqueur.
+  {
+    const exp = parseFloat(_editingDoc.expertise) || 0;
+    let nt = String(_editingDoc.notes || '').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
+    if (exp > 0) nt += (nt ? '\n' : '') + '[EXPERT:' + exp + ']';
+    _editingDoc.notes = nt;
+  }
   // Retire les champs transitoires d'UI avant sauvegarde
   const toSave = JSON.parse(JSON.stringify(_editingDoc));
   delete toSave._bonNumeroSaisi;
+  delete toSave.expertise;   // persisté dans notes via [EXPERT:n]
   const docs = DB.documents;
   const i = docs.findIndex(x => x.id === toSave.id);
   if (i >= 0) docs[i] = toSave; else docs.push(toSave);
@@ -6251,7 +6276,7 @@ function downloadDocPDF(id, mode) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
   const isFacture = d.type === 'facture';
-  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais);
+  const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais, _docExpertise(d));
 
   // --- En-tête horizontal (LOGO + coordonnées) — dessiné sur CHAQUE page ---
   const logoW = 62, logoH = logoW * 199 / 900;   // logo agrandi (ratio d'origine conservé)
@@ -6445,6 +6470,11 @@ function downloadDocPDF(id, mode) {
   if ((d.rabais || 0) > 0) {
     doc.setTextColor(180, 40, 40);
     doc.text(`Rabais ${d.rabais}%`, 130, ty); doc.text('- ' + _displayMontant(t.rabaisMontant) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
+    doc.setTextColor(0);
+  }
+  if ((t.expertise || 0) > 0) {
+    doc.setTextColor(180, 40, 40);
+    doc.text('Déduction expertise', 130, ty); doc.text('- ' + _displayMontant(t.expertise) + ' CHF', 188, ty, {align:'right'}); ty += 4.3;
     doc.setTextColor(0);
   }
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
