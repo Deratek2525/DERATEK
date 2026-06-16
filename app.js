@@ -2704,7 +2704,21 @@ async function bonExtractInfosIA(texte) {
 }
 
 // Affiche le récap de confirmation (champs éditables avant validation)
-function bonShowConfirm(infos, fileName) {
+// Numéro pour un bon créé à la main (gérance sans PDF) : BM-AAAA-NNN
+function _nextBonManuelNumero() {
+  const year = new Date().getFullYear();
+  let max = 0;
+  (DB.bons || []).forEach(b => { const m = String(b.numero || '').match(new RegExp('^BM-' + year + '-(\\d+)$')); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return 'BM-' + year + '-' + String(max + 1).padStart(3, '0');
+}
+// Ouvre le formulaire de bon VIDE (sans PDF) — pour les gérances qui n'envoient pas de bon
+function openManualBon() {
+  if (typeof showScreen === 'function') showScreen('bons');
+  _pendingBonPdf = null;
+  const fi = $('bon-file-input'); if (fi) fi.value = '';
+  bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
+}
+function bonShowConfirm(infos, fileName, manual) {
   const box = $('bon-confirm');
   if (!box) return;
   const champ = (label, key, val) =>
@@ -2715,8 +2729,8 @@ function bonShowConfirm(infos, fileName) {
 
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
-      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">✅ Voici ce que l'IA a trouvé</div>
-      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifiez et corrigez si besoin, puis validez. Fichier : <b>${fileName||''}</b></div>
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">${manual ? '📝 Nouveau bon manuel (sans PDF)' : '✅ Voici ce que l\'IA a trouvé'}</div>
+      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">${manual ? 'Remplis les champs (au minimum la gérance ou le locataire), puis valide. Le n° BM- est auto, tu peux le changer.' : ('Vérifiez et corrigez si besoin, puis validez. Fichier : <b>' + (fileName||'') + '</b>')}</div>
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 8px;">🏢 Gérance &amp; gérant (→ Clients)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
