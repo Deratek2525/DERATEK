@@ -2704,12 +2704,16 @@ async function bonExtractInfosIA(texte) {
 }
 
 // Affiche le récap de confirmation (champs éditables avant validation)
-// Numéro pour un bon créé à la main (gérance sans PDF) : BM-AAAA-NNN
+// Numéro pour un bon créé à la main (gérance sans PDF) : suite simple démarrant à 101
+// (on ne compte que les n° purement numériques à 3-4 chiffres entre 101 et 9999,
+//  pour ne pas être perturbé par les n° de gérance type « 079145 » ou « 2026 041 211 »)
 function _nextBonManuelNumero() {
-  const year = new Date().getFullYear();
-  let max = 0;
-  (DB.bons || []).forEach(b => { const m = String(b.numero || '').match(new RegExp('^BM-' + year + '-(\\d+)$')); if (m) max = Math.max(max, parseInt(m[1], 10)); });
-  return 'BM-' + year + '-' + String(max + 1).padStart(3, '0');
+  let max = 100;
+  (DB.bons || []).forEach(b => {
+    const s = String(b.numero || '').trim();
+    if (/^\d{3,4}$/.test(s)) { const n = parseInt(s, 10); if (n >= 101 && n <= 9999) max = Math.max(max, n); }
+  });
+  return String(max + 1);
 }
 // Ouvre le formulaire de bon VIDE (sans PDF) — pour les gérances qui n'envoient pas de bon
 function openManualBon() {
@@ -2747,7 +2751,7 @@ function bonShowConfirm(infos, fileName, manual) {
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
       <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">${manual ? '📝 Nouveau bon manuel (sans PDF)' : '✅ Voici ce que l\'IA a trouvé'}</div>
-      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">${manual ? 'Remplis les champs (au minimum la gérance ou le locataire), puis valide. Le n° BM- est auto, tu peux le changer.' : ('Vérifiez et corrigez si besoin, puis validez. Fichier : <b>' + (fileName||'') + '</b>')}</div>
+      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">${manual ? 'Remplis les champs (au minimum la gérance ou le locataire), puis valide. Le n° est attribué automatiquement (101, 102, 103…), tu peux le changer.' : ('Vérifiez et corrigez si besoin, puis validez. Fichier : <b>' + (fileName||'') + '</b>')}</div>
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 8px;">🏢 Gérance &amp; gérant (→ Clients)</div>
       <div style="margin-bottom:10px;">
