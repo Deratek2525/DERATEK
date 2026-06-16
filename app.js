@@ -2718,6 +2718,21 @@ function openManualBon() {
   const fi = $('bon-file-input'); if (fi) fi.value = '';
   bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
 }
+// Remplit les champs du bon manuel depuis un client (gérance) existant
+function onManualBonClientSelect(id) {
+  if (!id) return;
+  const c = (DB.clients || []).find(x => x.id === id);
+  if (!c) return;
+  const setv = (k, v) => { const el = $('bonf-' + k); if (el) el.value = v || ''; };
+  const gerant = String(c.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+  setv('gerance_nom', c.nom);
+  setv('gerant_nom', gerant);
+  setv('gerant_tel', c.tel);
+  setv('gerant_email', c.email);
+  setv('gerance_adresse', c.adresse);
+  setv('gerance_npa', c.npa);
+  setv('gerance_ville', c.ville);
+}
 function bonShowConfirm(infos, fileName, manual) {
   const box = $('bon-confirm');
   if (!box) return;
@@ -2726,6 +2741,8 @@ function bonShowConfirm(infos, fileName, manual) {
        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
        <input class="form-input" id="bonf-${key}" value="${(val||'').replace(/"/g,'&quot;')}" style="font-size:13px;">
      </div>`;
+  const _clientOpts = (DB.clients || []).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||''))
+    .map(c => `<option value="${c.id}">${(c.nom||'').replace(/</g,'&lt;')}${c.type ? ' (' + c.type + ')' : ''}</option>`).join('');
 
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
@@ -2733,6 +2750,13 @@ function bonShowConfirm(infos, fileName, manual) {
       <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">${manual ? 'Remplis les champs (au minimum la gérance ou le locataire), puis valide. Le n° BM- est auto, tu peux le changer.' : ('Vérifiez et corrigez si besoin, puis validez. Fichier : <b>' + (fileName||'') + '</b>')}</div>
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 8px;">🏢 Gérance &amp; gérant (→ Clients)</div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">📇 Reprendre une gérance / un client existant</label>
+        <select class="form-input" style="font-size:13px;" onchange="onManualBonClientSelect(this.value)">
+          <option value="">— Choisir dans mes clients (remplit les champs ci-dessous) —</option>
+          ${_clientOpts}
+        </select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
         ${champ('Gérance', 'gerance_nom', infos.gerance_nom)}
         ${champ('Gérant(e)', 'gerant_nom', infos.gerant_nom)}
