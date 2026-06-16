@@ -2745,7 +2745,11 @@ function bonShowConfirm(infos, fileName, manual) {
        <input class="form-input" id="bonf-${key}" value="${(val||'').replace(/"/g,'&quot;')}" style="font-size:13px;">
      </div>`;
   const _clientOpts = (DB.clients || []).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||''))
-    .map(c => `<option value="${c.id}">${(c.nom||'').replace(/</g,'&lt;')}${c.type ? ' (' + c.type + ')' : ''}</option>`).join('');
+    .map(c => {
+      const gerant = String(c.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+      const label = (c.nom || '') + (gerant ? ' — ' + gerant : '') + (c.type ? ' (' + c.type + ')' : '');
+      return `<option value="${c.id}">${label.replace(/</g,'&lt;')}</option>`;
+    }).join('');
 
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
