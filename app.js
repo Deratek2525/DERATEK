@@ -501,30 +501,62 @@ async function doLogout() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-// ---- Bloc-notes partagé du dashboard (table Supabase notes_tableau, 1 ligne id='shared') ----
-let _dashNoteTimer = null;
-async function loadDashNote() {
-  const ta = $('dash-note'); if (!ta || !sb) return;
-  if (document.activeElement === ta) return;   // ne pas écraser pendant que l'on tape
-  try {
-    const { data, error } = await sb.from('notes_tableau').select('contenu,updated_at').eq('id', 'shared').limit(1);
-    if (error) { const st = $('dash-note-status'); if (st) st.textContent = ''; return; }
-    const row = data && data[0];
-    ta.value = (row && row.contenu) || '';
-    const st = $('dash-note-status');
-    if (st) st.textContent = row && row.updated_at ? ('Synchronisé · ' + fmtDate(String(row.updated_at).slice(0,10))) : '';
-  } catch (e) {}
+// ---- Blocs-notes du dashboard (1 par personne) — table Supabase notes_tableau, 1 ligne par clé ----
+const _NOTE_KEYS = ['jessy', 'dany'];
+const _NOTE_COLORS = ['#000000','#6b7280','#e63946','#ea580c','#ca8a04','#16a34a','#0d9488','#2563eb','#7c3aed','#db2777'];
+let _noteTimers = {};
+let _noteHL = { jessy: false, dany: false };
+
+function _noteFocus(key){ const el = $('note-' + key); if (el) el.focus(); return el; }
+function noteExec(key, cmd){ _noteFocus(key); try { document.execCommand(cmd, false, null); } catch (e) {} noteOnInput(key); }
+function noteFont(key, val){ _noteFocus(key); try { document.execCommand('fontName', false, val); } catch (e) {} noteOnInput(key); }
+function noteSize(key, val){ _noteFocus(key); try { document.execCommand('fontSize', false, val); } catch (e) {} noteOnInput(key); }
+function noteColor(key, hex){ _noteFocus(key); try { document.execCommand(_noteHL[key] ? 'hiliteColor' : 'foreColor', false, hex); } catch (e) {} noteOnInput(key); }
+function noteToggleHL(key){
+  _noteHL[key] = !_noteHL[key];
+  const b = $('hl-' + key);
+  if (b) { b.style.background = _noteHL[key] ? '#fde68a' : ''; b.style.color = _noteHL[key] ? '#7c2d12' : ''; }
 }
-function dashNoteOnInput() {
-  const st = $('dash-note-status'); if (st) { st.textContent = 'Modification…'; st.style.color = 'var(--g400)'; }
-  clearTimeout(_dashNoteTimer);
-  _dashNoteTimer = setTimeout(saveDashNote, 700);
+function initNotePalettes(){
+  _NOTE_KEYS.forEach(function(key){
+    const pal = $('pal-' + key); if (!pal || pal.dataset.done) return;
+    pal.dataset.done = '1';
+    _NOTE_COLORS.forEach(function(hex){
+      const d = document.createElement('button');
+      d.type = 'button'; d.title = 'Couleur';
+      d.style.cssText = 'width:18px;height:18px;border-radius:50%;border:1px solid #d1d5db;cursor:pointer;padding:0;background:' + hex + ';';
+      d.onmousedown = function(e){ e.preventDefault(); };
+      d.onclick = function(){ noteColor(key, hex); };
+      pal.appendChild(d);
+    });
+  });
 }
-async function saveDashNote() {
-  const ta = $('dash-note'); if (!ta || !sb) return;
-  const st = $('dash-note-status');
+async function loadDashNotes(){
+  if (!sb) return;
+  initNotePalettes();
+  for (const key of _NOTE_KEYS) {
+    const el = $('note-' + key); if (!el) continue;
+    if (document.activeElement === el) continue;   // ne pas écraser pendant la frappe
+    try {
+      const { data, error } = await sb.from('notes_tableau').select('contenu,updated_at').eq('id', key).limit(1);
+      if (error) continue;
+      const row = data && data[0];
+      el.innerHTML = (row && row.contenu) || '';
+      const st = $('note-status-' + key);
+      if (st) st.textContent = row && row.updated_at ? ('Synchronisé · ' + fmtDate(String(row.updated_at).slice(0,10))) : '';
+    } catch (e) {}
+  }
+}
+function noteOnInput(key){
+  const st = $('note-status-' + key); if (st) { st.textContent = 'Modification…'; st.style.color = 'var(--g400)'; }
+  clearTimeout(_noteTimers[key]);
+  _noteTimers[key] = setTimeout(function(){ saveNote(key); }, 700);
+}
+async function saveNote(key){
+  const el = $('note-' + key); if (!el || !sb) return;
+  const st = $('note-status-' + key);
   try {
-    const { error } = await sb.from('notes_tableau').upsert({ id: 'shared', contenu: ta.value, updated_at: new Date().toISOString() });
+    const { error } = await sb.from('notes_tableau').upsert({ id: key, contenu: el.innerHTML, updated_at: new Date().toISOString() });
     if (error) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } return; }
     if (st) { const h = new Date(); st.textContent = '✓ Enregistré ' + String(h.getHours()).padStart(2,'0') + ':' + String(h.getMinutes()).padStart(2,'0'); st.style.color = '#2d9e6b'; }
   } catch (e) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } }
@@ -537,7 +569,7 @@ function renderDashboard() {
   const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   const dd = $('dash-date');
   if (dd) dd.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-  if (typeof loadDashNote === 'function') loadDashNote();
+  if (typeof loadDashNotes === 'function') loadDashNotes();
 
   const rapports = DB.rapports, clients = DB.clients;
   const brouillon = rapports.filter(r => r.statut === 'Brouillon').length;

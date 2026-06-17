@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260611ul">
+<link rel="stylesheet" href="./style.css?v=20260611um">
 </head>
 <body>
 
@@ -366,13 +366,52 @@
     </div>
     <div class="page-body">
       <div class="stats-grid" id="dash-stats"></div>
-      <div class="card" style="margin-bottom:14px;">
-        <div class="card-hd">
-          <span class="card-title">📝 Bloc-notes partagé (Jessy &amp; Dany)</span>
-          <span id="dash-note-status" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" id="notes-grid">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📝 Bloc-notes — Jessy</span>
+            <span id="note-status-jessy" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
+          </div>
+          <div style="padding:10px 14px 14px;">
+            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+              <select onchange="noteFont('jessy',this.value)" title="Police" style="font-size:12px;padding:3px 6px;width:auto;">
+                <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
+              </select>
+              <select onchange="noteSize('jessy',this.value)" title="Taille" style="font-size:12px;padding:3px 6px;width:auto;">
+                <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
+              </select>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','bold')" title="Gras" style="font-weight:800;min-width:30px;">B</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','italic')" title="Italique" style="font-style:italic;min-width:30px;">I</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','insertUnorderedList')" title="Puces (astérisque)" style="min-width:30px;">&bull;</button>
+              <span id="pal-jessy" style="display:inline-flex;gap:3px;align-items:center;"></span>
+              <button type="button" id="hl-jessy" onmousedown="event.preventDefault()" onclick="noteToggleHL('jessy')" title="Surlignement" style="font-size:12px;">Surligner</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','removeFormat')" title="Effacer la mise en forme" style="font-size:12px;">&#8635;</button>
+            </div>
+            <div id="note-jessy" contenteditable="true" class="form-input" style="min-height:130px;font-family:Arial,Helvetica,sans-serif;font-size:14px;overflow:auto;line-height:1.5;" oninput="noteOnInput('jessy')"></div>
+          </div>
         </div>
-        <div style="padding:12px 16px 16px;">
-          <textarea id="dash-note" rows="5" class="form-input" style="width:100%;resize:vertical;font-size:13px;" placeholder="Notes communes : rappels, à faire, infos à se partager… (sauvegarde automatique)" oninput="dashNoteOnInput()"></textarea>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📝 Bloc-notes — Dany</span>
+            <span id="note-status-dany" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
+          </div>
+          <div style="padding:10px 14px 14px;">
+            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+              <select onchange="noteFont('dany',this.value)" title="Police" style="font-size:12px;padding:3px 6px;width:auto;">
+                <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
+              </select>
+              <select onchange="noteSize('dany',this.value)" title="Taille" style="font-size:12px;padding:3px 6px;width:auto;">
+                <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
+              </select>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','bold')" title="Gras" style="font-weight:800;min-width:30px;">B</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','italic')" title="Italique" style="font-style:italic;min-width:30px;">I</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','insertUnorderedList')" title="Puces (astérisque)" style="min-width:30px;">&bull;</button>
+              <span id="pal-dany" style="display:inline-flex;gap:3px;align-items:center;"></span>
+              <button type="button" id="hl-dany" onmousedown="event.preventDefault()" onclick="noteToggleHL('dany')" title="Surlignement" style="font-size:12px;">Surligner</button>
+              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','removeFormat')" title="Effacer la mise en forme" style="font-size:12px;">&#8635;</button>
+            </div>
+            <div id="note-dany" contenteditable="true" class="form-input" style="min-height:130px;font-family:Arial,Helvetica,sans-serif;font-size:14px;overflow:auto;line-height:1.5;" oninput="noteOnInput('dany')"></div>
+          </div>
         </div>
       </div>
       <div class="card" style="margin-bottom:14px;display:none;border:1.5px solid #e63946;" id="impayes-card">
@@ -1367,10 +1406,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260611ul"></script>
-<script src="./footer_prestations.js?v=20260611ul"></script>
-<script src="./config.js?v=20260611ul"></script>
-<script src="./app.js?v=20260611ul"></script>
-<script src="./pdf.js?v=20260611ul"></script>
+<script src="./logo.js?v=20260611um"></script>
+<script src="./footer_prestations.js?v=20260611um"></script>
+<script src="./config.js?v=20260611um"></script>
+<script src="./app.js?v=20260611um"></script>
+<script src="./pdf.js?v=20260611um"></script>
 
 </body></html>
