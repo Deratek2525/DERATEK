@@ -10409,7 +10409,324 @@ Un traitement préventif au printemps permet de réduire l'activité des colonie
 9. Conclusion
 La présence de fourmis ailées correspond très probablement à un vol nuptial. Ce phénomène est naturel, mais il indique souvent qu'une colonie est déjà présente à proximité du bâtiment. Les jeunes reines fécondées peuvent ensuite tenter de fonder de nouvelles colonies, ce qui peut provoquer des récidives les années suivantes.
 Un traitement ciblé des fissures, plinthes, rails de fenêtres, seuils, cadres et zones périphériques est recommandé afin de neutraliser l'activité et de limiter le risque de nouvelles installations. Un suivi dans les jours suivants permet d'évaluer l'efficacité du traitement et de déterminer si un second passage est nécessaire.`
-  }
+  },
+  lasius_niger: { titre: 'Lasius niger — fourmi noire des jardins', texte:
+`Identification :
+La Lasius niger est l'une des fourmis les plus courantes en Suisse. Les ouvrières sont généralement de couleur noire à brun foncé. Elles mesurent environ 3 à 5 mm. Les reines sont plus grandes, notamment lors des vols nuptiaux.
+
+Habitat :
+Cette espèce vit principalement à l'extérieur, dans les jardins, pelouses, sous les dalles, pavés, terrasses, bordures, murs, seuils et fissures. Elle peut s'introduire dans les bâtiments à la recherche de nourriture.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu de juin à août, parfois jusqu'en septembre selon les conditions climatiques. Les vols sont souvent observés par temps chaud, humide et avec peu de vent.
+
+Risques dans les bâtiments :
+Cette espèce ne cause généralement pas de dégâts structurels. Elle peut toutefois devenir gênante lorsqu'elle pénètre dans les cuisines, salons, vérandas, caves ou autour des fenêtres. Une forte présence peut indiquer un nid proche du bâtiment.
+
+Traitement recommandé :
+- Recherche des pistes de fourmis et des points d'entrée.
+- Traitement par gel insecticide professionnel sur les zones de passage.
+- Injection de poudre insecticide dans les fissures, seuils, rails de fenêtres, plinthes et vides.
+- Pulvérisation ciblée en périphérie extérieure si nécessaire.
+- Colmatage des fissures après traitement.
+- Suivi après quelques jours si l'activité persiste.
+
+Conclusion :
+La Lasius niger est une espèce très fréquente en extérieur. Sa présence dans le bâtiment est souvent liée à une recherche de nourriture ou à des accès ouverts depuis l'extérieur.` },
+  lasius_emarginatus: { titre: 'Lasius emarginatus — fourmi bicolore / des maisons', texte:
+`Identification :
+La Lasius emarginatus est une fourmi de petite taille, généralement entre 3 et 5 mm. Elle présente souvent un thorax brun-roux à brun clair, avec une tête et un abdomen plus foncés. Elle peut être confondue avec d'autres espèces du genre Lasius.
+
+Habitat :
+Cette espèce apprécie les endroits chauds et secs. On la rencontre souvent dans les murs, façades, fissures, cadres de fenêtres, seuils, terrasses, dalles et zones périphériques des bâtiments. Elle peut également être observée à l'intérieur.
+
+Période des vols nuptiaux :
+Les vols nuptiaux sont généralement observés de juin à juillet, parfois plus tard selon les conditions météorologiques.
+
+Risques dans les bâtiments :
+Elle peut former des nids dans les fissures, murs, façades ou zones creuses. Sa présence à l'intérieur peut devenir gênante, surtout lorsqu'elle suit des pistes régulières vers une source alimentaire.
+
+Traitement recommandé :
+- Inspection des cadres de fenêtres, seuils, plinthes, murs et fissures.
+- Injection de poudre insecticide professionnelle dans les fissures et cavités.
+- Application de gel insecticide sur les pistes actives.
+- Pulvérisation ciblée sur les zones périphériques et points d'entrée.
+- Colmatage après traitement afin d'éviter les récidives.
+
+Conclusion :
+La Lasius emarginatus est une espèce fréquemment associée aux bâtiments. Elle doit être traitée en ciblant les accès, fissures, murs creux et zones chaudes.` },
+  lasius_brunneus: { titre: 'Lasius brunneus — fourmi brune liée au bois', texte:
+`Identification :
+La Lasius brunneus est une petite fourmi, généralement de 2 à 4 mm. Elle possède souvent une coloration brunâtre, avec un thorax plus clair. Elle peut être difficile à identifier sans observation précise.
+
+Habitat :
+Cette espèce est souvent liée au bois mort, humide ou dégradé, notamment le bois attaqué par des champignons. Elle peut se retrouver dans des arbres, souches, poutres, cadres, charpentes ou éléments en bois fragilisés.
+
+Période des vols nuptiaux :
+Les vols nuptiaux peuvent apparaître dès le mois de mai, parfois dans les bâtiments, souvent en soirée ou durant la nuit selon les conditions.
+
+Risques dans les bâtiments :
+Sa présence peut indiquer un problème d'humidité ou de bois dégradé. Elle ne doit pas être confondue avec un insecte xylophage classique, car elle ne se nourrit pas du bois, mais peut utiliser des cavités existantes ou du bois déjà affaibli.
+
+Traitement recommandé :
+- Inspection du bois, des poutres, cadres, plinthes et zones humides.
+- Recherche d'humidité, de champignons ou de bois ramolli.
+- Identification au microscope numérique si nécessaire.
+- Traitement par injection de poudre insecticide dans les cavités actives.
+- Suppression ou remplacement du bois fortement dégradé si nécessaire.
+- Correction de la cause d'humidité.
+
+Conclusion :
+La présence de Lasius brunneus doit attirer l'attention sur l'état du bois. Il est important d'évaluer l'humidité et la dégradation des éléments en bois.` },
+  lasius_flavus: { titre: 'Lasius flavus — fourmi jaune', texte:
+`Identification :
+La Lasius flavus est une petite fourmi de couleur jaune à jaune-brun. Elle est souvent moins visible que les autres espèces, car elle vit principalement sous terre.
+
+Habitat :
+Elle vit principalement dans les pelouses, prairies, jardins, talus et zones herbeuses. Elle construit souvent des nids souterrains et peut produire de petits monticules de terre.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu de juillet à septembre, souvent après des périodes chaudes et humides.
+
+Risques dans les bâtiments :
+Cette espèce pose rarement problème à l'intérieur des bâtiments. Elle peut toutefois être observée près des façades, terrasses ou pelouses autour des habitations.
+
+Traitement recommandé :
+- Traitement uniquement si la présence devient gênante.
+- Pulvérisation ciblée autour des zones actives.
+- Traitement localisé des nids extérieurs si nécessaire.
+- Surveillance après traitement.
+
+Conclusion :
+La Lasius flavus est surtout une espèce extérieure. Elle est rarement problématique dans les bâtiments, sauf en cas de forte activité proche des accès.` },
+  tetramorium: { titre: 'Tetramorium caespitum / immigrans — fourmi des pavés', texte:
+`Identification :
+Petite fourmi brun foncé à noire, généralement de 2,5 à 4 mm. Elle est souvent observée sur les dalles, pavés, terrasses, trottoirs et zones minérales.
+
+Habitat :
+Cette espèce vit fréquemment sous les pavés, dalles, terrasses, bordures, fissures de béton, murs et seuils. Elle apprécie les zones minérales chauffées par le soleil.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu de juin à août, avec une forte activité possible en début d'été selon les conditions.
+
+Risques dans les bâtiments :
+Elle peut entrer dans les bâtiments par les fissures, seuils, joints de terrasse, rails de portes-fenêtres ou cadres. Elle peut devenir gênante dans les cuisines, vérandas, caves ou locaux techniques.
+
+Traitement recommandé :
+- Inspection des dalles, pavés, seuils, terrasses et fissures.
+- Traitement par pulvérisation ciblée autour des zones minérales.
+- Injection de poudre insecticide dans les fissures, joints et seuils.
+- Gel insecticide si des pistes alimentaires sont visibles.
+- Colmatage des accès après traitement.
+
+Conclusion :
+La fourmi des pavés est très fréquente autour des bâtiments. Le traitement doit viser les dalles, seuils, terrasses et fissures périphériques.` },
+  myrmica_rubra: { titre: 'Myrmica rubra — fourmi rouge (piqueuse)', texte:
+`Identification :
+La Myrmica rubra est une fourmi rougeâtre, généralement de 4 à 6 mm. Elle peut piquer ou provoquer une sensation de brûlure lorsqu'elle est dérangée.
+
+Habitat :
+Elle vit souvent dans les jardins, prairies humides, bordures, zones herbeuses, sols frais, massifs et zones proches de l'humidité.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu d'août à septembre, selon la météo.
+
+Risques dans les bâtiments :
+Elle pose surtout problème en extérieur, dans les jardins, terrasses, places de jeux ou zones de passage. Sa présence à l'intérieur est moins fréquente, mais possible près des accès ou zones humides.
+
+Traitement recommandé :
+- Localisation précise du nid extérieur.
+- Pulvérisation ciblée sur les zones de passage.
+- Traitement localisé du nid si accessible.
+- Protection des zones sensibles, notamment terrasses et places de jeux.
+- Éviter les traitements dispersants non ciblés.
+
+Conclusion :
+La Myrmica rubra est principalement une fourmi extérieure. Elle peut être gênante à cause de ses piqûres et doit être traitée de manière localisée.` },
+  camponotus_ligniperda: { titre: 'Camponotus ligniperda — grande fourmi charpentière', texte:
+`Identification :
+La Camponotus ligniperda est une grande fourmi, parmi les plus grandes espèces indigènes. Les ouvrières peuvent présenter différentes tailles. La coloration est souvent noire avec des zones brun-rougeâtre. Les reines sont nettement plus grandes.
+
+Habitat :
+Elle vit naturellement dans les bois morts, souches, troncs, arbres, forêts et zones boisées. Elle peut aussi s'installer dans des éléments en bois, poutres, bardages, cloisons, isolations ou charpentes si les conditions sont favorables.
+
+Période des vols nuptiaux :
+Les vols nuptiaux peuvent avoir lieu de mai à août, souvent plus tôt que certaines petites espèces de fourmis.
+
+Risques dans les bâtiments :
+Cette espèce peut creuser ou utiliser des galeries dans le bois, surtout lorsque celui-ci est humide, dégradé ou déjà affaibli. Elle peut également s'installer dans des isolations ou cavités. Une inspection technique est indispensable.
+
+Traitement recommandé :
+- Inspection complète du bois, des poutres, bardages, charpentes et isolations.
+- Recherche de sciure, galeries, bruits, ouvrières de grande taille et points d'entrée.
+- Détection acoustique si nécessaire.
+- Traitement par injection ciblée dans les zones actives.
+- Traitement insecticide professionnel adapté aux cavités.
+- Correction de l'humidité et remplacement du bois trop dégradé si nécessaire.
+- Suivi obligatoire après traitement.
+
+Conclusion :
+La Camponotus ligniperda doit être prise au sérieux lorsqu'elle est observée dans une structure en bois. Une expertise du bois est recommandée afin d'évaluer l'activité et les risques.` },
+  camponotus_herculeanus: { titre: 'Camponotus herculeanus — fourmi charpentière des bois', texte:
+`Identification :
+Grande fourmi du genre Camponotus, de couleur sombre, avec des ouvrières de tailles variables. Elle ressemble à d'autres fourmis charpentières et nécessite parfois une identification précise.
+
+Habitat :
+Elle est souvent liée aux zones boisées, troncs, souches, bois mort, bois humide ou éléments en bois anciens. Elle peut être rencontrée dans les régions forestières ou proches des bâtiments avec présence de bois.
+
+Période des vols nuptiaux :
+Les vols nuptiaux se produisent généralement entre juin et juillet, parfois plus largement selon l'altitude et la météo.
+
+Risques dans les bâtiments :
+Elle peut s'installer dans le bois fragilisé, humide ou dégradé. Sa présence dans une charpente, une poutre ou un bardage doit faire l'objet d'une inspection approfondie.
+
+Traitement recommandé :
+- Inspection du bois et des zones humides.
+- Recherche de galeries, sciure, points d'entrée et activité nocturne.
+- Traitement par injection ciblée dans les cavités.
+- Correction des causes d'humidité.
+- Remplacement des éléments très dégradés si nécessaire.
+- Suivi technique après intervention.
+
+Conclusion :
+La Camponotus herculeanus est une espèce liée au bois. Elle peut devenir problématique si elle s'installe dans des éléments structurels ou des zones humides du bâtiment.` },
+  camponotus_vagus: { titre: 'Camponotus vagus — fourmi charpentière noire', texte:
+`Identification :
+Grande fourmi noire, souvent observée à proximité du bois mort, des arbres, souches ou zones chaudes. Les ouvrières peuvent être de tailles différentes.
+
+Habitat :
+Elle vit principalement dans le bois mort, les souches, troncs, arbres morts ou bois dégradé. Elle peut être observée près des bâtiments lorsque du bois ancien, humide ou stocké est présent.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu de juin à août selon les conditions.
+
+Risques dans les bâtiments :
+Elle peut indiquer la présence de bois dégradé ou de cavités favorables. Sa présence dans ou autour d'une structure en bois doit être contrôlée.
+
+Traitement recommandé :
+- Inspection des bois extérieurs, bardages, poutres, souches et zones humides.
+- Élimination des bois morts ou stockés contre le bâtiment.
+- Traitement localisé des zones actives.
+- Injection de poudre insecticide si présence dans une cavité.
+- Correction des causes favorables.
+
+Conclusion :
+La Camponotus vagus est principalement liée au bois mort. Sa présence près d'un bâtiment doit conduire à vérifier les bois dégradés et les points d'entrée.` },
+  formica_rufa: { titre: 'Formica rufa / polyctena — fourmis rousses des bois (protégées)', texte:
+`Identification :
+Fourmis de taille moyenne à grande, généralement rougeâtres et noires. Elles construisent souvent de grandes fourmilières en dôme avec des aiguilles, brindilles et matériaux végétaux.
+
+Habitat :
+Elles vivent principalement en forêt, lisières, clairières, chemins forestiers et zones boisées. Elles jouent un rôle écologique important.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu au printemps ou au début de l'été, selon les espèces et les conditions.
+
+Risques dans les bâtiments :
+Ces espèces ne sont généralement pas des nuisibles du bâtiment. Elles sont principalement forestières et utiles à l'écosystème.
+
+Traitement recommandé :
+- Ne pas traiter sans nécessité.
+- Ne pas détruire les fourmilières forestières.
+- Évaluer la situation si elles se trouvent très proches d'une habitation.
+- Orienter vers une solution respectueuse de l'environnement si nécessaire.
+
+Conclusion :
+Les fourmis rousses des bois ont un rôle écologique important. Elles ne doivent pas être traitées comme des nuisibles classiques, sauf cas très particulier et après évaluation.` },
+  monomorium_pharaonis: { titre: 'Monomorium pharaonis — fourmi pharaon', texte:
+`Identification :
+La fourmi pharaon est une très petite fourmi, souvent jaune à brun clair, avec une taille généralement proche de 2 mm. Elle est discrète, rapide et peut former plusieurs nids dans un même bâtiment.
+
+Habitat :
+Elle vit principalement dans les bâtiments chauffés : immeubles, hôpitaux, EMS, cuisines, restaurants, locaux techniques, gaines, faux plafonds, murs creux et zones chaudes.
+
+Période des vols nuptiaux :
+La fourmi pharaon ne réalise généralement pas de vol nuptial extérieur classique. L'accouplement se fait dans le nid, ce qui favorise la formation de colonies satellites.
+
+Risques dans les bâtiments :
+C'est une espèce très problématique en bâtiment. Elle peut se disperser dans les gaines, murs, locaux techniques et étages. Un mauvais traitement peut provoquer une fragmentation de la colonie et aggraver l'infestation.
+
+Traitement recommandé :
+- Ne pas pulvériser de manière agressive.
+- Ne pas utiliser de répulsif ou traitement dispersant.
+- Utiliser uniquement des appâts professionnels adaptés.
+- Traiter l'ensemble du bâtiment si plusieurs zones sont touchées.
+- Réaliser un suivi sur plusieurs semaines.
+- Identifier les zones chaudes, gaines, cuisines, locaux techniques et salles d'eau.
+- Informer les occupants de ne pas utiliser d'insecticide grand public.
+
+Conclusion :
+La fourmi pharaon nécessite une stratégie spécifique par appâts. Un traitement inadapté peut disperser les colonies et rendre l'infestation beaucoup plus difficile à maîtriser.` },
+  tapinoma_magnum: { titre: 'Tapinoma magnum — fourmi invasive', texte:
+`Identification :
+La Tapinoma magnum est une fourmi noire brillante, généralement de petite taille, mais avec des ouvrières de tailles variables dans une même colonie. Elle peut former de très grandes colonies avec de nombreuses reines.
+
+Habitat :
+Elle se développe dans les sols, jardins, trottoirs, dalles, murs, terrasses, bordures, espaces verts, gaines et zones urbaines. Elle peut pénétrer dans les bâtiments par les fissures, seuils, gaines et zones techniques.
+
+Période des vols nuptiaux :
+Les vols nuptiaux peuvent varier selon les conditions, mais l'espèce se développe surtout durant la période chaude. Sa progression est surtout liée à la présence de colonies très importantes et de nombreux nids annexes.
+
+Risques dans les bâtiments :
+Cette espèce invasive peut devenir très difficile à maîtriser lorsqu'elle est installée. Elle peut former des supercolonies, envahir des jardins, trottoirs, bâtiments et locaux techniques. Elle peut provoquer une gêne importante pour les habitants.
+
+Traitement recommandé :
+- Identification précise indispensable.
+- Cartographie des zones actives.
+- Traitement global et non uniquement localisé.
+- Application de gels ou appâts adaptés selon la situation.
+- Traitement des fissures, joints, seuils, murs et périphéries.
+- Plusieurs passages nécessaires.
+- Suivi régulier sur plusieurs semaines ou mois.
+- Collaboration avec la commune ou la gérance si l'infestation dépasse une seule parcelle.
+
+Conclusion :
+La Tapinoma magnum est une espèce invasive à fort potentiel de développement. Une intervention rapide, globale et suivie est recommandée afin d'éviter son extension.` },
+  linepithema_humile: { titre: "Linepithema humile — fourmi d'Argentine (invasive)", texte:
+`Identification :
+Petite fourmi brun clair à brun foncé, souvent très mobile. Elle peut former de très grandes colonies avec plusieurs reines.
+
+Habitat :
+Elle est surtout connue dans les zones urbaines, jardins, serres, bâtiments chauffés, zones humides et régions favorables. Elle peut se déplacer en longues pistes très actives.
+
+Période des vols nuptiaux :
+Cette espèce forme surtout de grandes colonies par extension et déplacement des reines. Le développement dépend fortement des conditions climatiques et de la chaleur.
+
+Risques dans les bâtiments :
+Elle peut envahir les bâtiments, cuisines, locaux techniques, jardins et zones extérieures. Elle est difficile à éliminer en raison de ses colonies étendues et de la présence de nombreuses reines.
+
+Traitement recommandé :
+- Identification précise.
+- Traitement par appâts professionnels adaptés.
+- Éviter les pulvérisations répulsives seules.
+- Traiter les pistes, zones d'entrée et périphéries.
+- Réaliser plusieurs passages.
+- Suivi régulier indispensable.
+
+Conclusion :
+La fourmi d'Argentine est une espèce invasive pouvant former de très grandes colonies. Le traitement doit être global, progressif et suivi.` },
+  lasius_fuliginosus: { titre: 'Lasius fuliginosus — fourmi fuligineuse', texte:
+`Identification :
+Fourmi noire brillante, souvent légèrement plus grande que Lasius niger. Elle peut dégager une odeur caractéristique lorsqu'elle est écrasée. Elle forme parfois des pistes très visibles.
+
+Habitat :
+Elle vit souvent près du bois, des arbres, souches, cavités, murs, bâtiments anciens ou zones avec matériaux organiques. Elle peut établir des nids dans des cavités ou zones protégées.
+
+Période des vols nuptiaux :
+Les vols nuptiaux ont généralement lieu durant l'été, selon les conditions climatiques.
+
+Risques dans les bâtiments :
+Elle peut être observée dans les vieux bâtiments, cavités, murs, zones boisées ou structures proches d'arbres. Sa présence peut indiquer une cavité favorable ou du bois ancien à proximité.
+
+Traitement recommandé :
+- Recherche des pistes extérieures et intérieures.
+- Inspection des arbres, souches, murs, façades et cavités.
+- Traitement localisé des zones actives.
+- Injection dans les fissures ou cavités si nécessaire.
+- Correction des points d'entrée.
+
+Conclusion :
+La Lasius fuliginosus peut être liée aux cavités, arbres et vieux bâtiments. Une inspection des points d'entrée et des zones boisées proches est recommandée.` }
 };
 
 function openNewFourmis() {
@@ -10457,7 +10774,7 @@ function renderFourmisEditor() {
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer;">
       <input type="checkbox" ${(d.actions||[]).includes(n)?'checked':''} onchange="toggleDiagList('actions','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
     </label>`).join('');
-  const fichesBtns = Object.keys(FOURMIS_FICHES).map(k => `<button type="button" class="btn btn-navy btn-sm" onclick="fourmisAddFiche('${k}')" style="font-size:12px;">📋 ${FOURMIS_FICHES[k].titre}</button>`).join(' ');
+  const fichesOpts = Object.keys(FOURMIS_FICHES).map(k => `<option value="${k}">${FOURMIS_FICHES[k].titre.replace(/</g,'&lt;')}</option>`).join('');
   box.innerHTML = `
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐜 Identification</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
@@ -10535,7 +10852,11 @@ function renderFourmisEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📋 Fiches techniques (annexées au PDF)</div>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:14px;">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${fichesBtns}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+        <select class="form-input" style="max-width:440px;font-size:12px;" onchange="if(this.value){fourmisAddFiche(this.value);this.selectedIndex=0;}">
+          <option value="">＋ Insérer une fiche technique…</option>
+          ${fichesOpts}
+        </select>
         <button type="button" class="btn btn-ghost btn-sm" onclick="_editingDiag.fiche='';var t=$('diag-ta-fiche');if(t)t.value='';refreshDiagPreview();" style="font-size:12px;">🗑 Vider</button>
       </div>
       <textarea class="form-input" id="diag-ta-fiche" rows="3" oninput="_editingDiag.fiche=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Clique une fiche ci-dessus pour insérer son texte (modifiable). Elle apparaîtra en annexe du PDF.">${(d.fiche||'').replace(/</g,'&lt;')}</textarea>
