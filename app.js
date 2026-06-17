@@ -511,11 +511,36 @@ function _noteFocus(key){ const el = $('note-' + key); if (el) el.focus(); retur
 function noteExec(key, cmd){ _noteFocus(key); try { document.execCommand(cmd, false, null); } catch (e) {} noteOnInput(key); }
 function noteFont(key, val){ _noteFocus(key); try { document.execCommand('fontName', false, val); } catch (e) {} noteOnInput(key); }
 function noteSize(key, val){ _noteFocus(key); try { document.execCommand('fontSize', false, val); } catch (e) {} noteOnInput(key); }
-function noteColor(key, hex){ _noteFocus(key); try { document.execCommand(_noteHL[key] ? 'hiliteColor' : 'foreColor', false, hex); } catch (e) {} noteOnInput(key); }
-function noteToggleHL(key){
-  _noteHL[key] = !_noteHL[key];
-  const b = $('hl-' + key);
-  if (b) { b.style.background = _noteHL[key] ? '#fde68a' : ''; b.style.color = _noteHL[key] ? '#7c2d12' : ''; }
+function noteColor(key, hex){ _noteFocus(key); try { document.execCommand('foreColor', false, hex); } catch (e) {} noteOnInput(key); }
+// Insère une case à cocher cliquable (tâche à valider) au curseur
+function noteAddTask(key){
+  const el = _noteFocus(key); if (!el) return;
+  const sel = window.getSelection();
+  let range;
+  if (sel.rangeCount && el.contains(sel.anchorNode)) { range = sel.getRangeAt(0); }
+  else { range = document.createRange(); range.selectNodeContents(el); range.collapse(false); }
+  range.deleteContents();
+  const sp = document.createElement('span'); sp.className = 'note-txt'; sp.innerHTML = '&nbsp;';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'note-cb'; cb.setAttribute('contenteditable', 'false');
+  range.insertNode(sp);
+  range.insertNode(cb);
+  const r2 = document.createRange(); r2.setStart(sp, 0); r2.collapse(true);
+  sel.removeAllRanges(); sel.addRange(r2);
+  noteOnInput(key);
+}
+// Délégation : cocher/décocher une case persiste l'état (attribut checked) et sauvegarde
+function initNoteEditors(){
+  _NOTE_KEYS.forEach(function(key){
+    const el = $('note-' + key); if (!el || el.dataset.init) return;
+    el.dataset.init = '1';
+    el.addEventListener('change', function(e){
+      const t = e.target;
+      if (t && t.classList && t.classList.contains('note-cb')) {
+        if (t.checked) t.setAttribute('checked', ''); else t.removeAttribute('checked');
+        noteOnInput(key);
+      }
+    });
+  });
 }
 function initNotePalettes(){
   _NOTE_KEYS.forEach(function(key){
@@ -534,6 +559,7 @@ function initNotePalettes(){
 async function loadDashNotes(){
   if (!sb) return;
   initNotePalettes();
+  initNoteEditors();
   for (const key of _NOTE_KEYS) {
     const el = $('note-' + key); if (!el) continue;
     if (document.activeElement === el) continue;   // ne pas écraser pendant la frappe

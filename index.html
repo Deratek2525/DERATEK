@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260611uo">
+<link rel="stylesheet" href="./style.css?v=20260611up">
 </head>
 <body>
 
@@ -381,6 +381,8 @@
         #notes-grid .note-hl{border:1px solid #e8eaf0;background:#fff;border-radius:9px;padding:5px 11px;font-size:12px;cursor:pointer;color:#374151;}
         #notes-grid .note-ed{min-height:150px;padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;outline:none;overflow:auto;color:#1f2937;}
         #notes-grid .note-ed:empty:before{content:attr(data-ph);color:#aab1bd;}
+        #notes-grid .note-cb{margin-right:6px;vertical-align:middle;cursor:pointer;width:15px;height:15px;accent-color:#16a34a;}
+        #notes-grid .note-cb:checked + .note-txt{text-decoration:line-through;color:#9aa1ad;}
       </style>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" id="notes-grid">
         <div class="note-card">
@@ -402,7 +404,7 @@
               <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','strikeThrough')" title="Barré (rayer ce qui est fait)" style="text-decoration:line-through;">S</button>
             </span>
             <span id="pal-jessy" style="display:inline-flex;gap:4px;align-items:center;"></span>
-            <button type="button" id="hl-jessy" class="note-hl" onmousedown="event.preventDefault()" onclick="noteToggleHL('jessy')" title="Surlignement">Surligner</button>
+            <button type="button" class="note-hl" onmousedown="event.preventDefault()" onclick="noteAddTask('jessy')" title="Insérer une case à cocher — clique la case pour valider une fois fait">&#9745; Tâche</button>
             <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','removeFormat')" title="Effacer la mise en forme">&#8635;</button>
           </div>
           <div id="note-jessy" contenteditable="true" class="note-ed" data-ph="Écris ici… (sauvegarde automatique)" oninput="noteOnInput('jessy')"></div>
@@ -426,7 +428,7 @@
               <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','strikeThrough')" title="Barré (rayer ce qui est fait)" style="text-decoration:line-through;">S</button>
             </span>
             <span id="pal-dany" style="display:inline-flex;gap:4px;align-items:center;"></span>
-            <button type="button" id="hl-dany" class="note-hl" onmousedown="event.preventDefault()" onclick="noteToggleHL('dany')" title="Surlignement">Surligner</button>
+            <button type="button" class="note-hl" onmousedown="event.preventDefault()" onclick="noteAddTask('dany')" title="Insérer une case à cocher — clique la case pour valider une fois fait">&#9745; Tâche</button>
             <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','removeFormat')" title="Effacer la mise en forme">&#8635;</button>
           </div>
           <div id="note-dany" contenteditable="true" class="note-ed" data-ph="Écris ici… (sauvegarde automatique)" oninput="noteOnInput('dany')"></div>
@@ -1424,10 +1426,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260611uo"></script>
-<script src="./footer_prestations.js?v=20260611uo"></script>
-<script src="./config.js?v=20260611uo"></script>
-<script src="./app.js?v=20260611uo"></script>
-<script src="./pdf.js?v=20260611uo"></script>
+<script src="./logo.js?v=20260611up"></script>
+<script src="./footer_prestations.js?v=20260611up"></script>
+<script src="./config.js?v=20260611up"></script>
+<script src="./app.js?v=20260611up"></script>
+<script src="./pdf.js?v=20260611up"></script>
 
 </body></html>
