@@ -523,8 +523,8 @@ function initNotePalettes(){
     pal.dataset.done = '1';
     _NOTE_COLORS.forEach(function(hex){
       const d = document.createElement('button');
-      d.type = 'button'; d.title = 'Couleur';
-      d.style.cssText = 'width:18px;height:18px;border-radius:50%;border:1px solid #d1d5db;cursor:pointer;padding:0;background:' + hex + ';';
+      d.type = 'button'; d.title = 'Couleur'; d.className = 'note-sw';
+      d.style.background = hex;
       d.onmousedown = function(e){ e.preventDefault(); };
       d.onclick = function(){ noteColor(key, hex); };
       pal.appendChild(d);

@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260611um">
+<link rel="stylesheet" href="./style.css?v=20260611un">
 </head>
 <body>
 
@@ -366,52 +366,68 @@
     </div>
     <div class="page-body">
       <div class="stats-grid" id="dash-stats"></div>
+      <style>
+        #notes-grid .note-card{background:#fff;border:1px solid #eef0f4;border-radius:16px;box-shadow:0 1px 4px rgba(13,27,62,.05);overflow:hidden;}
+        #notes-grid .note-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f1f3f7;}
+        #notes-grid .note-id{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--navy,#0d1b3e);font-size:14px;}
+        #notes-grid .note-ava{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;}
+        #notes-grid .note-tb{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:#f7f8fb;border-bottom:1px solid #f1f3f7;}
+        #notes-grid .note-grp{display:inline-flex;gap:2px;background:#fff;border:1px solid #e8eaf0;border-radius:10px;padding:2px;}
+        #notes-grid .tbtn{border:none;background:transparent;border-radius:8px;padding:5px 9px;font-size:13px;color:#374151;cursor:pointer;line-height:1;min-width:30px;transition:background .1s;}
+        #notes-grid .tbtn:hover{background:#eef1f6;}
+        #notes-grid .note-tb select{border:1px solid #e8eaf0;border-radius:9px;background:#fff;font-size:12px;padding:5px 7px;color:#374151;cursor:pointer;}
+        #notes-grid .note-sw{width:16px;height:16px;border-radius:50%;border:2px solid #fff;outline:1px solid #e3e6ee;cursor:pointer;padding:0;transition:transform .1s;}
+        #notes-grid .note-sw:hover{transform:scale(1.3);}
+        #notes-grid .note-hl{border:1px solid #e8eaf0;background:#fff;border-radius:9px;padding:5px 11px;font-size:12px;cursor:pointer;color:#374151;}
+        #notes-grid .note-ed{min-height:150px;padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;outline:none;overflow:auto;color:#1f2937;}
+        #notes-grid .note-ed:empty:before{content:attr(data-ph);color:#aab1bd;}
+      </style>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" id="notes-grid">
-        <div class="card">
-          <div class="card-hd">
-            <span class="card-title">📝 Bloc-notes — Jessy</span>
-            <span id="note-status-jessy" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
+        <div class="note-card">
+          <div class="note-top">
+            <span class="note-id"><span class="note-ava" style="background:#0d9488;">J</span> Bloc-notes — Jessy</span>
+            <span id="note-status-jessy" class="note-status" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
           </div>
-          <div style="padding:10px 14px 14px;">
-            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-              <select onchange="noteFont('jessy',this.value)" title="Police" style="font-size:12px;padding:3px 6px;width:auto;">
-                <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
-              </select>
-              <select onchange="noteSize('jessy',this.value)" title="Taille" style="font-size:12px;padding:3px 6px;width:auto;">
-                <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
-              </select>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','bold')" title="Gras" style="font-weight:800;min-width:30px;">B</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','italic')" title="Italique" style="font-style:italic;min-width:30px;">I</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','insertUnorderedList')" title="Puces (astérisque)" style="min-width:30px;">&bull;</button>
-              <span id="pal-jessy" style="display:inline-flex;gap:3px;align-items:center;"></span>
-              <button type="button" id="hl-jessy" onmousedown="event.preventDefault()" onclick="noteToggleHL('jessy')" title="Surlignement" style="font-size:12px;">Surligner</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('jessy','removeFormat')" title="Effacer la mise en forme" style="font-size:12px;">&#8635;</button>
-            </div>
-            <div id="note-jessy" contenteditable="true" class="form-input" style="min-height:130px;font-family:Arial,Helvetica,sans-serif;font-size:14px;overflow:auto;line-height:1.5;" oninput="noteOnInput('jessy')"></div>
+          <div class="note-tb">
+            <select onchange="noteFont('jessy',this.value)" title="Police">
+              <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
+            </select>
+            <select onchange="noteSize('jessy',this.value)" title="Taille">
+              <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
+            </select>
+            <span class="note-grp">
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','bold')" title="Gras" style="font-weight:800;">B</button>
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','italic')" title="Italique" style="font-style:italic;">I</button>
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','insertUnorderedList')" title="Puces">&bull;</button>
+            </span>
+            <span id="pal-jessy" style="display:inline-flex;gap:4px;align-items:center;"></span>
+            <button type="button" id="hl-jessy" class="note-hl" onmousedown="event.preventDefault()" onclick="noteToggleHL('jessy')" title="Surlignement">Surligner</button>
+            <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('jessy','removeFormat')" title="Effacer la mise en forme">&#8635;</button>
           </div>
+          <div id="note-jessy" contenteditable="true" class="note-ed" data-ph="Écris ici… (sauvegarde automatique)" oninput="noteOnInput('jessy')"></div>
         </div>
-        <div class="card">
-          <div class="card-hd">
-            <span class="card-title">📝 Bloc-notes — Dany</span>
-            <span id="note-status-dany" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
+        <div class="note-card">
+          <div class="note-top">
+            <span class="note-id"><span class="note-ava" style="background:#2563eb;">D</span> Bloc-notes — Dany</span>
+            <span id="note-status-dany" class="note-status" style="font-size:11px;font-weight:700;color:var(--g400);"></span>
           </div>
-          <div style="padding:10px 14px 14px;">
-            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-              <select onchange="noteFont('dany',this.value)" title="Police" style="font-size:12px;padding:3px 6px;width:auto;">
-                <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
-              </select>
-              <select onchange="noteSize('dany',this.value)" title="Taille" style="font-size:12px;padding:3px 6px;width:auto;">
-                <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
-              </select>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','bold')" title="Gras" style="font-weight:800;min-width:30px;">B</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','italic')" title="Italique" style="font-style:italic;min-width:30px;">I</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','insertUnorderedList')" title="Puces (astérisque)" style="min-width:30px;">&bull;</button>
-              <span id="pal-dany" style="display:inline-flex;gap:3px;align-items:center;"></span>
-              <button type="button" id="hl-dany" onmousedown="event.preventDefault()" onclick="noteToggleHL('dany')" title="Surlignement" style="font-size:12px;">Surligner</button>
-              <button type="button" onmousedown="event.preventDefault()" onclick="noteExec('dany','removeFormat')" title="Effacer la mise en forme" style="font-size:12px;">&#8635;</button>
-            </div>
-            <div id="note-dany" contenteditable="true" class="form-input" style="min-height:130px;font-family:Arial,Helvetica,sans-serif;font-size:14px;overflow:auto;line-height:1.5;" oninput="noteOnInput('dany')"></div>
+          <div class="note-tb">
+            <select onchange="noteFont('dany',this.value)" title="Police">
+              <option value="Arial" selected>Arial</option><option value="Helvetica">Helvetica</option><option value="Times New Roman">Times</option><option value="Courier New">Courier</option><option value="Verdana">Verdana</option>
+            </select>
+            <select onchange="noteSize('dany',this.value)" title="Taille">
+              <option value="2">Petite</option><option value="3" selected>Normale</option><option value="5">Grande</option><option value="6">Très grande</option>
+            </select>
+            <span class="note-grp">
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','bold')" title="Gras" style="font-weight:800;">B</button>
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','italic')" title="Italique" style="font-style:italic;">I</button>
+              <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','insertUnorderedList')" title="Puces">&bull;</button>
+            </span>
+            <span id="pal-dany" style="display:inline-flex;gap:4px;align-items:center;"></span>
+            <button type="button" id="hl-dany" class="note-hl" onmousedown="event.preventDefault()" onclick="noteToggleHL('dany')" title="Surlignement">Surligner</button>
+            <button type="button" class="tbtn" onmousedown="event.preventDefault()" onclick="noteExec('dany','removeFormat')" title="Effacer la mise en forme">&#8635;</button>
           </div>
+          <div id="note-dany" contenteditable="true" class="note-ed" data-ph="Écris ici… (sauvegarde automatique)" oninput="noteOnInput('dany')"></div>
         </div>
       </div>
       <div class="card" style="margin-bottom:14px;display:none;border:1.5px solid #e63946;" id="impayes-card">
@@ -1406,10 +1422,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260611um"></script>
-<script src="./footer_prestations.js?v=20260611um"></script>
-<script src="./config.js?v=20260611um"></script>
-<script src="./app.js?v=20260611um"></script>
-<script src="./pdf.js?v=20260611um"></script>
+<script src="./logo.js?v=20260611un"></script>
+<script src="./footer_prestations.js?v=20260611un"></script>
+<script src="./config.js?v=20260611un"></script>
+<script src="./app.js?v=20260611un"></script>
+<script src="./pdf.js?v=20260611un"></script>
 
 </body></html>
