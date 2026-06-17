@@ -4117,6 +4117,7 @@ function renderBonCard(b, solid) {
                   <option value="bois">🪵 Insectes du bois</option>
                   <option value="rongeurs">🐀 Rongeurs</option>
                   <option value="blattes">🪳 Blattes</option>
+                  <option value="fourmis">🐜 Fourmis</option>
                 </select>
                 <button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#16a34a' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
                 })()}
@@ -5033,7 +5034,7 @@ function createRapportTypeFromBon(bonId, type) {
   if (type === 'general') { createRapportFromBon(bonId); return; }
   const bon = (DB.bons || []).find(b => b.id === bonId);
   if (!bon) { toast('Bon introuvable', '#e63946'); return; }
-  if (type === 'rongeurs') openNewRongeurs(); else if (type === 'blattes') openNewBlattes(); else openNewDiagnostic();
+  if (type === 'rongeurs') openNewRongeurs(); else if (type === 'blattes') openNewBlattes(); else if (type === 'fourmis') openNewFourmis(); else openNewDiagnostic();
   autoFillDiagFromBon(bon.numero || '');
 }
 
@@ -6810,10 +6811,10 @@ const _DIAG_MARKERS = {
   rodenticideAutre: 'RODAUTRE', postesNb: 'POSTNB', suiviRem: 'SUIVREM',
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
-  statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN', noHum: 'NOHUM', hygiene: 'HYGIENE',
+  statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN', noHum: 'NOHUM', hygiene: 'HYGIENE', fiche: 'FICHE',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|HYGIENE):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|HYGIENE|FICHE):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -6930,7 +6931,7 @@ function _diagSectionToggle(field, label) {
 let _editingDiag = null;
 
 // Type d'un document de la table diagnostics : 'bois' (DG-) ou 'rongeurs' (RG-)
-function _diagType(d) { const n = (d && d.numero) || ''; if (n.startsWith('RG-')) return 'rongeurs'; if (n.startsWith('BL-')) return 'blattes'; return 'bois'; }
+function _diagType(d) { const n = (d && d.numero) || ''; if (n.startsWith('RG-')) return 'rongeurs'; if (n.startsWith('BL-')) return 'blattes'; if (n.startsWith('FM-')) return 'fourmis'; return 'bois'; }
 function _nextDiagNumero(prefix) {
   prefix = prefix || 'DG';
   const year = new Date().getFullYear();
@@ -6969,6 +6970,7 @@ function renderDiagEditor() {
   const d = _editingDiag; if (!d) return;
   if (_diagType(d) === 'rongeurs') return renderRongeursEditor();
   if (_diagType(d) === 'blattes') return renderBlattesEditor();
+  if (_diagType(d) === 'fourmis') return renderFourmisEditor();
   const box = $('modal-diag-body'); if (!box) return;
   const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
   const insectesHtml = INSECTES_BOIS.map(n => `
@@ -8526,6 +8528,8 @@ async function diagAICorrect(field) {
         ? "un rapport spécial rongeurs (dératisation), "
         : _diagType(_editingDiag) === 'blattes'
         ? "un rapport spécial blattes/cafards (désinsectisation), "
+        : _diagType(_editingDiag) === 'fourmis'
+        ? "un rapport spécial fourmis (désinsectisation), "
         : "un rapport de diagnostic d'insectes xylophages (bois/charpentes), ") +
       "plus précisément " + (_DIAG_AI_LABELS[field] || 'une section du rapport') + ". " +
       "Corrige l'orthographe et la grammaire, et améliore la formulation pour un ton professionnel et factuel. " +
@@ -8597,7 +8601,7 @@ function saveDiag(statut, keepOpen) {
   DB.diagnostics = list;
   renderDiagnostics();
   if (keepOpen) { toast('💾 Enregistré — tu peux continuer à travailler.', '#0f766e'); return; }
-  if (_editingDiag.statut === 'Finalisé') { const _dt = _diagType(_editingDiag); toast('✓ ' + (_dt==='rongeurs'?'Rapport rongeurs':_dt==='blattes'?'Rapport blattes':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b'); }
+  if (_editingDiag.statut === 'Finalisé') { const _dt = _diagType(_editingDiag); toast('✓ ' + (_dt==='rongeurs'?'Rapport rongeurs':_dt==='blattes'?'Rapport blattes':_dt==='fourmis'?'Rapport fourmis':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b'); }
   else toast('🕒 Enregistré comme brouillon — à reprendre plus tard.', '#d97706');
   closeModal('modal-diag');
 }
@@ -8608,6 +8612,7 @@ function downloadCurrentDiagPDF() {
   if (c) { try { _editingDiag.schema = c.toDataURL('image/png'); } catch (e) {} }
   if (_diagType(_editingDiag) === 'rongeurs') _genRongeursPDF(_editingDiag);
   else if (_diagType(_editingDiag) === 'blattes') _genBlattesPDF(_editingDiag);
+  else if (_diagType(_editingDiag) === 'fourmis') _genFourmisPDF(_editingDiag);
   else _genDiagPDF(_editingDiag);
 }
 function confirmDeleteDiag(id, label) {
@@ -8631,7 +8636,7 @@ function renderDiagnostics() {
     <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🔬 Diagnostics & rapports spéciaux (${list.length})</div>
     <div style="display:flex;flex-direction:column;gap:6px;">
       ${list.map(d => {
-        const _dt = _diagType(d); const rg = _dt==='rongeurs'; const bl = _dt==='blattes'; const ico = bl?'🪳':(rg?'🐀':'🪵'); const accentCol = bl?'#7c3f12':(rg?'#5f6f81':'#8b4513');
+        const _dt = _diagType(d); const rg = _dt==='rongeurs'; const bl = _dt==='blattes'; const fm = _dt==='fourmis'; const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')); const accentCol = fm?'#6d4c1b':(bl?'#7c3f12':(rg?'#5f6f81':'#8b4513'));
         const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/);
         const st = stm ? _decNote(stm[1]) : '';
         const stChip = st==='Brouillon'
@@ -8650,7 +8655,7 @@ function renderDiagnostics() {
             ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
           </div>
           <div style="flex:1.6;min-width:170px;">
-            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${(rg||bl)?'Espèces':'Insectes'}</div>
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${(rg||bl||fm)?'Espèces':'Insectes'}</div>
             <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
           </div>
           ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
@@ -8667,7 +8672,7 @@ function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
   const u = _diagUnpack(d);
-  if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else if (_diagType(u) === 'blattes') _genBlattesPDF(u); else _genDiagPDF(u);
+  if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else if (_diagType(u) === 'blattes') _genBlattesPDF(u); else if (_diagType(u) === 'fourmis') _genFourmisPDF(u); else _genDiagPDF(u);
 }
 // Grille d'informations sur 2 colonnes au-dessus du ruban — même style que le
 // rapport d'intervention classique (rows2col de pdf.js) : libellé gris en
@@ -9057,6 +9062,7 @@ function refreshDiagPreview(now) {
       const _dt = _diagType(_editingDiag);
       const blob = _dt === 'rongeurs' ? _genRongeursPDF(_editingDiag, 'blob')
         : _dt === 'blattes' ? _genBlattesPDF(_editingDiag, 'blob')
+        : _dt === 'fourmis' ? _genFourmisPDF(_editingDiag, 'blob')
         : _genDiagPDF(_editingDiag, 'blob');
       if (!blob) return;
       const ifr = $('diag-pdf-preview'); if (!ifr) return;
@@ -10288,6 +10294,575 @@ function _genBlattesPDF(d, mode) {
   if (mode === 'blob') return doc.output('blob');
   doc.save('rapport-blattes-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF rapport blattes téléchargé', '#2d9e6b');
+}
+
+// ============================================================
+// RAPPORT SPÉCIAL FOURMIS (même table "diagnostics", numéros FM-)
+// ============================================================
+const FOURMIS_ESPECES = ['Fourmi noire des jardins', 'Fourmi des pavés', 'Fourmi bicolore', 'Fourmi jaune', 'Fourmi rouge', 'Fourmi charpentière', 'Fourmi pharaon', "Fourmi d'Argentine"];
+const FOURMIS_SIGNES = ['Pistes d\'ouvrières', 'Fourmis ailées (essaimage / vol nuptial)', 'Ailes tombées au sol', 'Terre / déblais (nid)', 'Présence en cuisine', 'Présence dans fissures / plinthes', 'Nid visible', 'Dégâts au bois (charpentières)'];
+const FOURMIS_MATERIEL = ['Pistolet applicateur de gel', 'Poudreuse (injection)', 'Pulvérisateur professionnel', 'Aspirateur', 'Loupe / microscope numérique', 'Endoscope'];
+const FOURMIS_PRODUITS = ['Gel insecticide (appât)', 'Poudre insecticide (injection)', 'Pulvérisation rémanente', 'Traitement par injection', 'Aucun produit chimique'];
+const FOURMIS_ACTIONS = [
+  'Injection de poudre dans fissures, trous, rails de fenêtres, plinthes et vides de construction',
+  'Application de gel insecticide sur les pistes d\'ouvrières',
+  'Pulvérisation ciblée des zones périphériques, seuils, cadres et points d\'entrée',
+  'Aspiration des fourmis ailées visibles à l\'intérieur',
+  'Colmatage des fissures et ouvertures après traitement',
+  'Contrôle de suivi à prévoir',
+];
+const FOURMIS_INFO = {
+  'Fourmi noire des jardins': { latin: 'Lasius niger', habitat: 'Jardins, terrasses, sous les dalles et pavés ; entre dans les habitations en quête de sucre', indices: 'Pistes d\'ouvrières noires (3–5 mm), monticules de terre fine entre les pavés, vols nuptiaux de juin à août', biologie: 'Colonies de plusieurs milliers d\'individus ; une seule reine ; essaimage estival massif', risque: 'Nuisance domestique (cuisine, denrées sucrées) ; nids sous terrasses et dallages' },
+  'Fourmi des pavés': { latin: 'Tetramorium caespitum', habitat: 'Sous les pavés, dalles, trottoirs et le long des fondations', indices: 'Petits tas de sable/terre entre les joints, pistes denses, ouvrières brun foncé (2,5–4 mm)', biologie: 'Colonies populeuses ; vols nuptiaux de juin à août', risque: 'Nids sous dallages et seuils ; intrusion par les fissures de façade' },
+  'Fourmi jaune': { latin: 'Lasius flavus', habitat: 'Pelouses et sols (nids souterrains), parfois sous les terrasses', indices: 'Monticules de terre, ouvrières jaunâtres rarement en surface, vols de juillet à septembre', biologie: 'Vit surtout sous terre (élevage de pucerons racinaires)', risque: 'Dégâts esthétiques aux pelouses ; intrusion occasionnelle' },
+  'Fourmi rouge': { latin: 'Myrmica rubra', habitat: 'Jardins humides, sous pierres et bois ; abords de bâtiments', indices: 'Ouvrières rousses (4–5 mm), piqûre possible, vols d\'août à septembre', biologie: 'Colonies à plusieurs reines ; agressive', risque: 'Piqûres pour les personnes ; nids près des terrasses' },
+  'Fourmi charpentière': { latin: 'Camponotus spp.', habitat: 'Bois humide ou dégradé : charpentes, cadres, poutres, bois mort', indices: 'Grosses ouvrières (6–14 mm), sciure fine (vermoulure) sous le bois creusé, bruissements, vols de mai à août', biologie: 'Creuse des galeries dans le bois pour nicher (ne le mange pas) ; révèle souvent un problème d\'humidité', risque: 'Affaiblissement des bois de structure ; nids satellites ; à traiter en parallèle d\'un problème d\'humidité' },
+  'Fourmi pharaon': { latin: 'Monomorium pharaonis', habitat: 'Intérieur chauffé : cuisines, hôpitaux, immeubles ; gaines techniques', indices: 'Très petites ouvrières jaune clair (2 mm), pistes le long des canalisations chaudes', biologie: 'Colonies à reines multiples se divisant en cas de stress (bourgeonnement) — surtout pas de pulvérisation répulsive', risque: 'Dispersion rapide dans tout le bâtiment ; traitement exclusivement par gel appât' },
+  "Fourmi d'Argentine": { latin: 'Linepithema humile', habitat: 'Zones chaudes, intérieurs et extérieurs ; supercolonies', indices: 'Ouvrières brun clair (2–3 mm), pistes très denses et continues', biologie: 'Supercolonies à reines multiples, sans agressivité entre nids — très difficile à éradiquer', risque: 'Invasion massive ; nécessite un traitement par appât coordonné et durable' },
+};
+// Fiches techniques insérables dans le rapport (texte de référence DERATEK)
+const FOURMIS_FICHES = {
+  vol_nuptial: {
+    titre: 'Vols nuptiaux des fourmis',
+    texte:
+`1. Définition
+Le vol nuptial, également appelé essaimage, est une phase naturelle de reproduction chez les fourmis. Durant cette période, la colonie produit des individus ailés, composés de mâles reproducteurs et de jeunes reines. Ces fourmis ailées quittent le nid afin de s'accoupler en plein air, lorsque les conditions climatiques sont favorables.
+Après l'accouplement, les mâles meurent généralement rapidement. Les jeunes reines fécondées perdent ensuite leurs ailes et recherchent un endroit favorable afin de fonder une nouvelle colonie. C'est pour cette raison que l'on peut observer soudainement un grand nombre de fourmis ailées autour des fenêtres, plinthes, fissures, seuils de portes, rails de fenêtres, terrasses ou façades.
+
+2. Période des vols nuptiaux
+Les vols nuptiaux ont principalement lieu entre le printemps et la fin de l'été, selon l'espèce de fourmis et les conditions météorologiques.
+Périodes généralement observées :
+- Fourmis noires des jardins : de juin à août, parfois jusqu'en septembre.
+- Fourmis des pavés : de juin à août.
+- Fourmis bicolores : de juin à juillet, parfois durant l'été.
+- Fourmis jaunes : de juillet à septembre.
+- Fourmis rouges : d'août à septembre.
+- Fourmis charpentières : de mai à août selon les espèces.
+Ces dates restent indicatives. Les vols nuptiaux peuvent varier selon la région, l'altitude, la température, l'humidité, l'exposition du bâtiment et les conditions climatiques de l'année.
+
+3. Conditions favorables
+Les vols nuptiaux se déclenchent généralement lorsque plusieurs conditions sont réunies :
+- Temps chaud.
+- Taux d'humidité élevé.
+- Période suivant une pluie ou un orage.
+- Vent faible ou absence de vent.
+- Température extérieure favorable.
+- Sols, murs ou façades suffisamment réchauffés.
+Il est fréquent que plusieurs colonies essaiment en même temps dans une même zone. Cela peut donner l'impression d'une invasion soudaine, alors qu'il s'agit en réalité d'un phénomène naturel de reproduction.
+
+4. Origine probable
+La présence de fourmis ailées indique généralement qu'une colonie est déjà bien développée à proximité. L'origine peut se situer dans :
+- Les fissures de façade.
+- Les joints dégradés.
+- Les seuils de portes.
+- Les cadres et rails de fenêtres.
+- Les plinthes.
+- Les vides de construction.
+- Les terrasses, dalles ou pavés.
+- Les murs creux.
+- Les zones périphériques du bâtiment.
+- Les espaces chauds et humides.
+Dans certains cas, les fourmis peuvent s'introduire à l'intérieur par de très petites ouvertures, notamment au niveau des fenêtres, plinthes, gaines techniques, seuils ou fissures.
+
+5. Risques en cas d'absence de traitement
+Si le problème n'est pas traité correctement, les jeunes reines fécondées peuvent tenter de créer de nouvelles colonies. Cela peut entraîner :
+- Des récidives les années suivantes.
+- La création de nouveaux nids à proximité.
+- Une activité plus importante autour du bâtiment.
+- Une présence régulière de fourmis à l'intérieur.
+- Le développement de plusieurs colonies ou colonies satellites.
+- Une difficulté de traitement plus importante si l'infestation s'installe durablement.
+La présence de fourmis ailées ne doit donc pas être prise à la légère, surtout si elle se répète chaque année ou si les fourmis apparaissent à l'intérieur du bâtiment.
+
+6. Méthodes d'inspection
+Lors de l'inspection, il est important de contrôler les éléments suivants :
+- Identification de l'espèce si possible, notamment à l'aide d'une loupe ou d'un microscope numérique.
+- Recherche des points de sortie.
+- Contrôle des plinthes, fissures, cadres de fenêtres, rails, seuils et joints.
+- Observation des pistes de fourmis ouvrières.
+- Recherche d'ailes tombées au sol.
+- Vérification des zones chaudes, humides ou abritées.
+- Contrôle des façades, terrasses, murs, dalles et pavés.
+- Détermination de l'origine probable : intérieure ou extérieure.
+
+7. Traitement recommandé
+Le traitement doit être adapté à la situation et à l'espèce concernée. Il peut comprendre :
+- Injection de poudre insecticide professionnelle dans les fissures, trous, rails de fenêtres, plinthes, vides de construction et zones de passage.
+- Application de gel insecticide professionnel lorsque des ouvrières sont visibles.
+- Pulvérisation ciblée sur les zones périphériques, seuils, cadres, fissures et points d'entrée.
+- Traitement par injection dans les zones profondes ou difficilement accessibles.
+- Aspiration des fourmis ailées visibles à l'intérieur, en complément du traitement.
+- Colmatage des fissures et ouvertures après traitement, afin de limiter les récidives.
+Il est important de ne pas se limiter uniquement aux fourmis visibles. Le traitement doit viser les zones de passage, les accès, les fissures et les endroits où la colonie peut être installée.
+
+8. Prévention
+Afin de limiter les risques de récidive, il est recommandé de :
+- Reboucher les fissures et ouvertures après traitement.
+- Contrôler les joints de fenêtres et de portes.
+- Vérifier les seuils, plinthes et cadres de fenêtres.
+- Éviter les restes alimentaires accessibles.
+- Surveiller les zones extérieures proches du bâtiment.
+- Réaliser un traitement préventif au printemps, généralement entre mars et avril.
+- Prévoir deux passages préventifs si une forte activité a déjà été constatée les années précédentes.
+Un traitement préventif au printemps permet de réduire l'activité des colonies avant la période des vols nuptiaux.
+
+9. Conclusion
+La présence de fourmis ailées correspond très probablement à un vol nuptial. Ce phénomène est naturel, mais il indique souvent qu'une colonie est déjà présente à proximité du bâtiment. Les jeunes reines fécondées peuvent ensuite tenter de fonder de nouvelles colonies, ce qui peut provoquer des récidives les années suivantes.
+Un traitement ciblé des fissures, plinthes, rails de fenêtres, seuils, cadres et zones périphériques est recommandé afin de neutraliser l'activité et de limiter le risque de nouvelles installations. Un suivi dans les jours suivants permet d'évaluer l'efficacité du traitement et de déterminer si un second passage est nécessaire.`
+  }
+};
+
+function openNewFourmis() {
+  _editingDiag = {
+    id: newId(), numero: _nextDiagNumero('FM'), dateDoc: today(), tech: '',
+    clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
+    batiment: '', bonId: '', insectes: [], elementsTouches: '',
+    activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
+    traitement: '', suivi: '', prevention: '', hygiene: '', fiche: '', signes: [], postes: [], materiel: [],
+    rodenticides: [], actions: [], photos: [],
+    bureau: 'ne', doctype: 'Rapport', noPlan: '1', noPhotos: '', noTech: '', statut: '', ruban: '', noSign: '1',
+    rodenticideAutre: '', postesNb: '', suiviRem: '',
+    contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
+    dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
+  };
+  renderDiagEditor(); openModal('modal-diag');
+}
+// Insère (ajoute) le texte d'une fiche technique dans le champ Fiche du rapport fourmis
+function fourmisAddFiche(key) {
+  if (!_editingDiag) return;
+  const f = FOURMIS_FICHES[key]; if (!f) return;
+  const block = 'FICHE TECHNIQUE - ' + f.titre.toUpperCase() + '\n\n' + f.texte;
+  const cur = (_editingDiag.fiche || '').trim();
+  _editingDiag.fiche = cur ? (cur + '\n\n\n' + block) : block;
+  const ta = $('diag-ta-fiche'); if (ta) { ta.value = _editingDiag.fiche; diagTaAutoGrow(ta); }
+  refreshDiagPreview();
+}
+
+function renderFourmisEditor() {
+  const d = _editingDiag; if (!d) return;
+  const box = $('modal-diag-body'); if (!box) return;
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const checkList = (arr, field) => arr.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d[field]||[]).includes(n)?'checked':''} onchange="toggleDiagList('${field}','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const especesHtml = FOURMIS_ESPECES.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.insectes||[]).includes(n)?'checked':''} onchange="toggleDiagInsecte('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const signesHtml   = checkList(FOURMIS_SIGNES,   'signes');
+  const materielHtml = checkList(FOURMIS_MATERIEL, 'materiel');
+  const produitsHtml = checkList(FOURMIS_PRODUITS, 'rodenticides');
+  const actionsHtml  = FOURMIS_ACTIONS.map(n => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.actions||[]).includes(n)?'checked':''} onchange="toggleDiagList('actions','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const fichesBtns = Object.keys(FOURMIS_FICHES).map(k => `<button type="button" class="btn btn-navy btn-sm" onclick="fourmisAddFiche('${k}')" style="font-size:12px;">📋 ${FOURMIS_FICHES[k].titre}</button>`).join(' ');
+  box.innerHTML = `
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐜 Identification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc||''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      ${_diagTypeBureauFields(d)}
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Nuisible affiché dans le ruban du PDF</label>
+        <select class="form-input" oninput="_editingDiag.ruban=this.value">
+          <option value="" ${!d.ruban?'selected':''}>Automatique (espèce cochée, sinon « Fourmis »)</option>
+          ${['Fourmis','Fourmis ailées (vol nuptial)','Fourmi noire des jardins','Fourmi des pavés','Fourmi charpentière','Fourmi pharaon'].map(o => `<option ${d.ruban===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Client (gérance)</label>
+        <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
+        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
+      </div>
+      ${_diagTechField(d)}
+      <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Site / bâtiment concerné</label><input class="form-input" value="${(d.batiment||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. immeuble, terrasse, façade, cuisine"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
+    </div>
+
+    ${_diagDatesFields(d)}
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🐜 Espèces détectées</div>
+    <div style="margin-bottom:10px;">${especesHtml}</div>
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔎 Signes observés</div>
+    <div style="margin-bottom:12px;">${signesHtml}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+      <div class="form-group"><label class="form-label">Activité de l'infestation</label>
+        <select class="form-input" oninput="_editingDiag.activite=this.value">
+          <option value="" ${!d.activite?'selected':''}>-- Choisir --</option>
+          <option ${d.activite==='Active'?'selected':''}>Active</option>
+          <option ${d.activite==='Ancienne (traces)'?'selected':''}>Ancienne (traces)</option>
+          <option ${d.activite==='Mixte'?'selected':''}>Mixte</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Niveau d'infestation</label>
+        <select class="form-input" oninput="_editingDiag.gravite=this.value">
+          <option value="" ${!d.gravite?'selected':''}>-- Choisir --</option>
+          <option ${d.gravite==='Faible'?'selected':''}>Faible</option>
+          <option ${d.gravite==='Modérée'?'selected':''}>Modérée</option>
+          <option ${d.gravite==='Importante'?'selected':''}>Importante</option>
+          <option ${d.gravite==='Critique (infestation massive)'?'selected':''}>Critique (infestation massive)</option>
+        </select>
+      </div>
+      ${_diagZonesField(d, 'Zones inspectées / d\'activité')}
+      <div class="form-group"><label class="form-label">Origine probable / points d'entrée</label><input class="form-input" value="${(d.elementsTouches||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. fissures de façade, seuils, rails de fenêtres, terrasse"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">📷 Photo inspection ${_diagSectionToggle('noPhotos','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPhotos?'display:none;':''}">
+      <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <input type="file" id="diag-photo-replace-file" accept="image/*" style="display:none" onchange="onDiagPhotoReplace(event)">
+      <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF avec date et auteur (non stockées en base).</span>
+      <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧰 Matériel / méthode</div>
+    <div style="margin-bottom:12px;">${materielHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧪 Insecticide professionnel utilisé</div>
+    <div style="margin-bottom:4px;">${produitsHtml}</div>
+    <div class="form-group" style="margin-bottom:12px;max-width:360px;"><input class="form-input" style="font-size:12px;" value="${(d.rodenticideAutre||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.rodenticideAutre=this.value" placeholder="Autre produit (champ libre)"></div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">✅ Mesures du traitement</div>
+    <div style="margin-bottom:12px;">${actionsHtml}</div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations détaillées</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.diagnostic||''}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">📋 Fiches techniques (annexées au PDF)</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:14px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${fichesBtns}
+        <button type="button" class="btn btn-ghost btn-sm" onclick="_editingDiag.fiche='';var t=$('diag-ta-fiche');if(t)t.value='';refreshDiagPreview();" style="font-size:12px;">🗑 Vider</button>
+      </div>
+      <textarea class="form-input" id="diag-ta-fiche" rows="3" oninput="_editingDiag.fiche=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Clique une fiche ci-dessus pour insérer son texte (modifiable). Elle apparaîtra en annexe du PDF.">${(d.fiche||'').replace(/</g,'&lt;')}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Plan de traitement & suivi</div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Plan de traitement</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. injection de poudre dans les fissures de façade, gel sur les pistes, 2e passage à prévoir...">${d.traitement||''}</textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label>
+      <select class="form-input" oninput="_editingDiag.suivi=this.value">
+        <option value="" ${!d.suivi?'selected':''}>-- Choisir --</option>
+        ${SUIVI_OPTIONS.map(o => `<option ${d.suivi===o?'selected':''}>${o}</option>`).join('')}
+        ${d.suivi && !SUIVI_OPTIONS.includes(d.suivi) ? `<option selected>${d.suivi.replace(/</g,'&lt;')}</option>` : ''}
+      </select>
+      <input class="form-input" style="margin-top:5px;font-size:12px;" value="${(d.suiviRem||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.suiviRem=this.value" placeholder="Remarque complémentaire (champ libre)">
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Prévention recommandée</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-prevention" onclick="diagAICorrect('prevention')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. reboucher les fissures, contrôler joints et seuils, traitement préventif au printemps...">${d.prevention||''}</textarea>
+    </div>
+
+    ${_diagContratFields(d)}
+
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.conclusion||''}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign','Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;${d.noSign?'display:none;':''}">
+      <canvas id="diag-sign-canvas" width="400" height="140" style="width:min(400px,100%);height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSignature()">↺ Effacer</button>
+        <span style="font-size:11px;color:var(--g400);">Signe à la souris ou au doigt — la signature est insérée dans le PDF (non stockée en base).</span>
+      </div>
+    </div>
+  `;
+  const t = $('modal-diag-title'); if (t) t.textContent = 'Rapport fourmis ' + (d.numero||'');
+  initDiagSignPad();
+  renderDiagPhotos();
+  box.oninput = () => refreshDiagPreview();
+  _syncDiagPreviewPane();
+  refreshDiagPreview();
+}
+
+function _genFourmisPDF(d, mode) {
+  if (!d) { if (mode !== 'blob') toast('Rapport introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const M = 20, R = 190, CW = R - M;
+  const NAVY = [13,27,62], SLATE = [95,111,129], GREY = [110,110,110];
+  const MAX_Y = 270;
+  let y = 0;
+
+  const newPage = () => { doc.addPage(); y = 20; };
+  const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
+  const section = (titre, keep) => {
+    ensure(14 + (keep || 0));
+    doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.text(titre, M+4.5, y);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
+    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  };
+  const field = (lbl, val, indent) => {
+    if (!val) return;
+    const x = indent || M;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
+    const lines = doc.splitTextToSize(String(val), R - vx - 2);
+    ensure(Math.max(lines.length*4.8, 5.5) + 2);
+    doc.setTextColor(60);
+    doc.text(lbl + ' :', x, y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.text(lines, vx, y);
+    y += Math.max(lines.length*4.8, 5.5);
+  };
+  const para = (txt) => {
+    if (!txt) return;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    String(txt).split('\n').forEach(function(p){
+      if (!p) { y += 3; return; }
+      doc.splitTextToSize(p, CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+    });
+  };
+  const badge = (txt, rgb, x, yy) => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const w = doc.getTextWidth(txt) + 6;
+    doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+    doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
+    doc.setTextColor(255); doc.text(txt, x+3, yy);
+    doc.setTextColor(0);
+    return w;
+  };
+  const GRAV_RGB = { 'Faible':[45,158,107], 'Modérée':[230,170,30], 'Importante':[235,120,40], 'Critique (infestation massive)':[230,57,70] };
+  const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne (traces)':[120,120,120], 'Mixte':[235,120,40] };
+
+  const bu = (typeof BUREAUX !== 'undefined' && BUREAUX.find(b => b.id === d.bureau)) || { rue: co.rue, npa: co.npa, ville: co.ville, tel: co.tel };
+  const logoW = 62, logoH = logoW*199/900;
+  const logoY = 13;
+  const headerFiletY = logoY + logoH + 5;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
+  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  const cy0 = logoY + 4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
+  doc.setTextColor(13,27,62);
+  try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
+  doc.setTextColor(0);
+  doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  const bi = _diagBonInfo(d) || {};
+
+  y = headerFiletY + 9;
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Fourmis');
+  doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
+
+  y = _diagRows2Col(doc, [
+    ['Technicien', d.noTech ? '' : d.tech],
+    ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
+    ['N° bon de commande', bi.bonNumero],
+    ['Adresse d\'intervention', d.locataireAdresse],
+    ['Gérant', bi.gerant],
+    ['Téléphone', bi.tel],
+    ['Email', bi.email],
+    ['Locataire', d.locataireNom],
+    ['Tél. locataire', bi.locTel],
+    ['Logement', (bi.logement && bi.logement !== d.locataireAdresse) ? bi.logement : ''],
+    ['Site / bâtiment', d.batiment],
+    ['Zones inspectées', d.zones],
+    ['Origine / points d\'entrée', d.elementsTouches],
+  ], y, M, CW);
+
+  y = _diagDatesStrip(doc, d, y + 5, M, CW);
+  y += 1;
+
+  const postes = Array.isArray(d.postes) ? d.postes.filter(p => p && (p.emplacement || p.produit)) : [];
+  const synth = [
+    ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
+    ['NIVEAU D\'INFESTATION', d.gravite, GRAV_RGB[d.gravite]],
+    ['ESPÈCES', (d.insectes||[]).length ? (d.insectes||[]).length + ' détectée(s)' : '', null],
+    ['ESSAIMAGE', (d.signes||[]).some(s => /ail/i.test(s)) ? 'Oui' : '', null],
+  ];
+  if (synth.some(s => s[1])) {
+    ensure(20);
+    const colW = CW/4;
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y, CW, 15, 2, 2, 'D');
+    synth.forEach((s, i) => {
+      const cx = M + i*colW + 4;
+      if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(s[0], cx, y+5);
+      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
+      else {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
+      }
+    });
+    doc.setTextColor(0);
+    y += 21;
+  }
+
+  section('Constatations');
+  field('Espèces détectées', (d.insectes||[]).join(', '));
+  field('Signes observés', (d.signes||[]).join(', '));
+  field('Origine / points d\'entrée', d.elementsTouches);
+  if (d.diagnostic) {
+    y += 1.5;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
+    para(d.diagnostic);
+  }
+
+  const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
+  if (photos.length) {
+    y += 2; section('Photos de l\'inspection', 62);
+    const pw = (CW - 6) / 2, ph = 58;
+    photos.forEach((p, i) => {
+      const col = i % 2;
+      if (col === 0 && y + ph + 8 > MAX_Y) newPage();
+      const px = M + col*(pw+6);
+      try {
+        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
+        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
+        const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
+        doc.setTextColor(0);
+      } catch (e) {}
+      if (col === 1 || i === photos.length-1) y += ph + 8;
+    });
+    y += 2;
+  }
+
+  const fiches = (d.insectes||[]).filter(n => FOURMIS_INFO[n]);
+  if (fiches.length) {
+    y += 2; section('Fiches des espèces détectées', 38);
+    fiches.forEach(nom => {
+      const f = FOURMIS_INFO[nom];
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
+      ensure(Math.min(estH, 75));
+      doc.setFillColor(238,241,246);
+      doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      const nomW = doc.getTextWidth(nom);
+      doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+      doc.text(nom, M+3, y+3.6);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.text(f.latin, M+3+nomW+4, y+3.6);
+      doc.setTextColor(0);
+      y += 10;
+      field('Habitat', f.habitat, M+3);
+      field('Indices typiques', f.indices, M+3);
+      field('Biologie', f.biologie, M+3);
+      field('Risque', f.risque, M+3);
+      y += 3;
+    });
+  }
+
+  const materiel = Array.isArray(d.materiel) ? d.materiel : [];
+  const produits = Array.isArray(d.rodenticides) ? d.rodenticides : [];
+  const actions = Array.isArray(d.actions) ? d.actions : [];
+  const checkLine = (txt) => {
+    const lines = doc.splitTextToSize(String(txt), CW - 8);
+    ensure(lines.length*4.8 + 2);
+    doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.35);
+    doc.rect(M, y-3, 3.2, 3.2);
+    doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
+    doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.text(lines, M+5.5, y);
+    y += lines.length*4.8 + 1;
+  };
+  if (d.traitement || d.suivi || materiel.length || produits.length || actions.length) {
+    y += 2; section('Plan de traitement', 12);
+    if (materiel.length) { field('Matériel / méthode', materiel.join(', ')); y += 1; }
+    const prodAucun = produits.includes('Aucun produit chimique');
+    const prodList = produits.filter(r => r !== 'Aucun produit chimique');
+    if (prodAucun && !prodList.length && !d.rodenticideAutre) { field('Produit', 'Aucun produit chimique utilisé'); y += 1; }
+    else if (prodList.length || d.rodenticideAutre) { field('Insecticide professionnel', [...prodList, d.rodenticideAutre].filter(Boolean).join(', ')); y += 1; }
+    para(d.traitement);
+    if (actions.length) { y += 1.5; actions.forEach(a => checkLine(a)); }
+    const suiviTxt = [d.suivi, d.suiviRem].filter(Boolean).join(' — ');
+    if (suiviTxt) { y += 1.5; field('Suivi / prochain passage', suiviTxt); }
+  }
+
+  if (d.prevention) {
+    y += 2; section('Prévention recommandée', 12);
+    para(d.prevention);
+  }
+
+  if (d.contrat) {
+    y += 2; section('Proposition de contrat annuel', 18);
+    para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
+    y += 1.5;
+    field('Passages annuels proposés', d.contratPassages);
+    field('Montant estimatif', d.contratMontant);
+    field('Zones concernées', d.contratZones);
+    field('Remarques', d.contratRem);
+  }
+
+  if (d.conclusion) {
+    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const boxH = lines.length*4.9 + 8;
+    if (y + boxH + 12 > MAX_Y) newPage();
+    y += 2; section('Conclusion / recommandations');
+    doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    doc.setTextColor(0);
+    y += boxH + 4;
+  }
+
+  // Fiche(s) technique(s) annexée(s)
+  if (d.fiche && String(d.fiche).trim()) {
+    y += 2; section('Fiche technique', 14);
+    para(d.fiche);
+  }
+
+  if (!d.noSign) {
+    ensure(32);
+    y += 8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+    doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
+    if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
+    doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+18, 186, y+18);
+    doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('Signature', 120, y+21.5);
+    doc.setTextColor(0);
+  }
+
+  const nb = doc.getNumberOfPages();
+  for (let i = 1; i <= nb; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
+    doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
+    doc.setTextColor(0);
+  }
+
+  if (mode === 'blob') return doc.output('blob');
+  doc.save('rapport-fourmis-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
+  toast('✓ PDF rapport fourmis téléchargé', '#2d9e6b');
 }
 
 // ============================================================
