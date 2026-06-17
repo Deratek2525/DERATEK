@@ -101,56 +101,43 @@ function generatePDF(rapport, statut) {
       orange: [244, 166, 35],
     };
 
-    // ── HEADER ──────────────────────────────────────────────
-    doc.setFillColor(...C.navy);
-    doc.rect(0, 0, W, 32, 'F');
-    // Logo DERATEK (image, version sombre) en haut à gauche sur une carte blanche
+    // ── HEADER (même style que le rapport rongeurs) ─────────
+    const _co = (typeof DERATEK_CONFIG !== 'undefined' && DERATEK_CONFIG.company) ? DERATEK_CONFIG.company : {};
+    const R = W - M;
+    const logoW = 62, logoH = logoW * 199 / 900, logoY = 13;
+    const headerFiletY = logoY + logoH + 5;
     let logoOk = false;
     if (typeof LOGO_B64 !== 'undefined' && LOGO_B64) {
-      try {
-        const logoW = 46, logoH = logoW * 199 / 900; // ratio d'origine du logo
-        const padX = 3, padY = 2.5;
-        const cardW = logoW + padX * 2, cardH = logoH + padY * 2;
-        const cardY = (32 - cardH) / 2;
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(M, cardY, cardW, cardH, 1.5, 1.5, 'F');
-        doc.addImage(LOGO_B64, 'PNG', M + padX, cardY + padY, logoW, logoH);
-        logoOk = true;
-      } catch (e) { logoOk = false; }
+      try { doc.addImage(LOGO_B64, 'PNG', M, logoY, logoW, logoH); logoOk = true; } catch (e) { logoOk = false; }
     }
     if (!logoOk) {
-      doc.setTextColor(...C.white);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(22);
-      doc.text('DERATEK', M, 14);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(180, 190, 210);
-      doc.text('PROFESSIONAL PEST CONTROL', M, 21);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...C.navy);
+      doc.text('DERATEK', M, 23);
     }
-    // Badge RAPPORT
-    doc.setFillColor(...C.red);
-    doc.roundedRect(W - M - 54, 10, 54, 11, 2, 2, 'F');
-    doc.setTextColor(...C.white);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text("RAPPORT D'INTERVENTION", W - M - 27, 16.8, { align: 'center' });
-    y = 37;
-
-    // ── BANDE ID / DATE ──────────────────────────────────────
-    doc.setFillColor(248, 250, 252);
-    doc.rect(0, y, W, 13, 'F');
-    doc.setDrawColor(...C.border);
-    doc.line(0, y+13, W, y+13);
+    const cy0 = logoY + 4;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    [_co.rue, ((_co.npa || '') + ' ' + (_co.ville || '')).trim(), 'Tél. ' + (_co.tel || '')].forEach((l, i) => { if (l) doc.text(String(l), 90, cy0 + i * 4.4); });
+    [_co.email, _co.tva].forEach((l, i) => { if (l) doc.text(String(l), 150, cy0 + i * 4.4); });
     doc.setTextColor(...C.navy);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.text(rapport.id || '—', M, y + 9);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...C.muted);
-    doc.text(fmtDate(rapport.date), W - M, y + 9, { align: 'right' });
-    y += 18;
+    try { doc.textWithLink('www.deratek.ch', 150, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); } catch (e) { doc.text('www.deratek.ch', 150, cy0 + 2 * 4.4); }
+    doc.setTextColor(0);
+    doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(M, headerFiletY, R, headerFiletY);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.navy);
+    doc.text((_co.ville || 'Neuchâtel') + ', le ' + (fmtDate(rapport.date) || ''), R, headerFiletY + 5, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+
+    // ── BANDEAU TITRE (navy) ─────────────────────────────────
+    y = headerFiletY + 9;
+    doc.setFillColor(...C.navy);
+    doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
+    doc.text("RAPPORT D'INTERVENTION", M + 6, y + 6.8);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(225, 228, 238);
+    doc.text('N° ' + (rapport.id || '') + (rapport.noint ? '   -   Bon ' + rapport.noint : ''), M + 6, y + 12.4);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(255, 255, 255);
+    doc.text(fmtDate(rapport.date) || '', R - 6, y + 6.8, { align: 'right' });
+    doc.setTextColor(0);
+    y += 21;
 
     // ── HELPERS ──────────────────────────────────────────────
     function checkPage(needed = 20) {
