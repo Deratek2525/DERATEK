@@ -501,6 +501,35 @@ async function doLogout() {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// ---- Bloc-notes partagé du dashboard (table Supabase notes_tableau, 1 ligne id='shared') ----
+let _dashNoteTimer = null;
+async function loadDashNote() {
+  const ta = $('dash-note'); if (!ta || !sb) return;
+  if (document.activeElement === ta) return;   // ne pas écraser pendant que l'on tape
+  try {
+    const { data, error } = await sb.from('notes_tableau').select('contenu,updated_at').eq('id', 'shared').limit(1);
+    if (error) { const st = $('dash-note-status'); if (st) st.textContent = ''; return; }
+    const row = data && data[0];
+    ta.value = (row && row.contenu) || '';
+    const st = $('dash-note-status');
+    if (st) st.textContent = row && row.updated_at ? ('Synchronisé · ' + fmtDate(String(row.updated_at).slice(0,10))) : '';
+  } catch (e) {}
+}
+function dashNoteOnInput() {
+  const st = $('dash-note-status'); if (st) { st.textContent = 'Modification…'; st.style.color = 'var(--g400)'; }
+  clearTimeout(_dashNoteTimer);
+  _dashNoteTimer = setTimeout(saveDashNote, 700);
+}
+async function saveDashNote() {
+  const ta = $('dash-note'); if (!ta || !sb) return;
+  const st = $('dash-note-status');
+  try {
+    const { error } = await sb.from('notes_tableau').upsert({ id: 'shared', contenu: ta.value, updated_at: new Date().toISOString() });
+    if (error) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } return; }
+    if (st) { const h = new Date(); st.textContent = '✓ Enregistré ' + String(h.getHours()).padStart(2,'0') + ':' + String(h.getMinutes()).padStart(2,'0'); st.style.color = '#2d9e6b'; }
+  } catch (e) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } }
+}
+
 function renderDashboard() {
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
   const now = new Date();
@@ -508,6 +537,7 @@ function renderDashboard() {
   const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   const dd = $('dash-date');
   if (dd) dd.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+  if (typeof loadDashNote === 'function') loadDashNote();
 
   const rapports = DB.rapports, clients = DB.clients;
   const brouillon = rapports.filter(r => r.statut === 'Brouillon').length;
