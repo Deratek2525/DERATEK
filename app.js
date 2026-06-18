@@ -5446,6 +5446,14 @@ function renderDocEditor() {
     <button class="btn btn-ghost btn-sm" onclick="addDocLigne()" style="margin-top:8px;">+ Ajouter une ligne</button>
     <div id="doc-summary" style="margin-top:14px;margin-left:auto;width:280px;font-size:13px;">${_docSummaryHtml(t, d)}</div>
     <div class="form-group" style="margin-top:10px;"><label class="form-label">Notes / conditions</label><textarea class="form-input" rows="2" oninput="_editingDoc.notes=this.value">${d.notes||''}</textarea></div>
+    ${(d.type === 'devis' && !d._rappel) ? `
+      <div style="margin-top:12px;border-top:1px dashed #ccc;padding-top:12px;">
+        <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📷 Photos (incluses dans le PDF)</div>
+        <input type="file" id="doc-photos-file" accept="image/*" multiple style="display:none" onchange="docAddPhotos(event)">
+        <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('doc-photos-file').click()">📷 Ajouter des photos</button>
+        <span style="font-size:11px;color:var(--g400);margin-left:6px;">Ajoutées au PDF du devis (non stockées — à ajouter avant de générer le PDF).</span>
+        <div id="doc-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+      </div>` : ''}
     ${(d.type === 'facture' && !d._rappel) ? `
       <div style="margin-top:14px;border-top:1px dashed #ccc;padding-top:12px;">
         <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🇨🇭 Aperçu QR-facture</div>
@@ -5484,6 +5492,7 @@ function renderDocEditor() {
       if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
     } catch (e) { console.warn('QR preview', e); }
   }
+  if (typeof docRenderPhotos === 'function') docRenderPhotos();
   _docPdfLive();   // aperçu PDF en direct à droite
 }
 
@@ -5561,6 +5570,42 @@ function docSetMontantField(field, val) {
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 
+// --- Photos du devis (en mémoire uniquement, incluses dans le PDF) ---
+function docAddPhotos(ev) {
+  const files = [...(ev.target.files || [])]; if (!files.length) return;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1000, r = Math.min(1, MAX / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        if (!_editingDoc) return;
+        if (!Array.isArray(_editingDoc.photos)) _editingDoc.photos = [];
+        _editingDoc.photos.push({ data: cv.toDataURL('image/jpeg', 0.82), caption: '', use: true });
+        docRenderPhotos(); _docPdfLive();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  ev.target.value = '';
+}
+function docRemovePhoto(i) { if (_editingDoc && Array.isArray(_editingDoc.photos)) { _editingDoc.photos.splice(i, 1); docRenderPhotos(); _docPdfLive(); } }
+function docSetPhotoCaption(i, v) { if (_editingDoc && _editingDoc.photos && _editingDoc.photos[i]) { _editingDoc.photos[i].caption = v; _docPdfLive(); } }
+function docRenderPhotos() {
+  const box = $('doc-photos-box'); if (!box) return;
+  const photos = (_editingDoc && _editingDoc.photos) || [];
+  box.innerHTML = photos.map((p, i) => `
+    <div style="width:150px;">
+      <img src="${p.data}" style="width:150px;height:105px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;">
+      <input class="form-input" style="font-size:11px;margin-top:4px;" placeholder="Légende (optionnel)" value="${(p.caption||'').replace(/"/g,'&quot;')}" oninput="docSetPhotoCaption(${i},this.value)">
+      <button class="btn btn-red btn-xs" style="margin-top:3px;width:100%;" onclick="docRemovePhoto(${i})">🗑 Retirer</button>
+    </div>`).join('') || '<div style="font-size:11px;color:var(--g400);">Aucune photo ajoutée.</div>';
+}
+
 // Enregistre le document (devis/facture)
 // Enregistre le document en brouillon (rappel « à finir ») dans l'onglet Devis/Factures
 function saveDocBrouillon() {
@@ -5588,6 +5633,7 @@ function saveDoc() {
   const toSave = JSON.parse(JSON.stringify(_editingDoc));
   delete toSave._bonNumeroSaisi;
   delete toSave.expertise;   // persisté dans notes via [EXPERT:n]
+  delete toSave.photos;      // photos non stockées en base (incluses uniquement dans le PDF)
   const docs = DB.documents;
   const i = docs.findIndex(x => x.id === toSave.id);
   if (i >= 0) docs[i] = toSave; else docs.push(toSave);
@@ -6649,6 +6695,31 @@ function downloadDocPDF(id, mode) {
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
     doc.text(noteLines, 20, ty + 6); doc.setTextColor(0);
     ty += notesH;
+  }
+
+  // --- Photos (devis uniquement) : incluses dans le PDF, paginées si besoin ---
+  if (!isFacture && !d._rappel && Array.isArray(d.photos)) {
+    const dphotos = d.photos.filter(p => p && p.data && p.use !== false);
+    if (dphotos.length) {
+      if (ty + 16 > contentBottom) { ty = startContentPage(); }
+      ty += 6;
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(13,27,62);
+      doc.text('Photos', 20, ty);
+      doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, ty+1.8, 190, ty+1.8);
+      doc.setTextColor(0); ty += 7;
+      const pw = (170 - 6) / 2, ph = 58;
+      dphotos.forEach((p, i) => {
+        const col = i % 2;
+        if (col === 0 && ty + ph + 10 > contentBottom) { ty = startContentPage(); }
+        const px = 20 + col * (pw + 6);
+        try {
+          doc.addImage(p.data, 'JPEG', px, ty, pw, ph);
+          doc.setDrawColor(225,228,238); doc.rect(px, ty, pw, ph, 'D');
+          if (p.caption) { doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
+        } catch (e) {}
+        if (col === 1 || i === dphotos.length - 1) ty += ph + 11;
+      });
+    }
   }
 
   // --- Bulletin QR (factures) : DANS LE FLUX, ancré en bas de la page courante. ---
