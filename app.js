@@ -511,7 +511,13 @@ function _noteFocus(key){ const el = $('note-' + key); if (el) el.focus(); retur
 function noteExec(key, cmd){ _noteFocus(key); try { document.execCommand(cmd, false, null); } catch (e) {} noteOnInput(key); }
 function noteFont(key, val){ _noteFocus(key); try { document.execCommand('fontName', false, val); } catch (e) {} noteOnInput(key); }
 function noteSize(key, val){ _noteFocus(key); try { document.execCommand('fontSize', false, val); } catch (e) {} noteOnInput(key); }
-function noteColor(key, hex){ _noteFocus(key); try { document.execCommand('foreColor', false, hex); } catch (e) {} noteOnInput(key); }
+function noteColor(key, hex){ _noteFocus(key); try { document.execCommand(_noteHL[key] ? 'hiliteColor' : 'foreColor', false, hex); } catch (e) {} noteOnInput(key); }
+// Bascule mode surlignement : quand actif, les pastilles de couleur s'appliquent en surlignement (fond) au lieu du texte
+function noteToggleHL(key){
+  _noteHL[key] = !_noteHL[key];
+  const b = $('hl-' + key);
+  if (b) { b.style.background = _noteHL[key] ? '#fde68a' : ''; b.style.color = _noteHL[key] ? '#7c2d12' : ''; b.style.borderColor = _noteHL[key] ? '#f59e0b' : ''; }
+}
 // Insère une case à cocher cliquable (tâche à valider) au curseur
 function noteAddTask(key){
   const el = _noteFocus(key); if (!el) return;
