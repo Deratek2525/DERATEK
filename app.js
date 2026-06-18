@@ -5480,6 +5480,7 @@ function renderDocEditor() {
          <button class="btn btn-navy" onclick="rappelGenererDepuisEditeur()">📄 Générer le PDF du rappel</button>`
       : `<button class="btn btn-ghost" onclick="closeModal('modal-doc')">Annuler</button>
          <button class="btn btn-ghost" onclick="saveDocBrouillon()" title="Enregistrer en brouillon pour le finir plus tard (rappel dans Factures)">💾 Brouillon — à finir</button>
+         <button class="btn btn-ghost" onclick="downloadDocPDF(_editingDoc)" title="Télécharger le PDF (avec les photos ajoutées)">📥 Télécharger le PDF</button>
          <button class="btn btn-navy" onclick="saveDoc()">✓ Enregistrer</button>`;
   }
   // Génère l'aperçu QR pour les factures
