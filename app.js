@@ -6723,6 +6723,21 @@ function downloadDocPDF(id, mode) {
     }
   }
 
+  // --- Bon pour accord (devis uniquement) : date + signature du client ---
+  if (!isFacture && !d._rappel) {
+    if (ty + 30 > contentBottom) { ty = startContentPage(); }
+    ty += 10;
+    const bx = 110, bw = 80;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
+    doc.text('Bon pour accord', bx, ty);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.text('Date et signature du client :', bx, ty + 6);
+    doc.setTextColor(0);
+    doc.setDrawColor(120); doc.setLineWidth(0.3);
+    doc.line(bx, ty + 22, bx + bw, ty + 22);
+    ty += 26;
+  }
+
   // --- Bulletin QR (factures) : DANS LE FLUX, ancré en bas de la page courante. ---
   // S'il ne reste pas la place sous le contenu, il bascule entier en bas de la page
   // suivante (jamais coupé, jamais superposé au texte).
