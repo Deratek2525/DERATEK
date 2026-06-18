@@ -11668,6 +11668,12 @@ function renderAnciennesList() {
   // Les payées sont parties dans « Facturation archivée » → ici on n'affiche que les NON payées.
   const paidList = all.filter(d => d.statut === 'payee');
   const shown = all.filter(d => d.statut !== 'payee').slice().sort((a, b) => (_ancOrd(a) - _ancOrd(b)) || (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+  // Tri optionnel par numéro de facture (croissant / décroissant) ; sinon ordre manuel
+  const _ancSort = state.ancSort || 'manuel';
+  if (_ancSort === 'num-asc' || _ancSort === 'num-desc') {
+    const numOf = d => { const m = String(d.numero || '').match(/\d+/g); return m ? parseInt(m.join(''), 10) : NaN; };
+    shown.sort((a, b) => { const na = numOf(a), nb = numOf(b); let c; if (isNaN(na) && isNaN(nb)) c = String(a.numero||'').localeCompare(String(b.numero||'')); else if (isNaN(na)) c = 1; else if (isNaN(nb)) c = -1; else c = na - nb; return _ancSort === 'num-desc' ? -c : c; });
+  }
   const nPay = paidList.length;
   const totalPaye = paidList.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const totalNonPaye = shown.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
@@ -11690,6 +11696,12 @@ function renderAnciennesList() {
         <div onclick="ancSetFilter('tous')" title="Cliquer pour afficher toutes les factures à encaisser" style="cursor:pointer;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;${ring(af==='tous','#d97706')}"><span style="color:#b45309;font-weight:800;">Total à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
         <div onclick="showScreen('fact-archive')" title="Voir les factures payées dans « Facturation archivée »" style="cursor:pointer;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé → Facturation archivée</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span> ↗</div>
       </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;font-size:12px;flex-wrap:wrap;">
+      <span style="color:var(--g600);font-weight:700;">Trier :</span>
+      <button class="btn ${_ancSort==='manuel'?'btn-navy':'btn-ghost'} btn-sm" onclick="ancSetSort('manuel')" title="Ordre manuel (glisser-déposer)">⠿ Manuel</button>
+      <button class="btn ${_ancSort==='num-asc'?'btn-navy':'btn-ghost'} btn-sm" onclick="ancSetSort('num-asc')" title="Numéro croissant">N° croissant ↑</button>
+      <button class="btn ${_ancSort==='num-desc'?'btn-navy':'btn-ghost'} btn-sm" onclick="ancSetSort('num-desc')" title="Numéro décroissant">N° décroissant ↓</button>
     </div>
     ${!shown.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">🎉 Toutes les anciennes factures sont payées et classées dans « Facturation archivée ».</div>` : ''}
     ${shown.length && !displayed.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">Aucune facture dans ce filtre. <a href="#" onclick="ancSetFilter('tous');return false;" style="color:var(--navy);font-weight:700;">Tout afficher</a></div>` : ''}
@@ -11773,6 +11785,7 @@ function renderAnciennesList() {
     </div>`;
 }
 function ancSetFilter(v) { state.ancFilter = v || 'tous'; renderAnciennesList(); }
+function ancSetSort(v) { state.ancSort = v || 'manuel'; renderAnciennesList(); }
 function ancToggleRappels(id) {
   state.ancRappelsOpen = state.ancRappelsOpen || {};
   state.ancRappelsOpen[id] = !state.ancRappelsOpen[id];
