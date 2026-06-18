@@ -11677,19 +11677,24 @@ function renderAnciennesList() {
   const pasPayees = shown.filter(d => d.statut === 'impayee');
   const nEnv = envoyees.length, sEnv = envoyees.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   const nImp = pasPayees.length, sImp = pasPayees.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+  // Filtre cliquable (cartes récap) : 'tous' | 'envoyee' | 'impayee'
+  const af = state.ancFilter || 'tous';
+  const displayed = af === 'impayee' ? pasPayees : (af === 'envoyee' ? envoyees : shown);
+  const ring = (on, col) => on ? `box-shadow:0 0 0 2px ${col};` : '';
   box.innerHTML = `
     <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
       <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📁 Anciennes factures à encaisser (${nNonPay}) · ${_displayMontant(totalNonPaye)} CHF</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#1a2744;font-weight:800;">📨 Factures envoyées</span> : <b>${nEnv}</b> · ${_displayMontant(sEnv)} CHF</div>
-        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#9a3412;font-weight:800;">⏳ Pas payées</span> : <b>${nImp}</b> · ${_displayMontant(sImp)} CHF</div>
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#b45309;font-weight:800;">Total à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
+        <div onclick="ancSetFilter('envoyee')" title="Cliquer pour n'afficher que les factures envoyées" style="cursor:pointer;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:7px 12px;font-size:12px;${ring(af==='envoyee','#6366f1')}"><span style="color:#1a2744;font-weight:800;">📨 Factures envoyées</span> : <b>${nEnv}</b> · ${_displayMontant(sEnv)} CHF</div>
+        <div onclick="ancSetFilter('impayee')" title="Cliquer pour n'afficher que les factures pas payées" style="cursor:pointer;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:7px 12px;font-size:12px;${ring(af==='impayee','#f59e0b')}"><span style="color:#9a3412;font-weight:800;">⏳ Pas payées</span> : <b>${nImp}</b> · ${_displayMontant(sImp)} CHF</div>
+        <div onclick="ancSetFilter('tous')" title="Cliquer pour afficher toutes les factures à encaisser" style="cursor:pointer;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;${ring(af==='tous','#d97706')}"><span style="color:#b45309;font-weight:800;">Total à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
         <div onclick="showScreen('fact-archive')" title="Voir les factures payées dans « Facturation archivée »" style="cursor:pointer;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé → Facturation archivée</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span> ↗</div>
       </div>
     </div>
     ${!shown.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">🎉 Toutes les anciennes factures sont payées et classées dans « Facturation archivée ».</div>` : ''}
+    ${shown.length && !displayed.length ? `<div style="font-size:13px;color:var(--g600);padding:8px 2px;">Aucune facture dans ce filtre. <a href="#" onclick="ancSetFilter('tous');return false;" style="color:var(--navy);font-weight:700;">Tout afficher</a></div>` : ''}
     <div style="display:flex;flex-direction:column;gap:6px;">
-      ${shown.map(d => {
+      ${displayed.map(d => {
         const paye = d.statut === 'payee';
         const notes = String(d.notes || '');
         const bonNo = (notes.match(/Bon n°\s*([^·\n]+)/) || [])[1];
