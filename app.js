@@ -1183,6 +1183,7 @@ function renderClients() {
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
+        <button class="btn btn-sm" onclick="planifyClient('${c.id}')" title="Planifier une intervention dans l'agenda" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📅 Planifier</button>
         <button class="btn btn-ghost btn-sm" onclick="openNewRapportForClient('${c.id}')" title="Nouveau rapport">+ Rapport</button>
         ${CLIENT_TYPES_DOC.includes(c.type) ? `
         <button class="btn btn-sm" onclick="createDevisFromClient('${c.id}')" title="Créer un devis pour ce client" style="font-weight:700;border:1.5px solid #8b5cf6;background:#f5f3ff;color:#6d28d9;">📝 Devis</button>
@@ -1234,6 +1235,19 @@ function clReadDates() {
   return Array.from(wrap.querySelectorAll('[data-cl-date]'))
     .map(i => i.value.trim()).filter(Boolean)
     .sort();
+}
+// Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
+function planifyClient(id) {
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
+  const meta = _clientMeta(c);
+  const fut = (meta.dates || []).filter(d => d >= today()).sort();
+  const date = fut[0] || (meta.dates && meta.dates[0]) || today();
+  openNewIntervDate(date, '08:00');
+  populateClientSelectInterv(c.id);
+  populateLocataireSelectInterv(c.id, '');
+  const adr = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if ($('iv-adresse') && adr) $('iv-adresse').value = adr;
+  if ($('iv-nuisible') && meta.nuisible) $('iv-nuisible').value = meta.nuisible;
 }
 function openNewClient() {
   state.editingClientId = null;
