@@ -1161,12 +1161,18 @@ function renderClients() {
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">📍 Adresse</div>
         <div style="font-size:12px;color:var(--g600);">${adresseFmt || '—'}</div>
       </div>
-      ${(() => { const m = _clientMeta(c); return (m.nuisible || m.dates.length) ? `
-      <div style="flex:1.1;min-width:150px;">
-        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / interv.</div>
-        ${m.nuisible ? `<div style="font-size:12px;font-weight:600;color:var(--navy);">${m.nuisible}</div>` : ''}
-        ${m.dates.length ? `<div style="font-size:11px;color:var(--g600);">📅 ${m.dates.map(d => fmtDate(d)).join(', ')}</div>` : ''}
-      </div>` : ''; })()}
+      ${(() => { const m = _clientMeta(c); return `
+      <div style="flex:1.1;min-width:165px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;letter-spacing:.3px;">🐛 Nuisible / dates d'interv.</div>
+        ${m.nuisible ? `<div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:3px;">${m.nuisible}</div>` : ''}
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          ${m.dates.map((d, i) => `<div style="display:flex;gap:3px;align-items:center;">
+            <input type="date" value="${d}" onchange="clientSetDate('${c.id}',${i},this.value)" style="font-size:11px;font-weight:bold;color:#166534;padding:2px 5px;border-radius:6px;border:1.5px solid #22c55e;">
+            <button class="btn btn-ghost btn-xs" style="color:#b00;padding:1px 5px;" onclick="clientSetDate('${c.id}',${i},'')" title="Retirer cette date">✕</button>
+          </div>`).join('')}
+          ${m.dates.length < 5 ? `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="clientAddDate('${c.id}')" title="Ajouter une date d'intervention">+ Ajouter (${m.dates.length}/5)</button>` : `<div style="font-size:10px;color:var(--g400);">5/5 (max)</div>`}
+        </div>
+      </div>`; })()}
       <div style="display:flex;gap:14px;align-items:center;min-width:170px;border-left:1px solid #f0f0f0;padding-left:12px;">
         <div style="text-align:center;">
           <div style="font-size:16px;font-weight:800;color:var(--navy);line-height:1;">${nb}</div>
@@ -1235,6 +1241,24 @@ function clReadDates() {
   return Array.from(wrap.querySelectorAll('[data-cl-date]'))
     .map(i => i.value.trim()).filter(Boolean)
     .sort();
+}
+// Dates d'intervention éditables directement sur la carte client (comme sur les bons, max 5)
+function clientAddDate(id) {
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) return;
+  const m = _clientMeta(c); const dates = m.dates.slice();
+  if (dates.length >= 5) { toast('Maximum 5 dates d\'intervention', '#e63946'); return; }
+  dates.push(today());
+  const list = DB.clients; const i = list.findIndex(x => x.id === id);
+  if (i >= 0) { list[i] = { ...list[i], notes: _composeClientNotes(m.notesClean, m.nuisible, dates) }; DB.clients = list; }
+  renderClients();
+}
+function clientSetDate(id, index, value) {
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) return;
+  const m = _clientMeta(c); const dates = m.dates.slice();
+  if (value) dates[index] = value; else dates.splice(index, 1);
+  const list = DB.clients; const i = list.findIndex(x => x.id === id);
+  if (i >= 0) { list[i] = { ...list[i], notes: _composeClientNotes(m.notesClean, m.nuisible, dates.slice().sort()) }; DB.clients = list; }
+  renderClients();
 }
 // Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
 function planifyClient(id) {
