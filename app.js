@@ -2553,6 +2553,38 @@ async function bonExtractText(file) {
   return texte.trim();
 }
 
+// Rend les pages d'un PDF (objet File) en images JPEG (pour les PDF scannés → OCR)
+async function bonRenderToImages(file) {
+  const pdfjsLib = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const imgs = [];
+  const n = Math.min(pdf.numPages, 3);
+  for (let p = 1; p <= n; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 2 });
+    const cv = document.createElement('canvas');
+    cv.width = vp.width; cv.height = vp.height;
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    imgs.push(cv.toDataURL('image/jpeg', 0.85));
+  }
+  return imgs;
+}
+// OCR par l'IA (Mistral vision) : transcrit le texte d'un bon scanné depuis ses images
+async function bonOcrImages(images) {
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const content = [{ type: 'text', text: 'Transcris INTÉGRALEMENT et fidèlement tout le texte visible de ce bon de travaux scanné (toutes les pages fournies), en conservant les libellés et leurs valeurs (gérance, n° de bon, immeuble/adresse, locataire, téléphones, problème…). Réponds uniquement par le texte brut, sans commentaire.' }];
+  images.forEach(d => content.push({ type: 'image_url', image_url: d }));
+  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 2000, messages: [{ role: 'user', content }] })
+  });
+  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error('OCR : ' + m); }
+  const data = await resp.json();
+  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+}
+
 // Gestion du glisser-déposer
 function bonHandleDrop(e) {
   e.preventDefault();
@@ -2582,11 +2614,21 @@ async function bonProcessFile(file) {
   const setStatus = (msg) => { if (status) { status.style.display = 'block'; status.innerHTML = msg; } };
   try {
     setStatus('⏳ Lecture du PDF en cours…');
-    const texte = await bonExtractText(file);
+    let texte = await bonExtractText(file);
     if (!texte || texte.length < 20) {
-      setStatus('');
-      toast('Ce PDF ne contient pas de texte lisible (PDF scanné ?).', '#e63946');
-      return;
+      // PDF scanné (sans texte) → OCR par l'IA depuis les images des pages
+      setStatus('🔍 PDF scanné — lecture OCR par l\'IA…');
+      let ocrTexte = '';
+      try {
+        const imgs = await bonRenderToImages(file);
+        ocrTexte = await bonOcrImages(imgs);
+      } catch (e) { console.warn('OCR bon', e); }
+      if (!ocrTexte || ocrTexte.trim().length < 20) {
+        setStatus('');
+        toast('PDF scanné illisible par l\'OCR. Réessaie avec un scan plus net, ou saisis le bon à la main (« + Bon manuel »).', '#e63946');
+        return;
+      }
+      texte = ocrTexte;
     }
     setStatus('🤖 Analyse intelligente du bon par l\'IA…');
     const infos = _normalizeBonInfos(await bonExtractInfosIA(texte));
