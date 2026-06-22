@@ -6635,8 +6635,10 @@ function downloadDocPDF(id, mode) {
   const infoPairs = [
     ['N° TVA', co.tva],
     [isFacture ? 'Date facture' : 'Date devis', fmtDate(d.dateDoc) || ''],
-    ['Délai de paiement', '30 jours'],
   ];
+  const _nuisDoc = [d.nuisible, d.nuisible2].map(x => String(x || '').trim()).filter(Boolean).join(', ');
+  if (_nuisDoc) infoPairs.push(['Nuisible traité', _nuisDoc]);
+  infoPairs.push(['Délai de paiement', '30 jours']);
   if (bonLie && bonLie.numero) infoPairs.unshift(['N° bon de travail', bonLie.numero]);
   doc.setFontSize(9);
   infoPairs.forEach(([k, v]) => {
