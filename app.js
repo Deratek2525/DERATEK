@@ -1189,11 +1189,16 @@ function renderClients() {
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
-        <button class="btn btn-sm" onclick="planifyClient('${c.id}')" title="Planifier une intervention dans l'agenda" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📅 Planifier</button>
-        <button class="btn btn-ghost btn-sm" onclick="openNewRapportForClient('${c.id}')" title="Nouveau rapport">+ Rapport</button>
-        ${CLIENT_TYPES_DOC.includes(c.type) ? `
-        <button class="btn btn-sm" onclick="createDevisFromClient('${c.id}')" title="Créer un devis pour ce client" style="font-weight:700;border:1.5px solid #8b5cf6;background:#f5f3ff;color:#6d28d9;">📝 Devis</button>
-        <button class="btn btn-sm" onclick="createFactureFromClient('${c.id}')" title="Créer une facture pour ce client" style="font-weight:700;border:1.5px solid #2d9e6b;background:#ecfdf5;color:#166534;">🧾 Facture</button>` : ''}
+        <select onchange="clientCreate('${c.id}', this.value); this.selectedIndex=0;" title="Créer un document ou un rapport pour ce client" style="font-weight:700;font-size:12px;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;border-radius:6px;padding:5.5px 6px;cursor:pointer;max-width:155px;">
+          <option value="">➕ Créer ▾</option>
+          <option value="rapport">📋 Rapport d'intervention</option>
+          ${CLIENT_TYPES_DOC.includes(c.type) ? `<option value="devis">📝 Devis</option><option value="facture">🧾 Facture</option>` : ''}
+          <option value="bois">🪵 Diagnostic bois</option>
+          <option value="rongeurs">🐀 Rapport rongeurs</option>
+          <option value="blattes">🪳 Rapport blattes</option>
+          <option value="fourmis">🐜 Rapport fourmis</option>
+          <option value="planifier">📅 Planifier (agenda)</option>
+        </select>
         <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteClient('${c.id}','${c.nom.replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
       </div>
     </div>`;
@@ -1259,6 +1264,27 @@ function clientSetDate(id, index, value) {
   const list = DB.clients; const i = list.findIndex(x => x.id === id);
   if (i >= 0) { list[i] = { ...list[i], notes: _composeClientNotes(m.notesClean, m.nuisible, dates.slice().sort()) }; DB.clients = list; }
   renderClients();
+}
+// Action choisie dans la liste déroulante « Créer » d'une fiche client
+function clientCreate(id, what) {
+  if (!what) return;
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
+  if (what === 'rapport') { openNewRapportForClient(id); return; }
+  if (what === 'devis')   { createDevisFromClient(id);   return; }
+  if (what === 'facture') { createFactureFromClient(id); return; }
+  if (what === 'planifier') { planifyClient(id); return; }
+  // Diagnostics / rapports spéciaux : on ouvre puis on pré-remplit le client
+  if (what === 'bois') openNewDiagnostic();
+  else if (what === 'rongeurs') openNewRongeurs();
+  else if (what === 'blattes') openNewBlattes();
+  else if (what === 'fourmis') openNewFourmis();
+  else return;
+  if (_editingDiag) {
+    _editingDiag.clientId = c.id;
+    _editingDiag.clientNom = c.nom || '';
+    if (!_editingDiag.locataireAdresse) _editingDiag.locataireAdresse = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    if (typeof renderDiagEditor === 'function') renderDiagEditor();
+  }
 }
 // Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
 function planifyClient(id) {
