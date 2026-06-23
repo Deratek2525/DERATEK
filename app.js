@@ -5024,7 +5024,7 @@ function _nextDocNumero(type) {
 // --- Calcul des totaux à partir des lignes (avec rabais avant TVA) ---
 function _calcTotaux(lignes, tvaTaux, rabaisTaux, expertise) {
   const r2 = n => Math.round(n * 100) / 100;
-  const sousTotal = (lignes || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0), 0);
+  const sousTotal = (lignes || []).reduce((s, l) => s + (parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0) * (1 - ((parseFloat(l.rabais) || 0) / 100)), 0);
   const rabaisMontant = sousTotal * ((parseFloat(rabaisTaux) || 0) / 100);
   const exp = parseFloat(expertise) || 0;          // déduction expertise (avant TVA, après rabais)
   const net = sousTotal - rabaisMontant - exp;
@@ -5256,7 +5256,7 @@ function editDoc(id) {
   _editingDoc.notes = String(_editingDoc.notes || '').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
   // Réparation : on prend comme cible le sous-total recalculé depuis le TOTAL TTC stocké
   // (plus fiable que le sous-total HT que l'IA peut avoir mal extrait)
-  const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0), 0);
+  const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - ((parseFloat(l.rabais)||0)/100)), 0);
   const totalStocke = parseFloat(_editingDoc.total) || 0;
   const sousTotalStocke = parseFloat(_editingDoc.sousTotal) || 0;
   const rabaisTaux = parseFloat(_editingDoc.rabais) || 0;
@@ -5444,7 +5444,8 @@ function renderDocEditor() {
       </td>
       <td style="padding:3px;width:70px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
       <td style="padding:3px;width:100px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
-      <td id="lt-${i}" style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;vertical-align:top;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0))}</td>
+      <td style="padding:3px;width:62px;vertical-align:top;"><input class="form-input" type="number" step="1" min="0" max="100" style="font-size:12px;text-align:right;" value="${l.rabais||0}" oninput="updateDocLigne(${i},'rabais',this.value)" title="Rabais sur cette ligne (%) — ex. 50 pour le 2e nid"></td>
+      <td id="lt-${i}" style="padding:3px;width:100px;text-align:right;font-size:12px;font-weight:600;vertical-align:top;">${_displayMontant((parseFloat(l.qte)||0)*(parseFloat(l.prix)||0)*(1-((parseFloat(l.rabais)||0)/100)))}</td>
       <td style="padding:3px;width:54px;text-align:center;vertical-align:top;">
         <button class="btn btn-ghost btn-xs" onclick="addPrestaModel(${i})" title="Enregistrer cette description comme modèle">💾</button>
         <button class="btn btn-red btn-xs" onclick="removeDocLigne(${i})" title="Supprimer la ligne">✕</button>
@@ -5519,7 +5520,7 @@ function renderDocEditor() {
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr style="font-size:10px;color:var(--g400);text-transform:uppercase;text-align:left;">
-        <th style="padding:3px;">Description</th><th style="padding:3px;text-align:right;">Qté</th><th style="padding:3px;text-align:right;">Prix unit.</th><th style="padding:3px;text-align:right;">Total</th><th></th>
+        <th style="padding:3px;">Description</th><th style="padding:3px;text-align:right;">Qté</th><th style="padding:3px;text-align:right;">Prix unit.</th><th style="padding:3px;text-align:right;">Rabais %</th><th style="padding:3px;text-align:right;">Total</th><th></th>
       </tr></thead>
       <tbody>${lignesHtml}</tbody>
     </table>
@@ -5615,7 +5616,7 @@ function updateDocLigne(i, field, val) {
   // Pour qté/prix : mettre à jour uniquement la cellule total de la ligne + le récapitulatif
   const l = _editingDoc.lignes[i];
   const cell = $('lt-' + i);
-  if (cell) cell.textContent = _displayMontant((parseFloat(l.qte)||0) * (parseFloat(l.prix)||0));
+  if (cell) cell.textContent = _displayMontant((parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - ((parseFloat(l.rabais)||0)/100)));
   const t = _calcTotaux(_editingDoc.lignes, _editingDoc.tvaTaux, _editingDoc.rabais, _editingDoc.expertise);
   const sum = $('doc-summary');
   if (sum) sum.innerHTML = _docSummaryHtml(t, _editingDoc);
@@ -6723,8 +6724,9 @@ function downloadDocPDF(id, mode) {
   let ty = startY;
   ty = drawLignesHeader(ty);
   lignes.forEach((l) => {
-    const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0);
-    const descLines = doc.splitTextToSize(l.desc || '', 100);
+    const _lr = parseFloat(l.rabais) || 0;
+    const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - _lr/100);
+    const descLines = doc.splitTextToSize((l.desc || '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), 100);
     const rowTextH = descLines.length * LINE;
     if (ty + rowTextH + PAD * 2 > contentBottom) {
       ty = drawLignesHeader(startContentPage());
