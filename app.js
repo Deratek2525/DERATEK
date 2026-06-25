@@ -5930,6 +5930,19 @@ function renderDocuments() {
         ${carte('Brouillons', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
         ${carte('Encaissé (payées)', tPayee, '#f0fdf4', '#bbf7d0', '#15803d')}
       </div>`;
+  } else {
+    // Devis : récap des montants par statut (surtout les acceptés)
+    const byS = st => allOfType.filter(d => (d.statut || 'brouillon') === st);
+    const sumS = st => byS(st).reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+    const carteD = (label, n, montant, bg, bd, cl) =>
+      `<div style="background:${bg};border:1px solid ${bd};border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:${cl};font-weight:800;">${label}</span> : <b>${_displayMontant(montant)} CHF</b> <span style="color:var(--g400);">(${n})</span></div>`;
+    statsBar = `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        ${carteD('✅ Devis acceptés', byS('accepte').length, sumS('accepte'), '#f0fdf4', '#bbf7d0', '#15803d')}
+        ${carteD('📨 Envoyés', byS('envoye').length, sumS('envoye'), '#eff6ff', '#bfdbfe', '#1d4ed8')}
+        ${carteD('🕒 Brouillons', byS('brouillon').length, sumS('brouillon'), '#fffbeb', '#fde68a', '#b45309')}
+        ${carteD('❌ Refusés', byS('refuse').length, sumS('refuse'), '#fef2f2', '#fecaca', '#b91c1c')}
+      </div>`;
   }
   const topHtml = statsBar + aFacturerHtml + aDeviserHtml + brouillonsHtml;
   if (!docs.length) {
