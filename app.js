@@ -6762,14 +6762,19 @@ function downloadDocPDF(id, mode) {
   // Les lignes suivent le flux normal et continuent en page suivante si nécessaire.
   let ty = startY;
   ty = drawLignesHeader(ty);
+  let rowsOnPage = 0;   // évite de pousser une 1re ligne (longue) sur une page vide
   lignes.forEach((l) => {
     const _lr = parseFloat(l.rabais) || 0;
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - _lr/100);
     const descLines = doc.splitTextToSize((l.desc || '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), 100);
     const rowTextH = descLines.length * LINE;
-    if (ty + rowTextH + PAD * 2 > contentBottom) {
+    // On ne saute à la page suivante que s'il y a DÉJÀ au moins une ligne sur la page
+    // courante : ainsi la 1re ligne commence toujours sur la page en cours (page 1 jamais vide).
+    if (rowsOnPage > 0 && ty + rowTextH + PAD * 2 > contentBottom) {
       ty = drawLignesHeader(startContentPage());
+      rowsOnPage = 0;
     }
+    rowsOnPage++;
     const baseY = ty + LINE - 1;   // baseline de la 1re ligne (texte sous le haut de la rangée)
     doc.text(descLines, 22, baseY, { lineHeightFactor: LINE / 3.35 });
     doc.text(String(l.qte||0), 130, baseY, {align:'right'});
