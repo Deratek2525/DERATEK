@@ -5466,7 +5466,7 @@ function renderDocEditor() {
           <option value="">＋ Choisir une prestation modèle…</option>
           ${prestaOpts}
         </select>
-        <input class="form-input" style="font-size:12px;" value="${(l.desc||'').replace(/"/g,'&quot;')}" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description libre">
+        <textarea class="form-input" rows="2" style="font-size:12px;resize:vertical;min-height:34px;line-height:1.4;" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description libre (retours à la ligne possibles)">${(l.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </td>
       <td style="padding:3px;width:70px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
       <td style="padding:3px;width:100px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
