@@ -4271,7 +4271,13 @@ function renderBons() {
   }
   if (count) {
     const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
-    count.textContent = bons.length ? bons.length + ' ' + lbl : '';
+    // Rapports à transmettre : bons (non archivés, hors demande de devis) dont le rapport n'est pas encore fait
+    const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && !['demande-devis', 'attente-devis'].includes(b.statut || '') && !_bonRapFait(b)).length;
+    const base = bons.length ? bons.length + ' ' + lbl : '';
+    const rapHtml = rapAFaire
+      ? `<span style="color:#b91c1c;font-weight:800;">📋 ${rapAFaire} rapport${rapAFaire > 1 ? 's' : ''} à transmettre</span>`
+      : `<span style="color:#15803d;font-weight:700;">✅ Tous les rapports sont faits</span>`;
+    count.innerHTML = base + (base ? ' &nbsp;·&nbsp; ' : '') + rapHtml;
   }
   if (!list) return;
   if (!bons.length) {
