@@ -5646,8 +5646,8 @@ function _docSummaryHtml(t, d) {
 function updateDocLigne(i, field, val) {
   if (!_editingDoc || !_editingDoc.lignes[i]) return;
   _editingDoc.lignes[i][field] = (field === 'desc') ? val : (parseFloat(val) || 0);
-  // La description n'affecte pas les montants → rien d'autre à faire
-  if (field === 'desc') return;
+  // La description n'affecte pas les montants, mais on rafraîchit quand même l'aperçu PDF
+  if (field === 'desc') { if (typeof _docPdfLive === 'function') _docPdfLive(); return; }
   // Pour qté/prix : mettre à jour uniquement la cellule total de la ligne + le récapitulatif
   const l = _editingDoc.lignes[i];
   const cell = $('lt-' + i);
