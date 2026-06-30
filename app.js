@@ -4271,8 +4271,8 @@ function renderBons() {
   }
   if (count) {
     const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
-    // Rapports à transmettre : bons (non archivés, hors demande de devis) dont le rapport n'est pas encore fait
-    const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && !['demande-devis', 'attente-devis'].includes(b.statut || '') && !_bonRapFait(b)).length;
+    // Rapports à transmettre : bons dont le statut est « 📕 Rapport à transmettre »
+    const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && (b.statut || '') === 'a-transmettre').length;
     const base = bons.length ? bons.length + ' ' + lbl : '';
     const rapHtml = rapAFaire
       ? `<span style="color:#b91c1c;font-weight:800;">📋 ${rapAFaire} rapport${rapAFaire > 1 ? 's' : ''} à transmettre</span>`
