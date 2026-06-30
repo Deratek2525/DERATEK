@@ -5475,7 +5475,7 @@ function renderDocEditor() {
           <option value="">＋ Choisir une prestation modèle…</option>
           ${prestaOpts}
         </select>
-        <textarea class="form-input" rows="2" style="font-size:12px;resize:vertical;min-height:34px;line-height:1.4;" oninput="updateDocLigne(${i},'desc',this.value)" placeholder="Description libre (retours à la ligne possibles)">${(l.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        <textarea class="form-input" rows="2" style="font-size:12px;resize:vertical;min-height:34px;line-height:1.4;" oninput="updateDocLigne(${i},'desc',this.value)" onpaste="docDescPaste(event,${i})" placeholder="Description libre (retours à la ligne possibles)">${(l.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </td>
       <td style="padding:3px;width:70px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.qte||0}" oninput="updateDocLigne(${i},'qte',this.value)"></td>
       <td style="padding:3px;width:100px;vertical-align:top;"><input class="form-input" type="number" step="0.01" style="font-size:12px;text-align:right;" value="${l.prix||0}" oninput="updateDocLigne(${i},'prix',this.value)"></td>
@@ -5686,6 +5686,16 @@ function docSetMontantField(field, val) {
 }
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
+// Colle du texte dans une désignation en retirant les marqueurs de gras ** (sinon ils s'affichent en astérisques)
+function docDescPaste(ev, i) {
+  ev.preventDefault();
+  let txt = ((ev.clipboardData || window.clipboardData).getData('text') || '').replace(/\*\*/g, '');
+  const ta = ev.target;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + txt + ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s + txt.length;
+  updateDocLigne(i, 'desc', ta.value);
+}
 
 // --- Photos du devis (en mémoire uniquement, incluses dans le PDF) ---
 function docAddPhotos(ev) {
@@ -6775,7 +6785,7 @@ function downloadDocPDF(id, mode) {
   lignes.forEach((l) => {
     const _lr = parseFloat(l.rabais) || 0;
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - _lr/100);
-    const descLines = doc.splitTextToSize((l.desc || '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), 100);
+    const descLines = doc.splitTextToSize(String(l.desc || '').replace(/\*\*/g, '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), 100);
     const rowTextH = descLines.length * LINE;
     // On ne saute à la page suivante que s'il y a DÉJÀ au moins une ligne sur la page
     // courante : ainsi la 1re ligne commence toujours sur la page en cours (page 1 jamais vide).
