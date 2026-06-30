@@ -4196,7 +4196,9 @@ function renderBonCard(b, solid) {
                   const h = _bonAlerteHeures(b);
                   if ((statut === 'a-contacter' || statut === 'urgent') && h !== null && h >= 48) {
                     const lbl = statut === 'urgent' ? '🚨 URGENT' : '📞 À CONTACTER';
-                    return `<span title="En statut « ${lbl} » depuis plus de 48 h" style="font-size:11px;font-weight:800;color:#fff;background:#dc2626;border-radius:6px;padding:4px 9px;">⚠️ ${lbl} · +48 h</span>`;
+                    const retard = Math.floor((h - 48) / 24);   // jours de retard au-delà du délai de 48 h
+                    const suffix = retard >= 1 ? ('+' + retard + ' jour' + (retard > 1 ? 's' : '') + ' de retard') : '+48 h';
+                    return `<span title="En statut « ${lbl} » depuis plus de 48 h${retard >= 1 ? (' — ' + retard + ' jour(s) de retard au-delà du délai') : ''}" style="font-size:11px;font-weight:800;color:#fff;background:#dc2626;border-radius:6px;padding:4px 9px;">⚠️ ${lbl} · ${suffix}</span>`;
                   }
                   return '';
                 })()}
