@@ -6653,9 +6653,10 @@ function downloadDocPDF(id, mode) {
   const startContentPage = () => { doc.addPage(); drawHeader(); return headerFiletY + 8; };
   drawHeader();
 
-  // Date d'émission, sous le filet, à droite ("Neuchâtel, le ...")
+  // Date d'émission, sous le filet, à GAUCHE ("Neuchâtel, le ...") — hors de la
+  // fenêtre droite de l'enveloppe C5 (sinon la date apparaît dans la fenêtre).
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
-  doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 190, headerFiletY + 5, { align: 'right' });
+  doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 20, headerFiletY + 5);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
