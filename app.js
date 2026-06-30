@@ -1128,10 +1128,10 @@ function renderClients() {
   grid.innerHTML = list.map(c => {
     const nbDiag = (DB.diagnostics || []).filter(dg => (dg.clientId && dg.clientId === c.id) || (!dg.clientId && _normNom(dg.clientNom) === _normNom(c.nom))).length;
     const nb = rapports.filter(r => r.clientId === c.id).length + nbDiag;
-    // CA = anciens rapports "Envoyé" + factures PAYÉES liées au client (par id ou par nom)
+    // CHF facturés = anciens rapports "Envoyé" + toutes les factures émises (hors brouillon et hors rappel) liées au client
     const caRapports = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
     const caFactures = (DB.documents || []).filter(d =>
-        d.type === 'facture' && d.statut === 'payee' &&
+        d.type === 'facture' && (d.statut || '') !== 'brouillon' && !_isRappelDoc(d) &&
         ((d.clientId && d.clientId === c.id) || (!d.clientId && _normNom(d.clientNom) === _normNom(c.nom)))
       ).reduce((a,d) => a + (parseFloat(d.total)||0), 0);
     const totalCA = caRapports + caFactures;
