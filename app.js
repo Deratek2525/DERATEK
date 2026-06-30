@@ -1126,7 +1126,8 @@ function renderClients() {
   grid.style.display = 'block';
   const _normNom = s => String(s||'').trim().toLowerCase();
   grid.innerHTML = list.map(c => {
-    const nb = rapports.filter(r => r.clientId === c.id).length;
+    const nbDiag = (DB.diagnostics || []).filter(dg => (dg.clientId && dg.clientId === c.id) || (!dg.clientId && _normNom(dg.clientNom) === _normNom(c.nom))).length;
+    const nb = rapports.filter(r => r.clientId === c.id).length + nbDiag;
     // CA = anciens rapports "Envoyé" + factures PAYÉES liées au client (par id ou par nom)
     const caRapports = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
     const caFactures = (DB.documents || []).filter(d =>
