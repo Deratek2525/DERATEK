@@ -4875,7 +4875,8 @@ function _displayMontant(a) {
 const BUREAUX = [
   { id: 'ne', label: 'Neuchâtel', rue: DERATEK_CONFIG.company.rue, npa: DERATEK_CONFIG.company.npa, ville: DERATEK_CONFIG.company.ville, tel: DERATEK_CONFIG.company.tel },
   { id: 'la', label: 'Lausanne', rue: 'Ch. des Pyramides 7', npa: '1007', ville: 'Lausanne', tel: '021 552 66 72' },
-  { id: 'be', label: 'Berne', rue: 'Neufeldstrasse 119', npa: '3012', ville: 'Berne', tel: DERATEK_CONFIG.company.tel }
+  { id: 'be', label: 'Berne', rue: 'Neufeldstrasse 119', npa: '3012', ville: 'Berne', tel: DERATEK_CONFIG.company.tel },
+  { id: 'ge', label: 'Genève', rue: DERATEK_CONFIG.company.rue, npa: DERATEK_CONFIG.company.npa, ville: DERATEK_CONFIG.company.ville, tel: '022 552 33 72' }
 ];
 function _docBureau(d) {
   return BUREAUX.find(b => b.id === ((d && d.bureauId) || 'ne')) || BUREAUX[0];
