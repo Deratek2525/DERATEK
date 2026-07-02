@@ -3089,6 +3089,13 @@ function bonShowConfirm(infos, fileName, manual) {
         ${champ('Concierge', 'concierge', infos.concierge)}
         ${champ('Contact sur place', 'contact_sur_place', infos.contact_sur_place)}
       </div>
+
+      <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">📅 Dates d'intervention (→ bon)</div>
+      <div id="bonf-dates" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        ${((_pendingBonDates || []).slice(0, 5)).map(d => `<input type="date" class="form-input" data-bonf-date value="${d}" style="width:auto;font-size:13px;">`).join('')}
+        <button type="button" class="btn btn-ghost btn-sm" onclick="bonfAddDate()" title="Ajouter une date d'intervention">+ Ajouter une date</button>
+      </div>
+
       <div style="margin-top:8px;">
         <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Problème / travaux</label>
         <textarea class="form-input" id="bonf-probleme" rows="2" style="font-size:13px;">${(infos.probleme||'')}</textarea>
@@ -3106,6 +3113,16 @@ function bonShowConfirm(infos, fileName, manual) {
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Ajoute un champ date vide dans la section « Dates d'intervention » du formulaire de bon
+function bonfAddDate() {
+  const wrap = $('bonf-dates'); if (!wrap) return;
+  const inp = document.createElement('input');
+  inp.type = 'date'; inp.className = 'form-input'; inp.setAttribute('data-bonf-date', '');
+  inp.style.cssText = 'width:auto;font-size:13px;';
+  const btn = wrap.querySelector('button');
+  wrap.insertBefore(inp, btn);
+  inp.focus();
+}
 function bonCancel() {
   const box = $('bon-confirm');
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
@@ -3272,8 +3289,10 @@ async function bonConfirmSave() {
     pdfPath:         pdfPath,
     createdAt: new Date().toISOString()
   };
-  // Reporte les dates d'intervention pré-remplies (ex. depuis une fiche client)
-  if (_pendingBonDates && _pendingBonDates.length) { _setBonDatesInterv(bon, _pendingBonDates); }
+  // Dates d'intervention : on lit celles saisies/pré-remplies dans le formulaire du bon
+  const _formDates = Array.prototype.slice.call(document.querySelectorAll('#bonf-dates [data-bonf-date]')).map(function (i) { return (i.value || '').trim(); }).filter(Boolean);
+  const _datesToApply = _formDates.length ? _formDates : (_pendingBonDates || []);
+  if (_datesToApply.length) { _setBonDatesInterv(bon, _datesToApply); }
   _pendingBonDates = null;
   bons.push(bon);
   DB.bons = bons;
