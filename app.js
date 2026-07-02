@@ -1377,6 +1377,9 @@ function openManualBonForClient(id) {
   set('gerance_adresse', c.adresse);
   set('gerance_npa', c.npa);
   set('gerance_ville', c.ville);
+  // Reporte les dates d'intervention déjà saisies sur la fiche client dans le bon manuel
+  const _cm = (typeof _clientMeta === 'function') ? _clientMeta(c) : { dates: [] };
+  _pendingBonDates = (_cm.dates || []).slice();
 }
 // Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
 function planifyClient(id) {
@@ -2718,6 +2721,7 @@ function bonHandleInput(e) {
 
 // Référence au fichier PDF en cours de traitement (pour l'uploader à la validation)
 let _pendingBonPdf = null;
+let _pendingBonDates = null;   // dates d'intervention à reporter dans un bon manuel (ex. depuis une fiche client)
 
 // Traite le PDF : extraction texte -> IA -> récap
 async function bonProcessFile(file) {
@@ -2728,6 +2732,7 @@ async function bonProcessFile(file) {
 
   // Mémorise le fichier pour l'upload à la validation
   _pendingBonPdf = file;
+  _pendingBonDates = null;
 
   const setStatus = (msg) => { if (status) { status.style.display = 'block'; status.innerHTML = msg; } };
   try {
@@ -3010,6 +3015,7 @@ function _nextBonManuelNumero() {
 function openManualBon() {
   if (typeof showScreen === 'function') showScreen('bons');
   _pendingBonPdf = null;
+  _pendingBonDates = null;
   const fi = $('bon-file-input'); if (fi) fi.value = '';
   bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
 }
@@ -3105,6 +3111,7 @@ function bonCancel() {
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   const fi = $('bon-file-input'); if (fi) fi.value = '';
   _pendingBonPdf = null;
+  _pendingBonDates = null;
 }
 
 // Récupère la valeur d'un input du récap (ou chaîne vide)
@@ -3265,6 +3272,9 @@ async function bonConfirmSave() {
     pdfPath:         pdfPath,
     createdAt: new Date().toISOString()
   };
+  // Reporte les dates d'intervention pré-remplies (ex. depuis une fiche client)
+  if (_pendingBonDates && _pendingBonDates.length) { _setBonDatesInterv(bon, _pendingBonDates); }
+  _pendingBonDates = null;
   bons.push(bon);
   DB.bons = bons;
 
