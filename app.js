@@ -594,6 +594,81 @@ async function saveNote(key){
   } catch (e) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } }
 }
 
+// ============================================================
+// RECHERCHE GLOBALE (barre du haut) — cherche partout dans l'app
+// ============================================================
+let _gsTimer = null;
+function _gsNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function _gsHide() { const b = $('global-search-results'); if (b) { b.style.display = 'none'; b.innerHTML = ''; } const inp = $('global-search'); if (inp) inp.value = ''; }
+function globalSearch(q) { clearTimeout(_gsTimer); _gsTimer = setTimeout(function () { _globalSearchNow(q); }, 150); }
+function _gsOpenBon(b) {
+  showScreen('bons');
+  const st = b.statut || '';
+  const filt = st === 'termine' ? 'termines' : (st === 'en-cours' ? 'en-cours' : 'actifs');
+  const s = $('bon-search'); if (s) s.value = b.numero || '';
+  if (typeof setBonsFilter === 'function') setBonsFilter(filt); else if (typeof renderBons === 'function') renderBons();
+  _gsHide();
+}
+function _globalSearchNow(q) {
+  const box = $('global-search-results'); if (!box) return;
+  const raw = (q || '').trim();
+  if (raw.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const nq = _gsNorm(raw), nqns = nq.replace(/\s/g, '');
+  const match = function () {
+    const hay = _gsNorm(Array.prototype.filter.call(arguments, Boolean).join(' '));
+    return hay.includes(nq) || hay.replace(/\s/g, '').includes(nqns);
+  };
+  const res = [];
+  (DB.bons || []).forEach(function (b) {
+    if (match(b.numero, b.geranceNom, b.gerantNom, b.locataireNom, b.immeuble, b.gerantTel, (typeof _bonProblemeClean === 'function' ? _bonProblemeClean(b) : b.probleme)))
+      res.push({ icon: '📄', type: 'Bon', title: b.numero || '(sans n°)', sub: [b.geranceNom, b.locataireNom || b.immeuble].filter(Boolean).join(' · '), go: function () { _gsOpenBon(b); } });
+  });
+  (DB.documents || []).forEach(function (d) {
+    const isFact = d.type === 'facture';
+    const lignesTxt = Array.isArray(d.lignes) ? d.lignes.map(function (l) { return l.desc; }).join(' ') : '';
+    if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt))
+      res.push({ icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)', sub: [d.clientNom, (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '), go: function () { editDoc(d.id); _gsHide(); } });
+  });
+  (DB.rapports || []).forEach(function (r) {
+    if (match(r.id, r.clientNom, r.noint, (r.nuisibles || []).join(' '), r.adresse, r.tech, r.bonCommande))
+      res.push({ icon: '📋', type: 'Rapport', title: r.id || '', sub: [r.clientNom, (r.nuisibles || []).join(', ')].filter(Boolean).join(' · '), go: function () { editRapport(r.id); _gsHide(); } });
+  });
+  (DB.diagnostics || []).forEach(function (dg) {
+    if (match(dg.numero, dg.clientNom, dg.locataireNom, (dg.insectes || []).join(' '), dg.batiment))
+      res.push({ icon: '🔬', type: 'Diagnostic', title: dg.numero || '', sub: [dg.clientNom].filter(Boolean).join(' · '), go: function () { editDiag(dg.id); _gsHide(); } });
+  });
+  (DB.clients || []).forEach(function (c) {
+    if (match(c.nom, c.contact, c.tel, c.email, c.adresse, c.ville, c.num))
+      res.push({ icon: '👤', type: 'Client', title: c.nom || '', sub: [c.type, c.ville].filter(Boolean).join(' · '), go: function () { editClient(c.id); _gsHide(); } });
+  });
+  (DB.locataires || []).forEach(function (l) {
+    if (match(l.nom, l.tel, l.email, l.adresse))
+      res.push({ icon: '🏠', type: 'Locataire', title: l.nom || '', sub: [l.adresse].filter(Boolean).join(' · '), go: function () { editLocataire(l.id); _gsHide(); } });
+  });
+  (DB.fournisseurs || []).forEach(function (f) {
+    if (match(f.nom, f.contact, f.tel, f.email, f.categorie))
+      res.push({ icon: '📦', type: 'Fournisseur', title: f.nom || '', sub: [f.categorie, f.ville].filter(Boolean).join(' · '), go: function () { showScreen('fournisseurs'); const s = $('fourn-search'); if (s) { s.value = raw; if (typeof renderFournisseurs === 'function') renderFournisseurs(); } _gsHide(); } });
+  });
+  const total = res.length, shown = res.slice(0, 25);
+  if (!shown.length) { box.innerHTML = '<div style="padding:12px 14px;color:#6b7280;font-size:13px;">Aucun résultat pour « ' + raw.replace(/</g, '&lt;') + ' »</div>'; box.style.display = 'block'; return; }
+  window._gsActions = shown.map(function (r) { return r.go; });
+  box.innerHTML = shown.map(function (r, i) {
+    return '<div onclick="(window._gsActions[' + i + ']||function(){})()" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f1f3f7;cursor:pointer;" onmouseover="this.style.background=\'#f5f7fb\'" onmouseout="this.style.background=\'\'">'
+      + '<span style="font-size:16px;">' + r.icon + '</span>'
+      + '<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + ' <span style="font-weight:600;color:#9ca3af;font-size:11px;">· ' + r.type + '</span></div>'
+      + (r.sub ? '<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.sub.replace(/</g, '&lt;') + '</div>' : '')
+      + '</div></div>';
+  }).join('') + (total > shown.length ? '<div style="padding:6px 14px;font-size:11px;color:#9ca3af;">… ' + (total - shown.length) + ' autre(s) résultat(s), précise ta recherche.</div>' : '');
+  box.style.display = 'block';
+}
+// Fermer les résultats en cliquant ailleurs
+document.addEventListener('click', function (e) {
+  const box = $('global-search-results'), inp = $('global-search');
+  if (!box || box.style.display === 'none') return;
+  if (e.target === inp || box.contains(e.target)) return;
+  box.style.display = 'none';
+});
+
 function renderDashboard() {
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
   const now = new Date();
