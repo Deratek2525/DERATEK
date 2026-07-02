@@ -1267,6 +1267,7 @@ function renderClients() {
         <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
         <select onchange="clientCreate('${c.id}', this.value); this.selectedIndex=0;" title="Créer un document ou un rapport pour ce client" style="font-weight:700;font-size:12px;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;border-radius:6px;padding:5.5px 6px;cursor:pointer;max-width:155px;">
           <option value="">➕ Créer ▾</option>
+          <option value="bon">📄 Bon manuel</option>
           <option value="rapport">📋 Rapport d'intervention</option>
           ${CLIENT_TYPES_DOC.includes(c.type) ? `<option value="devis">📝 Devis</option><option value="facture">🧾 Facture</option>` : ''}
           <option value="bois">🪵 Diagnostic bois</option>
@@ -1345,6 +1346,7 @@ function clientSetDate(id, index, value) {
 function clientCreate(id, what) {
   if (!what) return;
   const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
+  if (what === 'bon') { openManualBonForClient(id); return; }
   if (what === 'rapport') { openNewRapportForClient(id); return; }
   if (what === 'devis')   { createDevisFromClient(id);   return; }
   if (what === 'facture') { createFactureFromClient(id); return; }
@@ -1361,6 +1363,20 @@ function clientCreate(id, what) {
     if (!_editingDiag.locataireAdresse) _editingDiag.locataireAdresse = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     if (typeof renderDiagEditor === 'function') renderDiagEditor();
   }
+}
+// Ouvre un bon manuel pré-rempli depuis une fiche client
+function openManualBonForClient(id) {
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) return;
+  if (typeof openManualBon === 'function') openManualBon();
+  const set = (k, v) => { const el = $('bonf-' + k); if (el) el.value = v || ''; };
+  const gerant = String(c.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+  set('gerance_nom', c.nom);
+  set('gerant_nom', gerant);
+  set('gerant_tel', c.tel);
+  set('gerant_email', c.email);
+  set('gerance_adresse', c.adresse);
+  set('gerance_npa', c.npa);
+  set('gerance_ville', c.ville);
 }
 // Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
 function planifyClient(id) {
