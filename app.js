@@ -1203,6 +1203,9 @@ function renderClients() {
   grid.innerHTML = list.map(c => {
     const nbDiag = (DB.diagnostics || []).filter(dg => (dg.clientId && dg.clientId === c.id) || (!dg.clientId && _normNom(dg.clientNom) === _normNom(c.nom))).length;
     const nb = rapports.filter(r => r.clientId === c.id).length + nbDiag;
+    // Signaux ruban : bons et factures liés à ce client
+    const nbBons = (DB.bons || []).filter(b => (b.geranceId && b.geranceId === c.id) || (!b.geranceId && b.geranceNom && _normNom(b.geranceNom) === _normNom(c.nom))).length;
+    const nbFact = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d) && ((d.clientId && d.clientId === c.id) || (!d.clientId && d.clientNom && _normNom(d.clientNom) === _normNom(c.nom)))).length;
     // CHF facturés = anciens rapports "Envoyé" + toutes les factures émises (hors brouillon et hors rappel) liées au client
     const caRapports = rapports.filter(r => r.clientId === c.id && r.statut === 'Envoyé').reduce((a,r) => a + (parseFloat(r.montant)||0), 0);
     const caFactures = (DB.documents || []).filter(d =>
@@ -1220,6 +1223,8 @@ function renderClients() {
           <div style="font-size:13px;font-weight:800;color:var(--navy);line-height:1.2;">${c.nom}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px;">
             <span class="badge b-gray" style="background:${typeColor}22;color:${typeColor};">${c.type}</span>
+            ${nbBons ? `<span title="${nbBons} bon(s) lié(s)" style="font-size:10px;font-weight:800;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:1px 7px;">📄 ${nbBons} bon${nbBons > 1 ? 's' : ''}</span>` : ''}
+            ${nbFact ? `<span title="${nbFact} facture(s) liée(s)" style="font-size:10px;font-weight:800;color:#166534;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:8px;padding:1px 7px;">🧾 ${nbFact} facture${nbFact > 1 ? 's' : ''}</span>` : ''}
             ${c.num ? `<span style="font-size:10px;color:var(--g400);">${c.num}</span>` : ''}
           </div>
         </div>
