@@ -12054,7 +12054,13 @@ function renderAnciennesList() {
   const nImp = pasPayees.length, sImp = pasPayees.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
   // Filtre cliquable (cartes récap) : 'tous' | 'envoyee' | 'impayee'
   const af = state.ancFilter || 'tous';
-  const displayed = af === 'impayee' ? pasPayees : (af === 'envoyee' ? envoyees : shown);
+  const _ancQ = (state.ancSearch || '').trim().toLowerCase();
+  const _ancMatch = d => {
+    if (!_ancQ) return true;
+    const hay = [d.numero, d.clientNom, d.proprietaire, d.locataireNom, d.locataireAdresse, String(d.notes || '')].join(' ').toLowerCase();
+    return hay.includes(_ancQ);
+  };
+  const displayed = (af === 'impayee' ? pasPayees : (af === 'envoyee' ? envoyees : shown)).filter(_ancMatch);
   const ring = (on, col) => on ? `box-shadow:0 0 0 2px ${col};` : '';
   box.innerHTML = `
     <div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:8px;">
@@ -12065,6 +12071,14 @@ function renderAnciennesList() {
         <div onclick="ancSetFilter('tous')" title="Cliquer pour afficher toutes les factures à encaisser" style="cursor:pointer;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;font-size:12px;${ring(af==='tous','#d97706')}"><span style="color:#b45309;font-weight:800;">Total à encaisser</span> : <b>${_displayMontant(totalNonPaye)} CHF</b> <span style="color:var(--g400);">(${nNonPay})</span></div>
         <div onclick="showScreen('fact-archive')" title="Voir les factures payées dans « Facturation archivée »" style="cursor:pointer;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 12px;font-size:12px;"><span style="color:#15803d;font-weight:800;">✅ Encaissé → Facturation archivée</span> : <b>${_displayMontant(totalPaye)} CHF</b> <span style="color:var(--g400);">(${nPay})</span> ↗</div>
       </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <div style="position:relative;flex:1;max-width:420px;">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--g400);pointer-events:none;">🔎</span>
+        <input id="anc-search" type="text" value="${(state.ancSearch || '').replace(/"/g, '&quot;')}" oninput="ancSetSearch(this.value)" placeholder="Rechercher : n° facture, client, propriétaire, locataire…" style="width:100%;font-size:13px;padding:7px 30px 7px 30px;border:1px solid #d1d5db;border-radius:8px;box-sizing:border-box;">
+        ${_ancQ ? `<span onclick="ancSetSearch('')" title="Effacer la recherche" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:13px;color:var(--g400);">✕</span>` : ''}
+      </div>
+      ${_ancQ ? `<span style="font-size:11px;color:var(--g600);white-space:nowrap;">${displayed.length} résultat${displayed.length > 1 ? 's' : ''}</span>` : ''}
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;font-size:12px;flex-wrap:wrap;">
       <span style="color:var(--g600);font-weight:700;">Trier :</span>
@@ -12152,6 +12166,12 @@ function renderAnciennesList() {
         </div>${rappelsHtml}</div>`;
       }).join('')}
     </div>`;
+}
+function ancSetSearch(v) {
+  state.ancSearch = v || '';
+  renderAnciennesList();
+  const el = $('anc-search');
+  if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch (e) {} }
 }
 function ancSetFilter(v) { state.ancFilter = v || 'tous'; renderAnciennesList(); }
 function ancSetSort(v) { state.ancSort = v || 'manuel'; renderAnciennesList(); }
