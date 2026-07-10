@@ -4626,6 +4626,11 @@ function updateBonStatut(id, value) {
   };
   toast(labels[value] || 'Statut mis à jour', '#2d9e6b');
   renderBons();
+  // Le statut du bon décide de son apparition dans « Bons terminés à facturer »
+  // (onglet Factures) et « Bons en demande de devis » (onglet Devis) → on rafraîchit ces vues.
+  if (typeof renderDocuments === 'function') renderDocuments();
+  if (typeof updateNavCounts === 'function') updateNavCounts();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 
 function confirmDeleteBon(id, label) {
