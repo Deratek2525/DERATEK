@@ -4886,6 +4886,24 @@ function _docBureau(d) {
 function _docIsArchive(d) {
   return !!(d && (d._archive || /\[ARCHIVE\]/.test(String(d.notes || ''))));
 }
+// Un devis « archivé avec sa facture payée » : marqueur invisible [DEVISARCH].
+// Il quitte alors la liste active des devis et s'affiche dans le dossier archivé de sa facture.
+function _isDevisArchivedWithFacture(d) {
+  return !!(d && (d.type || 'devis') === 'devis' && /\[DEVISARCH\]/.test(String(d.notes || '')));
+}
+function _setDevisArchivedFlag(devis, on) {
+  if (!devis) return;
+  const n = String(devis.notes || '');
+  const has = /\[DEVISARCH\]/.test(n);
+  if (on && !has) devis.notes = (n + ' [DEVISARCH]').trim();
+  else if (!on && has) devis.notes = n.replace(/\s*\[DEVISARCH\]/g, '').trim();
+}
+// Synchronise l'archivage du devis source avec l'état payé de sa facture.
+function _syncDevisArchiveWithFacture(facture, paid) {
+  if (!facture || !facture.devisId) return;
+  const dv = (DB.documents || []).find(x => x.id === facture.devisId && (x.type || 'devis') === 'devis');
+  if (dv) _setDevisArchivedFlag(dv, !!paid);
+}
 function _docNotesClean(d) {
   return String((d && d.notes) || '')
     .replace(/\s*\[ARCHIVE\]\s*/g, ' ')
@@ -4894,6 +4912,7 @@ function _docNotesClean(d) {
     .replace(/\s*\[ENVDATE:[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[ORD:\d+\]\s*/g, ' ')
     .replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ')
+    .replace(/\s*\[DEVISARCH\]\s*/g, ' ')
     .trim();
 }
 // Ordre manuel d'affichage dans Anciennes factures (glisser-déposer) — marqueur [ORD:n]
@@ -5017,7 +5036,8 @@ function _factArchiveSets() {
     if (!_isFactureFactArchived(d)) return;
     const bon = (DB.bons || []).find(b => b.id === d.bonId) || null;
     const rapport = bon ? _rapForBon(bon) : null;
-    sets.push({ facture: d, bon, rapport, manual: false });
+    const devis = d.devisId ? ((DB.documents || []).find(x => x.id === d.devisId && (x.type || 'devis') === 'devis') || null) : null;
+    sets.push({ facture: d, bon, rapport, devis, manual: false });
     if (bon) seenBon.add(bon.id);
     if (rapport) seenRap.add(rapport.id);
   });
@@ -5056,7 +5076,7 @@ function renderFactArchive() {
   }
   const pill = (icon, txt, col) => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${col};background:${_hexTint(col,0.12)};border:1px solid ${_hexTint(col,0.30)};border-radius:6px;padding:3px 8px;">${icon} ${txt}</span>`;
   const card = (s) => {
-    const f = s.facture, b = s.bon, r = s.rapport;
+    const f = s.facture, b = s.bon, r = s.rapport, dv = s.devis;
     const isPaid = !!(f && f.statut === 'payee');
     const clientNom = (f && f.clientNom) || (r && r.clientNom) || (b && b.geranceNom) || '—';
     const locNom = (f && f.locataireNom) || (r && _rapLoc(r).nom) || '';
@@ -5075,12 +5095,15 @@ function renderFactArchive() {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
         ${b ? pill('📄', 'Bon ' + (b.numero || ''), '#2563eb') : pill('📄', 'Bon — (aucun)', '#9ca3af')}
         ${r ? pill('📋', 'Rapport ' + (r.id || ''), '#7c3aed') : pill('📋', 'Rapport — (aucun)', '#9ca3af')}
+        ${dv ? pill('📝', 'Devis ' + (dv.numero || ''), '#8b5cf6') : ''}
         ${f ? pill('🧾', 'Facture ' + (f.numero || ''), '#0f766e') : pill('🧾', 'Facture — à faire', '#9ca3af')}
         <span style="font-size:11px;color:var(--g400);">📅 ${fmtDate(dateTxt) || '—'}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px dashed #eee;padding-top:10px;">
         ${b && b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" onmouseenter="bonPdfPreview('${b.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = ouvrir">📎 PDF du bon</button>` : ''}
         ${r ? `<button class="btn btn-ghost btn-sm" onclick="editRapport('${r.id}')" onmouseenter="rapPdfPreview('${r.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu du rapport · Clic = ouvrir">📋 Voir le rapport</button>` : ''}
+        ${dv ? `<button class="btn btn-ghost btn-sm" onclick="editDoc('${dv.id}')">📝 Voir le devis</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${dv.id}')" title="Télécharger le PDF du devis">📥 PDF devis</button>` : ''}
         ${f ? `<button class="btn btn-ghost btn-sm" onclick="editDoc('${f.id}')">✏️ Voir la facture</button>
         <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${f.id}')" onmouseenter="factPdfPreview('${f.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = télécharger">📥 PDF facture</button>`
         : (b ? `<button class="btn btn-navy btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer la facture pour ce dossier">🧾 Créer la facture</button>` : '')}
@@ -5101,7 +5124,10 @@ function renderFactArchive() {
 // Désarchive : remet la facture en « Envoyée » (non payée) → le trio ressort des archives
 function unarchiveFact(id) {
   const docs = DB.documents; const d = docs.find(x => x.id === id); if (!d) return;
-  d.statut = 'envoyee'; DB.documents = docs;
+  d.statut = 'envoyee';
+  // On ressort aussi le devis source qui avait été archivé avec la facture
+  if (d.type === 'facture' && d.devisId) _syncDevisArchiveWithFacture(d, false);
+  DB.documents = docs;
   renderFactArchive();
   toast('Dossier ressorti de l\'archive (facture remise en « non payée »)', '#2d9e6b');
 }
@@ -5414,7 +5440,9 @@ function editDoc(id) {
   if (_editingDoc.rabais === undefined || _editingDoc.rabais === null) _editingDoc.rabais = 0;
   // Déduction expertise : on lit le marqueur [EXPERT:n] et on le retire de la note affichée
   _editingDoc.expertise = _docExpertise(_editingDoc);
-  _editingDoc.notes = String(_editingDoc.notes || '').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
+  // Devis archivé avec sa facture : on retire le marqueur de l'affichage mais on le restaure à la sauvegarde
+  _editingDoc._wasDevisArch = /\[DEVISARCH\]/.test(String(_editingDoc.notes || ''));
+  _editingDoc.notes = String(_editingDoc.notes || '').replace(/\s*\[DEVISARCH\]\s*/g, ' ').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
   // Réparation : on prend comme cible le sous-total recalculé depuis le TOTAL TTC stocké
   // (plus fiable que le sous-total HT que l'IA peut avoir mal extrait)
   const sommeLignes = _editingDoc.lignes.reduce((s, l) => s + (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - ((parseFloat(l.rabais)||0)/100)), 0);
@@ -5880,10 +5908,13 @@ function saveDoc() {
     const exp = parseFloat(_editingDoc.expertise) || 0;
     let nt = String(_editingDoc.notes || '').replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ').trim();
     if (exp > 0) nt += (nt ? '\n' : '') + '[EXPERT:' + exp + ']';
+    // Restaure le marqueur d'archivage du devis s'il était présent avant l'édition
+    if (_editingDoc._wasDevisArch && !/\[DEVISARCH\]/.test(nt)) nt += (nt ? ' ' : '') + '[DEVISARCH]';
     _editingDoc.notes = nt;
   }
   // Retire les champs transitoires d'UI avant sauvegarde
   const toSave = JSON.parse(JSON.stringify(_editingDoc));
+  delete toSave._wasDevisArch;
   delete toSave._bonNumeroSaisi;
   delete toSave.expertise;   // persisté dans notes via [EXPERT:n]
   delete toSave.photos;      // photos non stockées en base (incluses uniquement dans le PDF)
@@ -5921,8 +5952,11 @@ function updateDocStatut(id, value) {
   const d = docs.find(x => x.id === id);
   if (!d) return;
   d.statut = value;
+  // Facture payée → on archive aussi le devis source (et on le ressort si on dé-paie)
+  if (d.type === 'facture' && d.devisId) _syncDevisArchiveWithFacture(d, value === 'payee');
   DB.documents = docs;
-  if (value === 'payee' && d.bonId) toast('✅ Payée — dossier classé dans « 📦 Facturation archivée »', '#0f766e');
+  if (value === 'payee' && d.devisId) toast('✅ Payée — facture et devis archivés ensemble dans « 📦 Facturation archivée »', '#0f766e');
+  else if (value === 'payee' && d.bonId) toast('✅ Payée — dossier classé dans « 📦 Facturation archivée »', '#0f766e');
   else toast('Statut mis à jour ✓', '#2d9e6b');
   renderDocuments();
   // Le CA "CHF facturés" du portefeuille client dépend des factures payées → on rafraîchit
@@ -5973,7 +6007,7 @@ function renderDocuments() {
   const titleEl = document.querySelector('#screen-devis .page-title');
   if (titleEl) titleEl.textContent = (filtre === 'facture') ? 'Factures' : 'Devis';
   // Exclut les factures payées liées à un bon (parties dans « Facturation archivée »)
-  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d) && !_isAncienneFacture(d));
+  let docs = (DB.documents || []).slice().filter(d => (d.type || 'devis') === filtre && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d) && !_isAncienneFacture(d) && !_isDevisArchivedWithFacture(d));
   const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';
@@ -12214,6 +12248,8 @@ function ancSetStatut(id, value) {
   d.statut = value;
   // Marquée « envoyée » → on enregistre la date du jour d'envoi
   if (value === 'envoyee') _setAncEnvoiDate(d, today());
+  // Facture payée → on archive aussi le devis source (et on le ressort si on dé-paie)
+  if (d.type === 'facture' && d.devisId) _syncDevisArchiveWithFacture(d, value === 'payee');
   DB.documents = docs;
   renderAnciennesList();
   if (typeof renderFactArchive === 'function') renderFactArchive();
