@@ -4341,7 +4341,8 @@ function renderBonCard(b, solid) {
                   <option value="termine"       ${statut === 'termine'       ? 'selected' : ''}>✅ Travail terminé</option>
                   <option value="a-facturer"    ${statut === 'a-facturer'    ? 'selected' : ''}>🧾 À facturer</option>
                 </select>
-                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" onmouseenter="bonPdfPreview('${b.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = ouvrir dans un nouvel onglet">📎 PDF</button>` : ''}
+                ${b.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')" onmouseenter="bonPdfPreview('${b.id}', this)" onmouseleave="bonPdfPreviewHide()" title="Survol = aperçu · Clic = ouvrir dans un nouvel onglet">📎 PDF</button>`
+                  : `<button class="btn btn-ghost btn-sm" onclick="generateBonPDF('${b.id}')" title="Générer un PDF imprimable de ce bon manuel">🖨 PDF</button>`}
                 ${(() => {
                   const hasNote = _bonNoteHasData(_bonNoteData(b));
                   return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
@@ -6807,6 +6808,87 @@ function _saveRappelDoc(ed, niv) {
   if (existing) { toSave.id = existing.id; const i = docs.findIndex(x => x.id === existing.id); docs[i] = toSave; }
   else { toSave.id = newId(); docs.push(toSave); }
   DB.documents = docs;
+}
+
+// Génère un PDF imprimable pour un bon manuel (bon de travail sans PDF scanné).
+function generateBonPDF(bonId) {
+  const b = (DB.bons || []).find(x => x.id === bonId);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  try {
+    const co = DERATEK_CONFIG.company;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297;
+    // --- En-tête (logo + coordonnées + filet) ---
+    const logoW = 62, logoH = logoW * 199 / 900, logoY = 13;
+    const headerFiletY = logoY + logoH + 5;
+    if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); } catch (e) {} }
+    else { doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23); }
+    const cy0 = logoY + 4;
+    const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
+    const colB = [co.email, co.tva];
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
+    colB.forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
+    doc.setTextColor(13, 27, 62);
+    try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); } catch (e) { doc.text('www.deratek.ch', 146, cy0 + 2 * 4.4); }
+    doc.setTextColor(0);
+    doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+    // --- Bandeau titre ---
+    let y = headerFiletY + 8;
+    doc.setFillColor(13, 27, 62); doc.rect(20, y, 170, 11, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255);
+    doc.text('BON DE TRAVAIL', 24, y + 7.4);
+    doc.setFontSize(11); doc.text(String(b.numero || ''), 186, y + 7.4, { align: 'right' });
+    doc.setTextColor(0); y += 17;
+    // Date
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text('Date : ' + (fmtDate(b.date) || '—'), 20, y); y += 9;
+    // --- Champs (label : valeur) ---
+    const rows = [
+      ['Gérance', b.geranceNom || '—'],
+      ['Gérant', [b.gerantNom, b.gerantTel, b.gerantEmail].filter(Boolean).join(' · ')],
+      ['Propriétaire', b.proprietaire || ''],
+      ['Locataire', b.locataireNom || '—'],
+      ['Adresse / immeuble', b.immeuble || '—'],
+      ['Contact sur place', b.contactSurPlace || ''],
+      ['Concierge', b.concierge || ''],
+    ].filter(r => r[1]);
+    doc.setFontSize(10);
+    rows.forEach(([k, v]) => {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(90); doc.text(k + ' :', 20, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+      const lines = doc.splitTextToSize(String(v), 110);
+      lines.forEach((ln, i) => doc.text(ln, 74, y + i * 5));
+      y += Math.max(6, lines.length * 5 + 1);
+    });
+    y += 4;
+    // --- Nuisible / problème ---
+    doc.setFillColor(245, 247, 250); doc.rect(20, y, 170, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
+    doc.text('NUISIBLE / PROBLÈME SIGNALÉ', 24, y + 5.5); doc.setTextColor(0); y += 12;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.splitTextToSize(_bonProblemeClean(b) || '—', 168).forEach(ln => { doc.text(ln, 22, y); y += 5; });
+    y += 6;
+    // --- Dates d'intervention ---
+    const dates = _bonDatesInterv(b);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(90); doc.text('Dates d\'intervention :', 20, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+    doc.text(dates.length ? dates.map(fmtDate).join(', ') : '—', 74, y);
+    y += 22;
+    // --- Zone de signatures ---
+    doc.setDrawColor(160); doc.setLineWidth(0.3);
+    doc.line(24, y, 92, y); doc.line(118, y, 186, y);
+    doc.setFontSize(8.5); doc.setTextColor(110);
+    doc.text('Signature technicien', 24, y + 4);
+    doc.text('Signature client', 118, y + 4);
+    doc.setTextColor(0);
+    if (typeof _drawPrestationsFooter === 'function') _drawPrestationsFooter(doc, W, H);
+    const fname = 'bon-' + String(b.numero || 'sans-numero').replace(/[^\w-]+/g, '_') + '.pdf';
+    doc.save(fname);
+    toast('PDF du bon généré', '#2d9e6b');
+  } catch (e) { console.error(e); toast('Erreur lors de la génération du PDF du bon', '#e63946'); }
 }
 
 function downloadDocPDF(id, mode) {
