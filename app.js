@@ -5363,6 +5363,41 @@ function createRapportFromBon(bonId) {
   toast('Rapport pré-rempli depuis le bon ' + (bon.numero || ''), '#2d9e6b');
 }
 
+// Crée un rapport depuis un devis/facture. Si le document est lié à un bon,
+// on réutilise le pré-remplissage depuis le bon ; sinon on pré-remplit depuis le document.
+function createRapportFromDoc(docId, type) {
+  if (!type) return;
+  const d = (DB.documents || []).find(x => x.id === docId);
+  if (!d) { toast('Document introuvable', '#e63946'); return; }
+  if (d.bonId) { createRapportTypeFromBon(d.bonId, type); return; }
+  // Rapports spécialisés sans bon lié : on ouvre le formulaire vierge du bon type
+  if (type === 'rongeurs') { openNewRongeurs(); return; }
+  if (type === 'blattes')  { openNewBlattes(); return; }
+  if (type === 'fourmis')  { openNewFourmis(); return; }
+  if (type === 'bois')     { openNewDiagnostic(); return; }
+  // Rapport général → pré-remplir depuis le document (client, locataire, adresse)
+  state.editingRapportId = null;
+  resetRapportForm();
+  const cli = (d.clientId ? (DB.clients || []).find(c => c.id === d.clientId) : null)
+           || (d.clientNom ? (DB.clients || []).find(c => (c.nom || '').toLowerCase() === String(d.clientNom).toLowerCase()) : null);
+  if (cli) { populateClientSelectRapport(cli.id); onClientChange(); }
+  const setVal = (id, v) => { const el = $(id); if (el && v) el.value = v; };
+  setVal('r-contact', d.proprietaire || (cli ? cli.contact : ''));
+  setVal('r-tel', cli ? cli.tel : '');
+  setVal('r-email', cli ? cli.email : '');
+  setVal('r-date', today());
+  if (d.locataireNom || d.locataireAdresse) {
+    if ($('r-avec-locataire')) $('r-avec-locataire').checked = true;
+    toggleLocataire();
+    setVal('r-locataire', d.locataireNom);
+    setVal('r-locataire-adresse', d.locataireAdresse);
+  }
+  _setAdresseInter(d.locataireAdresse || '');
+  if (typeof updatePDF === 'function') updatePDF();
+  showScreen('rapport-edit');
+  toast('Rapport pré-rempli depuis ' + (d.type === 'facture' ? 'la facture ' : 'le devis ') + (d.numero || ''), '#2d9e6b');
+}
+
 // Nouveau document vierge (devis ou facture)
 function openNewDoc(type) {
   type = type || 'devis';
@@ -6190,6 +6225,14 @@ function renderDocuments() {
           </select>
           <button class="btn btn-ghost btn-sm" onclick="editDoc('${d.id}')" title="Modifier">✏️</button>
           <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
+          ${isDevis?`<select onchange="createRapportFromDoc('${d.id}', this.value); this.selectedIndex=0;" title="Créer un rapport depuis ce devis" style="font-weight:700;font-size:12px;border:1.5px solid #7c3aed;background:#faf5ff;color:#6d28d9;border-radius:6px;padding:5.5px 4px;cursor:pointer;max-width:118px;">
+            <option value="" selected>📋 Rapport ▾</option>
+            <option value="general">📋 Rapport général</option>
+            <option value="bois">🪵 Insectes du bois</option>
+            <option value="rongeurs">🐀 Rongeurs</option>
+            <option value="blattes">🪳 Blattes</option>
+            <option value="fourmis">🐜 Fourmis</option>
+          </select>`:''}
           ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
           <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
         </div>
