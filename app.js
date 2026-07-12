@@ -6845,13 +6845,32 @@ function generateBonPDF(bonId) {
     // Date
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
     doc.text('Date : ' + (fmtDate(b.date) || '—'), 20, y); y += 9;
+    // Fiches liées : on récupère les coordonnées complètes (téléphones, e-mails, adresses)
+    const cli = (b.geranceId && (DB.clients || []).find(c => c.id === b.geranceId))
+             || (b.geranceNom && (DB.clients || []).find(c => (c.nom || '').toLowerCase() === String(b.geranceNom).toLowerCase()))
+             || null;
+    const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId))
+             || (b.locataireNom && (DB.locataires || []).find(l => (l.nom || '').toLowerCase() === String(b.locataireNom).toLowerCase()))
+             || null;
+    const gerTel   = b.gerantTel   || (cli ? cli.tel   : '');
+    const gerEmail = b.gerantEmail || (cli ? cli.email : '');
+    const gerAdr   = cli ? [cli.adresse, `${cli.npa || ''} ${cli.ville || ''}`.trim()].filter(Boolean).join(', ') : '';
+    const locTel   = loc ? (loc.tel   || '') : '';
+    const locEmail = loc ? (loc.email || '') : '';
+    const locAdr   = (loc ? [loc.adresse, `${loc.npa || ''} ${loc.ville || ''}`.trim()].filter(Boolean).join(', ') : '') || b.immeuble || '';
     // --- Champs (label : valeur) ---
     const rows = [
       ['Gérance', b.geranceNom || '—'],
-      ['Gérant', [b.gerantNom, b.gerantTel, b.gerantEmail].filter(Boolean).join(' · ')],
+      ['Gérant', b.gerantNom || ''],
+      ['Tél. gérance', gerTel],
+      ['E-mail gérance', gerEmail],
+      ['Adresse gérance', gerAdr],
       ['Propriétaire', b.proprietaire || ''],
       ['Locataire', b.locataireNom || '—'],
-      ['Adresse / immeuble', b.immeuble || '—'],
+      ['Tél. locataire', locTel],
+      ['E-mail locataire', locEmail],
+      ['Adresse locataire', locAdr],
+      ['Immeuble', b.immeuble || ''],
       ['Contact sur place', b.contactSurPlace || ''],
       ['Concierge', b.concierge || ''],
     ].filter(r => r[1]);
