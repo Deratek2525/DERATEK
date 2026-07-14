@@ -7491,7 +7491,10 @@ function _nextDiagNumero(prefix) {
   const list = (DB.diagnostics || []).filter(d => (d.numero||'').startsWith(prefix + '-' + year + '-'));
   let max = 0;
   list.forEach(d => { const m = (d.numero||'').match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
-  return `${prefix}-${year}-${String(max+1).padStart(3,'0')}`;
+  // Numéro de départ minimal par type : rongeurs (RG) et blattes (BL) commencent à 210.
+  const START = { RG: 210, BL: 210 };
+  const next = Math.max(max + 1, START[prefix] || 1);
+  return `${prefix}-${year}-${String(next).padStart(3,'0')}`;
 }
 
 function openNewDiagnostic() {
