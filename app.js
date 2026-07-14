@@ -2181,7 +2181,7 @@ function updatePDF() {
   st('pdf-superficie', (sup ? sup+'m²' : '—') + (pie ? ' / '+pie+' pièce(s)' : ''));
   st('pdf-niveau',      $('r-niveau').value);
   const desc = ($('r-description').value || '—').replace(/\*\*/g, '');
-  st('pdf-description', desc.substring(0,100) + (desc.length > 100 ? '…' : ''));
+  st('pdf-description', desc.substring(0,260) + (desc.length > 260 ? '…' : ''));
   st('pdf-traitement',  traitement.join(', ') || '—');
   const montant = $('r-montant').value;
   st('pdf-montant', montant ? montant+' CHF' : '—');
