@@ -1518,8 +1518,23 @@ function renderRapports() {
     const cle = r.clientNom || '— Sans client —';
     (groupes[cle] = groupes[cle] || []).push(r);
   });
-  // Gérances triées par ordre alphabétique
-  const noms = Object.keys(groupes).sort((a, b) => a.localeCompare(b, 'fr'));
+  // Rapports spéciaux (diagnostics FM / RG / BL / DG) intégrés SOUS les mêmes rubans gérance.
+  // Affichés en filtre « Tous » (leur statut Brouillon/Finalisé diffère des rapports classiques).
+  const diagGroupes = {};
+  if ((state.rapportsFilter || 'Tous') === 'Tous') {
+    (DB.diagnostics || []).forEach(d => {
+      const hay = ((d.numero||'') + ' ' + (d.clientNom||'') + ' ' + (d.locataireNom||'') + ' ' + (d.insectes||[]).join(' ') + ' ' + (d.tech||'')).toLowerCase();
+      if (q && !hay.includes(q.toLowerCase())) return;
+      const cle = (d.clientNom||'').trim() || '— Sans client —';
+      (diagGroupes[cle] = diagGroupes[cle] || []).push(d);
+    });
+  }
+  // Union des gérances (rapports classiques + spéciaux), triées alphabétiquement
+  const noms = [...new Set([...Object.keys(groupes), ...Object.keys(diagGroupes)])].sort((a, b) => {
+    if (a === '— Sans client —') return 1;
+    if (b === '— Sans client —') return -1;
+    return a.localeCompare(b, 'fr');
+  });
 
   if (!noms.length) {
     tb.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Aucun rapport</div></div></td></tr>';
@@ -1553,17 +1568,44 @@ function renderRapports() {
     </tr>`;
   };
 
+  // Ligne d'un rapport spécial (diagnostic) — mêmes colonnes que le tableau des rapports
+  const ligneDiag = d => {
+    const _dt = _diagType(d); const rg = _dt==='rongeurs', bl = _dt==='blattes', fm = _dt==='fourmis';
+    const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵'));
+    const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/); const st = stm ? _decNote(stm[1]) : '';
+    const stBadge = st==='Brouillon'
+      ? '<span class="badge" style="background:#fffbeb;color:#b45309;border:1px solid #fcd34d;">🕒 Brouillon</span>'
+      : (st==='Finalisé' ? '<span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">✓ Finalisé</span>' : '—');
+    const locLigne = d.locataireNom ? `<div style="font-size:11.5px;color:#1e3a8a;margin-top:2px;">🏠 ${d.locataireNom}</div>` : '';
+    return `
+    <tr onclick="editDiag('${d.id}')">
+      <td style="font-weight:700;color:var(--navy);">${ico} ${d.numero||'—'}</td>
+      <td>${d.clientNom||'—'}${locLigne}</td>
+      <td>—</td>
+      <td>${(d.insectes||[]).join(', ')||'—'}</td>
+      <td>${fmtDate(d.dateDoc)||'—'}</td>
+      <td>${d.tech||'—'}</td>
+      <td>—</td>
+      <td>${stBadge}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();downloadDiagPDF('${d.id}')" title="Télécharger le PDF">📥</button>
+        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+      </td>
+    </tr>`;
+  };
+
   tb.innerHTML = noms.map(nom => {
     // Rapports de la gérance, du plus récent au plus ancien
-    const rapps = groupes[nom].slice().reverse();
-    const nb = rapps.length;
+    const rapps = (groupes[nom] || []).slice().reverse();
+    const diags = (diagGroupes[nom] || []).slice().sort((a, b) => (b.dateDoc||'').localeCompare(a.dateDoc||''));
+    const nb = rapps.length + diags.length;
     const techs = [...new Set(rapps.map(r => r.tech).filter(Boolean))];
     const techTxt = techs.length ? `<span class="rapport-groupe-tech">👷 ${techs.join(', ')}</span>` : '';
     const entete = `
       <tr class="rapport-groupe">
         <td colspan="9">🏢 ${nom} <span class="rapport-groupe-nb">${nb} rapport${nb > 1 ? 's' : ''}</span>${techTxt}</td>
       </tr>`;
-    return entete + rapps.map(ligneRapport).join('');
+    return entete + rapps.map(ligneRapport).join('') + diags.map(ligneDiag).join('');
   }).join('');
 }
 function confirmDeleteRapport(id) {
@@ -9193,66 +9235,11 @@ function confirmDeleteDiag(id, label) {
   openModal('modal-confirm');
 }
 function renderDiagnostics() {
-  const box = $('diagnostics-section'); if (!box) return;
-  const stOf = d => { const m = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/); return m ? _decNote(m[1]) : ''; };
-  const list = (DB.diagnostics || []).slice().sort((a,b) => {
-    const ba = stOf(a)==='Brouillon' ? 0 : 1, bb = stOf(b)==='Brouillon' ? 0 : 1;
-    if (ba !== bb) return ba - bb;            // brouillons à reprendre en tête
-    return (b.dateDoc||'').localeCompare(a.dateDoc||'');
-  });
-  if (!list.length) { box.innerHTML = ''; return; }
-  // Carte d'un rapport spécial (diagnostic)
-  const card = d => {
-    const _dt = _diagType(d); const rg = _dt==='rongeurs'; const bl = _dt==='blattes'; const fm = _dt==='fourmis'; const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')); const accentCol = fm?'#6d4c1b':(bl?'#7c3f12':(rg?'#5f6f81':'#8b4513'));
-    const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/);
-    const st = stm ? _decNote(stm[1]) : '';
-    const stChip = st==='Brouillon'
-      ? '<span style="font-size:9.5px;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 7px;">🕒 Brouillon</span>'
-      : (st==='Finalisé' ? '<span style="font-size:9.5px;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:1px 7px;">✓ Finalisé</span>' : '');
-    return `
-    <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accentCol};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-      <div style="min-width:130px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);">${ico} ${d.numero||''}</div>
-        <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
-        ${stChip ? `<div style="margin-top:2px;">${stChip}</div>` : ''}
-      </div>
-      <div style="flex:1.4;min-width:150px;">
-        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
-        <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
-        ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
-      </div>
-      <div style="flex:1.6;min-width:170px;">
-        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${(rg||bl||fm)?'Espèces':'Insectes'}</div>
-        <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
-      </div>
-      ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
-      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
-        <button class="btn btn-ghost btn-sm" onclick="editDiag('${d.id}')" title="Modifier">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="downloadDiagPDF('${d.id}')" title="PDF">📥 PDF</button>
-        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
-      </div>
-    </div>`;
-  };
-  // Regroupement par gérance / client (comme les rapports classiques)
-  const groupes = {};
-  list.forEach(d => { const cle = (d.clientNom || '').trim() || '— Sans client —'; (groupes[cle] = groupes[cle] || []).push(d); });
-  const noms = Object.keys(groupes).sort((a, b) => {
-    if (a === '— Sans client —') return 1;
-    if (b === '— Sans client —') return -1;
-    return a.localeCompare(b, 'fr');
-  });
-  box.innerHTML = `
-    <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🔬 Diagnostics & rapports spéciaux (${list.length})</div>
-    ${noms.map(nom => {
-      const arr = groupes[nom];
-      return `
-      <div style="margin-bottom:12px;">
-        <div style="font-size:12px;font-weight:800;color:#5b3a1a;background:#faf5ef;border:1px solid #e8d9c5;border-radius:7px;padding:6px 11px;margin-bottom:6px;">🏢 ${nom} <span style="font-weight:600;color:var(--g600);">(${arr.length} rapport${arr.length>1?'s':''})</span></div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${arr.map(card).join('')}
-        </div>
-      </div>`;
-    }).join('')}`;
+  // Les rapports spéciaux sont désormais affichés SOUS les rubans gérance du tableau
+  // des rapports classiques (voir renderRapports). On vide donc l'ancienne section
+  // séparée et on rafraîchit le tableau des rapports.
+  const box = $('diagnostics-section'); if (box) box.innerHTML = '';
+  if (typeof renderRapports === 'function') renderRapports();
 }
 function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
