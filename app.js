@@ -6130,7 +6130,7 @@ function renderDocuments() {
     // Les factures PAYÉES ne sont plus dans la liste (elles sont dans « Facturation archivée »).
     // On les recompte directement depuis toutes les factures pour le total encaissé.
     const paidAll = (DB.documents || []).filter(_isFactureFactArchived);
-    const tBrouillon = sumS('brouillon'), tEnvoyee = sumS('envoyee'), tPayee = paidAll.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+    const tBrouillon = sumS('brouillon'), tPret = sumS('pret'), tEnvoyee = sumS('envoyee'), tPayee = paidAll.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
     const chip = (val, label, n, col) => {
       const on = (sf === val);
       return `<button onclick="docSetStatutFilter('${val}')" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid ${on ? col : '#d1d5db'};background:${on ? col : '#fff'};color:${on ? '#fff' : '#374151'};">${label} (${n})</button>`;
@@ -6146,6 +6146,7 @@ function renderDocuments() {
         <button onclick="showScreen('fact-archive')" title="Les factures payées sont dans « Facturation archivée »" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid #16a34a;background:#fff;color:#166534;">✅ Payées (${paidAll.length}) ↗</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        ${carte('📤 Prêt à envoyer', tPret, '#fff7ed', '#fed7aa', '#c2410c')}
         ${carte('Total envoyé (à encaisser)', tEnvoyee, '#eff6ff', '#bfdbfe', '#1d4ed8')}
         ${carte('Brouillons', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
         ${carte('Encaissé (payées)', tPayee, '#f0fdf4', '#bbf7d0', '#15803d')}
