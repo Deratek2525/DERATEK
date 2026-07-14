@@ -9155,6 +9155,19 @@ function saveDiag(statut, keepOpen) {
   const i = list.findIndex(x => x.id === toSave.id);
   if (i >= 0) list[i] = toSave; else list.push(toSave);
   DB.diagnostics = list;
+  // Rapport (rongeurs / blattes / fourmis / bois) FINALISÉ et lié à un bon :
+  // le bon passe « terminé » et est marqué « rapport fait » (ruban vert ✅), comme un rapport général.
+  if (_editingDiag.statut === 'Finalisé' && _editingDiag.bonId) {
+    const bons = DB.bons;
+    const bon = bons.find(b => b.id === _editingDiag.bonId);
+    if (bon) {
+      const stPrev = bon.statut || '';
+      if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon));
+      DB.bons = bons;
+      if (typeof renderBons === 'function') renderBons();
+    }
+  }
   renderDiagnostics();
   if (keepOpen) { toast('💾 Enregistré — tu peux continuer à travailler.', '#0f766e'); return; }
   if (_editingDiag.statut === 'Finalisé') { const _dt = _diagType(_editingDiag); toast('✓ ' + (_dt==='rongeurs'?'Rapport rongeurs':_dt==='blattes'?'Rapport blattes':_dt==='fourmis'?'Rapport fourmis':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b'); }
