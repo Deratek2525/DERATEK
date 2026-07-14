@@ -9201,41 +9201,58 @@ function renderDiagnostics() {
     return (b.dateDoc||'').localeCompare(a.dateDoc||'');
   });
   if (!list.length) { box.innerHTML = ''; return; }
+  // Carte d'un rapport spécial (diagnostic)
+  const card = d => {
+    const _dt = _diagType(d); const rg = _dt==='rongeurs'; const bl = _dt==='blattes'; const fm = _dt==='fourmis'; const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')); const accentCol = fm?'#6d4c1b':(bl?'#7c3f12':(rg?'#5f6f81':'#8b4513'));
+    const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/);
+    const st = stm ? _decNote(stm[1]) : '';
+    const stChip = st==='Brouillon'
+      ? '<span style="font-size:9.5px;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 7px;">🕒 Brouillon</span>'
+      : (st==='Finalisé' ? '<span style="font-size:9.5px;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:1px 7px;">✓ Finalisé</span>' : '');
+    return `
+    <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accentCol};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+      <div style="min-width:130px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);">${ico} ${d.numero||''}</div>
+        <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+        ${stChip ? `<div style="margin-top:2px;">${stChip}</div>` : ''}
+      </div>
+      <div style="flex:1.4;min-width:150px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
+        ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
+      </div>
+      <div style="flex:1.6;min-width:170px;">
+        <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${(rg||bl||fm)?'Espèces':'Insectes'}</div>
+        <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
+      </div>
+      ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" onclick="editDiag('${d.id}')" title="Modifier">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDiagPDF('${d.id}')" title="PDF">📥 PDF</button>
+        <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+      </div>
+    </div>`;
+  };
+  // Regroupement par gérance / client (comme les rapports classiques)
+  const groupes = {};
+  list.forEach(d => { const cle = (d.clientNom || '').trim() || '— Sans client —'; (groupes[cle] = groupes[cle] || []).push(d); });
+  const noms = Object.keys(groupes).sort((a, b) => {
+    if (a === '— Sans client —') return 1;
+    if (b === '— Sans client —') return -1;
+    return a.localeCompare(b, 'fr');
+  });
   box.innerHTML = `
     <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid #8b4513;padding-bottom:4px;">🔬 Diagnostics & rapports spéciaux (${list.length})</div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      ${list.map(d => {
-        const _dt = _diagType(d); const rg = _dt==='rongeurs'; const bl = _dt==='blattes'; const fm = _dt==='fourmis'; const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')); const accentCol = fm?'#6d4c1b':(bl?'#7c3f12':(rg?'#5f6f81':'#8b4513'));
-        const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/);
-        const st = stm ? _decNote(stm[1]) : '';
-        const stChip = st==='Brouillon'
-          ? '<span style="font-size:9.5px;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 7px;">🕒 Brouillon</span>'
-          : (st==='Finalisé' ? '<span style="font-size:9.5px;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:1px 7px;">✓ Finalisé</span>' : '');
-        return `
-        <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accentCol};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-          <div style="min-width:130px;">
-            <div style="font-size:13px;font-weight:800;color:var(--navy);">${ico} ${d.numero||''}</div>
-            <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(d.dateDoc)||'—'}</div>
-            ${stChip ? `<div style="margin-top:2px;">${stChip}</div>` : ''}
-          </div>
-          <div style="flex:1.4;min-width:150px;">
-            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
-            <div style="font-size:12px;font-weight:600;color:var(--navy);">${d.clientNom||'—'}</div>
-            ${d.locataireNom?`<div style="font-size:11px;color:var(--g600);">🏠 ${d.locataireNom}</div>`:''}
-          </div>
-          <div style="flex:1.6;min-width:170px;">
-            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">${(rg||bl||fm)?'Espèces':'Insectes'}</div>
-            <div style="font-size:12px;color:var(--g600);">${(d.insectes||[]).join(', ')||'—'}</div>
-          </div>
-          ${d.gravite?`<span style="flex-shrink:0;font-size:10.5px;font-weight:800;color:#fff;border-radius:10px;padding:3px 9px;background:${({'Faible':'#2d9e6b','Modérée':'#e6aa1e','Importante':'#eb7828'})[d.gravite]||'#e63946'};">${d.gravite.replace(' (structure menacée)','')}</span>`:''}
-          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
-            <button class="btn btn-ghost btn-sm" onclick="editDiag('${d.id}')" title="Modifier">✏️</button>
-            <button class="btn btn-ghost btn-sm" onclick="downloadDiagPDF('${d.id}')" title="PDF">📥 PDF</button>
-            <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
-          </div>
+    ${noms.map(nom => {
+      const arr = groupes[nom];
+      return `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:800;color:#5b3a1a;background:#faf5ef;border:1px solid #e8d9c5;border-radius:7px;padding:6px 11px;margin-bottom:6px;">🏢 ${nom} <span style="font-weight:600;color:var(--g600);">(${arr.length} rapport${arr.length>1?'s':''})</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${arr.map(card).join('')}
         </div>
-      `; }).join('')}
-    </div>`;
+      </div>`;
+    }).join('')}`;
 }
 function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
