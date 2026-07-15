@@ -6269,6 +6269,9 @@ function renderDocuments() {
           </select>
           <button class="btn btn-ghost btn-sm" onclick="editDoc('${d.id}')" title="Modifier">✏️</button>
           <button class="btn btn-ghost btn-sm" onclick="downloadDocPDF('${d.id}')" title="Télécharger le PDF">📥 PDF</button>
+          ${_bon ? (_bon.pdfPath
+            ? `<button class="btn btn-sm" onclick="viewBonPdf('${_bon.id}')" onmouseenter="bonPdfPreview('${_bon.id}', this)" onmouseleave="bonPdfPreviewHide()" title="PDF du bon ${_bonNum} — survol = aperçu · clic = ouvrir" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📎 Bon</button>`
+            : `<button class="btn btn-sm" onclick="generateBonPDF('${_bon.id}')" title="Générer le PDF imprimable du bon ${_bonNum}" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">🖨 Bon</button>`) : ''}
           ${isDevis?`<select onchange="createRapportFromDoc('${d.id}', this.value); this.selectedIndex=0;" title="Créer un rapport depuis ce devis" style="font-weight:700;font-size:12px;border:1.5px solid #7c3aed;background:#faf5ff;color:#6d28d9;border-radius:6px;padding:5.5px 4px;cursor:pointer;max-width:118px;">
             <option value="" selected>📋 Rapport ▾</option>
             <option value="general">📋 Rapport général</option>
