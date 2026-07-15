@@ -7162,9 +7162,14 @@ function downloadDocPDF(id, mode) {
       const baseY = ty + LINE - 1;
       doc.text(dl, 22, baseY);
       if (rowFirst) {
-        doc.text(String(l.qte||0), 130, baseY, {align:'right'});
-        doc.text(_displayMontant(l.prix||0), 156, baseY, {align:'right'});
-        doc.text(_displayMontant(lt), 188, baseY, {align:'right'});
+        // Ligne purement informative (aucun prix) → on n'imprime pas « 0.00 » dans
+        // les colonnes Qté / Prix HT / Montant : la désignation reste seule.
+        const _sansPrix = (parseFloat(l.prix) || 0) === 0 && lt === 0;
+        if (!_sansPrix) {
+          doc.text(String(l.qte||0), 130, baseY, {align:'right'});
+          doc.text(_displayMontant(l.prix||0), 156, baseY, {align:'right'});
+          doc.text(_displayMontant(lt), 188, baseY, {align:'right'});
+        }
         rowFirst = false;
       }
       ty += LINE;
