@@ -5193,21 +5193,24 @@ function _buildSpcPayload(montant, message, debtor, cred) {
   const co = DERATEK_CONFIG.company;
   const c = cred || {};
   const cRue = c.rue || co.rue, cNpa = c.npa || co.npa, cVille = c.ville || co.ville;
+  // Le payload SPC est strictement « une ligne = un champ » : tout retour à la ligne
+  // saisi par l'utilisateur (nom/adresse sur plusieurs lignes) doit devenir un espace.
+  const _q = s => String(s == null ? '' : s).replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
   const lines = [];
   lines.push('SPC');                 // QRType
   lines.push('0200');                // Version
   lines.push('1');                   // Coding UTF-8
   lines.push(_cleanIban(co.iban));   // IBAN
   // Créancier (structuré)
-  lines.push('S', co.nom || '', cRue || '', '', cNpa || '', cVille || '', (co.pays || 'CH').toUpperCase());
+  lines.push('S', _q(co.nom), _q(cRue), '', _q(cNpa), _q(cVille), (co.pays || 'CH').toUpperCase());
   // Ultimate creditor (vide)
   lines.push('', '', '', '', '', '', '');
   // Montant + devise
   lines.push(_fmtMontant(montant));
   lines.push(co.devise || 'CHF');
   // Débiteur (le client payeur) — type structuré si présent
-  if (debtor && (debtor.nom || '').trim()) {
-    lines.push('S', debtor.nom || '', debtor.rue || '', '', debtor.npa || '', debtor.ville || '', 'CH');
+  if (debtor && _q(debtor.nom)) {
+    lines.push('S', _q(debtor.nom), _q(debtor.rue), '', _q(debtor.npa), _q(debtor.ville), 'CH');
   } else {
     lines.push('', '', '', '', '', '', '');
   }
@@ -5215,7 +5218,7 @@ function _buildSpcPayload(montant, message, debtor, cred) {
   lines.push('NON');                 // pas de référence structurée
   lines.push('');
   // Message libre (n° de facture)
-  lines.push(message || '');
+  lines.push(_q(message));
   lines.push('EPD');                 // Trailer
   lines.push('');                    // Bill information
   return lines.join('\r\n');
@@ -5773,12 +5776,12 @@ function renderDocEditor() {
           <option value="">-- Choisir un client --</option>
           ${(DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}${c.type?' ('+c.type+')':''}</option>`).join('')}
         </select>
-        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou saisir un nom manuellement" value="${(d.clientNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">
+        <textarea class="form-input" style="margin-top:5px;font-size:12px;resize:vertical;" rows="2" placeholder="ou saisir un nom manuellement — Entrée = nouvelle ligne sur le PDF" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">${(d.clientNom||'').replace(/</g,'&lt;')}</textarea>
       </div>
       <div class="form-group"><label class="form-label">Locataire concerné</label><input class="form-input" id="doc-loc" value="${(d.locataireNom||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireNom=this.value"></div>
-      <div class="form-group"><label class="form-label">Propriétaire (destinataire)</label><input class="form-input" value="${(d.proprietaire||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.proprietaire=this.value" placeholder="Ex. Monsieur Aldo Brauen"></div>
+      <div class="form-group"><label class="form-label">Propriétaire (destinataire)</label><textarea class="form-input" style="resize:vertical;" rows="2" oninput="_editingDoc.proprietaire=this.value" placeholder="Ex. Monsieur Aldo Brauen — Entrée = nouvelle ligne sur le PDF">${(d.proprietaire||'').replace(/</g,'&lt;')}</textarea></div>
       <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Adresse du locataire</label><input class="form-input" value="${(d.locataireAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.locataireAdresse=this.value" placeholder="Rue, étage, NPA ville"></div>
-      <div class="form-group"><label class="form-label">Adresse client</label><input class="form-input" value="${(d.clientAdresse||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientAdresse=this.value"></div>
+      <div class="form-group"><label class="form-label">Adresse client</label><textarea class="form-input" style="resize:vertical;" rows="2" oninput="_editingDoc.clientAdresse=this.value" placeholder="Entrée = nouvelle ligne sur le PDF">${(d.clientAdresse||'').replace(/</g,'&lt;')}</textarea></div>
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
         <div class="form-group"><label class="form-label">NPA</label><input class="form-input" value="${(d.clientNpa||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientNpa=this.value"></div>
         <div class="form-group"><label class="form-label">Ville</label><input class="form-input" value="${(d.clientVille||'').replace(/"/g,'&quot;')}" oninput="_editingDoc.clientVille=this.value"></div>
@@ -6761,9 +6764,15 @@ function docImportSave() {
 // Rétablit l'espacement autour de "p.a." / "p/a" (ex "PREVHORp.a. Naef" → "PREVHOR p.a. Naef")
 // et nettoie les espaces multiples. Sert pour l'affichage du destinataire et du débiteur QR.
 function _fixPa(txt) {
+  // Les retours à la ligne saisis par l'utilisateur sont PRÉSERVÉS (on ne compresse
+  // que les espaces/tabulations), afin que le bloc destinataire garde sa mise en forme.
   return String(txt || '')
-    .replace(/\s*p\s*[\.\/]\s*a\.?\s*/gi, ' p.a. ')
-    .replace(/\s{2,}/g, ' ')
+    .split('\n')
+    .map(line => line
+      .replace(/[ \t]*p[ \t]*[\.\/][ \t]*a\.?[ \t]*/gi, ' p.a. ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim())
+    .join('\n')
     .trim();
 }
 
@@ -7028,7 +7037,10 @@ function downloadDocPDF(id, mode) {
   } else {
     destLines = [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
   }
-  destLines = destLines.map(l => _fixPa(l));
+  // Les retours à la ligne saisis dans les champs deviennent de vraies lignes du bloc destinataire
+  destLines = destLines.map(l => _fixPa(l))
+    .reduce((acc, l) => acc.concat(String(l).split('\n')), [])
+    .map(s => s.trim()).filter(Boolean);
   destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
 
   // Titre du document À GAUCHE de l'adresse du destinataire (même hauteur, en haut)
@@ -7264,7 +7276,11 @@ function downloadDocPDF(id, mode) {
     const debtLines = ((d.proprietaire || '').trim()
       ? [d.proprietaire, 'p.a. ' + (d.clientNom||''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
       : ((d.clientNom || '').trim() ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean) : null));
-    const debtLinesClean = debtLines ? debtLines.map(l => _fixPa(l)) : null;
+    const debtLinesClean = debtLines
+      ? debtLines.map(l => _fixPa(l))
+          .reduce((acc, l) => acc.concat(String(l).split('\n')), [])
+          .map(s => s.trim()).filter(Boolean)
+      : null;
 
     // Conditions de paiement, juste au-dessus de la ligne pointillée
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
