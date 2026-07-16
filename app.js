@@ -3995,6 +3995,12 @@ function _bonNoteText(d) {
 function _bonRapFait(b) {
   return /\[RAPFAIT:1\]/.test(String((b && b.probleme) || ''));
 }
+// Bon MANUEL (« BM ») : créé à la main pour une gérance qui ne fournit aucun bon.
+// Reconnaissable à son numéro « BCM 10-NNN » et/ou à l'absence de PDF scanné.
+function _isBonManuel(b) {
+  if (!b) return false;
+  return /^BCM\s*10-/i.test(String(b.numero || '')) || !b.pdfPath;
+}
 // Horodatage de mise en statut "À contacter / Urgent" (pour l'alerte 48 h), stocké via marqueur
 function _bonAlerte(b) {
   const m = String((b && b.probleme) || '').match(/\[ALERTE:([^\]]*)\]/);
@@ -7071,7 +7077,9 @@ function downloadDocPDF(id, mode) {
   const _nuisDoc = [d.nuisible, d.nuisible2].map(x => String(x || '').trim()).filter(Boolean).join(', ');
   if (_nuisDoc) infoPairs.push(['Nuisible traité', _nuisDoc]);
   infoPairs.push(['Délai de paiement', '30 jours']);
-  if (bonLie && bonLie.numero) infoPairs.unshift(['N° bon de travail', bonLie.numero]);
+  // Bon manuel (aucun bon fourni par la gérance) → libellé « Bon interne » : le numéro
+  // BCM est une référence DERATEK, pas un n° de bon de travail du client.
+  if (bonLie && bonLie.numero) infoPairs.unshift([_isBonManuel(bonLie) ? 'Bon interne' : 'N° bon de travail', bonLie.numero]);
   doc.setFontSize(9);
   infoPairs.forEach(([k, v]) => {
     if (!v) return;
