@@ -644,14 +644,43 @@ function _gsOpenClient(c) {
   const s = $('cl-search'); if (s) s.value = c.nom || '';
   if (typeof renderClients === 'function') renderClients();
   _gsHide();
+  _gsHighlight('clientrow-' + c.id);
+}
+// Met en surbrillance un ruban et le centre à l'écran
+function _gsHighlight(rowId) {
   setTimeout(function () {
-    const el = document.getElementById('clientrow-' + c.id);
+    const el = document.getElementById(rowId);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const prev = el.style.boxShadow;
     el.style.boxShadow = '0 0 0 3px #e63946';
     setTimeout(function () { el.style.boxShadow = prev; }, 2200);
-  }, 200);
+  }, 220);
+}
+// Va au RUBAN d'un devis/facture, dans la RUBRIQUE où il se trouve réellement
+// (Factures · Anciennes factures · Facturation archivée · Devis), au lieu d'ouvrir l'éditeur.
+function _gsOpenDoc(d) {
+  const isFact = d.type === 'facture';
+  const num = d.numero || '';
+  if (isFact && _isFactureFactArchived(d)) {
+    showScreen('fact-archive');
+    const s = $('fact-archive-search'); if (s) s.value = num;
+    if (typeof renderFactArchive === 'function') renderFactArchive();
+    _gsHighlight('factarch-' + d.id);
+  } else if (isFact && _isAncienneFacture(d)) {
+    showScreen('anciennes');
+    state.ancSearch = num; state.ancFilter = 'tous';
+    if (typeof renderAnciennesList === 'function') renderAnciennesList();
+    _gsHighlight('ancrow-' + d.id);
+  } else {
+    showScreen('devis');
+    state.docsFilter = isFact ? 'facture' : 'devis';
+    state.docStatutFilter = 'tous';
+    const s = $('doc-search'); if (s) s.value = num;
+    if (typeof renderDocuments === 'function') renderDocuments();
+    _gsHighlight('docrow-' + d.id);
+  }
+  _gsHide();
 }
 // Idem pour un locataire : on va à son ruban dans la liste Locataires.
 function _gsOpenLocataire(l) {
@@ -659,14 +688,7 @@ function _gsOpenLocataire(l) {
   const s = $('loc-search'); if (s) s.value = l.nom || '';
   if (typeof renderLocataires === 'function') renderLocataires();
   _gsHide();
-  setTimeout(function () {
-    const el = document.getElementById('locrow-' + l.id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const prev = el.style.boxShadow;
-    el.style.boxShadow = '0 0 0 3px #e63946';
-    setTimeout(function () { el.style.boxShadow = prev; }, 2200);
-  }, 200);
+  _gsHighlight('locrow-' + l.id);
 }
 function _globalSearchNow(q) {
   const box = $('global-search-results'); if (!box) return;
@@ -693,7 +715,7 @@ function _globalSearchNow(q) {
         icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)',
         sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '),
         meta: _gsDocMeta(d),   // payée / pas payée + rubrique où elle se trouve
-        go: function () { editDoc(d.id); _gsHide(); }
+        go: function () { _gsOpenDoc(d); }
       });
   });
   (DB.rapports || []).forEach(function (r) {
@@ -5255,7 +5277,7 @@ function renderFactArchive() {
       : `<span style="color:#b45309;">📦 Archivé · ⏳ facture à venir${(f ? ' (brouillon)' : '')}</span>`;
     const dateTxt = (f && f.dateDoc) || (r && r.date) || '';
     return `
-    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${isPaid ? '#0f766e' : '#f59e0b'};border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.04);">
+    <div${f ? ` id="factarch-${f.id}"` : ''} style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${isPaid ? '#0f766e' : '#f59e0b'};border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:box-shadow .3s;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);min-width:150px;">${clientNom}</div>
         <div style="flex:1;font-size:12px;color:var(--g600);">${locNom ? ('🏠 ' + locNom) : ''}</div>
@@ -6397,7 +6419,7 @@ function renderDocuments() {
     const cardBg = isDevis ? '#fff' : _hexTint(gColor, 0.10);
     const cardBorder = isDevis ? '#e5e7eb' : _hexTint(gColor, 0.30);
     return `
-    <div style="display:flex;align-items:center;gap:14px;background:${cardBg};border:1px solid ${cardBorder};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+    <div id="docrow-${d.id}" style="display:flex;align-items:center;gap:14px;background:${cardBg};border:1px solid ${cardBorder};border-left:4px solid ${gColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
       <div style="min-width:130px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}${_isRappelDoc(d)?` <span style="font-size:9px;font-weight:800;color:#fff;background:#dc2626;border-radius:8px;padding:1px 6px;vertical-align:middle;">RAPPEL ${(_rappelMeta(d)||{}).niveau||''}</span>`:''}</div>
         <div style="font-size:11px;${d.statut==='envoyee'?'color:var(--navy);font-weight:800;':'color:var(--g600);'}">📅 ${fmtDate(d.dateDoc)||'—'}</div>
@@ -12497,7 +12519,7 @@ function renderAnciennesList() {
               <button class="btn btn-sm" style="background:#7f1d1d;color:#fff;font-weight:700;" onclick="ancDeleteDoc('${r.id}')" title="Supprimer ce rappel">🗑</button>
             </div>`; }).join('')}
           </div>` : '';
-        return `<div style="display:flex;flex-direction:column;gap:2px;" ondragover="ancDragOver(event)" ondrop="ancDrop(event,'${d.id}')"><div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+        return `<div id="ancrow-${d.id}" style="display:flex;flex-direction:column;gap:2px;transition:box-shadow .3s;" ondragover="ancDragOver(event)" ondrop="ancDrop(event,'${d.id}')"><div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${paye ? '#22c55e' : '#f59e0b'};border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
           <div draggable="true" ondragstart="ancDragStart(event,'${d.id}')" ondragend="ancDragEnd(event)" title="Glisser pour déplacer cette facture vers le haut ou le bas" style="cursor:grab;color:#9ca3af;font-size:16px;flex-shrink:0;padding:0 2px;user-select:none;">⠿</div>
           <div style="width:130px;flex-shrink:0;">
             <div style="font-size:13px;font-weight:800;color:var(--navy);">🧾 ${d.numero || '—'}</div>
