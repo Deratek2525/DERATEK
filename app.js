@@ -12219,6 +12219,7 @@ function ancShowForm(infos) {
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
       <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">📁 Facture ${a.qIdx + 1} / ${a.queue.length} — vérifie puis valide</div>
       <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Corrige ce que l'IA aurait mal lu, puis « ✅ Valider et enregistrer ».</div>
+      <div id="anc-doublon" style="display:none;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;">
         ${champ('N° facture', 'numero_facture', infos.numero_facture)}
         ${champ('N° bon de travail', 'numero_bon', infos.numero_bon)}
@@ -12268,6 +12269,10 @@ function ancShowForm(infos) {
         <button class="btn btn-green" onclick="ancValider()">✅ Valider et enregistrer</button>
       </div>
     </div>`;
+  // Alerte « déjà enregistrée » : au chargement et à chaque modification du n° de facture
+  const _nf = $('anc-numero_facture');
+  if (_nf) _nf.addEventListener('input', ancCheckDoublon);
+  ancCheckDoublon();
 }
 function ancPasser() { state.anc.qIdx++; ancProcessFile(); }
 // Liste des anciennes factures importées, conservée dans l'onglet (payée / non payée)
@@ -12499,8 +12504,44 @@ function ancAddLocataireFromDoc(id) {
   openModal('modal-locataire');
   toast('Vérifie / complète puis « Enregistrer »', '#2563eb');
 }
+// Cherche une facture DÉJÀ enregistrée portant le même numéro, dans TOUTES les rubriques :
+// Factures courantes, Anciennes factures ET Facturation archivée (payées). Rappels exclus.
+function _factureDoublons(numero, excludeId) {
+  const n = _factNorm(numero);
+  if (!n) return [];
+  return (DB.documents || []).filter(d =>
+    d && d.type === 'facture' && !_isRappelDoc(d) && d.id !== excludeId && _factNorm(d.numero) === n
+  );
+}
+// Où se trouve cette facture (pour le message d'alerte)
+function _factureRubrique(d) {
+  if (_isFactureFactArchived(d)) return '📦 Facturation archivée (payée)';
+  if (_isAncienneFacture(d)) return '📁 Anciennes factures';
+  return '🧾 Factures';
+}
+// Affiche/masque le bandeau d'alerte « facture déjà enregistrée » dans le formulaire d'import
+function ancCheckDoublon() {
+  const box = $('anc-doublon'); if (!box) return;
+  const el = $('anc-numero_facture');
+  const dbl = _factureDoublons(el ? el.value : '');
+  if (!dbl.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div style="background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;color:#b91c1c;margin-bottom:4px;">⚠️ Cette facture est déjà enregistrée (${dbl.length})</div>
+      ${dbl.map(d => `<div style="font-size:12px;color:#7f1d1d;">• N° <b>${d.numero || '—'}</b> · 📅 ${fmtDate(d.dateDoc) || '—'} · ${_displayMontant(d.total || 0)} CHF · ${d.clientNom || '—'} → ${_factureRubrique(d)}</div>`).join('')}
+      <div style="font-size:11px;color:#991b1b;margin-top:5px;">Utilise « ⏭ Passer » pour l'ignorer, ou modifie le n° si c'est une facture différente.</div>
+    </div>`;
+}
+
 function ancValider() {
   const val = id => { const el = $(id); return el ? String(el.value).trim() : ''; };
+  // Garde-fou : facture déjà présente (y compris dans la facturation archivée)
+  const _dbl = _factureDoublons(val('anc-numero_facture'));
+  if (_dbl.length) {
+    const _ou = _dbl.map(d => '• N° ' + (d.numero || '—') + ' du ' + (fmtDate(d.dateDoc) || '—') + ' — ' + _factureRubrique(d).replace(/^[^\w]+\s*/, '')).join('\n');
+    if (!confirm('⚠️ La facture n° ' + val('anc-numero_facture') + ' est DÉJÀ enregistrée :\n\n' + _ou + '\n\nL\'enregistrer quand même (doublon) ?')) return;
+  }
   const num = s => parseFloat(String(s).replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
   const prixHT = num(val('anc-prix_ht'));
   const rabais = num(val('anc-rabais'));
