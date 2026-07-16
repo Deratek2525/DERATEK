@@ -637,6 +637,37 @@ function _gsDocMeta(d) {
   else rub = _isDevisArchivedWithFacture(d) ? '📦 Facturation archivée (avec sa facture)' : '📝 Devis';
   return statut + chip('→ ' + rub, '#f3f4f6', '#374151', '#e5e7eb');
 }
+// Va au RUBAN du client dans la liste Clients (au lieu d'ouvrir la fiche) :
+// on filtre la liste sur son nom, puis on met sa carte en surbrillance.
+function _gsOpenClient(c) {
+  showScreen('clients');
+  const s = $('cl-search'); if (s) s.value = c.nom || '';
+  if (typeof renderClients === 'function') renderClients();
+  _gsHide();
+  setTimeout(function () {
+    const el = document.getElementById('clientrow-' + c.id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prev = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 3px #e63946';
+    setTimeout(function () { el.style.boxShadow = prev; }, 2200);
+  }, 200);
+}
+// Idem pour un locataire : on va à son ruban dans la liste Locataires.
+function _gsOpenLocataire(l) {
+  showScreen('locataires');
+  const s = $('loc-search'); if (s) s.value = l.nom || '';
+  if (typeof renderLocataires === 'function') renderLocataires();
+  _gsHide();
+  setTimeout(function () {
+    const el = document.getElementById('locrow-' + l.id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prev = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 3px #e63946';
+    setTimeout(function () { el.style.boxShadow = prev; }, 2200);
+  }, 200);
+}
 function _globalSearchNow(q) {
   const box = $('global-search-results'); if (!box) return;
   const raw = (q || '').trim();
@@ -677,11 +708,11 @@ function _globalSearchNow(q) {
   });
   (DB.clients || []).forEach(function (c) {
     if (match(c.nom, c.contact, c.tel, c.email, c.adresse, c.ville, c.num))
-      res.push({ icon: '👤', type: 'Client', title: c.nom || '', sub: [c.type, c.ville].filter(Boolean).join(' · '), go: function () { editClient(c.id); _gsHide(); } });
+      res.push({ icon: '👤', type: 'Client', title: c.nom || '', sub: [c.type, c.ville].filter(Boolean).join(' · '), go: function () { _gsOpenClient(c); } });
   });
   (DB.locataires || []).forEach(function (l) {
     if (match(l.nom, l.tel, l.email, l.adresse))
-      res.push({ icon: '🏠', type: 'Locataire', title: l.nom || '', sub: [l.adresse].filter(Boolean).join(' · '), go: function () { editLocataire(l.id); _gsHide(); } });
+      res.push({ icon: '🏠', type: 'Locataire', title: l.nom || '', sub: [l.adresse].filter(Boolean).join(' · '), go: function () { _gsOpenLocataire(l); } });
   });
   (DB.fournisseurs || []).forEach(function (f) {
     if (match(f.nom, f.contact, f.tel, f.email, f.categorie))
@@ -1277,7 +1308,7 @@ function renderClients() {
     const typeColor = colorForClient(c);
     const adresseFmt = [c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     return `
-    <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${typeColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+    <div id="clientrow-${c.id}" style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${typeColor};border-radius:8px;padding:10px 14px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
       <div style="display:flex;align-items:center;gap:10px;min-width:200px;flex:1.5;">
         <div style="width:34px;height:34px;border-radius:50%;background:${typeColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(c.nom)}</div>
         <div>
@@ -3517,7 +3548,7 @@ function renderLocataires() {
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${items.map(({ l, dateFmt }) => `
-            <div style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColorL};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;">
+            <div id="locrow-${l.id}" style="display:flex;align-items:stretch;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gColorL};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:200px;flex:1.5;">
                 <div style="width:34px;height:34px;border-radius:50%;background:${gColorL};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${initials(l.nom||'')}</div>
                 <div>
