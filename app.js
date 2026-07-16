@@ -626,16 +626,21 @@ function _globalSearchNow(q) {
   (DB.documents || []).forEach(function (d) {
     const isFact = d.type === 'facture';
     const lignesTxt = Array.isArray(d.lignes) ? d.lignes.map(function (l) { return l.desc; }).join(' ') : '';
-    if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt))
-      res.push({ icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)', sub: [d.clientNom, (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '), go: function () { editDoc(d.id); _gsHide(); } });
+    // Numéro du BON LIÉ (via bonId) : taper un n° de bon doit aussi sortir sa facture / son devis.
+    const _bd = d.bonId ? (DB.bons || []).find(function (b) { return b.id === d.bonId; }) : null;
+    const _bdNum = (_bd && _bd.numero) || d.bonCommande || '';
+    if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt, _bdNum))
+      res.push({ icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)', sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '), go: function () { editDoc(d.id); _gsHide(); } });
   });
   (DB.rapports || []).forEach(function (r) {
     if (match(r.id, r.clientNom, r.noint, (r.nuisibles || []).join(' '), r.adresse, r.tech, r.bonCommande))
       res.push({ icon: '📋', type: 'Rapport', title: r.id || '', sub: [r.clientNom, (r.nuisibles || []).join(', ')].filter(Boolean).join(' · '), go: function () { editRapport(r.id); _gsHide(); } });
   });
   (DB.diagnostics || []).forEach(function (dg) {
-    if (match(dg.numero, dg.clientNom, dg.locataireNom, (dg.insectes || []).join(' '), dg.batiment))
-      res.push({ icon: '🔬', type: 'Diagnostic', title: dg.numero || '', sub: [dg.clientNom].filter(Boolean).join(' · '), go: function () { editDiag(dg.id); _gsHide(); } });
+    const _dgB = dg.bonId ? (DB.bons || []).find(function (b) { return b.id === dg.bonId; }) : null;
+    const _dgBNum = (_dgB && _dgB.numero) || '';
+    if (match(dg.numero, dg.clientNom, dg.locataireNom, (dg.insectes || []).join(' '), dg.batiment, _dgBNum))
+      res.push({ icon: '🔬', type: 'Diagnostic', title: dg.numero || '', sub: [dg.clientNom, _dgBNum ? ('📄 Bon ' + _dgBNum) : ''].filter(Boolean).join(' · '), go: function () { editDiag(dg.id); _gsHide(); } });
   });
   (DB.clients || []).forEach(function (c) {
     if (match(c.nom, c.contact, c.tel, c.email, c.adresse, c.ville, c.num))
