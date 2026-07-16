@@ -1372,7 +1372,10 @@ function clientCreate(id, what) {
 // Ouvre un bon manuel pré-rempli depuis une fiche client
 function openManualBonForClient(id) {
   const c = (DB.clients || []).find(x => x.id === id); if (!c) return;
-  if (typeof openManualBon === 'function') openManualBon();
+  // Dates d'intervention déjà saisies sur la fiche client → transmises AVANT l'ouverture
+  // pour qu'elles soient affichées d'emblée dans le formulaire du bon manuel.
+  const _cm = (typeof _clientMeta === 'function') ? _clientMeta(c) : { dates: [] };
+  if (typeof openManualBon === 'function') openManualBon((_cm.dates || []).slice());
   const set = (k, v) => { const el = $('bonf-' + k); if (el) el.value = v || ''; };
   const gerant = String(c.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
   set('gerance_nom', c.nom);
@@ -1382,9 +1385,9 @@ function openManualBonForClient(id) {
   set('gerance_adresse', c.adresse);
   set('gerance_npa', c.npa);
   set('gerance_ville', c.ville);
-  // Reporte les dates d'intervention déjà saisies sur la fiche client dans le bon manuel
-  const _cm = (typeof _clientMeta === 'function') ? _clientMeta(c) : { dates: [] };
-  _pendingBonDates = (_cm.dates || []).slice();
+  // Nuisible de la fiche client → problème signalé du bon (s'il est vide)
+  const _pb = $('bonf-probleme');
+  if (_pb && !_pb.value && _cm.nuisible) _pb.value = _cm.nuisible;
 }
 // Planifie une intervention dans l'agenda depuis une fiche client (modale pré-remplie)
 function planifyClient(id) {
@@ -3059,10 +3062,12 @@ function _nextBonManuelNumero() {
   return 'BCM 10-' + (max + 1);
 }
 // Ouvre le formulaire de bon VIDE (sans PDF) — pour les gérances qui n'envoient pas de bon
-function openManualBon() {
+// dates : tableau optionnel de dates d'intervention à pré-remplir dans le bon manuel.
+// Il DOIT être fourni ici : le formulaire construit la liste des dates au moment du rendu.
+function openManualBon(dates) {
   if (typeof showScreen === 'function') showScreen('bons');
   _pendingBonPdf = null;
-  _pendingBonDates = null;
+  _pendingBonDates = (dates && dates.length) ? dates.slice(0, 5) : null;
   const fi = $('bon-file-input'); if (fi) fi.value = '';
   bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
 }
