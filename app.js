@@ -710,10 +710,17 @@ function _globalSearchNow(q) {
     // Numéro du BON LIÉ (via bonId) : taper un n° de bon doit aussi sortir sa facture / son devis.
     const _bd = d.bonId ? (DB.bons || []).find(function (b) { return b.id === d.bonId; }) : null;
     const _bdNum = (_bd && _bd.numero) || d.bonCommande || '';
-    if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt, _bdNum))
+    // Numéro du DEVIS SOURCE (via devisId) : taper un n° de devis doit aussi sortir sa facture.
+    const _dv = d.devisId ? (DB.documents || []).find(function (x) { return x.id === d.devisId; }) : null;
+    const _dvNum = (_dv && _dv.numero) || '';
+    // …et inversement : pour un devis, le n° de la facture qui en découle.
+    const _fc = (d.type === 'devis') ? (DB.documents || []).find(function (x) { return x.type === 'facture' && x.devisId === d.id; }) : null;
+    const _fcNum = (_fc && _fc.numero) || '';
+    if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt, _bdNum, _dvNum, _fcNum))
       res.push({
         icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)',
-        sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '),
+        sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', _dvNum ? ('📝 Devis ' + _dvNum) : '', _fcNum ? ('🧾 Facturé : ' + _fcNum) : '',
+              (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '),
         meta: _gsDocMeta(d),   // payée / pas payée + rubrique où elle se trouve
         go: function () { _gsOpenDoc(d); }
       });
