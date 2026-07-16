@@ -1400,6 +1400,7 @@ function renderClients() {
           <option value="rongeurs">🐀 Rapport rongeurs</option>
           <option value="blattes">🪳 Rapport blattes</option>
           <option value="fourmis">🐜 Rapport fourmis</option>
+          <option value="punaises">🛏️ Rapport punaises de lit</option>
           <option value="planifier">📅 Planifier (agenda)</option>
         </select>
         <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteClient('${c.id}','${c.nom.replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
@@ -1482,6 +1483,7 @@ function clientCreate(id, what) {
   else if (what === 'rongeurs') openNewRongeurs();
   else if (what === 'blattes') openNewBlattes();
   else if (what === 'fourmis') openNewFourmis();
+  else if (what === 'punaises') openNewPunaises();
   else return;
   if (_editingDiag) {
     _editingDiag.clientId = c.id;
@@ -1694,8 +1696,8 @@ function renderRapports() {
 
   // Ligne d'un rapport spécial (diagnostic) — mêmes colonnes que le tableau des rapports
   const ligneDiag = d => {
-    const _dt = _diagType(d); const rg = _dt==='rongeurs', bl = _dt==='blattes', fm = _dt==='fourmis';
-    const ico = fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵'));
+    const _dt = _diagType(d); const rg = _dt==='rongeurs', bl = _dt==='blattes', fm = _dt==='fourmis', pl = _dt==='punaises';
+    const ico = pl?'🛏️':(fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')));
     const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/); const st = stm ? _decNote(stm[1]) : '';
     const stBadge = st==='Brouillon'
       ? '<span class="badge" style="background:#fffbeb;color:#b45309;border:1px solid #fcd34d;">🕒 Brouillon</span>'
@@ -4551,6 +4553,7 @@ function renderBonCard(b, solid) {
                   <option value="rongeurs">🐀 Rongeurs</option>
                   <option value="blattes">🪳 Blattes</option>
                   <option value="fourmis">🐜 Fourmis</option>
+                  <option value="punaises">🛏️ Punaises de lit</option>
                 </select>
                 <button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#16a34a' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
                 })()}
@@ -5508,7 +5511,7 @@ function createRapportTypeFromBon(bonId, type) {
   if (type === 'general') { createRapportFromBon(bonId); return; }
   const bon = (DB.bons || []).find(b => b.id === bonId);
   if (!bon) { toast('Bon introuvable', '#e63946'); return; }
-  if (type === 'rongeurs') openNewRongeurs(); else if (type === 'blattes') openNewBlattes(); else if (type === 'fourmis') openNewFourmis(); else openNewDiagnostic();
+  if (type === 'rongeurs') openNewRongeurs(); else if (type === 'blattes') openNewBlattes(); else if (type === 'fourmis') openNewFourmis(); else if (type === 'punaises') openNewPunaises(); else openNewDiagnostic();
   autoFillDiagFromBon(bon.numero || '');
 }
 
@@ -5570,6 +5573,7 @@ function createRapportFromDoc(docId, type) {
   if (type === 'rongeurs') { openNewRongeurs(); return; }
   if (type === 'blattes')  { openNewBlattes(); return; }
   if (type === 'fourmis')  { openNewFourmis(); return; }
+  if (type === 'punaises') { openNewPunaises(); return; }
   if (type === 'bois')     { openNewDiagnostic(); return; }
   // Rapport général → pré-remplir depuis le document (client, locataire, adresse)
   state.editingRapportId = null;
@@ -6460,6 +6464,7 @@ function renderDocuments() {
             <option value="rongeurs">🐀 Rongeurs</option>
             <option value="blattes">🪳 Blattes</option>
             <option value="fourmis">🐜 Fourmis</option>
+            <option value="punaises">🛏️ Punaises de lit</option>
           </select>`:''}
           ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
           <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
@@ -7614,9 +7619,11 @@ const _DIAG_MARKERS = {
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
   statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN', noHum: 'NOHUM', hygiene: 'HYGIENE', fiche: 'FICHE',
+  // Rapport punaises de lit : consignes de préparation du locataire
+  preparation: 'PREPA', preparationRem: 'PREPAREM',
 };
-const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|HYGIENE|FICHE):[^\]]*\]/g;
+const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions', 'preparation']);   // tableaux/objets → JSON dans le marqueur
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|HYGIENE|FICHE|PREPAREM|PREPA):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -7733,15 +7740,16 @@ function _diagSectionToggle(field, label) {
 let _editingDiag = null;
 
 // Type d'un document de la table diagnostics : 'bois' (DG-) ou 'rongeurs' (RG-)
-function _diagType(d) { const n = (d && d.numero) || ''; if (n.startsWith('RG-')) return 'rongeurs'; if (n.startsWith('BL-')) return 'blattes'; if (n.startsWith('FM-')) return 'fourmis'; return 'bois'; }
+function _diagType(d) { const n = (d && d.numero) || ''; if (n.startsWith('RG-')) return 'rongeurs'; if (n.startsWith('BL-')) return 'blattes'; if (n.startsWith('FM-')) return 'fourmis'; if (n.startsWith('PL-')) return 'punaises'; return 'bois'; }
 function _nextDiagNumero(prefix) {
   prefix = prefix || 'DG';
   const year = new Date().getFullYear();
   const list = (DB.diagnostics || []).filter(d => (d.numero||'').startsWith(prefix + '-' + year + '-'));
   let max = 0;
   list.forEach(d => { const m = (d.numero||'').match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
-  // Numéro de départ minimal par type : rongeurs (RG), blattes (BL) et fourmis (FM) commencent à 210.
-  const START = { RG: 210, BL: 210, FM: 210 };
+  // Numéro de départ minimal par type : rongeurs (RG), blattes (BL), fourmis (FM)
+  // et punaises de lit (PL) commencent à 210.
+  const START = { RG: 210, BL: 210, FM: 210, PL: 210 };
   const next = Math.max(max + 1, START[prefix] || 1);
   return `${prefix}-${year}-${String(next).padStart(3,'0')}`;
 }
@@ -7776,6 +7784,7 @@ function renderDiagEditor() {
   if (_diagType(d) === 'rongeurs') return renderRongeursEditor();
   if (_diagType(d) === 'blattes') return renderBlattesEditor();
   if (_diagType(d) === 'fourmis') return renderFourmisEditor();
+  if (_diagType(d) === 'punaises') return renderPunaisesEditor();
   const box = $('modal-diag-body'); if (!box) return;
   const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
   const insectesHtml = INSECTES_BOIS.map(n => `
@@ -9335,6 +9344,8 @@ async function diagAICorrect(field) {
         ? "un rapport spécial blattes/cafards (désinsectisation), "
         : _diagType(_editingDiag) === 'fourmis'
         ? "un rapport spécial fourmis (désinsectisation), "
+        : _diagType(_editingDiag) === 'punaises'
+        ? "un rapport spécial punaises de lit (désinsectisation), "
         : "un rapport de diagnostic d'insectes xylophages (bois/charpentes), ") +
       "plus précisément " + (_DIAG_AI_LABELS[field] || 'une section du rapport') + ". " +
       "Corrige l'orthographe et la grammaire, et améliore la formulation pour un ton professionnel et factuel. " +
@@ -9419,7 +9430,7 @@ function saveDiag(statut, keepOpen) {
   }
   renderDiagnostics();
   if (keepOpen) { toast('💾 Enregistré — tu peux continuer à travailler.', '#0f766e'); return; }
-  if (_editingDiag.statut === 'Finalisé') { const _dt = _diagType(_editingDiag); toast('✓ ' + (_dt==='rongeurs'?'Rapport rongeurs':_dt==='blattes'?'Rapport blattes':_dt==='fourmis'?'Rapport fourmis':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b'); }
+  if (_editingDiag.statut === 'Finalisé') { const _dt = _diagType(_editingDiag); toast('✓ ' + (_dt==='rongeurs'?'Rapport rongeurs':_dt==='blattes'?'Rapport blattes':_dt==='fourmis'?'Rapport fourmis':_dt==='punaises'?'Rapport punaises de lit':'Diagnostic bois') + ' finalisé. Pense à télécharger le PDF pour garder le schéma et les photos.', '#2d9e6b'); }
   else toast('🕒 Enregistré comme brouillon — à reprendre plus tard.', '#d97706');
   closeModal('modal-diag');
 }
@@ -9431,6 +9442,7 @@ function downloadCurrentDiagPDF() {
   if (_diagType(_editingDiag) === 'rongeurs') _genRongeursPDF(_editingDiag);
   else if (_diagType(_editingDiag) === 'blattes') _genBlattesPDF(_editingDiag);
   else if (_diagType(_editingDiag) === 'fourmis') _genFourmisPDF(_editingDiag);
+  else if (_diagType(_editingDiag) === 'punaises') _genPunaisesPDF(_editingDiag);
   else _genDiagPDF(_editingDiag);
 }
 function confirmDeleteDiag(id, label) {
@@ -9452,7 +9464,7 @@ function downloadDiagPDF(id) {
   const d = (DB.diagnostics||[]).find(x => x.id === id);
   if (!d) { toast('Diagnostic introuvable', '#e63946'); return; }
   const u = _diagUnpack(d);
-  if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else if (_diagType(u) === 'blattes') _genBlattesPDF(u); else if (_diagType(u) === 'fourmis') _genFourmisPDF(u); else _genDiagPDF(u);
+  if (_diagType(u) === 'rongeurs') _genRongeursPDF(u); else if (_diagType(u) === 'blattes') _genBlattesPDF(u); else if (_diagType(u) === 'fourmis') _genFourmisPDF(u); else if (_diagType(u) === 'punaises') _genPunaisesPDF(u); else _genDiagPDF(u);
 }
 // Grille d'informations sur 2 colonnes au-dessus du ruban — même style que le
 // rapport d'intervention classique (rows2col de pdf.js) : libellé gris en
@@ -10587,6 +10599,245 @@ const BLATTES_INFO = {
   },
 };
 
+// ============================================================
+// RAPPORT SPÉCIAL PUNAISES DE LIT (même table "diagnostics", numéros PL-)
+// ============================================================
+const PUNAISES_ESPECES = ['Punaise de lit commune', 'Punaise de lit tropicale'];
+const PUNAISES_SIGNES = [
+  'Individus vivants (adultes)', 'Larves / juvéniles', 'Individus morts',
+  'Œufs (blancs, ~1 mm)', 'Mues / exuvies', 'Déjections (points noirs)',
+  'Traces de sang sur la literie', 'Odeur caractéristique (coriandre)',
+  'Piqûres signalées par l\'occupant', 'Aucun signe visible (monitoring en cours)',
+];
+const PUNAISES_ZONES = [
+  'Matelas (coutures, étiquettes)', 'Sommier / cadre de lit', 'Tête de lit',
+  'Table de nuit', 'Plinthes', 'Prises et interrupteurs', 'Canapé / fauteuils',
+  'Rideaux', 'Armoire / commode', 'Tableaux et cadres', 'Parquet / lames disjointes', 'Bagages / valises',
+];
+const PUNAISES_MATERIEL = [
+  'Générateur de vapeur sèche', 'Pulvérisateur professionnel', 'Poudreuse',
+  'Canons à chaleur (traitement thermique)', 'Sondes de température',
+  'Housses anti-punaises', 'Pièges de monitoring (intercepteurs)', 'Aspirateur HEPA',
+  'Lampe / miroir d\'inspection',
+];
+const PUNAISES_PRODUITS = [
+  'Vapeur sèche (choc thermique localisé)', 'Pulvérisation insecticide rémanente',
+  'Terre de diatomée / poudre insecticide', 'Traitement thermique complet du volume',
+  'Régulateur de croissance (IGR)', 'Pièges de monitoring', 'Aucun produit chimique',
+];
+const PUNAISES_ACTIONS = [
+  'Traitement vapeur sèche du matelas, sommier et tête de lit',
+  'Pulvérisation rémanente des plinthes, fissures et zones de repos',
+  'Application de terre de diatomée dans les fissures, prises et plinthes',
+  'Traitement thermique complet du volume (50–60 °C)',
+  'Démontage des prises et interrupteurs pour traitement',
+  'Pose de housses anti-punaises sur matelas et sommier',
+  'Pose de pièges de monitoring (intercepteurs sous les pieds du lit)',
+  'Aspiration HEPA des zones infestées avant traitement',
+  'Contrôle de l\'efficacité au prochain passage',
+];
+// Consignes de préparation à cocher — condition clé de la réussite du traitement
+const PUNAISES_PREPARATION = [
+  'Laver tout le linge et la literie à 60 °C minimum',
+  'Sécher au sèche-linge à haute température (30 min) ce qui ne se lave pas à 60 °C',
+  'Enfermer le linge propre dans des sacs hermétiques jusqu\'à la fin du traitement',
+  'Aspirer soigneusement sols, plinthes et sommier (jeter le sac dehors immédiatement)',
+  'Décoller le lit des murs et écarter les meubles',
+  'Vider les tables de nuit et les commodes proches du lit',
+  'Ne pas déplacer d\'affaires vers une autre pièce ou un autre logement',
+  'Débarrasser l\'encombrement au sol (cartons, vêtements, journaux)',
+  'Libérer l\'accès aux plinthes, prises et interrupteurs',
+  'Prévoir de ne pas laver les surfaces traitées pendant plusieurs semaines',
+  'Laisser le logement ventilé et inoccupé pendant le délai indiqué',
+  'Ne pas jeter les meubles infestés sans les signaler (risque de dissémination)',
+];
+// Fiches descriptives des espèces — incluses dans le PDF pour chaque espèce cochée
+const PUNAISES_INFO = {
+  'Punaise de lit commune': {
+    latin: 'Cimex lectularius',
+    habitat: 'Chambres à coucher : coutures du matelas, sommier, tête de lit, plinthes, prises — à moins de 2 m du lieu de couchage',
+    indices: 'Adultes brun-roux aplatis (4–7 mm), points noirs de déjections, taches de sang sur les draps, mues translucides, œufs blancs collés dans les fissures',
+    biologie: 'Une femelle pond 5 à 12 œufs par jour, jusqu\'à 500 dans sa vie. Résiste plusieurs mois sans se nourrir. Activité nocturne. Cycle complet en 5 à 8 semaines selon la température.',
+    risque: 'Piqûres en ligne ou en grappe, démangeaisons, troubles du sommeil et anxiété. Dissémination très rapide par les bagages, le mobilier et les gaines techniques entre appartements. Ne transmet pas de maladie.',
+  },
+  'Punaise de lit tropicale': {
+    latin: 'Cimex hemipterus',
+    habitat: 'Mêmes zones que la punaise commune, mais liée aux climats chauds — importée par les voyages ; se maintient dans les logements bien chauffés',
+    indices: 'Très proche de Cimex lectularius, distinction au pronotum (bords moins élargis) — identification à la loupe',
+    biologie: 'Cycle plus rapide en ambiance chaude (>25 °C) ; même mode de reproduction et de dispersion que l\'espèce commune',
+    risque: 'Identiques à la punaise commune. Résistances aux insecticides plus fréquemment signalées : le traitement combiné vapeur/chaleur est privilégié.',
+  },
+};
+
+function openNewPunaises() {
+  _editingDiag = {
+    id: newId(), numero: _nextDiagNumero('PL'), dateDoc: today(), tech: '',
+    clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
+    batiment: '', bonId: '', insectes: [], elementsTouches: '',
+    activite: '', gravite: '', zones: '', diagnostic: '', conclusion: '',
+    traitement: '', suivi: '', prevention: '', hygiene: '', signes: [], postes: [], materiel: [],
+    rodenticides: [], actions: [], photos: [],
+    preparation: [], preparationRem: '',
+    bureau: 'ne', doctype: 'Rapport', noPlan: '1', noPhotos: '', noTech: '', statut: '', ruban: '', noSign: '1',
+    rodenticideAutre: '', postesNb: '', suiviRem: '',
+    contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
+    dateInt1: '', dateInt2: '', dateInt3: '', dateProchain: ''
+  };
+  renderDiagEditor(); openModal('modal-diag');
+}
+
+function renderPunaisesEditor() {
+  const d = _editingDiag; if (!d) return;
+  const box = $('modal-diag-body'); if (!box) return;
+  const clientOpts = (DB.clients || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
+    .map(c => `<option value="${c.id}" ${d.clientId === c.id ? 'selected' : ''}>${(c.nom || '').replace(/</g, '&lt;')}</option>`).join('');
+  const checkList = (arr, field, toggleFn) => arr.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d[field] || []).includes(n) ? 'checked' : ''} onchange="${toggleFn}('${field}','${n.replace(/'/g, "\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const especesHtml = PUNAISES_ESPECES.map(n => `
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.insectes || []).includes(n) ? 'checked' : ''} onchange="toggleDiagInsecte('${n.replace(/'/g, "\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const signesHtml   = checkList(PUNAISES_SIGNES,   'signes',       'toggleDiagList');
+  const zonesHtml    = checkList(PUNAISES_ZONES,    'postes',       'toggleDiagList');
+  const materielHtml = checkList(PUNAISES_MATERIEL, 'materiel',     'toggleDiagList');
+  const produitsHtml = checkList(PUNAISES_PRODUITS, 'rodenticides', 'toggleDiagList');
+  const actionsHtml  = PUNAISES_ACTIONS.map(n => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.actions || []).includes(n) ? 'checked' : ''} onchange="toggleDiagList('actions','${n.replace(/'/g, "\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  const prepaHtml = PUNAISES_PREPARATION.map(n => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer;">
+      <input type="checkbox" ${(d.preparation || []).includes(n) ? 'checked' : ''} onchange="toggleDiagList('preparation','${n.replace(/'/g, "\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
+    </label>`).join('');
+  box.innerHTML = `
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🛏️ Identification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="form-group"><label class="form-label">N° de bon (remplissage auto)</label><input class="form-input" placeholder="Tape le n° puis Tab" onchange="autoFillDiagFromBon(this.value)" onblur="autoFillDiagFromBon(this.value)"></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" value="${d.dateDoc || ''}" oninput="_editingDiag.dateDoc=this.value"></div>
+      ${_diagTypeBureauFields(d)}
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Nuisible affiché dans le ruban du PDF</label>
+        <select class="form-input" oninput="_editingDiag.ruban=this.value">
+          <option value="" ${!d.ruban ? 'selected' : ''}>Automatique (espèce cochée, sinon « Punaises de lit »)</option>
+          ${['Punaises de lit', 'Punaise de lit commune', 'Punaise de lit tropicale'].map(o => `<option ${d.ruban === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Client (gérance)</label>
+        <select class="form-input" onchange="onDiagClientSelect(this.value)"><option value="">-- Choisir --</option>${clientOpts}</select>
+        <input class="form-input" style="margin-top:5px;font-size:12px;" placeholder="ou nom manuel" value="${(d.clientNom || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.clientNom=this.value;_editingDiag.clientId='';">
+      </div>
+      ${_diagTechField(d)}
+      <div class="form-group"><label class="form-label">Locataire</label><input class="form-input" value="${(d.locataireNom || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.locataireNom=this.value"></div>
+      <div class="form-group"><label class="form-label">Site / logement concerné</label><input class="form-input" value="${(d.batiment || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.batiment=this.value" placeholder="Ex. appartement 3e étage, chambre, hôtel"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Adresse</label><input class="form-input" value="${(d.locataireAdresse || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.locataireAdresse=this.value"></div>
+    </div>
+
+    ${_diagDatesFields(d)}
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🛏️ Espèce identifiée</div>
+    <div style="margin-bottom:10px;">${especesHtml}</div>
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔎 Signes observés</div>
+    <div style="margin-bottom:12px;">${signesHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">📍 Zones inspectées / infestées</div>
+    <div style="margin-bottom:12px;">${zonesHtml}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+      <div class="form-group"><label class="form-label">Activité de l'infestation</label>
+        <select class="form-input" oninput="_editingDiag.activite=this.value">
+          <option value="" ${!d.activite ? 'selected' : ''}>-- Choisir --</option>
+          <option ${d.activite === 'Active' ? 'selected' : ''}>Active</option>
+          <option ${d.activite === 'Ancienne (traces)' ? 'selected' : ''}>Ancienne (traces)</option>
+          <option ${d.activite === 'Mixte' ? 'selected' : ''}>Mixte</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Niveau d'infestation</label>
+        <select class="form-input" oninput="_editingDiag.gravite=this.value">
+          <option value="" ${!d.gravite ? 'selected' : ''}>-- Choisir --</option>
+          <option ${d.gravite === 'Faible' ? 'selected' : ''}>Faible</option>
+          <option ${d.gravite === 'Modérée' ? 'selected' : ''}>Modérée</option>
+          <option ${d.gravite === 'Importante' ? 'selected' : ''}>Importante</option>
+          <option ${d.gravite === 'Critique (infestation massive)' ? 'selected' : ''}>Critique (infestation massive)</option>
+        </select>
+      </div>
+      ${_diagZonesField(d, 'Pièces traitées')}
+      <div class="form-group"><label class="form-label">Origine probable / voie d'introduction</label><input class="form-input" value="${(d.elementsTouches || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.elementsTouches=this.value" placeholder="Ex. voyage, mobilier d'occasion, logement voisin, gaines techniques"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;flex-wrap:wrap;">📷 Photo inspection ${_diagSectionToggle('noPhotos', 'Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:14px;${d.noPhotos ? 'display:none;' : ''}">
+      <input type="file" id="diag-photos-file" accept="image/*" multiple style="display:none" onchange="addDiagPhotos(event)">
+      <input type="file" id="diag-photo-replace-file" accept="image/*" style="display:none" onchange="onDiagPhotoReplace(event)">
+      <button class="btn btn-navy btn-sm" type="button" onclick="document.getElementById('diag-photos-file').click()">📷 Ajouter des photos</button>
+      <span style="font-size:11px;color:var(--g400);margin-left:6px;">Incluses dans le PDF avec date et auteur (non stockées en base).</span>
+      <div id="diag-photos-box" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧰 Matériel / méthode</div>
+    <div style="margin-bottom:12px;">${materielHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🧪 Traitement appliqué</div>
+    <div style="margin-bottom:4px;">${produitsHtml}</div>
+    <div class="form-group" style="margin-bottom:12px;max-width:360px;"><input class="form-input" style="font-size:12px;" value="${(d.rodenticideAutre || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.rodenticideAutre=this.value" placeholder="Autre produit (champ libre)"></div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">✅ Mesures du traitement</div>
+    <div style="margin-bottom:12px;">${actionsHtml}</div>
+
+    <div style="font-size:12px;font-weight:800;color:#b45309;text-transform:uppercase;margin-bottom:6px;">🧺 Préparation du locataire (avant / après traitement)</div>
+    <div style="border:1.5px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:10px;margin-bottom:14px;">
+      <div style="font-size:11px;color:#92400e;margin-bottom:6px;">Coche les consignes remises au locataire — elles apparaîtront dans le PDF. Sans préparation, un traitement punaises échoue le plus souvent.</div>
+      ${prepaHtml}
+      <div class="form-group" style="margin-top:8px;margin-bottom:0;">
+        <textarea class="form-input" rows="2" oninput="_editingDiag.preparationRem=this.value" placeholder="Consignes complémentaires (champ libre)">${d.preparationRem || ''}</textarea>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Observations détaillées</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-diagnostic" onclick="diagAICorrect('diagnostic')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-diagnostic" rows="3" oninput="_editingDiag.diagnostic=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.diagnostic || ''}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">💊 Plan de traitement & suivi</div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Plan de traitement</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-traitement" onclick="diagAICorrect('traitement')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-traitement" rows="3" oninput="_editingDiag.traitement=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. vapeur + insecticide rémanent sur literie et plinthes, 2e passage à J+15 pour traiter les éclosions...">${d.traitement || ''}</textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Suivi / prochain passage</label>
+      <select class="form-input" oninput="_editingDiag.suivi=this.value">
+        <option value="" ${!d.suivi ? 'selected' : ''}>-- Choisir --</option>
+        ${SUIVI_OPTIONS.map(o => `<option ${d.suivi === o ? 'selected' : ''}>${o}</option>`).join('')}
+        ${d.suivi && !SUIVI_OPTIONS.includes(d.suivi) ? `<option selected>${d.suivi.replace(/</g, '&lt;')}</option>` : ''}
+      </select>
+      <input class="form-input" style="margin-top:5px;font-size:12px;" value="${(d.suiviRem || '').replace(/"/g, '&quot;')}" oninput="_editingDiag.suiviRem=this.value" placeholder="Remarque complémentaire (champ libre)">
+    </div>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Prévention recommandée</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-prevention" onclick="diagAICorrect('prevention')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-prevention" rows="2" oninput="_editingDiag.prevention=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)" placeholder="Ex. inspecter les bagages au retour de voyage, éviter le mobilier d'occasion, housses de matelas...">${d.prevention || ''}</textarea>
+    </div>
+
+    ${_diagContratFields(d)}
+
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><label class="form-label">Conclusion / recommandations</label><button type="button" class="btn btn-ghost btn-sm" id="diag-ai-conclusion" onclick="diagAICorrect('conclusion')" style="font-size:11px;padding:2px 8px;">✨ Corriger IA</button></div>
+      <textarea class="form-input" id="diag-ta-conclusion" rows="2" oninput="_editingDiag.conclusion=this.value;diagTaAutoGrow(this)" onfocus="diagTaAutoGrow(this)" onblur="diagTaShrink(this)">${d.conclusion || ''}</textarea>
+    </div>
+
+    <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;">✍️ Signature numérique ${_diagSectionToggle('noSign', 'Afficher dans le PDF')}</div>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;${d.noSign ? 'display:none;' : ''}">
+      <canvas id="diag-sign-canvas" width="400" height="140" style="width:min(400px,100%);height:auto;border:1px dashed #ccc;border-radius:6px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="clearDiagSignature()">↺ Effacer</button>
+        <span style="font-size:11px;color:var(--g400);">Signe à la souris ou au doigt — la signature est insérée dans le PDF (non stockée en base).</span>
+      </div>
+    </div>
+  `;
+  const t = $('modal-diag-title'); if (t) t.textContent = 'Rapport punaises de lit ' + (d.numero || '');
+  initDiagSignPad();
+  renderDiagPhotos();
+}
+
 function openNewBlattes() {
   _editingDiag = {
     id: newId(), numero: _nextDiagNumero('BL'), dateDoc: today(), tech: '',
@@ -11074,6 +11325,340 @@ function _genBlattesPDF(d, mode) {
   if (mode === 'blob') return doc.output('blob');
   doc.save('rapport-blattes-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
   toast('✓ PDF rapport blattes téléchargé', '#2d9e6b');
+}
+
+function _genPunaisesPDF(d, mode) {
+  if (!d) { if (mode !== 'blob') toast('Rapport introuvable', '#e63946'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const M = 20, R = 190, CW = R - M;
+  const NAVY = [13,27,62], SLATE = [95,111,129], GREY = [110,110,110];
+  const MAX_Y = 270;
+  let y = 0;
+
+  const newPage = () => { doc.addPage(); y = 20; };
+  const ensure = (h) => { if (y + h > MAX_Y) newPage(); };
+  const section = (titre, keep) => {
+    ensure(14 + (keep || 0));
+    doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.text(titre, M+4.5, y);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
+    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  };
+  const field = (lbl, val, indent) => {
+    if (!val) return;
+    const x = indent || M;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
+    const lines = doc.splitTextToSize(String(val), R - vx - 2);
+    ensure(Math.max(lines.length*4.8, 5.5) + 2);
+    doc.setTextColor(60);
+    doc.text(lbl + ' :', x, y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.text(lines, vx, y);
+    y += Math.max(lines.length*4.8, 5.5);
+  };
+  const para = (txt) => {
+    if (!txt) return;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+  };
+  const badge = (txt, rgb, x, yy) => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const w = doc.getTextWidth(txt) + 6;
+    doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+    doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
+    doc.setTextColor(255); doc.text(txt, x+3, yy);
+    doc.setTextColor(0);
+    return w;
+  };
+  const GRAV_RGB = { 'Faible':[45,158,107], 'Modérée':[230,170,30], 'Importante':[235,120,40], 'Critique (infestation massive)':[230,57,70] };
+  const ACT_RGB  = { 'Active':[230,57,70], 'Ancienne (traces)':[120,120,120], 'Mixte':[235,120,40] };
+
+  // En-tête horizontal — identique aux factures / rapport rongeurs
+  const bu = (typeof BUREAUX !== 'undefined' && BUREAUX.find(b => b.id === d.bureau)) || { rue: co.rue, npa: co.npa, ville: co.ville, tel: co.tel };
+  const logoW = 62, logoH = logoW*199/900;
+  const logoY = 13;
+  const headerFiletY = logoY + logoH + 5;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
+  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  const cy0 = logoY + 4;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
+  [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
+  doc.setTextColor(13,27,62);
+  try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
+  doc.setTextColor(0);
+  doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  const bi = _diagBonInfo(d) || {};
+
+  // Bandeau titre
+  y = headerFiletY + 9;
+  doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+  doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Punaises de lit');
+  doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
+  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
+  doc.setTextColor(0);
+  y += 21;
+
+  // Informations sur 2 colonnes
+  y = _diagRows2Col(doc, [
+    ['Technicien', d.noTech ? '' : d.tech],
+    ['Client', [(d.clientNom||''), bi.clientAdresse].filter(Boolean).join('\n')],
+    ['N° bon de commande', bi.bonNumero],
+    ['Adresse d\'intervention', d.locataireAdresse],
+    ['Gérant', bi.gerant],
+    ['Téléphone', bi.tel],
+    ['Email', bi.email],
+    ['Locataire', d.locataireNom],
+    ['Tél. locataire', bi.locTel],
+    ['Logement', (bi.logement && bi.logement !== d.locataireAdresse) ? bi.logement : ''],
+    ['Site / bâtiment', d.batiment],
+    ['Zones inspectées', d.zones],
+    ['Foyers / zones chaudes', d.elementsTouches],
+  ], y, M, CW);
+
+  y = _diagDatesStrip(doc, d, y + 5, M, CW);
+  y += 1;
+
+  // Synthèse
+  const postes = Array.isArray(d.postes) ? d.postes.filter(p => p && (p.emplacement || p.produit)) : [];
+  const synth = [
+    ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
+    ['NIVEAU D\'INFESTATION', d.gravite, GRAV_RGB[d.gravite]],
+    ['ESPÈCES', (d.insectes||[]).length ? (d.insectes||[]).length + ' détectée(s)' : '', null],
+    ['POINTS TRAITÉS', d.postesNb ? String(d.postesNb) : (postes.length ? String(postes.length) : ''), null],
+  ];
+  if (synth.some(s => s[1])) {
+    ensure(20);
+    const colW = CW/4;
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y, CW, 15, 2, 2, 'D');
+    synth.forEach((s, i) => {
+      const cx = M + i*colW + 4;
+      if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.text(s[0], cx, y+5);
+      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
+      else {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
+      }
+    });
+    doc.setTextColor(0);
+    y += 21;
+  }
+
+  // Constatations
+  section('Constatations');
+  field('Espèces détectées', (d.insectes||[]).join(', '));
+  field('Signes observés', (d.signes||[]).join(', '));
+  field('Foyers / zones chaudes', d.elementsTouches);
+  if (d.diagnostic) {
+    y += 1.5;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
+    para(d.diagnostic);
+  }
+
+  // Photos
+  const photos = (!d.noPhotos && Array.isArray(d.photos)) ? d.photos.filter(p => p && p.data && p.use !== false) : [];
+  if (photos.length) {
+    y += 2; section('Photos de l\'inspection', 62);
+    const pw = (CW - 6) / 2, ph = 58;
+    photos.forEach((p, i) => {
+      const col = i % 2;
+      if (col === 0 && y + ph + 8 > MAX_Y) newPage();
+      const px = M + col*(pw+6);
+      try {
+        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
+        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
+        const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
+        doc.setTextColor(0);
+      } catch (e) {}
+      if (col === 1 || i === photos.length-1) y += ph + 8;
+    });
+    y += 2;
+  }
+
+  // Tableau des points de gel / pièges
+  if (postes.length) {
+    y += 2; section('Zones traitées / pièges posés', 18);
+    const c1 = M, c2 = M+14, c3 = M+105;
+    const drawPostesHeader = () => {
+      doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
+      doc.rect(M, y-4, CW, 6.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255);
+      doc.text('N°', c1+2, y); doc.text('Emplacement', c2+2, y); doc.text('Produit / dispositif', c3+2, y);
+      doc.setTextColor(0);
+      y += 5;
+    };
+    ensure(8);
+    drawPostesHeader();
+    postes.forEach((p, i) => {
+      const lines1 = doc.splitTextToSize(String(p.emplacement||'—'), c3-c2-6);
+      const lines2 = doc.splitTextToSize(String(p.produit||'—'), R-c3-6);
+      const rowH = Math.max(lines1.length, lines2.length)*4.6 + 2.4;
+      if (y + rowH + 2 > MAX_Y) { newPage(); drawPostesHeader(); }
+      if (i % 2 === 0) { doc.setFillColor(246,247,250); doc.rect(M, y-3.4, CW, rowH, 'F'); }
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
+      doc.setFont('helvetica','normal');
+      doc.text(lines1, c2+2, y);
+      doc.text(lines2, c3+2, y);
+      y += rowH;
+    });
+    doc.setDrawColor(225,228,238); doc.setLineWidth(0.3); doc.line(M, y-2.8, R, y-2.8);
+    y += 4;
+  }
+
+  // Fiches des espèces détectées
+  const fiches = (d.insectes||[]).filter(n => PUNAISES_INFO[n]);
+  if (fiches.length) {
+    y += 2; section('Fiches des espèces détectées', 38);
+    fiches.forEach(nom => {
+      const f = PUNAISES_INFO[nom];
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
+      ensure(Math.min(estH, 75));
+      doc.setFillColor(238,241,246);
+      doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      const nomW = doc.getTextWidth(nom);
+      doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
+      doc.text(nom, M+3, y+3.6);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.text(f.latin, M+3+nomW+4, y+3.6);
+      doc.setTextColor(0);
+      y += 10;
+      field('Habitat', f.habitat, M+3);
+      field('Indices typiques', f.indices, M+3);
+      field('Biologie', f.biologie, M+3);
+      field('Risque', f.risque, M+3);
+      y += 3;
+    });
+  }
+
+  // Plan de traitement & suivi
+  const materiel = Array.isArray(d.materiel) ? d.materiel : [];
+  const produits = Array.isArray(d.rodenticides) ? d.rodenticides : [];
+  const actions = Array.isArray(d.actions) ? d.actions : [];
+  const checkLine = (txt) => {
+    const lines = doc.splitTextToSize(String(txt), CW - 8);
+    ensure(lines.length*4.8 + 2);
+    doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.35);
+    doc.rect(M, y-3, 3.2, 3.2);
+    doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
+    doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.text(lines, M+5.5, y);
+    y += lines.length*4.8 + 1;
+  };
+  if (d.traitement || d.suivi || materiel.length || produits.length || actions.length) {
+    y += 2; section('Plan de traitement', 12);
+    if (materiel.length) { field('Matériel / méthode', materiel.join(', ')); y += 1; }
+    if (d.postesNb) { field('Nombre de pièges / points traités', String(d.postesNb)); y += 1; }
+    const prodAucun = produits.includes('Aucun produit chimique');
+    const prodList = produits.filter(r => r !== 'Aucun produit chimique');
+    if (prodAucun && !prodList.length && !d.rodenticideAutre) { field('Produit', 'Aucun produit chimique utilisé'); y += 1; }
+    else if (prodList.length || d.rodenticideAutre) { field('Traitement appliqué', [...prodList, d.rodenticideAutre].filter(Boolean).join(', ')); y += 1; }
+    para(d.traitement);
+    if (actions.length) { y += 1.5; actions.forEach(a => checkLine(a)); }
+    const suiviTxt = [d.suivi, d.suiviRem].filter(Boolean).join(' — ');
+    if (suiviTxt) { y += 1.5; field('Suivi / prochain passage', suiviTxt); }
+  }
+
+  // Hygiène recommandée
+  if (d.hygiene) {
+    y += 2; section('Hygiène recommandée', 12);
+    para(d.hygiene);
+  }
+
+  // Préparation du locataire (spécifique punaises de lit)
+  {
+    const prep = (d.preparation || []);
+    if (prep.length || d.preparationRem) {
+      y += 2; section('Préparation du locataire', 20);
+      para("La réussite du traitement dépend directement du respect des consignes ci-dessous par l'occupant. Sans cette préparation, une nouvelle infestation est très probable.");
+      y += 1.5;
+      prep.forEach(a => checkLine(a));
+      if (d.preparationRem) { y += 1.5; para(d.preparationRem); }
+    }
+  }
+
+  // Prévention recommandée
+  if (d.prevention) {
+    y += 2; section('Prévention recommandée', 12);
+    para(d.prevention);
+  }
+
+  // Proposition de contrat annuel
+  if (d.contrat) {
+    y += 2; section('Proposition de contrat annuel', 18);
+    para("Au vu de la situation constatée, une proposition de contrat annuel peut être envisagée afin d'assurer un suivi régulier, de limiter les risques de récidive et de maintenir une surveillance préventive des zones sensibles.");
+    y += 1.5;
+    field('Passages annuels proposés', d.contratPassages);
+    field('Montant estimatif', d.contratMontant);
+    field('Zones concernées', d.contratZones);
+    field('Remarques', d.contratRem);
+  }
+
+  // Conclusion (encadré)
+  if (d.conclusion) {
+    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const boxH = lines.length*4.9 + 8;
+    if (y + boxH + 12 > MAX_Y) newPage();
+    y += 2; section('Conclusion / recommandations');
+    doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    doc.setTextColor(0);
+    y += boxH + 4;
+  }
+
+  // Signature
+  if (!d.noSign) {
+    ensure(32);
+    y += 8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
+    doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
+    if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
+    doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(120, y+18, 186, y+18);
+    doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('Signature', 120, y+21.5);
+    doc.setTextColor(0);
+  }
+
+  // Pied de page
+  const nb = doc.getNumberOfPages();
+  for (let i = 1; i <= nb; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
+    doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
+    doc.setTextColor(0);
+  }
+
+  if (mode === 'blob') return doc.output('blob');
+  doc.save('rapport-punaises-' + (d.numero||'doc').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf');
+  toast('✓ PDF rapport punaises de lit téléchargé', '#2d9e6b');
 }
 
 // ============================================================
