@@ -7067,6 +7067,9 @@ function downloadDocPDF(id, mode) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
+  // Police du document : Arial (embarquée via fonts_arial.js — Liberation Sans, métriques
+  // strictement identiques à Arial). Repli sur Helvetica si le fichier n'est pas chargé.
+  const FONT = (function () { try { return doc.getFontList().Arial ? 'Arial' : 'helvetica'; } catch (e) { return 'helvetica'; } })();
   const isFacture = d.type === 'facture';
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais, _docExpertise(d));
 
@@ -7079,13 +7082,13 @@ function downloadDocPDF(id, mode) {
       try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); }
       catch (e) { console.warn('logo', e); }
     } else {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23);
+      doc.setFont(FONT, 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23);
     }
     // Coordonnées en 2 colonnes à droite du logo
     const cy0 = logoY + 4;
     const colA = [bureau.rue, `${bureau.npa} ${bureau.ville}`, 'Tél. ' + bureau.tel];
     const colB = [co.email, co.tva];
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
     colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
     colB.forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
     // Site web (lien cliquable) sous l'email / la TVA
@@ -7095,7 +7098,7 @@ function downloadDocPDF(id, mode) {
     doc.setTextColor(0);
     // Filet de séparation sous l'en-tête
     doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+    doc.setFont(FONT, 'normal'); doc.setTextColor(0);
   };
   // Démarre une nouvelle page de contenu : saut de page + en-tête répété, renvoie le Y de départ
   const startContentPage = () => { doc.addPage(); drawHeader(); return headerFiletY + 8; };
@@ -7103,9 +7106,9 @@ function downloadDocPDF(id, mode) {
 
   // Date d'émission, sous le filet, à GAUCHE ("Neuchâtel, le ...") — hors de la
   // fenêtre droite de l'enveloppe C5 (sinon la date apparaît dans la fenêtre).
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
+  doc.setFont(FONT, 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
   doc.text((bureau.ville || 'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc) || ''), 20, headerFiletY + 5);
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+  doc.setFont(FONT, 'normal'); doc.setTextColor(0);
 
   // Destinataire (client) à droite — même position que le générateur
   // Si un propriétaire est renseigné : "Propriétaire / p.a. Gérance / adresse gérance"
@@ -7130,13 +7133,13 @@ function downloadDocPDF(id, mode) {
   // Titre du document À GAUCHE de l'adresse du destinataire (même hauteur, en haut)
   const titleY = 50;
   if (d._rappel) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(200, 30, 30);
+    doc.setFont(FONT, 'bold'); doc.setFontSize(15); doc.setTextColor(200, 30, 30);
     doc.text(d._rappelLabel || 'RAPPEL DE PAIEMENT', 20, titleY);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(9.5); doc.setTextColor(90);
     doc.text('Facture ' + (d.numero || '') + ((d._rappelFactureDate || d.dateDoc) ? (' du ' + fmtDate(d._rappelFactureDate || d.dateDoc)) : ''), 20, titleY + 6);
     doc.setTextColor(0);
   } else {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
+    doc.setFont(FONT, 'bold'); doc.setFontSize(14); doc.setTextColor(13, 27, 62);
     doc.text((isFacture ? 'Facture ' : 'Devis ') + (d.numero || ''), 20, titleY);
     doc.setTextColor(0);
   }
@@ -7156,7 +7159,7 @@ function downloadDocPDF(id, mode) {
   doc.setFontSize(9);
   infoPairs.forEach(([k, v]) => {
     if (!v) return;
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(90);
+    doc.setFont(FONT, 'normal'); doc.setTextColor(90);
     doc.text(k, 20, infoY);
     doc.setTextColor(0); doc.text(': ' + v, 62, infoY);
     infoY += 4.6;
@@ -7169,7 +7172,7 @@ function downloadDocPDF(id, mode) {
   if (d.locataireAdresse) descParts.push(d.locataireAdresse);
   if (descParts.length) {
     let cy = Math.max(infoY, 92);   // 92 mm : sous la zone fenêtre du destinataire
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(40);
     doc.splitTextToSize(descParts.join(' — '), 170).forEach(ln => { doc.text(ln, 20, cy); cy += 4.6; });
     doc.setTextColor(0);
     infoY = cy;
@@ -7177,7 +7180,7 @@ function downloadDocPDF(id, mode) {
   // Texte de relance (rappel de paiement), placé sous la zone fenêtre de l'enveloppe
   if (d._rappel && d._rappelTexte) {
     let ry = Math.max(infoY, 96);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(10); doc.setTextColor(20);
     doc.splitTextToSize(d._rappelTexte, 170).forEach(ln => { doc.text(ln, 20, ry); ry += 5.2; });
     doc.setTextColor(0);
     infoY = ry + 3;
@@ -7186,9 +7189,9 @@ function downloadDocPDF(id, mode) {
   // En-tête du tableau — ruban BLEU (navy) avec texte blanc
   const drawLignesHeader = (y) => {
     doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7.5, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont(FONT, 'bold');
     doc.text('Désignation', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix HT', 156, y, {align:'right'}); doc.text('Montant', 188, y, {align:'right'});
-    doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0); doc.setFont(FONT, 'normal');
     return y + 8.5;
   };
 
@@ -7271,10 +7274,10 @@ function downloadDocPDF(id, mode) {
   if (ty + totalsH > contentBottom) { ty = startContentPage(); }
   ty += 3;
   doc.line(120, ty, 190, ty); ty += 4.3;
-  doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5); doc.setFont(FONT, 'normal');
   if (d._rappel) {
     // Rappel : pas de détail HT/TVA, juste le montant total à payer (le QR reprend ce montant)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(180, 30, 30);
+    doc.setFont(FONT, 'bold'); doc.setFontSize(12); doc.setTextColor(180, 30, 30);
     doc.text('Total à payer', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
     doc.setTextColor(0);
     ty += 6;
@@ -7291,7 +7294,7 @@ function downloadDocPDF(id, mode) {
     doc.setTextColor(0);
   }
   doc.text(`TVA ${d.tvaTaux}%`, 130, ty); doc.text(_displayMontant(t.tvaMontant) + ' CHF', 188, ty, {align:'right'}); ty += 5.5;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.setFont(FONT, 'bold'); doc.setFontSize(11);
   doc.text('Total TTC', 130, ty); doc.text(_displayMontant(t.total) + ' CHF', 188, ty, {align:'right'});
   ty += 6;
   }
@@ -7301,7 +7304,7 @@ function downloadDocPDF(id, mode) {
     const noteLines = doc.splitTextToSize(_docNotesClean(d), 170);
     const notesH = noteLines.length * 4.5 + 8;
     if (ty + notesH > contentBottom) { ty = startContentPage(); }
-    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.setFont(FONT,'normal'); doc.setFontSize(9); doc.setTextColor(80);
     doc.text(noteLines, 20, ty + 6); doc.setTextColor(0);
     ty += notesH;
   }
@@ -7312,7 +7315,7 @@ function downloadDocPDF(id, mode) {
     if (dphotos.length) {
       if (ty + 16 > contentBottom) { ty = startContentPage(); }
       ty += 6;
-      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(13,27,62);
+      doc.setFont(FONT,'bold'); doc.setFontSize(11); doc.setTextColor(13,27,62);
       doc.text('Photos', 20, ty);
       doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, ty+1.8, 190, ty+1.8);
       doc.setTextColor(0); ty += 7;
@@ -7324,7 +7327,7 @@ function downloadDocPDF(id, mode) {
         try {
           doc.addImage(p.data, 'JPEG', px, ty, pw, ph);
           doc.setDrawColor(225,228,238); doc.rect(px, ty, pw, ph, 'D');
-          if (p.caption) { doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
+          if (p.caption) { doc.setFont(FONT,'italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
         } catch (e) {}
         if (col === 1 || i === dphotos.length - 1) ty += ph + 11;
       });
@@ -7336,9 +7339,9 @@ function downloadDocPDF(id, mode) {
     if (ty + 30 > contentBottom) { ty = startContentPage(); }
     ty += 10;
     const bx = 110, bw = 80;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
+    doc.setFont(FONT, 'bold'); doc.setFontSize(10); doc.setTextColor(13, 27, 62);
     doc.text('Bon pour accord', bx, ty);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(80);
     doc.text('Date et signature du client :', bx, ty + 6);
     doc.setTextColor(0);
     doc.setDrawColor(120); doc.setLineWidth(0.3);
@@ -7374,9 +7377,9 @@ function downloadDocPDF(id, mode) {
       : null;
 
     // Conditions de paiement, juste au-dessus de la ligne pointillée
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
+    doc.setFont(FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
     doc.text('Condition de paiement : 30 jours net.', 20, billTop - 11);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+    doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
     doc.text('Veuillez utiliser le bulletin de versement ci-dessous pour le paiement.', 20, billTop - 6);
     doc.setTextColor(0);
 
@@ -7386,9 +7389,9 @@ function downloadDocPDF(id, mode) {
     doc.setLineDashPattern([], 0);
     doc.setFontSize(8); doc.setTextColor(110); doc.text('✂', 3, billTop + 1.2); doc.setTextColor(0);
 
-    const L = (txt, x, y) => { doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.text(txt, x, y); return y + 3.4; };
+    const L = (txt, x, y) => { doc.setFont(FONT,'bold'); doc.setFontSize(6); doc.text(txt, x, y); return y + 3.4; };
     const V = (arr, x, y, size, maxW) => {
-      doc.setFont('helvetica','normal'); doc.setFontSize(size||8);
+      doc.setFont(FONT,'normal'); doc.setFontSize(size||8);
       const lh = (size||8)*0.40; let cy = y;
       (Array.isArray(arr)?arr:[arr]).forEach(ln => { if(!ln) return; (maxW?doc.splitTextToSize(String(ln),maxW):[String(ln)]).forEach(p=>{doc.text(p,x,cy);cy+=lh;}); });
       return cy;
@@ -7398,18 +7401,18 @@ function downloadDocPDF(id, mode) {
 
     // Récépissé
     let y = billTop + 7;
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Récépissé', padX, y); y += 8;
+    doc.setFont(FONT,'bold'); doc.setFontSize(11); doc.text('Récépissé', padX, y); y += 8;
     y = L('Compte / Payable à', padX, y); y = V(credLines, padX, y, 7, recW-padX-4) + 1.5;
     y = L('Payable par', padX, y);
     if (debtLinesClean) y = V(debtLinesClean, padX, y, 7, recW-padX-4) + 1.5; else y += 6;
     const amountY = 255;
     L('Monnaie', padX, amountY); L('Montant', padX+18, amountY);
     V([co.devise||'CHF'], padX, amountY+3.6, 8); V([amountDisp], padX+18, amountY+3.6, 8);
-    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.text('Point de dépôt', recW-5, H-8, {align:'right'});
+    doc.setFont(FONT,'bold'); doc.setFontSize(6); doc.text('Point de dépôt', recW-5, H-8, {align:'right'});
 
     // Section paiement
     const px2 = payX + 5; let py = billTop + 7;
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Section paiement', px2, py);
+    doc.setFont(FONT,'bold'); doc.setFontSize(11); doc.text('Section paiement', px2, py);
     const qrSize = 46, qrX = px2, qrY = py + 4;
     if (qrUrl) doc.addImage(qrUrl, 'PNG', qrX, qrY, qrSize, qrSize);
     // Croix suisse au centre
