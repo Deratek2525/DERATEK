@@ -609,6 +609,34 @@ function _gsOpenBon(b) {
   if (typeof setBonsFilter === 'function') setBonsFilter(filt); else if (typeof renderBons === 'function') renderBons();
   _gsHide();
 }
+// Badges d'un devis/facture dans les résultats de recherche :
+// son STATUT (payée / pas payée…) et la RUBRIQUE où le retrouver.
+function _gsDocMeta(d) {
+  const chip = function (txt, bg, col, bd) {
+    return '<span style="display:inline-block;font-size:10px;font-weight:800;color:' + col + ';background:' + bg
+      + ';border:1px solid ' + bd + ';border-radius:8px;padding:1px 7px;margin-right:4px;">' + txt + '</span>';
+  };
+  const st = String(d.statut || 'brouillon');
+  let statut;
+  if (d.type === 'facture') {
+    if (_isRappelDoc(d))        statut = chip('📄 Rappel', '#fef2f2', '#b91c1c', '#fecaca');
+    else if (st === 'payee')    statut = chip('✅ Payée', '#dcfce7', '#166534', '#86efac');
+    else if (st === 'impayee')  statut = chip('⏳ Pas payée', '#fef3c7', '#92400e', '#fcd34d');
+    else if (st === 'envoyee')  statut = chip('📨 Envoyée — à encaisser', '#eff6ff', '#1d4ed8', '#bfdbfe');
+    else if (st === 'pret')     statut = chip('📤 Prêt à envoyer', '#fff7ed', '#c2410c', '#fed7aa');
+    else                        statut = chip('🕒 Brouillon', '#fffbeb', '#b45309', '#fde68a');
+  } else {
+    const L = { brouillon: ['🕒 Brouillon', '#fffbeb', '#b45309', '#fde68a'], envoye: ['📨 Envoyé', '#eff6ff', '#1d4ed8', '#bfdbfe'],
+                accepte: ['✅ Accepté', '#dcfce7', '#166534', '#86efac'], refuse: ['❌ Refusé', '#fef2f2', '#b91c1c', '#fecaca'] };
+    const v = L[st] || L.brouillon;
+    statut = chip(v[0], v[1], v[2], v[3]);
+  }
+  // Rubrique où se trouve le document
+  let rub;
+  if (d.type === 'facture') rub = _factureRubrique(d);
+  else rub = _isDevisArchivedWithFacture(d) ? '📦 Facturation archivée (avec sa facture)' : '📝 Devis';
+  return statut + chip('→ ' + rub, '#f3f4f6', '#374151', '#e5e7eb');
+}
 function _globalSearchNow(q) {
   const box = $('global-search-results'); if (!box) return;
   const raw = (q || '').trim();
@@ -630,7 +658,12 @@ function _globalSearchNow(q) {
     const _bd = d.bonId ? (DB.bons || []).find(function (b) { return b.id === d.bonId; }) : null;
     const _bdNum = (_bd && _bd.numero) || d.bonCommande || '';
     if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt, _bdNum))
-      res.push({ icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)', sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '), go: function () { editDoc(d.id); _gsHide(); } });
+      res.push({
+        icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)',
+        sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '),
+        meta: _gsDocMeta(d),   // payée / pas payée + rubrique où elle se trouve
+        go: function () { editDoc(d.id); _gsHide(); }
+      });
   });
   (DB.rapports || []).forEach(function (r) {
     if (match(r.id, r.clientNom, r.noint, (r.nuisibles || []).join(' '), r.adresse, r.tech, r.bonCommande))
@@ -674,6 +707,7 @@ function _globalSearchNow(q) {
       + '<span style="font-size:16px;">' + r.icon + '</span>'
       + '<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + '</div>'
       + (r.sub ? '<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.sub.replace(/</g, '&lt;') + '</div>' : '')
+      + (r.meta ? '<div style="margin-top:3px;">' + r.meta + '</div>' : '')
       + '</div></div>';
   };
   box.innerHTML =
