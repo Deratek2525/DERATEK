@@ -649,16 +649,38 @@ function _globalSearchNow(q) {
     if (match(f.nom, f.contact, f.tel, f.email, f.categorie))
       res.push({ icon: '📦', type: 'Fournisseur', title: f.nom || '', sub: [f.categorie, f.ville].filter(Boolean).join(' · '), go: function () { showScreen('fournisseurs'); const s = $('fourn-search'); if (s) { s.value = raw; if (typeof renderFournisseurs === 'function') renderFournisseurs(); } _gsHide(); } });
   });
-  const total = res.length, shown = res.slice(0, 25);
+  // Pertinence : une correspondance EXACTE sur le numéro/titre passe devant (ex. « 39326 »
+  // doit proposer la facture 39326 avant un client dont le téléphone contient ces chiffres).
+  res.forEach(function (r) { r._exact = _gsNorm(r.title || '').replace(/\s/g, '') === nqns ? 0 : 1; });
+  res.sort(function (a, b) { return a._exact - b._exact; });
+  const total = res.length, shown = res.slice(0, 40);
   if (!shown.length) { box.innerHTML = '<div style="padding:12px 14px;color:#6b7280;font-size:13px;">Aucun résultat pour « ' + raw.replace(/</g, '&lt;') + ' »</div>'; box.style.display = 'block'; return; }
   window._gsActions = shown.map(function (r) { return r.go; });
-  box.innerHTML = shown.map(function (r, i) {
+  // Résultats REGROUPÉS PAR TYPE : on voit tout ce qui a été trouvé et on choisit.
+  const ORDER = ['Bon', 'Facture', 'Devis', 'Rapport', 'Diagnostic', 'Client', 'Locataire', 'Fournisseur'];
+  const groups = {};
+  shown.forEach(function (r, i) { (groups[r.type] = groups[r.type] || []).push({ r: r, i: i }); });
+  const types = Object.keys(groups).sort(function (a, b) {
+    const ia = ORDER.indexOf(a), ib = ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const ligne = function (r, i) {
     return '<div onclick="(window._gsActions[' + i + ']||function(){})()" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f1f3f7;cursor:pointer;" onmouseover="this.style.background=\'#f5f7fb\'" onmouseout="this.style.background=\'\'">'
       + '<span style="font-size:16px;">' + r.icon + '</span>'
-      + '<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + ' <span style="font-weight:600;color:#9ca3af;font-size:11px;">· ' + r.type + '</span></div>'
+      + '<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + '</div>'
       + (r.sub ? '<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.sub.replace(/</g, '&lt;') + '</div>' : '')
       + '</div></div>';
-  }).join('') + (total > shown.length ? '<div style="padding:6px 14px;font-size:11px;color:#9ca3af;">… ' + (total - shown.length) + ' autre(s) résultat(s), précise ta recherche.</div>' : '');
+  };
+  box.innerHTML =
+    '<div style="padding:7px 14px;background:#0d1b3e;color:#fff;font-size:11px;font-weight:800;letter-spacing:.3px;">'
+      + total + ' résultat' + (total > 1 ? 's' : '') + ' pour « ' + raw.replace(/</g, '&lt;') + ' » — choisis ci-dessous</div>'
+    + types.map(function (t) {
+        const arr = groups[t];
+        return '<div style="padding:5px 14px;background:#eef2f8;font-size:10.5px;font-weight:800;color:#0d1b3e;text-transform:uppercase;letter-spacing:.4px;">'
+            + arr[0].r.icon + ' ' + t + ' (' + arr.length + ')</div>'
+          + arr.map(function (o) { return ligne(o.r, o.i); }).join('');
+      }).join('')
+    + (total > shown.length ? '<div style="padding:6px 14px;font-size:11px;color:#9ca3af;">… ' + (total - shown.length) + ' autre(s) résultat(s), précise ta recherche.</div>' : '');
   box.style.display = 'block';
 }
 // Fermer les résultats en cliquant ailleurs
