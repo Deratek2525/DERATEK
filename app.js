@@ -3034,7 +3034,7 @@ async function bonExtractInfosIA(texte) {
     '"gerance_adresse": "adresse de la gérance UNIQUEMENT si elle est clairement indiquée comme telle. NE METS RIEN (chaîne vide) si la seule adresse visible est celle du destinataire DERATEK / Maillefer 25 / Pyramides 7.",\n' +
     '"gerance_npa": "code postal gérance (vide si inconnu)",\n' +
     '"gerance_ville": "ville gérance (vide si inconnue)",\n' +
-    '"numero_bon": "numéro du bon de travaux",\n' +
+    '"numero_bon": "numéro du bon de travaux. ATTENTION : recopie-le INTÉGRALEMENT, sans jamais omettre le premier chiffre. Les bons de la Gérance CPCN / Caisse de pensions de la fonction publique du canton de Neuchâtel portent un numéro à 7 CHIFFRES commençant TOUJOURS par 1 (ex. \\"1 768 235\\", \\"1 892 795\\") : si tu ne lis que 6 chiffres (ex. \\"768 235\\"), c\'est que le 1 initial a été manqué — remets-le.",\n' +
     '"date_bon": "date du bon au format AAAA-MM-JJ",\n' +
     '"immeuble": "ADRESSE D\'INTERVENTION = l\'adresse écrite en face de \\"Immeuble\\" sur le bon (rue + numéro + NPA + ville, ex \\"Matthias Hipp 1A, 2000 Neuchâtel\\"). C\'est le lieu où DERATEK doit intervenir, PAS l\'adresse de la gérance ni de DERATEK.",\n' +
     '"proprietaire": "nom du propriétaire",\n' +
@@ -3113,9 +3113,27 @@ function onManualBonClientSelect(id) {
   setv('gerance_npa', c.npa);
   setv('gerance_ville', c.ville);
 }
+// Les bons de la Gérance CPCN portent TOUJOURS un numéro à 7 chiffres commençant par 1
+// (ex. « 1 768 235 »). L'OCR/IA perd régulièrement le « 1 » de tête et renvoie « 768 235 ».
+// On le rétablit automatiquement pour que le n° soit correct dès le formulaire.
+function _fixNumeroBonCPCN(numero, geranceNom) {
+  const num = String(numero || '').trim();
+  if (!num) return num;
+  if (!/cpcn/i.test(String(geranceNom || ''))) return num;
+  const digits = num.replace(/\D/g, '');
+  // Uniquement les numéros à 6 chiffres commençant par 7, 8 ou 9 (série CPCN : 1 7xx xxx → 1 9xx xxx)
+  if (!/^[789]\d{5}$/.test(digits)) return num;
+  const d = '1' + digits;
+  return d.slice(0, 1) + ' ' + d.slice(1, 4) + ' ' + d.slice(4);
+}
 function bonShowConfirm(infos, fileName, manual) {
   const box = $('bon-confirm');
   if (!box) return;
+  // Rétablit le « 1 » de tête oublié par l'IA sur les bons CPCN
+  infos = infos || {};
+  if (!manual && infos.numero_bon) {
+    infos.numero_bon = _fixNumeroBonCPCN(infos.numero_bon, infos.gerance_nom);
+  }
   const champ = (label, key, val) =>
     `<div style="margin-bottom:8px;">
        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
