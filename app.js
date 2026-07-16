@@ -5866,6 +5866,34 @@ function renderDocEditor() {
 
 // Aperçu PDF en direct du document en cours d'édition (panneau de droite de l'éditeur).
 let _docPdfLiveTimer = null, _docPdfLiveUrl = null;
+let _docPdfZoom = 0;   // 0 = ajusté à la largeur ; sinon zoom en pourcentage
+const _DOC_PDF_ZOOMS = [50, 75, 100, 125, 150, 200, 300];
+function _docPdfSrc(url) {
+  return url + '#toolbar=0&navpanes=0&' + (_docPdfZoom ? ('zoom=' + _docPdfZoom) : 'view=FitH');
+}
+// delta : +1 / -1 pour zoomer, 0 pour revenir à « ajusté à la largeur »
+function docPdfZoom(delta) {
+  if (!delta) {
+    _docPdfZoom = 0;
+  } else {
+    const cur = _docPdfZoom || 100;
+    let i = _DOC_PDF_ZOOMS.indexOf(cur);
+    if (i < 0) { i = _DOC_PDF_ZOOMS.findIndex(s => s >= cur); if (i < 0) i = _DOC_PDF_ZOOMS.length - 1; }
+    i = Math.max(0, Math.min(_DOC_PDF_ZOOMS.length - 1, i + delta));
+    _docPdfZoom = _DOC_PDF_ZOOMS[i];
+  }
+  const lbl = document.getElementById('doc-pdf-zoom-lbl');
+  if (lbl) lbl.textContent = _docPdfZoom ? (_docPdfZoom + '%') : 'Ajusté';
+  const ifr = document.getElementById('doc-pdf-preview');
+  if (ifr && _docPdfLiveUrl) ifr.src = _docPdfSrc(_docPdfLiveUrl);
+}
+// Ouvre l'aperçu en grand dans un nouvel onglet (pleine page)
+function docPdfOpenFull() {
+  let u = _docPdfLiveUrl;
+  if (!u && _editingDoc) { try { u = downloadDocPDF(_editingDoc, 'blob'); } catch (e) {} }
+  if (u) window.open(u, '_blank');
+  else toast('Aperçu indisponible', '#e63946');
+}
 function _docPdfLive() {
   if (!_editingDoc) return;
   clearTimeout(_docPdfLiveTimer);
@@ -5877,7 +5905,7 @@ function _docPdfLive() {
       if (!url) return;
       if (_docPdfLiveUrl) { try { URL.revokeObjectURL(_docPdfLiveUrl); } catch (e) {} }
       _docPdfLiveUrl = url;
-      ifr.src = url + '#toolbar=0&navpanes=0&view=FitH';
+      ifr.src = _docPdfSrc(url);
     } catch (e) { console.warn('aperçu live', e); }
   }, 350);
 }
