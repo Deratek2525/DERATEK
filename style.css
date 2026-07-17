@@ -308,7 +308,11 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   padding: 16px 20px; border-bottom: 1px solid var(--g200);
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; background: var(--white); z-index: 1;
+  cursor: move; user-select: none;   /* la fenêtre se déplace en glissant l'en-tête */
 }
+/* Les boutons de l'en-tête gardent un curseur normal (ils ne déplacent pas la fenêtre) */
+.modal-hd button, .modal-hd a, .modal-hd input, .modal-hd select { cursor: pointer; }
+.modal-title { cursor: move; }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--navy); }
 .modal-body { padding: 20px; }
 .modal-ft {

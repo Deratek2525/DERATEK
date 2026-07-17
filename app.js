@@ -430,8 +430,82 @@ function toast(msg, color) {
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-function openModal(id)  { $(id).classList.add('open'); }
+function openModal(id)  {
+  const bg = $(id); if (!bg) return;
+  // Réinitialise la position : une modale rouverte revient toujours centrée
+  const box = bg.querySelector('.modal'); if (box) box.style.transform = '';
+  bg.classList.add('open');
+}
 function closeModal(id) { $(id).classList.remove('open'); }
+
+// ============================================================
+// MODALES DÉPLAÇABLES — glisser la fenêtre par son en-tête
+// (double-clic sur l'en-tête = recentrer)
+// ============================================================
+(function () {
+  let box = null, startX = 0, startY = 0, origX = 0, origY = 0;
+  const posOf = el => {
+    const m = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(el.style.transform || '');
+    return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+  };
+  const start = (el, x, y) => {
+    box = el;
+    const p = posOf(el);
+    origX = p.x; origY = p.y; startX = x; startY = y;
+    el.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+  };
+  const move = (x, y) => {
+    if (!box) return;
+    // On garde toujours l'en-tête accessible à l'écran (pas de fenêtre perdue hors cadre)
+    const r = box.getBoundingClientRect();
+    let nx = origX + (x - startX), ny = origY + (y - startY);
+    const maxX = window.innerWidth  - 80 - (r.left - posOf(box).x);
+    const minX = -(r.left - posOf(box).x) - r.width + 120;
+    const maxY = window.innerHeight - 60 - (r.top - posOf(box).y);
+    const minY = -(r.top - posOf(box).y);
+    nx = Math.max(minX, Math.min(maxX, nx));
+    ny = Math.max(minY, Math.min(maxY, ny));
+    box.style.transform = 'translate(' + nx + 'px, ' + ny + 'px)';
+  };
+  const end = () => { if (!box) return; box.style.transition = ''; box = null; document.body.style.userSelect = ''; };
+
+  document.addEventListener('mousedown', function (e) {
+    const hd = e.target.closest && e.target.closest('.modal-hd');
+    if (!hd) return;
+    // Pas de glisser depuis un bouton ou un champ de l'en-tête
+    if (e.target.closest('button, a, input, select, textarea, label')) return;
+    const el = hd.closest('.modal'); if (!el) return;
+    start(el, e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+  document.addEventListener('mouseup', end);
+
+  // Tactile (iPad / écran tactile)
+  document.addEventListener('touchstart', function (e) {
+    const t = e.target;
+    const hd = t.closest && t.closest('.modal-hd');
+    if (!hd) return;
+    if (t.closest('button, a, input, select, textarea, label')) return;
+    const el = hd.closest('.modal'); if (!el) return;
+    start(el, e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (!box) return;
+    move(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchend', end);
+
+  // Double-clic sur l'en-tête → recentrer la fenêtre
+  document.addEventListener('dblclick', function (e) {
+    const hd = e.target.closest && e.target.closest('.modal-hd');
+    if (!hd) return;
+    if (e.target.closest('button, a, input, select, textarea, label')) return;
+    const el = hd.closest('.modal'); if (el) el.style.transform = '';
+  });
+})();
 
 function setFilter(sc, val, el) {
   const map = { rapports: 'rapportsFilter', clients: 'clientsFilter', interventions: 'intervFilter' };
