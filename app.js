@@ -1196,7 +1196,7 @@ function openEditInterv(id) {
 }
 function populateClientSelectInterv(selectedId) {
   $('iv-client').innerHTML = '<option value="">-- Sélectionner --</option>' +
-    DB.clients.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom}</option>`).join('');
+    DB.clients.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${_clientOptionLabel(c).replace(/</g, '&lt;')}</option>`).join('');
 }
 // Remplit le select Locataire selon la gérance choisie (et garde un éventuel locataire pré-sélectionné)
 function populateLocataireSelectInterv(clientId, selectedLocNom) {
@@ -1971,7 +1971,7 @@ function _refreshLocClientDropdown(selectedId) {
   const opts = ['<option value="">-- Aucune gérance --</option>']
     .concat(DB.clients
       .filter(c => c.type === 'Gérance')
-      .map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.nom}</option>`));
+      .map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${_clientOptionLabel(c).replace(/</g, '&lt;')}</option>`));
   sel.innerHTML = opts.join('');
 }
 
@@ -2067,6 +2067,16 @@ function _rapContactRole(contact) {
 }
 function _rapContactNom(contact) {
   return String(contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
+}
+// Libellé d'un client dans une liste déroulante : « Gérance — Gérant (Type) ».
+// Indispensable car il y a UNE CARTE PAR GÉRANT : sans le nom du gérant, plusieurs
+// cartes de la même gérance sont impossibles à distinguer dans la liste.
+function _clientOptionLabel(c) {
+  if (!c) return '';
+  const nom = String(c.nom || '');
+  const contact = _rapContactNom(c.contact);
+  const type = c.type ? ' (' + c.type + ')' : '';
+  return (contact ? nom + ' — ' + contact : nom) + type;
 }
 // Normalise un nom de personne pour comparaison (ignore M./Mme/Monsieur…, ponctuation,
 // accents et espaces multiples) → évite les doublons de fiches gérant.
@@ -5928,7 +5938,7 @@ function renderDocEditor() {
       <div class="form-group"><label class="form-label">Client (gérance)</label>
         <select class="form-input" id="doc-client-select" onchange="onDocClientSelect(this.value)">
           <option value="">-- Choisir un client --</option>
-          ${(DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}${c.type?' ('+c.type+')':''}</option>`).join('')}
+          ${(DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('')}
         </select>
         <textarea class="form-input" style="margin-top:5px;font-size:12px;resize:vertical;" rows="2" placeholder="ou saisir un nom manuellement — Entrée = nouvelle ligne sur le PDF" oninput="_editingDoc.clientNom=this.value;_editingDoc.clientId='';">${(d.clientNom||'').replace(/</g,'&lt;')}</textarea>
       </div>
@@ -7786,7 +7796,7 @@ function renderDiagEditor() {
   if (_diagType(d) === 'fourmis') return renderFourmisEditor();
   if (_diagType(d) === 'punaises') return renderPunaisesEditor();
   const box = $('modal-diag-body'); if (!box) return;
-  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('');
   const insectesHtml = INSECTES_BOIS.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d.insectes||[]).includes(n)?'checked':''} onchange="toggleDiagInsecte('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
@@ -10024,7 +10034,7 @@ function renderRongeursPostes() {
 function renderRongeursEditor() {
   const d = _editingDiag; if (!d) return;
   const box = $('modal-diag-body'); if (!box) return;
-  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('');
   const especesHtml = RONGEURS_ESPECES.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d.insectes||[]).includes(n)?'checked':''} onchange="toggleDiagInsecte('${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
@@ -10690,7 +10700,7 @@ function renderPunaisesEditor() {
   const d = _editingDiag; if (!d) return;
   const box = $('modal-diag-body'); if (!box) return;
   const clientOpts = (DB.clients || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
-    .map(c => `<option value="${c.id}" ${d.clientId === c.id ? 'selected' : ''}>${(c.nom || '').replace(/</g, '&lt;')}</option>`).join('');
+    .map(c => `<option value="${c.id}" ${d.clientId === c.id ? 'selected' : ''}>${_clientOptionLabel(c).replace(/</g, '&lt;')}</option>`).join('');
   const checkList = (arr, field, toggleFn) => arr.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d[field] || []).includes(n) ? 'checked' : ''} onchange="${toggleFn}('${field}','${n.replace(/'/g, "\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
@@ -10857,7 +10867,7 @@ function openNewBlattes() {
 function renderBlattesEditor() {
   const d = _editingDiag; if (!d) return;
   const box = $('modal-diag-body'); if (!box) return;
-  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('');
   const checkList = (arr, field, toggleFn) => arr.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d[field]||[]).includes(n)?'checked':''} onchange="${toggleFn}('${field}','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
@@ -12130,7 +12140,7 @@ function fourmisAddFiche(key) {
 function renderFourmisEditor() {
   const d = _editingDiag; if (!d) return;
   const box = $('modal-diag-body'); if (!box) return;
-  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${(c.nom||'').replace(/</g,'&lt;')}</option>`).join('');
+  const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('');
   const checkList = (arr, field) => arr.map(n => `
     <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:3px 10px 3px 0;cursor:pointer;">
       <input type="checkbox" ${(d[field]||[]).includes(n)?'checked':''} onchange="toggleDiagList('${field}','${n.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--navy);"> ${n}
