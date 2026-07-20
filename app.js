@@ -2487,7 +2487,7 @@ function _escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;
 function _legacyToHtml(v) {
   v = String(v == null ? '' : v);
   if (/<(b|strong|span|font|br|div|p)\b|<\/(b|strong|span|font|div|p)>/i.test(v)) return v; // déjà HTML
-  let h = _escapeHtml(v).replace(/\*\*([\s\S]*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  let h = _escapeHtml(v).replace(/^[ \t]*#{1,6}[ \t]*/gm, '').replace(/\*\*([\s\S]*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
   return h;
 }
 function richExec(id, cmd, val) {
@@ -2540,7 +2540,8 @@ function _richify(id) {
   // Collage : on garde le texte simple (évite d'importer des styles Word illisibles)
   ed.addEventListener('paste', e => {
     e.preventDefault();
-    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    let t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    t = t.replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown collés
     try { document.execCommand('insertText', false, t); } catch (err) {}
   });
 }
@@ -2871,7 +2872,7 @@ Réponds UNIQUEMENT avec le texte réécrit et corrigé, rien d'autre.`;
     const corrected = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
 
     if (corrected) {
-      showAIModal(fieldId, type, text, corrected.trim());
+      showAIModal(fieldId, type, text, corrected.replace(/^[ \t]*#{1,6}[ \t]*/gm, '').trim());
     } else {
       toast('Réponse IA vide', '#e63946');
     }
@@ -9545,7 +9546,7 @@ async function diagAICorrect(field) {
     const data = await response.json();
     let raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (!raw) throw new Error('Réponse IA vide');
-    raw = raw.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
+    raw = raw.replace(/```[a-z]*/gi, '').replace(/```/g, '').replace(/^[ \t]*#{1,6}[ \t]*/gm, '').trim();
     ta.value = raw;
     _editingDiag[field] = raw;
     // Champ en mode enrichi → on met à jour l'éditeur visible avec le texte corrigé
@@ -9731,7 +9732,7 @@ function _diagDatesStrip(doc, d, y, M, CW) {
 function _pdfHex2rgb(h) { return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
 function _pdfHtmlToMarked(s) {
   s = String(s == null ? '' : s);
-  if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s; // texte hérité
+  if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s.replace(/^[ \t]*#{1,6}[ \t]*/gm, ''); // texte hérité (dièses retirés)
   const hex = v => {
     v = String(v || '').trim();
     let m = v.match(/#([0-9a-f]{6})/i); if (m) return m[1].toLowerCase();
@@ -9750,7 +9751,8 @@ function _pdfHtmlToMarked(s) {
     .replace(/<font\b[^>]*color\s*=\s*["']?([^"'>\s]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
     .replace(/<\/(span|font)>/gi, '⟦/c⟧')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown (### …)
 }
 // Découpe un texte enrichi en lignes de segments {t,b,c} tenant dans maxW (police helvetica).
 function _pdfWrapRich(doc, text, maxW, size) {

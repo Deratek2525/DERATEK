@@ -29,7 +29,7 @@ function generatePDF(rapport, statut) {
     // Un texte hérité (sans balise, avec juste des **) passe inchangé.
     function _htmlToMarked(s) {
       s = String(s == null ? '' : s);
-      if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s; // legacy
+      if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s.replace(/^[ \t]*#{1,6}[ \t]*/gm, ''); // legacy (dièses retirés)
       const hex = v => {
         v = String(v || '').trim();
         let m = v.match(/#([0-9a-f]{6})/i); if (m) return m[1].toLowerCase();
@@ -48,7 +48,8 @@ function generatePDF(rapport, statut) {
         .replace(/<font\b[^>]*color\s*=\s*["']?([^"'>\s]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
         .replace(/<\/(span|font)>/gi, '⟦/c⟧')
         .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
+        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
+        .replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown (### …)
     }
     const _hex2rgb = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 
