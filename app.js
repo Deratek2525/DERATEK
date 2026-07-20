@@ -7831,9 +7831,9 @@ function _nextDiagNumero(prefix) {
   const list = (DB.diagnostics || []).filter(d => (d.numero||'').startsWith(prefix + '-' + year + '-'));
   let max = 0;
   list.forEach(d => { const m = (d.numero||'').match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
-  // Numéro de départ minimal par type : rongeurs (RG), blattes (BL), fourmis (FM)
-  // et punaises de lit (PL) commencent à 210.
-  const START = { RG: 210, BL: 210, FM: 210, PL: 210 };
+  // Numéro de départ minimal par type : diagnostic bois (DG) commence à 116 ;
+  // rongeurs (RG), blattes (BL), fourmis (FM) et punaises de lit (PL) commencent à 210.
+  const START = { DG: 116, RG: 210, BL: 210, FM: 210, PL: 210 };
   const next = Math.max(max + 1, START[prefix] || 1);
   return `${prefix}-${year}-${String(next).padStart(3,'0')}`;
 }
