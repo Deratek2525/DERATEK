@@ -313,6 +313,24 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 /* Les boutons de l'en-tête gardent un curseur normal (ils ne déplacent pas la fenêtre) */
 .modal-hd button, .modal-hd a, .modal-hd input, .modal-hd select { cursor: pointer; }
 .modal-title { cursor: move; }
+
+/* Éditeur de texte enrichi (gras + couleurs) dans les rapports */
+.rich-wrap { display: block; }
+.rich-tb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+.rich-tb .rich-b, .rich-tb .rich-clr {
+  border: 1px solid var(--g300, #d1d5db); background: #fff; border-radius: 6px;
+  padding: 3px 9px; font-size: 12px; cursor: pointer; color: #374151;
+}
+.rich-tb .rich-b:hover, .rich-tb .rich-clr:hover { background: #f3f4f6; }
+.rich-swatches { display: inline-flex; gap: 4px; align-items: center; }
+.rich-sw { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #d1d5db; cursor: pointer; padding: 0; }
+.rich-sw:hover { transform: scale(1.15); }
+.rich-ed {
+  min-height: 90px; max-height: 340px; overflow-y: auto; line-height: 1.5;
+  white-space: pre-wrap; cursor: text;
+}
+.rich-ed:empty::before { content: attr(data-ph); color: var(--g400, #9ca3af); }
+.rich-ed:focus { outline: none; border-color: var(--navy, #1a2744); box-shadow: 0 0 0 2px rgba(26,39,68,.12); }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--navy); }
 .modal-body { padding: 20px; }
 .modal-ft {

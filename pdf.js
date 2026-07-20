@@ -24,27 +24,64 @@ function generatePDF(rapport, statut) {
         .replace(/[ \t]+/g, ' ');
     }
 
-    // Découpe un texte (avec marqueurs **gras**) en lignes qui tiennent dans maxW.
-    // Retourne un tableau de lignes ; chaque ligne est un tableau de segments {t, b}.
+    // Convertit un contenu HTML (issu de l'éditeur enrichi) en texte balisé :
+    // gras → **…**, couleur → ⟦c:RRGGBB⟧…⟦/c⟧, retours à la ligne préservés.
+    // Un texte hérité (sans balise, avec juste des **) passe inchangé.
+    function _htmlToMarked(s) {
+      s = String(s == null ? '' : s);
+      if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s; // legacy
+      const hex = v => {
+        v = String(v || '').trim();
+        let m = v.match(/#([0-9a-f]{6})/i); if (m) return m[1].toLowerCase();
+        m = v.match(/#([0-9a-f]{3})/i); if (m) return m[1].split('').map(c => c + c).join('').toLowerCase();
+        m = v.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        if (m) return [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+        return '';
+      };
+      return s
+        .replace(/<(br)\s*\/?>/gi, '\n')
+        .replace(/<\/(div|p)>/gi, '\n')
+        .replace(/<(div|p)\b[^>]*>/gi, '')
+        .replace(/<(b|strong)\b[^>]*>/gi, '**').replace(/<\/(b|strong)>/gi, '**')
+        .replace(/<span\b[^>]*color\s*:\s*([^;"'>]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
+        .replace(/<font\b[^>]*color\s*=\s*["']?([^"'>\s]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
+        .replace(/<\/(span|font)>/gi, '⟦/c⟧')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
+    }
+    const _hex2rgb = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+
+    // Découpe un texte (marqueurs **gras** et ⟦c:hex⟧couleur⟦/c⟧) en lignes qui tiennent
+    // dans maxW. Chaque ligne est un tableau de segments {t, b, c} (c = [r,g,b] ou null).
     function _wrapBold(text, maxW) {
       const measure = (t, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); return doc.getTextWidth(t); };
       const spaceW = measure(' ', false);
       const lines = [];
-      String(text).split('\n').forEach(para => {
-        // 1) parse des runs gras/normal
-        const runs = []; let bold = false, buf = '';
+      _htmlToMarked(text).split('\n').forEach(para => {
+        // 1) parse des runs gras/normal + couleur
+        const runs = []; let bold = false, color = null, buf = '';
+        const push = () => { if (buf) { runs.push({ t: buf, b: bold, c: color }); buf = ''; } };
         for (let i = 0; i < para.length; i++) {
-          if (para[i] === '*' && para[i + 1] === '*') { if (buf) { runs.push({ t: buf, b: bold }); buf = ''; } bold = !bold; i++; continue; }
+          if (para[i] === '*' && para[i + 1] === '*') { push(); bold = !bold; i++; continue; }
+          if (para[i] === '⟦') {
+            const close = para.indexOf('⟧', i);
+            if (close > i) {
+              const tok = para.slice(i + 1, close);
+              if (tok === '/c') { push(); color = null; i = close; continue; }
+              const mc = tok.match(/^c:([0-9a-f]{6})$/i);
+              if (mc) { push(); color = _hex2rgb(mc[1]); i = close; continue; }
+            }
+          }
           buf += para[i];
         }
-        if (buf) runs.push({ t: buf, b: bold });
+        push();
         // 2) découpe en mots (les espaces sont des séparateurs)
         const words = []; let cur = null;
         runs.forEach(r => {
           r.t.split(/(\s+)/).forEach(p => {
             if (p === '') return;
             if (/^\s+$/.test(p)) { if (cur) { words.push(cur); cur = null; } words.push({ space: true }); }
-            else { if (!cur) cur = { segs: [], w: 0 }; cur.segs.push({ t: p, b: r.b }); cur.w += measure(p, r.b); }
+            else { if (!cur) cur = { segs: [], w: 0 }; cur.segs.push({ t: p, b: r.b, c: r.c }); cur.w += measure(p, r.b); }
           });
         });
         if (cur) words.push(cur);
@@ -61,7 +98,7 @@ function generatePDF(rapport, statut) {
                 const cw = measure(ch, sg.b);
                 if (chunk.w + cw > maxW && chunk.w > 0) { lines.push(chunk.segs); chunk = { segs: [], w: 0 }; }
                 const last = chunk.segs[chunk.segs.length - 1];
-                if (last && last.b === sg.b) last.t += ch; else chunk.segs.push({ t: ch, b: sg.b });
+                if (last && last.b === sg.b && last.c === sg.c) last.t += ch; else chunk.segs.push({ t: ch, b: sg.b, c: sg.c });
                 chunk.w += cw;
               }
             });
@@ -70,22 +107,24 @@ function generatePDF(rapport, statut) {
           }
           const addW = (pendingSpace ? spaceW : 0) + w.w;
           if (lineW + addW > maxW && line.length) { flush(); line.push(...w.segs); lineW = w.w; pendingSpace = false; return; }
-          if (pendingSpace) { line.push({ t: ' ', b: false }); lineW += spaceW; pendingSpace = false; }
+          if (pendingSpace) { line.push({ t: ' ', b: false, c: null }); lineW += spaceW; pendingSpace = false; }
           line.push(...w.segs); lineW += w.w;
         });
         flush(); // fin de paragraphe (préserve les lignes vides)
       });
       return lines;
     }
-    // Dessine une ligne enrichie (segments {t,b}) en gérant le changement gras/normal.
+    // Dessine une ligne enrichie (segments {t,b,c}) — gère gras/normal et couleur.
     function _drawRichLine(segs, x, y2) {
       let cx = x;
       segs.forEach(sg => {
         if (!sg.t) return;
         doc.setFont('helvetica', sg.b ? 'bold' : 'normal');
+        if (sg.c) doc.setTextColor(sg.c[0], sg.c[1], sg.c[2]); else doc.setTextColor(0);
         doc.text(sg.t, cx, y2);
         cx += doc.getTextWidth(sg.t);
       });
+      doc.setTextColor(0);
     }
 
     // Couleurs

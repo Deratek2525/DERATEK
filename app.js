@@ -420,6 +420,7 @@ function showScreen(name) {
   if (name === 'fournisseurs') renderFournisseurs();
   if (name === 'tva')          renderTVA();
   if (name === 'stats')        renderStats();
+  if (name === 'rapport-edit' && typeof _richifyReportFields === 'function') setTimeout(_richifyReportFields, 0);
   window.scrollTo(0, 0);
 }
 
@@ -2432,7 +2433,7 @@ function updatePDF() {
   const sup = $('r-superficie').value, pie = $('r-pieces').value;
   st('pdf-superficie', (sup ? sup+'m²' : '—') + (pie ? ' / '+pie+' pièce(s)' : ''));
   st('pdf-niveau',      $('r-niveau').value);
-  const desc = ($('r-description').value || '—').replace(/\*\*/g, '');
+  const desc = _richStripToText($('r-description').value || '—');
   st('pdf-description', desc.substring(0,260) + (desc.length > 260 ? '…' : ''));
   st('pdf-traitement',  traitement.join(', ') || '—');
   const montant = $('r-montant').value;
@@ -2472,6 +2473,88 @@ function boldShortcut(ev, el) {
     ev.preventDefault();
     toggleBold(el.id);
   }
+}
+
+// ============================================================
+// ÉDITEUR ENRICHI (gras + couleurs) pour les champs de rapport.
+// Remplace visuellement une <textarea> par un éditeur contenteditable, tout en
+// gardant la textarea (cachée) synchronisée : sa .value contient le HTML, donc
+// la sauvegarde, l'aperçu et la correction IA continuent de fonctionner.
+// ============================================================
+const RICH_COLORS = ['#111827', '#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be185d'];
+function _escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// Texte hérité (avec **gras**) → HTML pour l'éditeur ; du HTML reste tel quel.
+function _legacyToHtml(v) {
+  v = String(v == null ? '' : v);
+  if (/<(b|strong|span|font|br|div|p)\b|<\/(b|strong|span|font|div|p)>/i.test(v)) return v; // déjà HTML
+  let h = _escapeHtml(v).replace(/\*\*([\s\S]*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  return h;
+}
+function richExec(id, cmd, val) {
+  const ed = document.getElementById(id + '-rich'); if (!ed) return;
+  ed.focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  try { document.execCommand(cmd, false, val || null); } catch (e) {}
+  _richSync(id);
+}
+function richColor(id, hex) {
+  const ed = document.getElementById(id + '-rich'); if (!ed) return;
+  ed.focus();
+  try { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, hex); } catch (e) {}
+  _richSync(id);
+}
+function _richSync(id) {
+  const ed = document.getElementById(id + '-rich'); const ta = document.getElementById(id);
+  if (!ed || !ta) return;
+  ta.value = ed.innerHTML;
+  ta.dispatchEvent(new Event('input'));   // relance l'aperçu / la sauvegarde en mémoire
+}
+// Transforme la textarea #id en éditeur enrichi (idempotent).
+function _richify(id) {
+  const ta = document.getElementById(id); if (!ta) return;
+  if (ta.dataset.rich === '1' && document.getElementById(id + '-rich')) {
+    // déjà enrichie : on resynchronise l'affichage depuis la valeur courante
+    document.getElementById(id + '-rich').innerHTML = _legacyToHtml(ta.value);
+    return;
+  }
+  ta.style.display = 'none';
+  ta.dataset.rich = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'rich-wrap';
+  const swatches = RICH_COLORS.map(c => `<button type="button" class="rich-sw" title="Couleur" onclick="richColor('${id}','${c}')" style="background:${c};"></button>`).join('');
+  wrap.innerHTML =
+    `<div class="rich-tb">
+       <button type="button" class="rich-b" title="Gras (Ctrl/Cmd+B)" onmousedown="event.preventDefault()" onclick="richExec('${id}','bold')"><b>G</b></button>
+       <span class="rich-swatches">${swatches}</span>
+       <button type="button" class="rich-clr" title="Enlever la mise en forme" onmousedown="event.preventDefault()" onclick="richExec('${id}','removeFormat')">⌫ format</button>
+     </div>
+     <div id="${id}-rich" class="rich-ed form-input" contenteditable="true" data-ph="${(ta.getAttribute('placeholder') || '').replace(/"/g, '&quot;')}"></div>`;
+  ta.parentNode.insertBefore(wrap, ta);
+  const ed = document.getElementById(id + '-rich');
+  ed.innerHTML = _legacyToHtml(ta.value);
+  ed.addEventListener('input', () => _richSync(id));
+  ed.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); richExec(id, 'bold'); } });
+  // Collage : on garde le texte simple (évite d'importer des styles Word illisibles)
+  ed.addEventListener('paste', e => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    try { document.execCommand('insertText', false, t); } catch (err) {}
+  });
+}
+// Applique l'éditeur enrichi à une liste de champs (ignore ceux absents).
+function _richifyAll(ids) { (ids || []).forEach(_richify); }
+// Champs enrichis du rapport d'intervention
+function _richifyReportFields() {
+  _richifyAll(['r-description', 'r-contraintes', 'r-precautions', 'r-recommandations']);
+  // Les anciens boutons « B Gras » (mode texte) n'ont plus de sens avec l'éditeur enrichi
+  document.querySelectorAll('[onclick^="toggleBold"]').forEach(b => { b.style.display = 'none'; });
+}
+// HTML de l'éditeur enrichi → texte simple (pour l'IA et les aperçus texte)
+function _richStripToText(v) {
+  v = String(v == null ? '' : v);
+  if (!/<[a-z!/][^>]*>/i.test(v)) return v.replace(/\*\*/g, '');
+  return v.replace(/<(br)\s*\/?>/gi, '\n').replace(/<\/(div|p)>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
 }
 // Convertit du HTML collé (Word, web, …) en texte avec marqueurs **gras**
 function _htmlToBoldText(html) {
@@ -2715,7 +2798,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function correctWithAI(fieldId, type) {
   const el = document.getElementById(fieldId);
   if (!el) return;
-  const text = el.value.trim();
+  // On envoie le texte SIMPLE à l'IA (sans balises de mise en forme)
+  const text = _richStripToText(el.value).trim();
   if (!text) { toast('Écrivez quelque chose d\'abord !', '#f4a623'); return; }
 
   const btn = document.getElementById('ai-btn-' + type);
@@ -2853,6 +2937,11 @@ function showAIModal(fieldId, type, original, corrected) {
     const el = document.getElementById(fieldId);
     if (el) {
       el.value = corrected;
+      // Si le champ est en mode enrichi, on met à jour l'éditeur visible (le texte
+      // corrigé remplace le contenu ; la mise en forme précédente est réappliquée à la main).
+      const rich = document.getElementById(fieldId + '-rich');
+      if (rich) rich.innerHTML = _legacyToHtml(corrected);
+      el.dispatchEvent(new Event('input'));
       if (fieldId === 'r-description' || fieldId === 'r-recommandations') updatePDF();
     }
     closeModal('modal-ai');
@@ -7863,12 +7952,16 @@ function toggleDiagInsecte(nom, checked) {
   if (checked) set.add(nom); else set.delete(nom);
   _editingDiag.insectes = [...set];
 }
+// Champs texte des rapports spéciaux passés en éditeur enrichi (gras + couleurs)
+function _richifyDiagFields() {
+  _richifyAll(['diag-ta-diagnostic', 'diag-ta-traitement', 'diag-ta-hygiene', 'diag-ta-prevention', 'diag-ta-conclusion']);
+}
 function renderDiagEditor() {
   const d = _editingDiag; if (!d) return;
-  if (_diagType(d) === 'rongeurs') return renderRongeursEditor();
-  if (_diagType(d) === 'blattes') return renderBlattesEditor();
-  if (_diagType(d) === 'fourmis') return renderFourmisEditor();
-  if (_diagType(d) === 'punaises') return renderPunaisesEditor();
+  if (_diagType(d) === 'rongeurs') { renderRongeursEditor(); return _richifyDiagFields(); }
+  if (_diagType(d) === 'blattes')  { renderBlattesEditor();  return _richifyDiagFields(); }
+  if (_diagType(d) === 'fourmis')  { renderFourmisEditor();  return _richifyDiagFields(); }
+  if (_diagType(d) === 'punaises') { renderPunaisesEditor(); return _richifyDiagFields(); }
   const box = $('modal-diag-body'); if (!box) return;
   const clientOpts = (DB.clients||[]).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(c=>`<option value="${c.id}" ${d.clientId===c.id?'selected':''}>${_clientOptionLabel(c).replace(/</g,'&lt;')}</option>`).join('');
   const insectesHtml = INSECTES_BOIS.map(n => `
@@ -8007,6 +8100,7 @@ function renderDiagEditor() {
   initDiagSignPad();
   renderDiagPhotos();
   box.oninput = () => refreshDiagPreview();
+  _richifyDiagFields();
   _syncDiagPreviewPane();
   refreshDiagPreview();
 }
@@ -9411,7 +9505,7 @@ const _DIAG_AI_LABELS = {
 async function diagAICorrect(field) {
   const ta = $('diag-ta-' + field); if (!ta || !_editingDiag) return;
   const btn = $('diag-ai-' + field);
-  const txt = (ta.value || '').trim();
+  const txt = _richStripToText(ta.value || '').trim();   // texte simple (sans balises) pour l'IA
   if (!txt) { toast('✍️ Écris d\'abord quelques mots à corriger.', '#e6aa1e'); return; }
   if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) {
     toast('⚠️ Clé Mistral non configurée.', '#e63946'); return;
@@ -9451,6 +9545,9 @@ async function diagAICorrect(field) {
     raw = raw.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
     ta.value = raw;
     _editingDiag[field] = raw;
+    // Champ en mode enrichi → on met à jour l'éditeur visible avec le texte corrigé
+    const rich = document.getElementById('diag-ta-' + field + '-rich');
+    if (rich) { rich.innerHTML = _legacyToHtml(raw); _editingDiag[field] = rich.innerHTML; }
     toast('✓ Corrigé par l\'IA — relis avant d\'enregistrer.', '#2d9e6b');
   } catch (err) {
     console.error('Diag IA error:', err);
@@ -9624,6 +9721,105 @@ function _diagDatesStrip(doc, d, y, M, CW) {
   return y + h + 4;
 }
 
+// ============================================================
+// MOTEUR TEXTE ENRICHI POUR LES PDF (gras + couleurs) — partagé par les rapports spéciaux.
+// Convertit le HTML de l'éditeur enrichi en segments {t, b, c} et les dessine.
+// ============================================================
+function _pdfHex2rgb(h) { return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function _pdfHtmlToMarked(s) {
+  s = String(s == null ? '' : s);
+  if (!/<(b|strong|span|font|br|div|p|i|em|u)\b|<\/(b|strong|span|font|div|p|i|em|u)>/i.test(s)) return s; // texte hérité
+  const hex = v => {
+    v = String(v || '').trim();
+    let m = v.match(/#([0-9a-f]{6})/i); if (m) return m[1].toLowerCase();
+    m = v.match(/#([0-9a-f]{3})/i); if (m) return m[1].split('').map(c => c + c).join('').toLowerCase();
+    m = v.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (m) return [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+    return '';
+  };
+  return s
+    .replace(/<(br)\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p)>/gi, '\n')
+    .replace(/<(div|p)\b[^>]*>/gi, '')
+    .replace(/<(b|strong)\b[^>]*>/gi, '**').replace(/<\/(b|strong)>/gi, '**')
+    .replace(/<span\b[^>]*color\s*:\s*([^;"'>]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
+    .replace(/<font\b[^>]*color\s*=\s*["']?([^"'>\s]+)[^>]*>/gi, (m0, col) => { const h = hex(col); return h ? '⟦c:' + h + '⟧' : ''; })
+    .replace(/<\/(span|font)>/gi, '⟦/c⟧')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"');
+}
+// Découpe un texte enrichi en lignes de segments {t,b,c} tenant dans maxW (police helvetica).
+function _pdfWrapRich(doc, text, maxW, size) {
+  const measure = (t, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); if (size) doc.setFontSize(size); return doc.getTextWidth(t); };
+  const spaceW = measure(' ', false);
+  const lines = [];
+  _pdfHtmlToMarked(text).split('\n').forEach(para => {
+    const runs = []; let bold = false, color = null, buf = '';
+    const push = () => { if (buf) { runs.push({ t: buf, b: bold, c: color }); buf = ''; } };
+    for (let i = 0; i < para.length; i++) {
+      if (para[i] === '*' && para[i + 1] === '*') { push(); bold = !bold; i++; continue; }
+      if (para[i] === '⟦') {
+        const close = para.indexOf('⟧', i);
+        if (close > i) {
+          const tok = para.slice(i + 1, close);
+          if (tok === '/c') { push(); color = null; i = close; continue; }
+          const mc = tok.match(/^c:([0-9a-f]{6})$/i);
+          if (mc) { push(); color = _pdfHex2rgb(mc[1]); i = close; continue; }
+        }
+      }
+      buf += para[i];
+    }
+    push();
+    const words = []; let cur = null;
+    runs.forEach(r => {
+      r.t.split(/(\s+)/).forEach(p => {
+        if (p === '') return;
+        if (/^\s+$/.test(p)) { if (cur) { words.push(cur); cur = null; } words.push({ space: true }); }
+        else { if (!cur) cur = { segs: [], w: 0 }; cur.segs.push({ t: p, b: r.b, c: r.c }); cur.w += measure(p, r.b); }
+      });
+    });
+    if (cur) words.push(cur);
+    let line = [], lineW = 0, pendingSpace = false;
+    const flush = () => { lines.push(line); line = []; lineW = 0; pendingSpace = false; };
+    words.forEach(w => {
+      if (w.space) { if (line.length) pendingSpace = true; return; }
+      if (w.w > maxW) {
+        if (line.length) flush();
+        let chunk = { segs: [], w: 0 };
+        w.segs.forEach(sg => {
+          for (const ch of sg.t) {
+            const cw = measure(ch, sg.b);
+            if (chunk.w + cw > maxW && chunk.w > 0) { lines.push(chunk.segs); chunk = { segs: [], w: 0 }; }
+            const last = chunk.segs[chunk.segs.length - 1];
+            if (last && last.b === sg.b && last.c === sg.c) last.t += ch; else chunk.segs.push({ t: ch, b: sg.b, c: sg.c });
+            chunk.w += cw;
+          }
+        });
+        line = chunk.segs.slice(); lineW = chunk.w; pendingSpace = false;
+        return;
+      }
+      const addW = (pendingSpace ? spaceW : 0) + w.w;
+      if (lineW + addW > maxW && line.length) { flush(); line.push(...w.segs); lineW = w.w; pendingSpace = false; return; }
+      if (pendingSpace) { line.push({ t: ' ', b: false, c: null }); lineW += spaceW; pendingSpace = false; }
+      line.push(...w.segs); lineW += w.w;
+    });
+    flush();
+  });
+  return lines;
+}
+function _pdfDrawRichLine(doc, segs, x, y, size, defRGB) {
+  const d0 = defRGB || [0, 0, 0];
+  let cx = x;
+  (segs || []).forEach(sg => {
+    if (!sg.t) return;
+    doc.setFont('helvetica', sg.b ? 'bold' : 'normal'); if (size) doc.setFontSize(size);
+    if (sg.c) doc.setTextColor(sg.c[0], sg.c[1], sg.c[2]); else doc.setTextColor(d0[0], d0[1], d0[2]);
+    doc.text(sg.t, cx, y);
+    cx += doc.getTextWidth(sg.t);
+  });
+  doc.setTextColor(0);
+}
+
 function _genDiagPDF(d, mode) {
   if (!d) { if (mode !== 'blob') toast('Diagnostic introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
@@ -9663,7 +9859,7 @@ function _genDiagPDF(d, mode) {
   const para = (txt) => {
     if (!txt) return;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
-    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+    _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
@@ -9873,14 +10069,14 @@ function _genDiagPDF(d, mode) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
   }
@@ -10324,7 +10520,7 @@ function _genRongeursPDF(d, mode) {
   const para = (txt) => {
     if (!txt) return;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
-    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+    _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
@@ -10593,14 +10789,14 @@ function _genRongeursPDF(d, mode) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
   }
@@ -11132,7 +11328,7 @@ function _genBlattesPDF(d, mode) {
   const para = (txt) => {
     if (!txt) return;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
-    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+    _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
@@ -11378,14 +11574,14 @@ function _genBlattesPDF(d, mode) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
   }
@@ -11457,7 +11653,7 @@ function _genPunaisesPDF(d, mode) {
   const para = (txt) => {
     if (!txt) return;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
-    doc.splitTextToSize(String(txt), CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
+    _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
@@ -11715,14 +11911,14 @@ function _genPunaisesPDF(d, mode) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
   }
@@ -12410,10 +12606,7 @@ function _genFourmisPDF(d, mode) {
   const para = (txt) => {
     if (!txt) return;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
-    String(txt).split('\n').forEach(function(p){
-      if (!p) { y += 3; return; }
-      doc.splitTextToSize(p, CW).forEach(ln => { ensure(6); doc.text(ln, M, y); y += 4.9; });
-    });
+    _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
@@ -12611,14 +12804,14 @@ function _genFourmisPDF(d, mode) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
     doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
+    const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
-    lines.forEach((ln, i) => doc.text(ln, M+5, y+3.5 + i*4.9));
+    lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
   }
