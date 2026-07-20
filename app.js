@@ -5485,8 +5485,8 @@ function _makeQrDataUrl(payload) {
 function _nextDocNumero(type) {
   const year = new Date().getFullYear();
   const prefix = type === 'facture' ? 'F' : 'D';
-  // Les factures démarrent à 101 (donc 1ère facture = F-AAAA-101).
-  const base = (type === 'facture') ? 100 : 0;
+  // Les factures démarrent à 101 (F-AAAA-101), les devis à 212 (D-AAAA-212).
+  const base = (type === 'facture') ? 100 : 211;
   const docs = (DB.documents || []).filter(d => d.type === type && (d.numero || '').includes('-' + year + '-'));
   let max = base;
   docs.forEach(d => {
