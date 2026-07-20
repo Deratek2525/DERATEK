@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260612am">
+<link rel="stylesheet" href="./style.css?v=20260612an">
 </head>
 <body>
 
@@ -1074,8 +1074,16 @@
 
       <!-- PDF PANEL -->
       <div class="pdf-panel no-print">
-        <div class="pdf-panel-title">📄 Aperçu PDF · live</div>
-        <div class="pdf-preview">
+        <div class="pdf-panel-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>📄 Aperçu PDF · live</span><span style="flex:1;"></span>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="rapPdfZoom(-1)" title="Dézoomer">🔍−</button>
+          <span id="rap-pdf-zoom-lbl" style="font-size:11px;font-weight:700;color:var(--g600);min-width:44px;text-align:center;">Ajusté</span>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="rapPdfZoom(1)" title="Zoomer">🔍+</button>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="rapPdfZoom(0)" title="Ajuster à la largeur">↔</button>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="rapPdfFull()" title="Ouvrir en plein écran">⤢</button>
+        </div>
+        <iframe id="rap-pdf-live" title="Aperçu du rapport" style="width:100%;flex:1;min-height:74vh;border:1px solid var(--g200);border-radius:8px;background:#fff;"></iframe>
+        <div class="pdf-preview" style="display:none;">
           <div class="pdf-logo-mini">DER<span>A</span>TEK</div>
           <div style="font-size:8px;color:var(--g400);margin-bottom:6px;">Professional Pest Control</div>
           <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;border-bottom:1px solid var(--g200);padding-bottom:4px;">RAPPORT D'INTERVENTION</div>
@@ -1427,16 +1435,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260612am"></script>
+  <script src="./fonts_arial.js?v=20260612an"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260612am"></script>
-<script src="./footer_prestations.js?v=20260612am"></script>
-<script src="./config.js?v=20260612am"></script>
-<script src="./app.js?v=20260612am"></script>
-<script src="./pdf.js?v=20260612am"></script>
+<script src="./logo.js?v=20260612an"></script>
+<script src="./footer_prestations.js?v=20260612an"></script>
+<script src="./config.js?v=20260612an"></script>
+<script src="./app.js?v=20260612an"></script>
+<script src="./pdf.js?v=20260612an"></script>
 
 </body></html>

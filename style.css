@@ -479,7 +479,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
    ============================================================ */
 .rapport-shell { display: flex; flex: 1; overflow: hidden; }
 .rapport-form  { flex: 1; overflow-y: auto; padding: 16px 18px; background: var(--g100); }
-.pdf-panel     { width: 420px; background: var(--white); border-left: 1px solid var(--g200); padding: 16px; overflow-y: auto; flex-shrink: 0; }
+.pdf-panel     { width: 460px; background: var(--white); border-left: 1px solid var(--g200); padding: 16px; overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; }
 .pdf-panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--g400); margin-bottom: 10px; }
 .pdf-preview {
   background: var(--white); border: 1px solid var(--g200); border-radius: 8px;

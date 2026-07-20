@@ -420,7 +420,7 @@ function showScreen(name) {
   if (name === 'fournisseurs') renderFournisseurs();
   if (name === 'tva')          renderTVA();
   if (name === 'stats')        renderStats();
-  if (name === 'rapport-edit' && typeof _richifyReportFields === 'function') setTimeout(_richifyReportFields, 0);
+  if (name === 'rapport-edit' && typeof _richifyReportFields === 'function') setTimeout(() => { _richifyReportFields(); if (typeof _rapPdfLive === 'function') _rapPdfLive(); }, 0);
   window.scrollTo(0, 0);
 }
 
@@ -2410,7 +2410,37 @@ function saveRapportReprendre() {
 // ============================================================
 // PDF LIVE PREVIEW
 // ============================================================
+// Aperçu PDF RÉEL en direct du rapport d'intervention (panneau de droite) :
+// on génère le vrai PDF (sans les photos, pour la vitesse) et on l'affiche dans l'iframe.
+let _rapPdfLiveTimer = null, _rapPdfLiveUrl = null, _rapPdfZoom = 0;
+function _rapPdfLive() {
+  clearTimeout(_rapPdfLiveTimer);
+  _rapPdfLiveTimer = setTimeout(() => {
+    const ifr = document.getElementById('rap-pdf-live');
+    if (!ifr || typeof getCurrentRapportData !== 'function' || typeof generatePDF !== 'function') return;
+    try {
+      const r = getCurrentRapportData();
+      r.photos = [];   // aperçu rapide : les photos sont incluses uniquement au téléchargement
+      const doc = generatePDF(r, 'Brouillon');
+      if (!doc) return;
+      const url = doc.output('bloburl');
+      if (_rapPdfLiveUrl) { try { URL.revokeObjectURL(_rapPdfLiveUrl); } catch (e) {} }
+      _rapPdfLiveUrl = url;
+      ifr.src = url + '#toolbar=0&navpanes=0&' + (_rapPdfZoom ? ('zoom=' + _rapPdfZoom) : 'view=FitH');
+    } catch (e) { console.warn('aperçu rapport live', e); }
+  }, 400);
+}
+function rapPdfZoom(delta) {
+  const Z = [50, 75, 100, 125, 150, 200, 300];
+  if (!delta) _rapPdfZoom = 0;
+  else { const cur = _rapPdfZoom || 100; let i = Z.indexOf(cur); if (i < 0) i = 2; i = Math.max(0, Math.min(Z.length - 1, i + delta)); _rapPdfZoom = Z[i]; }
+  const lbl = document.getElementById('rap-pdf-zoom-lbl'); if (lbl) lbl.textContent = _rapPdfZoom ? _rapPdfZoom + '%' : 'Ajusté';
+  const ifr = document.getElementById('rap-pdf-live'); if (ifr && _rapPdfLiveUrl) ifr.src = _rapPdfLiveUrl + '#toolbar=0&navpanes=0&' + (_rapPdfZoom ? ('zoom=' + _rapPdfZoom) : 'view=FitH');
+}
+function rapPdfFull() { if (_rapPdfLiveUrl) window.open(_rapPdfLiveUrl, '_blank'); else { _rapPdfLive(); toast('Aperçu en préparation, réessaie dans un instant', '#d97706'); } }
+
 function updatePDF() {
+  _rapPdfLive();   // rafraîchit l'aperçu PDF réel (debounced)
   const clientId = $('r-client').value;
   const client = DB.clients.find(c => c.id === clientId);
   const clientNom = client ? client.nom : '—';
