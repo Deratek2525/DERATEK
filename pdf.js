@@ -39,6 +39,7 @@ function generatePDF(rapport, statut) {
         return '';
       };
       return s
+        .replace(/<span[^>]*font-weight\s*:\s*(?:bold|[6-9]00)[^>]*>([\s\S]*?)<\/span>/gi, '<b>$1</b>')
         .replace(/<(br)\s*\/?>/gi, '\n')
         .replace(/<\/(div|p)>/gi, '\n')
         .replace(/<(div|p)\b[^>]*>/gi, '')

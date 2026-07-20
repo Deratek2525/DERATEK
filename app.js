@@ -2493,13 +2493,16 @@ function _legacyToHtml(v) {
 function richExec(id, cmd, val) {
   const ed = document.getElementById(id + '-rich'); if (!ed) return;
   ed.focus();
-  try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  // Gras/italique/souligné : PAS de styleWithCSS → on obtient <b>/<i>/<u> (reconnus par le PDF),
+  // et non un <span style="font-weight:bold"> que le rendu PDF ignorerait.
+  try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
   try { document.execCommand(cmd, false, val || null); } catch (e) {}
   _richSync(id);
 }
 function richColor(id, hex) {
   const ed = document.getElementById(id + '-rich'); if (!ed) return;
   ed.focus();
+  // Couleur : styleWithCSS activé → <span style="color:…"> (reconnu par le PDF).
   try { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, hex); } catch (e) {}
   _richSync(id);
 }
@@ -9738,6 +9741,7 @@ function _pdfHtmlToMarked(s) {
     return '';
   };
   return s
+    .replace(/<span[^>]*font-weight\s*:\s*(?:bold|[6-9]00)[^>]*>([\s\S]*?)<\/span>/gi, '<b>$1</b>')
     .replace(/<(br)\s*\/?>/gi, '\n')
     .replace(/<\/(div|p)>/gi, '\n')
     .replace(/<(div|p)\b[^>]*>/gi, '')
