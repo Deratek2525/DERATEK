@@ -9655,7 +9655,8 @@ function downloadDiagPDF(id) {
 // rapport d'intervention classique (rows2col de pdf.js) : libellé gris en
 // majuscules, valeur en gras, rangées alternées grisées. Retourne le nouveau y.
 function _diagRows2Col(doc, pairs, y, M, CW) {
-  const items = (pairs || []).filter(p => p && p[1]);
+  const items = (pairs || []).filter(p => p && p[1])
+    .map(p => [p[0], String(p[1]).replace(/^[ \t]*#{1,6}[ \t]*/gm, '')]);   // retire les dièses de titre
   if (!items.length) return y;
   const gap = 6, colW = (CW - gap) / 2, colTextW = colW - 6;
   for (let i = 0; i < items.length; i += 2) {
@@ -9851,6 +9852,7 @@ function _genDiagPDF(d, mode) {
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
+    val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
@@ -10512,6 +10514,7 @@ function _genRongeursPDF(d, mode) {
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
+    val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
@@ -11320,6 +11323,7 @@ function _genBlattesPDF(d, mode) {
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
+    val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
@@ -11645,6 +11649,7 @@ function _genPunaisesPDF(d, mode) {
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
+    val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
@@ -12598,6 +12603,7 @@ function _genFourmisPDF(d, mode) {
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
+    val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
     doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);

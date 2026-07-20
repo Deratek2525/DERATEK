@@ -21,6 +21,7 @@ function generatePDF(rapport, statut) {
         .replace(/[\u2010\u2011\u2012\u2015]/g, '-')
         .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g, '')
         .replace(/[^\u0000-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/g, '')
+        .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')   // dieses de titre Markdown (### ...)
         .replace(/[ \t]+/g, ' ');
     }
 
