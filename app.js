@@ -9870,6 +9870,9 @@ function _genDiagPDF(d, mode) {
 
   // --- Conclusion (encadré) ----------------------------------------------
   if (d.conclusion) {
+    // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
+    // la taille laissée par la section précédente et les lignes débordent du cadre.
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
@@ -10587,6 +10590,9 @@ function _genRongeursPDF(d, mode) {
 
   // Conclusion (encadré)
   if (d.conclusion) {
+    // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
+    // la taille laissée par la section précédente et les lignes débordent du cadre.
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
@@ -11369,6 +11375,9 @@ function _genBlattesPDF(d, mode) {
 
   // Conclusion (encadré)
   if (d.conclusion) {
+    // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
+    // la taille laissée par la section précédente et les lignes débordent du cadre.
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
@@ -11703,6 +11712,9 @@ function _genPunaisesPDF(d, mode) {
 
   // Conclusion (encadré)
   if (d.conclusion) {
+    // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
+    // la taille laissée par la section précédente et les lignes débordent du cadre.
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
@@ -12596,6 +12608,9 @@ function _genFourmisPDF(d, mode) {
   }
 
   if (d.conclusion) {
+    // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
+    // la taille laissée par la section précédente et les lignes débordent du cadre.
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
     const lines = doc.splitTextToSize(String(d.conclusion), CW-13);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
