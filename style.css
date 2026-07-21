@@ -335,13 +335,13 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 /* Point rouge clignotant : bon non traité depuis plus de 48h */
 @keyframes bonBlink { 0%, 100% { opacity: 1; } 50% { opacity: .12; } }
 .bon-blink {
-  position: absolute; top: -3px; right: -3px; width: 13px; height: 13px;
-  border-radius: 50%; background: #dc2626; border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #dc2626, 0 0 6px rgba(220,38,38,.8);
+  position: absolute; top: -7px; right: -7px; width: 26px; height: 26px;
+  border-radius: 50%; background: #dc2626; border: 3px solid #fff;
+  box-shadow: 0 0 0 1px #dc2626, 0 0 10px rgba(220,38,38,.9);
   animation: bonBlink 1s ease-in-out infinite;
 }
 .bon-blink-txt {
-  color: #dc2626; font-size: 10px; font-weight: 800; margin-left: 4px;
+  color: #dc2626; font-size: 12px; font-weight: 800; margin-left: 5px;
   animation: bonBlink 1s ease-in-out infinite; white-space: nowrap;
 }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--navy); }
