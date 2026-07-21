@@ -331,6 +331,19 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 }
 .rich-ed:empty::before { content: attr(data-ph); color: var(--g400, #9ca3af); }
 .rich-ed:focus { outline: none; border-color: var(--navy, #1a2744); box-shadow: 0 0 0 2px rgba(26,39,68,.12); }
+
+/* Point rouge clignotant : bon non traité depuis plus de 48h */
+@keyframes bonBlink { 0%, 100% { opacity: 1; } 50% { opacity: .12; } }
+.bon-blink {
+  position: absolute; top: -3px; right: -3px; width: 13px; height: 13px;
+  border-radius: 50%; background: #dc2626; border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #dc2626, 0 0 6px rgba(220,38,38,.8);
+  animation: bonBlink 1s ease-in-out infinite;
+}
+.bon-blink-txt {
+  color: #dc2626; font-size: 10px; font-weight: 800; margin-left: 4px;
+  animation: bonBlink 1s ease-in-out infinite; white-space: nowrap;
+}
 .modal-title { font-size: 16px; font-weight: 700; color: var(--navy); }
 .modal-body { padding: 20px; }
 .modal-ft {

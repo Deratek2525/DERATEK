@@ -4360,6 +4360,15 @@ function _bonAlerteHeures(b) {
   const d = new Date(t); if (isNaN(d.getTime())) return null;
   return (Date.now() - d.getTime()) / 3600000;
 }
+// Bon NOUVEAU non traité depuis plus de 48h : aucun statut ET reçu il y a > 48h.
+// Sert à faire clignoter un point rouge dans le ruban pour ne pas l'oublier.
+function _bonAlerteNouveau48h(b) {
+  if (!b || (b.statut || '') !== '') return false;   // dès qu'il a un statut, plus d'alerte
+  if (!b.createdAt) return false;
+  const t = new Date(b.createdAt).getTime();
+  if (isNaN(t)) return false;
+  return (Date.now() - t) >= 48 * 3600 * 1000;
+}
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
     .replace(/\s*\[INTERV:[^\]]*\]/g, '')
@@ -4656,9 +4665,9 @@ function renderBonCard(b, solid) {
   return `
             <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
-                <div style="width:34px;height:34px;border-radius:50%;background:${iconBg};color:${iconCol};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">📄</div>
+                <div style="position:relative;width:34px;height:34px;border-radius:50%;background:${iconBg};color:${iconCol};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;"${_bonAlerteNouveau48h(b) ? ' title="Bon reçu il y a plus de 48h et toujours sans statut — à traiter !"' : ''}>📄${_bonAlerteNouveau48h(b) ? '<span class="bon-blink"></span>' : ''}</div>
                 <div>
-                  <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}</div>
+                  <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}${_bonAlerteNouveau48h(b) ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
                   <div style="font-size:12px;color:${dateCol};font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
                 </div>
               </div>
