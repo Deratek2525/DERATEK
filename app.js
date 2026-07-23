@@ -54,6 +54,11 @@ const TABLE_FIELDS = {
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
   fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht' } },
+  contrats:   { js2db: {
+    clientId: 'client_id', clientNom: 'client_nom',
+    dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
+    createdAt: 'created_at',
+  } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
@@ -118,8 +123,8 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] },
   _pending:    new Set(),
   _processing: false,
   _notifyOnSync: {},   // ex. { rapports: '✓ Rapport enregistré dans le cloud' } → toast vert après succès réel
@@ -148,6 +153,8 @@ const DB = {
   set diagnostics(v){ this._cache.diagnostics = v; this._queue('diagnostics'); },
   get fournisseurs() { return this._cache.fournisseurs; },
   set fournisseurs(v){ this._cache.fournisseurs = v; this._queue('fournisseurs'); },
+  get contrats()    { return this._cache.contrats; },
+  set contrats(v)   { this._cache.contrats = v;    this._queue('contrats'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -174,7 +181,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics', 'fournisseurs'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics', 'fournisseurs', 'contrats'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -270,8 +277,8 @@ const DB = {
   },
 
   _resetCache() {
-    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] };
-    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [] };
+    this._cache    = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] };
+    this._lastSync = { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] };
     this._pending  = new Set();
     this._processing = false;
   }
@@ -418,6 +425,7 @@ function showScreen(name) {
   if (name === 'bons')         { renderBons(); setTimeout(adjustStickyOffsets, 0); }
   if (name === 'devis')        renderDocuments();
   if (name === 'fournisseurs') renderFournisseurs();
+  if (name === 'contrats')     renderContrats();
   if (name === 'tva')          renderTVA();
   if (name === 'stats')        renderStats();
   if (name === 'rapport-edit' && typeof _richifyReportFields === 'function') setTimeout(() => { _richifyReportFields(); if (typeof _rapPdfLive === 'function') _rapPdfLive(); }, 0);
@@ -4613,6 +4621,7 @@ function updateNavCounts() {
   set('nb-clients-count', (DB.clients || []).length);
   set('nb-locataires-count', (DB.locataires || []).length);
   set('nb-fournisseurs-count', (DB.fournisseurs || []).length);
+  set('nb-contrats-count', (DB.contrats || []).length);
 }
 
 // Carte complète d'un bon (réutilisée dans l'écran Bons ET dans la section
@@ -13788,6 +13797,235 @@ function confirmDeleteFourn(id, label) {
     if (pdfPath) { try { await sb.storage.from('fournisseurs-pdfs').remove([pdfPath]); } catch (e) {} }
   };
   openModal('modal-confirm');
+}
+
+// ============================================================
+// CONTRATS DE DÉSINFECTION / LUTTE ANTINUISIBLE
+// Documents (PDF / Word / Excel) stockés dans le cloud, classés par catégorie.
+// ============================================================
+const CONTRAT_CATEGORIES = [
+  'Désinfection', 'Dératisation', 'Désourisation (souris)', 'Mouches',
+  'Blattes / Cafards', 'Punaises de lit', 'Guêpes / Frelons', 'Fourmis',
+  'Pigeons / Volatiles', 'Contrat annuel multi-nuisibles', 'Autre',
+];
+const CONTRAT_CAT_ICON = {
+  'Désinfection': '🧴', 'Dératisation': '🐀', 'Désourisation (souris)': '🐭', 'Mouches': '🪰',
+  'Blattes / Cafards': '🪳', 'Punaises de lit': '🛏️', 'Guêpes / Frelons': '🐝', 'Fourmis': '🐜',
+  'Pigeons / Volatiles': '🐦', 'Contrat annuel multi-nuisibles': '📅', 'Autre': '📄',
+};
+function _contratFileIcon(t) {
+  t = String(t || '').toLowerCase();
+  if (t.includes('pdf')) return '📕';
+  if (t.includes('word') || t.includes('doc')) return '📘';
+  if (t.includes('sheet') || t.includes('excel') || t.includes('xls') || t.includes('csv')) return '📗';
+  return '📎';
+}
+function _contratFileKind(name) {
+  const n = String(name || '').toLowerCase();
+  if (/\.pdf$/.test(n)) return 'PDF';
+  if (/\.docx?$/.test(n)) return 'Word';
+  if (/\.xlsx?$|\.xls$|\.csv$/.test(n)) return 'Excel';
+  return (n.split('.').pop() || '').toUpperCase();
+}
+
+let _contratEditingId = null;
+let _pendingContratFile = null;
+
+function updateContratsCount() {
+  const el = $('nb-contrats-count'); if (el) el.textContent = (DB.contrats || []).length;
+}
+
+function renderContrats() {
+  updateContratsCount();
+  const box = $('contrats-list'); if (!box) return;
+  const q = (($('contrat-search') || {}).value || '').trim().toLowerCase();
+  let list = (DB.contrats || []).slice();
+  if (q) list = list.filter(c => [c.nom, c.clientNom, c.categorie, c.notes, c.fileName].filter(Boolean).join(' ').toLowerCase().includes(q));
+  const sub = $('contrats-sub');
+  if (sub) sub.textContent = (DB.contrats || []).length + ' contrat(s)' + (q ? ' · ' + list.length + ' trouvé(s)' : '');
+  if (!list.length) {
+    box.innerHTML = '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + (q ? 'Aucun contrat pour cette recherche.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour déposer un PDF, Word ou Excel.') + '</div></div>';
+    return;
+  }
+  // Regroupement par catégorie
+  const groups = {};
+  list.forEach(c => { const k = c.categorie || 'Autre'; (groups[k] = groups[k] || []).push(c); });
+  const cats = Object.keys(groups).sort((a, b) => {
+    const ia = CONTRAT_CATEGORIES.indexOf(a), ib = CONTRAT_CATEGORIES.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'fr');
+  });
+  const _echeanceChip = c => {
+    if (!c.echeance) return '';
+    const d = new Date(c.echeance); if (isNaN(d.getTime())) return '';
+    const days = Math.round((d.getTime() - Date.now()) / 86400000);
+    if (days < 0) return '<span style="font-size:10px;font-weight:800;color:#fff;background:#dc2626;border-radius:8px;padding:2px 8px;">⚠️ échu le ' + fmtDate(c.echeance) + '</span>';
+    if (days <= 30) return '<span style="font-size:10px;font-weight:800;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:2px 8px;">⏳ échéance ' + fmtDate(c.echeance) + ' (J-' + days + ')</span>';
+    return '<span style="font-size:10px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:2px 8px;">✅ jusqu\'au ' + fmtDate(c.echeance) + '</span>';
+  };
+  box.innerHTML = cats.map(cat => {
+    const arr = groups[cat].slice().sort((a, b) => (b.dateSignature || '').localeCompare(a.dateSignature || ''));
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--navy);padding-bottom:5px;margin-bottom:8px;">
+          ${CONTRAT_CAT_ICON[cat] || '📄'} ${cat} <span style="font-weight:600;color:var(--g600);">(${arr.length})</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${arr.map(c => `
+            <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+              <div style="font-size:22px;flex-shrink:0;">${_contratFileIcon(c.fileType)}</div>
+              <div style="flex:1.5;min-width:180px;">
+                <div style="font-size:13px;font-weight:800;color:var(--navy);">${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--g600);">${c.clientNom ? '🏢 ' + c.clientNom.replace(/</g,'&lt;') : ''}${c.dateSignature ? ' · 📅 ' + fmtDate(c.dateSignature) : ''}${c.montant ? ' · ' + _displayMontant(c.montant) + ' CHF' : ''}</div>
+                ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
+              </div>
+              <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
+              <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+                ${c.filePath ? `<span style="font-size:10px;font-weight:700;color:var(--g600);background:#f3f4f6;border-radius:6px;padding:2px 7px;">${_contratFileKind(c.fileName)}</span>
+                <button class="btn btn-ghost btn-sm" onclick="viewContratFile('${c.id}')" title="Ouvrir le fichier">📥 Ouvrir</button>` : '<span style="font-size:10px;color:#b91c1c;">Aucun fichier</span>'}
+                <button class="btn btn-navy btn-sm" onclick="editContrat('${c.id}')" title="Modifier">✏️</button>
+                <button class="btn btn-red btn-sm btn-xs" onclick="deleteContrat('${c.id}')" title="Supprimer">🗑</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openNewContrat() { _openContratModal(null); }
+function editContrat(id) { _openContratModal(id); }
+function _openContratModal(id) {
+  _contratEditingId = id;
+  _pendingContratFile = null;
+  const c = id ? (DB.contrats || []).find(x => x.id === id) : null;
+  let modal = document.getElementById('modal-contrat');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-contrat'; modal.className = 'modal-bg';
+    document.body.appendChild(modal);
+  }
+  const v = s => (s == null ? '' : String(s)).replace(/"/g, '&quot;');
+  const clientOpts = (DB.clients || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
+    .map(x => `<option value="${x.id}" ${c && c.clientId === x.id ? 'selected' : ''}>${_clientOptionLabel(x).replace(/</g, '&lt;')}</option>`).join('');
+  const catOpts = CONTRAT_CATEGORIES.map(k => `<option ${c && c.categorie === k ? 'selected' : ''}>${k}</option>`).join('');
+  modal.innerHTML = `
+    <div class="modal" style="max-width:620px;">
+      <div class="modal-hd">
+        <span class="modal-title">${id ? '✏️ Modifier le contrat' : '📜 Nouveau contrat'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-contrat')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Nom / intitulé du contrat</label>
+          <input class="form-input" id="ct-nom" value="${v(c && c.nom)}" placeholder="Ex. Contrat annuel dératisation restaurant"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
+          <div class="form-group"><label class="form-label">Catégorie</label>
+            <select class="form-input" id="ct-categorie">${catOpts}</select></div>
+          <div class="form-group"><label class="form-label">Client (gérance / entreprise)</label>
+            <select class="form-input" id="ct-client" onchange="_ctClientPick(this.value)"><option value="">— Aucun / saisir ci-dessous —</option>${clientOpts}</select>
+            <input class="form-input" id="ct-client-nom" style="margin-top:5px;font-size:12px;" value="${v(c && c.clientNom)}" placeholder="ou nom du client (texte libre)"></div>
+          <div class="form-group"><label class="form-label">Date de signature</label>
+            <input class="form-input" id="ct-date" type="date" value="${v(c && c.dateSignature)}"></div>
+          <div class="form-group"><label class="form-label">Échéance / renouvellement</label>
+            <input class="form-input" id="ct-echeance" type="date" value="${v(c && c.echeance)}"></div>
+          <div class="form-group"><label class="form-label">Montant (CHF)</label>
+            <input class="form-input" id="ct-montant" type="number" step="0.01" value="${v(c && c.montant)}" placeholder="Ex. 480"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Note</label>
+          <textarea class="form-input" id="ct-notes" rows="2" placeholder="Nb de passages, zones couvertes, conditions…">${(c && c.notes ? String(c.notes) : '').replace(/</g, '&lt;')}</textarea></div>
+        <div class="form-group">
+          <label class="form-label">Fichier du contrat (PDF, Word ou Excel)</label>
+          <input type="file" id="ct-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="_ctFilePick(event)" style="font-size:13px;">
+          <div id="ct-file-info" style="font-size:12px;color:var(--g600);margin-top:5px;">${c && c.fileName ? '📎 Fichier actuel : <b>' + v(c.fileName) + '</b> — choisis-en un nouveau pour le remplacer.' : 'Aucun fichier sélectionné.'}</div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn btn-ghost" onclick="closeModal('modal-contrat')">Annuler</button>
+        <button class="btn btn-navy" id="ct-save-btn" onclick="saveContrat()">✓ Enregistrer</button>
+      </div>
+    </div>`;
+  openModal('modal-contrat');
+}
+function _ctClientPick(id) {
+  const c = (DB.clients || []).find(x => x.id === id);
+  const el = $('ct-client-nom'); if (el && c) el.value = c.nom || '';
+}
+function _ctFilePick(e) {
+  const f = e.target.files && e.target.files[0];
+  _pendingContratFile = f || null;
+  const info = $('ct-file-info');
+  if (info) info.innerHTML = f ? ('📎 ' + f.name.replace(/</g, '&lt;') + ' — ' + Math.round(f.size / 1024) + ' Ko') : 'Aucun fichier sélectionné.';
+}
+
+// Upload d'un fichier de contrat dans Supabase Storage
+async function _uploadContratFile(contratId, file) {
+  if (!sb || !file) return { path: '', name: '', type: '' };
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return { path: '', name: '', type: '' };
+    const userId = session.user.id;
+    const safeName = file.name.replace(/[^\w.-]+/g, '_');
+    const path = `${userId}/${contratId}-${safeName}`;
+    const { error } = await sb.storage.from('contrats-files').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: true });
+    if (error) { console.warn('Upload contrat', error); toast('Fichier non uploadé : ' + error.message, '#e63946'); return { path: '', name: '', type: '' }; }
+    return { path, name: file.name, type: file.type || '' };
+  } catch (e) { console.warn('Upload contrat exception', e); return { path: '', name: '', type: '' }; }
+}
+
+async function saveContrat() {
+  const val = id => { const el = $(id); return el ? String(el.value).trim() : ''; };
+  const clientId = val('ct-client');
+  const btn = $('ct-save-btn'); if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
+  const existing = _contratEditingId ? (DB.contrats || []).find(x => x.id === _contratEditingId) : null;
+  const id = _contratEditingId || newId();
+  let filePath = existing ? (existing.filePath || '') : '';
+  let fileName = existing ? (existing.fileName || '') : '';
+  let fileType = existing ? (existing.fileType || '') : '';
+  if (_pendingContratFile) {
+    toast('Upload du fichier…', '#1a2744');
+    const up = await _uploadContratFile(id, _pendingContratFile);
+    if (up.path) { filePath = up.path; fileName = up.name; fileType = up.type; }
+  }
+  const contrat = {
+    id,
+    nom: val('ct-nom') || fileName || 'Contrat',
+    categorie: val('ct-categorie') || 'Autre',
+    clientId: clientId || '',
+    clientNom: val('ct-client-nom') || '',
+    dateSignature: val('ct-date') || '',
+    echeance: val('ct-echeance') || '',
+    montant: val('ct-montant') === '' ? null : (parseFloat(val('ct-montant')) || 0),
+    notes: val('ct-notes') || '',
+    filePath, fileName, fileType,
+    createdAt: existing ? existing.createdAt : new Date().toISOString(),
+  };
+  const list = DB.contrats;
+  const i = list.findIndex(x => x.id === id);
+  if (i >= 0) list[i] = contrat; else list.push(contrat);
+  DB.contrats = list;
+  _contratEditingId = null; _pendingContratFile = null;
+  closeModal('modal-contrat');
+  renderContrats();
+  toast('✓ Contrat enregistré', '#2d9e6b');
+}
+
+async function viewContratFile(id) {
+  const c = (DB.contrats || []).find(x => x.id === id);
+  if (!c || !c.filePath) { toast('Aucun fichier associé', '#e63946'); return; }
+  if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
+  try {
+    const { data, error } = await sb.storage.from('contrats-files').createSignedUrl(c.filePath, 3600);
+    if (error || !data || !data.signedUrl) { toast('Erreur lien : ' + (error && error.message || '?'), '#e63946'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
+}
+
+function deleteContrat(id) {
+  const c = (DB.contrats || []).find(x => x.id === id); if (!c) return;
+  if (!confirm('Supprimer le contrat « ' + (c.nom || c.fileName || '') + ' » ?')) return;
+  // Supprime aussi le fichier du stockage
+  if (c.filePath && sb) { try { sb.storage.from('contrats-files').remove([c.filePath]); } catch (e) {} }
+  DB.contrats = (DB.contrats || []).filter(x => x.id !== id);
+  renderContrats();
+  toast('Contrat supprimé', '#e63946');
 }
 
 function renderFournisseurs() {
