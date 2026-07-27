@@ -608,7 +608,14 @@ function generatePDF(rapport, statut) {
       doc.text(rapport.resultat, M + 30, y + 6.5);
       y += 14;
     }
-    textBox(rapport.recommandations);
+    if (rapport.recommandations) {
+      checkPage(22);
+      // Libellé + bandeau de couleur distincte pour la conclusion
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(67, 56, 202);
+      doc.text('RECOMMANDATION / CONCLUSION', M + 1, y + 4);
+      y += 7;
+      textBox(rapport.recommandations, [237, 240, 253]);   // fond bleu-lavande
+    }
 
     // RDV + Garantie + Montant + Durée selon coches
     const showPrix = rapport.showPrix !== false;
