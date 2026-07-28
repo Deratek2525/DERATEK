@@ -4783,7 +4783,15 @@ function renderBonCard(b, solid) {
                 <button class="btn btn-sm" onclick="bonToggleRapFait('${b.id}')" title="${fait ? 'Rapport fait — cliquer pour décocher' : 'Marquer le rapport comme fait'}" style="font-weight:700;padding:6px 9px;border:1.5px solid ${fait ? '#16a34a' : '#d1d5db'};background:${fait ? '#dcfce7' : '#fff'};color:${fait ? '#166534' : '#9ca3af'};">${fait ? '✅' : '☐'}</button>`;
                 })()}
                 <button class="btn ${statut==='a-facturer'?'btn-navy':'btn-ghost'} btn-sm" onclick="createDevisFromBon('${b.id}')" title="Créer un devis depuis ce bon">📝 Devis</button>
-                <button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>
+                ${(() => {
+                  const _dv = (DB.documents||[]).filter(d => (d.type||'devis')==='devis' && d.bonId===b.id && !_docIsArchive(d) && !_isRappelDoc(d) && !_isDevisArchivedWithFacture(d));
+                  const _dva = _dv.find(d => d.statut==='accepte') || _dv[0];
+                  if (_dva) {
+                    const _ok = _dva.statut === 'accepte';
+                    return `<button class="btn btn-green btn-sm" onclick="createFactureFromBon('${b.id}')" title="Facturer directement le devis ${_dva.numero||''} (${_ok?'accepté':_dva.statut}) — reprend lignes et montants" style="font-weight:800;">🧾 Facturer le devis ${_ok?'✅':''}</button>`;
+                  }
+                  return `<button class="btn ${statut==='a-facturer'?'btn-green':'btn-ghost'} btn-sm" onclick="createFactureFromBon('${b.id}')" title="Créer une facture depuis ce bon">🧾 Facture</button>`;
+                })()}
                 <input type="color" value="${customColor || gColor}" onchange="bonSetColor('${b.id}', this.value)" title="🎨 Choisir la couleur de fond de ce bon" style="width:30px;height:30px;padding:0;border:1.5px solid #d1d5db;border-radius:6px;cursor:pointer;background:#fff;flex-shrink:0;">
                 ${customColor ? `<button class="btn btn-ghost btn-xs" onclick="bonSetColor('${b.id}','')" title="Revenir à la couleur automatique (gérance)">↺</button>` : ''}
                 <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteBon('${b.id}','${(b.numero||b.id).replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
@@ -5704,7 +5712,34 @@ function createDocFromBon(bonId, type) {
 }
 // Raccourcis depuis un bon
 function createDevisFromBon(bonId)   { createDocFromBon(bonId, 'devis'); }
-function createFactureFromBon(bonId) { createDocFromBon(bonId, 'facture'); }
+// Facture depuis un bon : si un devis (accepté de préférence) est lié à ce bon,
+// la facture REPREND le devis (lignes + montants) au lieu de repartir d'une facture vierge.
+function createFactureFromBon(bonId) {
+  const devisLies = (DB.documents || []).filter(d =>
+    (d.type || 'devis') === 'devis' && d.bonId === bonId &&
+    !_docIsArchive(d) && !_isRappelDoc(d) && !_isDevisArchivedWithFacture(d));
+  const devis = devisLies.find(d => d.statut === 'accepte') || devisLies[0];
+  if (devis) { _openFactureFromDevis(devis); return; }
+  createDocFromBon(bonId, 'facture');
+}
+// Ouvre l'éditeur avec une facture reprise d'un devis (à vérifier puis enregistrer)
+function _openFactureFromDevis(devis) {
+  const f = JSON.parse(JSON.stringify(devis));
+  f.id = newId();
+  f.type = 'facture';
+  f.numero = _nextDocNumero('facture');
+  f.dateDoc = today();
+  f.statut = 'brouillon';
+  f.devisId = devis.id;
+  _editingDoc = f;
+  // Le devis d'origine est marqué « accepté » s'il ne l'était pas
+  if (devis.statut !== 'accepte') {
+    const docs = DB.documents; const dv = docs.find(x => x.id === devis.id);
+    if (dv) { dv.statut = 'accepte'; DB.documents = docs; }
+  }
+  toast('Facture reprise du devis ' + (devis.numero || '') + ' — vérifie puis enregistre', '#2d9e6b');
+  openDocEditor();
+}
 
 // Types de clients pour lesquels on propose de créer directement un devis/facture
 const CLIENT_TYPES_DOC = ['Particulier', 'PPE', 'Association', 'Commune'];
