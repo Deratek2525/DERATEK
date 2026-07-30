@@ -4594,14 +4594,14 @@ function updateNavCounts() {
     const s = b.statut || '';
     if (s === 'termine') nT++;
     else if (s === 'en-cours') nE++;
-    else if (s === 'demande-devis') { /* comptés dans le bouton Devis (« à deviser »), pas dans Bons actifs — cohérent avec la liste */ }
+    else if (s === 'demande-devis' || s === 'attente-devis') { /* comptés côté Devis, pas dans Bons actifs — cohérent avec la liste */ }
     else nA++;
   });
   const docs = DB.documents || [];
   const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d)).length;
-  // Bons en demande de devis (en attente) sans devis encore créé
+  // Bons en demande / attente de devis sans devis encore créé
   const nDevisAttente = (DB.bons || []).filter(b =>
-    (b.statut || '') === 'demande-devis' &&
+    ((b.statut || '') === 'demande-devis' || (b.statut || '') === 'attente-devis') &&
     !docs.some(x => ((x.type || 'devis') === 'devis') && x.bonId === b.id)
   ).length;
   const nDevis = nDevisDocs + nDevisAttente;
@@ -4816,7 +4816,7 @@ function renderBons() {
   } else {
     // Actifs = ni terminés, ni en cours, ni en demande de devis
     // (en cours → onglet dédié ; demande de devis → écran Devis)
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis' && (b.statut || '') !== 'attente-devis');
   }
   if (q) {
     bons = bons.filter(b =>
@@ -6573,7 +6573,9 @@ function renderDocuments() {
   let aDeviserHtml = '';
   if (filtre === 'devis') {
     const dejaDevis = id => (DB.documents || []).some(x => ((x.type || 'devis') === 'devis') && x.bonId === id);
-    const aDeviser = (DB.bons || []).filter(b => (b.statut || '') === 'demande-devis' && !dejaDevis(b.id))
+    // Bons en demande de devis OU en attente de devis (sans devis déjà créé) : ils vivent
+    // dans la rubrique Devis, plus dans la liste des Bons actifs.
+    const aDeviser = (DB.bons || []).filter(b => ((b.statut || '') === 'demande-devis' || (b.statut || '') === 'attente-devis') && !dejaDevis(b.id))
       .sort((a, b) => {
         const ga = _geranceCanon(a.geranceNom || '').toLowerCase(), gbn = _geranceCanon(b.geranceNom || '').toLowerCase();
         if (ga !== gbn) return ga.localeCompare(gbn, 'fr');
@@ -6582,7 +6584,7 @@ function renderDocuments() {
     if (aDeviser.length) {
       aDeviserHtml = `
         <div style="margin-bottom:14px;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;background:#eef2ff;">
-          <div style="font-size:13px;font-weight:800;color:#3730a3;margin-bottom:10px;">📝 Bons en demande de devis (${aDeviser.length})</div>
+          <div style="font-size:13px;font-weight:800;color:#3730a3;margin-bottom:10px;">📝 Bons en demande / attente de devis (${aDeviser.length})</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
             ${aDeviser.map(b => renderBonCard(b)).join('')}
           </div>
