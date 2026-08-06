@@ -3437,6 +3437,14 @@ function _fixNumeroBonCPCN(numero, geranceNom) {
   const d = '1' + digits;
   return d.slice(0, 1) + ' ' + d.slice(1, 4) + ' ' + d.slice(4);
 }
+// Numéro de bon CANONIQUE pour comparer les doublons : chiffres uniquement, et un
+// numéro à 6 chiffres commençant par 7/8/9 (CPCN amputé du « 1 ») est ramené à sa
+// forme à 7 chiffres. Ainsi « 892 804 » et « 1 892 804 » sont reconnus identiques.
+function _bonNumCanon(numero) {
+  let d = String(numero || '').replace(/\D/g, '');
+  if (/^[789]\d{5}$/.test(d)) d = '1' + d;
+  return d;
+}
 function bonShowConfirm(infos, fileName, manual) {
   const box = $('bon-confirm');
   if (!box) return;
@@ -3653,7 +3661,10 @@ async function bonConfirmSave() {
 
   // Détection de doublon : un bon portant le même numéro existe-t-il déjà ?
   if (infos.numero_bon) {
-    const dup = (DB.bons || []).find(b => b.numero && _factNorm(b.numero) === _factNorm(infos.numero_bon));
+    const dup = (DB.bons || []).find(b => b.numero && (
+      _factNorm(b.numero) === _factNorm(infos.numero_bon) ||
+      _bonNumCanon(b.numero) === _bonNumCanon(infos.numero_bon)   // « 892 804 » ≡ « 1 892 804 » (CPCN)
+    ));
     if (dup) {
       const ger = dup.geranceNom ? (' — ' + dup.geranceNom) : '';
       const dt = dup.date ? (' du ' + fmtDate(dup.date)) : '';
