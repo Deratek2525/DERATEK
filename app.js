@@ -6217,6 +6217,11 @@ function renderDocEditor() {
       <div class="form-group"><label class="form-label">TVA (%)</label><input class="form-input" type="number" step="0.1" value="${d.tvaTaux}" oninput="docSetMontantField('tvaTaux',this.value)"></div>
       <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">🔍 Déduction expertise (CHF) — déduite avant TVA</label><input class="form-input" type="number" step="0.01" min="0" value="${d.expertise||0}" oninput="docSetMontantField('expertise',this.value)" placeholder="Ex. 150 — montant de l'expertise à créditer si le devis est accepté"></div>
     </div>
+    <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;margin:12px 0 6px;">📅 Dates d'intervention (apparaissent sur le document)</div>
+    <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div id="doc-dates" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="docAddDate()" style="margin-top:6px;">+ Ajouter une date</button>
+    </div>
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin:6px 0;">Lignes</div>
     <table style="width:100%;border-collapse:collapse;">
       <thead><tr style="font-size:10px;color:var(--g400);text-transform:uppercase;text-align:left;">
@@ -6375,6 +6380,67 @@ function docSetMontantField(field, val) {
       if (prev && url) prev.innerHTML = `<img src="${url}" style="width:116px;height:116px;">`;
     } catch (e) {}
   }
+  if (typeof _renderDocDates === 'function') _renderDocDates();
+  if (typeof _docPdfLive === 'function') _docPdfLive();
+}
+
+// ── Dates d'intervention du devis/facture ──────────────────────────
+// Stockées dans une ligne « Dates d'intervention : … » (donc visibles sur le PDF
+// et reprises telles quelles quand le devis devient facture — aucune colonne en plus).
+const _DOC_DATES_RE = /^\s*dates?\s+d['’]intervention\s*:/i;
+function _isoFromAny(s) {
+  s = String(s || '').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (m) return s;
+  m = s.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/); if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+  return '';
+}
+function _docDatesInit() {
+  if (!_editingDoc) return [];
+  if (Array.isArray(_editingDoc._datesInterv)) return _editingDoc._datesInterv;
+  const line = (_editingDoc.lignes || []).find(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  let arr = [];
+  if (line) arr = String(line.desc).replace(_DOC_DATES_RE, '').split(',').map(x => _isoFromAny(x)).filter(Boolean);
+  _editingDoc._datesInterv = arr;
+  return arr;
+}
+// Répercute les dates dans la ligne « Dates d'intervention : … » (crée / met à jour / retire)
+function _docDatesSyncLigne() {
+  if (!_editingDoc) return;
+  const iso = (_editingDoc._datesInterv || []).filter(Boolean);
+  const lignes = _editingDoc.lignes || (_editingDoc.lignes = []);
+  const i = lignes.findIndex(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  if (!iso.length) { if (i >= 0) lignes.splice(i, 1); }
+  else {
+    const txt = "Dates d'intervention : " + iso.map(fmtDate).join(', ');
+    if (i >= 0) lignes[i].desc = txt; else lignes.push({ desc: txt, qte: 1, prix: 0 });
+  }
+}
+function _renderDocDates() {
+  const box = document.getElementById('doc-dates'); if (!box) return;
+  const arr = _docDatesInit();
+  box.innerHTML = arr.map((d, i) => `
+    <span style="display:inline-flex;align-items:center;gap:3px;">
+      <input type="date" class="form-input" style="width:auto;font-size:13px;" value="${d || ''}" onchange="docSetDate(${i}, this.value)">
+      <button type="button" class="btn btn-ghost btn-xs" style="color:#b00;" onclick="docRemoveDate(${i})" title="Retirer">✕</button>
+    </span>`).join('') || '<span style="font-size:12px;color:var(--g400);">Aucune date — clique « + Ajouter une date ».</span>';
+}
+function docAddDate() {
+  const arr = _docDatesInit();
+  if (arr.length >= 5) { toast('Maximum 5 dates', '#d97706'); return; }
+  arr.push('');
+  _renderDocDates();
+}
+function docSetDate(i, iso) {
+  const arr = _docDatesInit();
+  arr[i] = iso || '';
+  _docDatesSyncLigne();
+  if (typeof _docPdfLive === 'function') _docPdfLive();
+}
+function docRemoveDate(i) {
+  const arr = _docDatesInit();
+  arr.splice(i, 1);
+  _docDatesSyncLigne();
+  _renderDocDates();
   if (typeof _docPdfLive === 'function') _docPdfLive();
 }
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
@@ -6455,6 +6521,7 @@ function saveDoc() {
   const toSave = JSON.parse(JSON.stringify(_editingDoc));
   delete toSave._wasDevisArch;
   delete toSave._bonNumeroSaisi;
+  delete toSave._datesInterv;   // champ transitoire — les dates vivent dans la ligne « Dates d'intervention : … »
   delete toSave.expertise;   // persisté dans notes via [EXPERT:n]
   delete toSave.photos;      // photos non stockées en base (incluses uniquement dans le PDF)
   const docs = DB.documents;
