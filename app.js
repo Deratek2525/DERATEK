@@ -6443,6 +6443,70 @@ function docRemoveDate(i) {
   _renderDocDates();
   if (typeof _docPdfLive === 'function') _docPdfLive();
 }
+// Nombre de dates d'intervention déjà saisies dans un document (pour le badge du ruban)
+function _docDatesCount(d) {
+  const line = (d && d.lignes || []).find(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  if (!line) return 0;
+  return String(line.desc).replace(_DOC_DATES_RE, '').split(',').map(x => _isoFromAny(x)).filter(Boolean).length;
+}
+// ── Fenêtre rapide « Dates d'intervention » depuis un ruban devis/facture ──
+let _docDatesQuick = null;
+function openDocDatesModal(id) {
+  const d = (DB.documents || []).find(x => x.id === id);
+  if (!d) { toast('Document introuvable', '#e63946'); return; }
+  const line = (d.lignes || []).find(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  const arr = line ? String(line.desc).replace(_DOC_DATES_RE, '').split(',').map(x => _isoFromAny(x)).filter(Boolean) : [];
+  _docDatesQuick = { id, arr };
+  let modal = document.getElementById('modal-docdates');
+  if (!modal) { modal = document.createElement('div'); modal.id = 'modal-docdates'; modal.className = 'modal-bg'; document.body.appendChild(modal); }
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-hd">
+        <span class="modal-title">📅 Dates d'intervention — ${(d.numero || '').replace(/</g, '&lt;')}</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-docdates')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12px;color:var(--g600);margin-bottom:8px;">Ces dates s'affichent sur le document et sont reprises automatiquement dans la facture.</div>
+        <div id="docdates-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="docDatesModalAdd()" style="margin-top:8px;">+ Ajouter une date</button>
+      </div>
+      <div class="modal-ft">
+        <button class="btn btn-ghost" onclick="closeModal('modal-docdates')">Annuler</button>
+        <button class="btn btn-navy" onclick="docDatesModalSave()">✓ Enregistrer</button>
+      </div>
+    </div>`;
+  _docDatesModalRender();
+  openModal('modal-docdates');
+}
+function _docDatesModalRender() {
+  const box = document.getElementById('docdates-list'); if (!box || !_docDatesQuick) return;
+  const arr = _docDatesQuick.arr;
+  box.innerHTML = arr.map((d, i) => `
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="date" class="form-input" style="width:auto;font-size:13px;" value="${d || ''}" onchange="_docDatesQuick.arr[${i}]=this.value">
+      <button type="button" class="btn btn-ghost btn-xs" style="color:#b00;" onclick="docDatesModalRemove(${i})" title="Retirer">✕</button>
+    </div>`).join('') || '<span style="font-size:12px;color:var(--g400);">Aucune date. Clique « + Ajouter une date ».</span>';
+}
+function docDatesModalAdd() { if (!_docDatesQuick) return; if (_docDatesQuick.arr.length >= 6) { toast('Maximum 6 dates', '#d97706'); return; } _docDatesQuick.arr.push(''); _docDatesModalRender(); }
+function docDatesModalRemove(i) { if (!_docDatesQuick) return; _docDatesQuick.arr.splice(i, 1); _docDatesModalRender(); }
+function docDatesModalSave() {
+  if (!_docDatesQuick) return;
+  const docs = DB.documents; const d = docs.find(x => x.id === _docDatesQuick.id);
+  if (!d) { closeModal('modal-docdates'); return; }
+  const iso = _docDatesQuick.arr.filter(Boolean);
+  d.lignes = d.lignes || [];
+  const i = d.lignes.findIndex(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  if (!iso.length) { if (i >= 0) d.lignes.splice(i, 1); }
+  else {
+    const txt = "Dates d'intervention : " + iso.map(fmtDate).join(', ');
+    if (i >= 0) d.lignes[i].desc = txt; else d.lignes.push({ desc: txt, qte: 1, prix: 0 });
+  }
+  DB.documents = docs;
+  _docDatesQuick = null;
+  closeModal('modal-docdates');
+  renderDocuments();
+  toast('✓ Dates enregistrées', '#2d9e6b');
+}
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 // Colle du texte dans une désignation en retirant les marqueurs de gras ** (sinon ils s'affichent en astérisques)
@@ -6806,7 +6870,8 @@ function renderDocuments() {
             <option value="fourmis">🐜 Fourmis</option>
             <option value="punaises">🛏️ Punaises de lit</option>
           </select>`:''}
-          ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture">→ Facture</button>`:''}
+          ${(() => { const _nd = _docDatesCount(d); return `<button class="btn btn-sm" onclick="openDocDatesModal('${d.id}')" title="Ajouter / modifier les dates d'intervention" style="font-weight:700;border:1.5px solid ${_nd?'#d97706':'#d1d5db'};background:${_nd?'#fffbeb':'#fff'};color:${_nd?'#b45309':'#6b7280'};">📅 Dates${_nd?' ('+_nd+')':''}</button>`; })()}
+          ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture (les dates d'intervention sont reprises automatiquement)">→ Facture</button>`:''}
           <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
         </div>
         ${d.statut==='envoyee'?`<div style="font-size:15px;font-weight:800;color:#1a2744;">📅 ${fmtDate(d.dateDoc)||'—'}</div>`:''}
