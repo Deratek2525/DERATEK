@@ -6507,6 +6507,33 @@ function docDatesModalSave() {
   renderDocuments();
   toast('✓ Dates enregistrées', '#2d9e6b');
 }
+// Duplique un devis (ou une facture) : copie tout, mais nouveau numéro auto, date du jour,
+// statut remis à « brouillon », et on retire les liens (bon/devis d'origine, envoi, rappels).
+function duplicateDoc(id) {
+  const src = (DB.documents || []).find(x => x.id === id);
+  if (!src) { toast('Document introuvable', '#e63946'); return; }
+  const copie = JSON.parse(JSON.stringify(src));
+  copie.id = newId();
+  copie.type = src.type || 'devis';
+  copie.numero = _nextDocNumero(copie.type);   // ← nouveau numéro automatique
+  copie.dateDoc = today();
+  copie.statut = 'brouillon';
+  copie.devisId = '';          // ce n'est pas une facture issue d'un devis
+  copie.bonId = '';            // pas rattaché au bon d'origine (évite les confusions de facturation)
+  // Nettoie les marqueurs d'état propres à l'original (envoi, rappels, archive, ordre…)
+  copie.notes = String(copie.notes || '')
+    .replace(/\s*\[ENVDATE:[^\]]*\]/g, '')
+    .replace(/\s*\[RAPPEL:[^\]]*\]/g, '')
+    .replace(/\s*\[RAPPELDOC:[^\]]*\]/g, '').replace(/\s*\[RAPPELSRC:[^\]]*\]/g, '').replace(/\s*\[RAPPELFD:[^\]]*\]/g, '').replace(/\s*\[RAPPELTXT:[^\]]*\]/g, '')
+    .replace(/\s*\[ARCHIVE\]/g, '').replace(/\s*\[ORD:\d+\]/g, '').trim();
+  copie._archive = false;
+  const docs = DB.documents;
+  docs.push(copie);
+  DB.documents = docs;
+  state.docsFilter = (copie.type === 'facture') ? 'facture' : 'devis';
+  if (typeof renderDocuments === 'function') renderDocuments();
+  toast('✓ ' + (copie.type === 'facture' ? 'Facture' : 'Devis') + ' dupliqué → ' + copie.numero, '#2d9e6b');
+}
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 // Colle du texte dans une désignation en retirant les marqueurs de gras ** (sinon ils s'affichent en astérisques)
@@ -6871,6 +6898,7 @@ function renderDocuments() {
             <option value="punaises">🛏️ Punaises de lit</option>
           </select>`:''}
           ${(() => { const _nd = _docDatesCount(d); return `<button class="btn btn-sm" onclick="openDocDatesModal('${d.id}')" title="Ajouter / modifier les dates d'intervention" style="font-weight:700;border:1.5px solid ${_nd?'#d97706':'#d1d5db'};background:${_nd?'#fffbeb':'#fff'};color:${_nd?'#b45309':'#6b7280'};">📅 Dates${_nd?' ('+_nd+')':''}</button>`; })()}
+          ${isDevis?`<button class="btn btn-ghost btn-sm" onclick="duplicateDoc('${d.id}')" title="Dupliquer ce devis (nouveau numéro attribué automatiquement)">⧉ Dupliquer</button>`:''}
           ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture (les dates d'intervention sont reprises automatiquement)">→ Facture</button>`:''}
           <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
         </div>
