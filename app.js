@@ -7747,6 +7747,7 @@ function downloadDocPDF(id, mode) {
   doc.setFontSize(9.5);
   let LINE = 4.4;   // hauteur d'une ligne de texte (mm)
   let PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
+  const ROWGAP = 1.8;   // écart FIXE supplémentaire entre deux désignations (non compressé — pour l'aération)
 
   // --- Compression adaptative (factures) : on resserre UNIQUEMENT le tableau (jamais les
   // totaux, qui gardent un espacement normal), juste ce qu'il faut pour tenir sur UNE page. ---
@@ -7754,7 +7755,7 @@ function downloadDocPDF(id, mode) {
   if (isFacture) {
     // Hauteur cumulée des RANGÉES seules (l'en-tête du tableau, 8.5 mm, n'est pas comprimé).
     let rowsRaw = 0;
-    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
+    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD + ROWGAP; });
     const headerH = 8.5;
     // Place réellement disponible pour les rangées avant le bulletin QR (totaux réservés).
     const availForRows = QR_NEED_TOP - startY - headerH - totalsH - 1;
@@ -7799,7 +7800,7 @@ function downloadDocPDF(id, mode) {
     const sepY = ty + PAD;
     doc.setDrawColor(225, 228, 233); doc.setLineWidth(0.2);
     doc.line(20, sepY, 190, sepY);
-    ty = sepY + PAD;
+    ty = sepY + PAD + ROWGAP;   // + écart fixe d'aération entre les désignations
   });
 
   // Bloc des totaux, juste APRÈS toutes les lignes (saut de page si pas la place).
