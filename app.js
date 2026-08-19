@@ -7735,7 +7735,9 @@ function downloadDocPDF(id, mode) {
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse.
   // Rappel : un seul total. Facture : ~23 mm (sans rabais) / ~28 mm (avec rabais).
   const totalsH = d._rappel ? 14 : ((d.rabais || 0) > 0 ? 28 : 24);
-  const lignes = d.lignes || [];
+  // On ignore les lignes VIDES (ni texte ni prix) — sinon elles ajoutent une rangée et un
+  // filet « fantôme » en bas du tableau.
+  const lignes = (d.lignes || []).filter(l => String(l.desc || '').trim() !== '' || (parseFloat(l.prix) || 0) !== 0);
 
   // Géométrie du bulletin QR suisse : bande de 105 mm ancrée en bas d'une page.
   const QR_TOP = H - 105;             // perforation haute du bulletin
@@ -7767,7 +7769,7 @@ function downloadDocPDF(id, mode) {
       // Il reste de la place : on ajoute un peu d'air entre les désignations, SANS jamais dépasser
       // (donc une facture qui tenait sur une page continue de tenir sur une page).
       const slack = availForRows - rowsRaw;
-      ROWGAP = Math.min(1.8, slack / Math.max(1, lignes.length));
+      ROWGAP = Math.min(3, slack / Math.max(1, lignes.length));
     }
   }
   LINE *= _K; PAD *= _K;   // ROWGAP est déjà calibré sur la place libre : on ne le comprime pas
