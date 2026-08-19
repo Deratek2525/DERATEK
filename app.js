@@ -7747,26 +7747,30 @@ function downloadDocPDF(id, mode) {
   doc.setFontSize(9.5);
   let LINE = 4.4;   // hauteur d'une ligne de texte (mm)
   let PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
-  const ROWGAP = 1.8;   // écart FIXE supplémentaire entre deux désignations (non compressé — pour l'aération)
+  let ROWGAP = 0;   // écart d'aération entre désignations — calculé selon la place disponible
 
   // --- Compression adaptative (factures) : on resserre UNIQUEMENT le tableau (jamais les
   // totaux, qui gardent un espacement normal), juste ce qu'il faut pour tenir sur UNE page. ---
   let _K = 1;
   if (isFacture) {
-    // Hauteur cumulée des RANGÉES seules (l'en-tête du tableau, 8.5 mm, n'est pas comprimé).
+    // Hauteur cumulée des RANGÉES seules, SANS l'aération (l'en-tête du tableau, 8.5 mm, n'est pas comprimé).
     let rowsRaw = 0;
-    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD + ROWGAP; });
+    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
     const headerH = 8.5;
     // Place réellement disponible pour les rangées avant le bulletin QR (totaux réservés).
     const availForRows = QR_NEED_TOP - startY - headerH - totalsH - 1;
-    // On comprime UNIQUEMENT ce qu'il faut pour garder le QR sur la page 1 dès qu'il
-    // y a la place. Si même comprimé au maximum ça ne tient pas → vraie 2e page.
     if (rowsRaw > availForRows) {
+      // Trop dense : on comprime juste ce qu'il faut (pas d'aération), pour garder le QR en page 1.
       const k = availForRows / rowsRaw;
       if (k >= 0.55) _K = k;
+    } else {
+      // Il reste de la place : on ajoute un peu d'air entre les désignations, SANS jamais dépasser
+      // (donc une facture qui tenait sur une page continue de tenir sur une page).
+      const slack = availForRows - rowsRaw;
+      ROWGAP = Math.min(1.8, slack / Math.max(1, lignes.length));
     }
   }
-  LINE *= _K; PAD *= _K;
+  LINE *= _K; PAD *= _K;   // ROWGAP est déjà calibré sur la place libre : on ne le comprime pas
 
   // Les lignes suivent le flux normal et continuent en page suivante si nécessaire.
   let ty = startY;
