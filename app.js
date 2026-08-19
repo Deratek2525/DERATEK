@@ -3144,7 +3144,7 @@ async function bonProcessFile(file) {
     setStatus('🤖 Analyse intelligente du bon par l\'IA…');
     const infos = _normalizeBonInfos(await bonExtractInfosIA(texte));
     setStatus('');
-    bonShowConfirm(infos, file.name);
+    bonShowConfirm(infos, file.name, false, texte);
   } catch (err) {
     setStatus('');
     console.error('Bon error:', err);
@@ -3338,7 +3338,7 @@ async function bonExtractInfosIA(texte) {
     'N\'utilise JAMAIS cette adresse comme gerance_adresse. La gérance est l\'émetteur du bon (ex "Régie ... SA", "Jouval SA"), souvent en bas du document.\n' +
     'Utilise exactement ces clés (chaîne vide si absent) :\n' +
     '{\n' +
-    '"gerance_nom": "nom de la régie/gérance (l\'émetteur du bon, ex Jouval SA). JAMAIS DERATEK.",\n' +
+    '"gerance_nom": "nom de la régie/gérance (l\'émetteur du bon, ex Jouval SA, Patrimoine Gérance SA). JAMAIS DERATEK, JAMAIS le propriétaire. Ne confonds pas avec le propriétaire : sur \\"Au nom et pour le compte de CCLM SA … Patrimoine Gérance SA\\", la gérance est \\"Patrimoine Gérance SA\\" et le propriétaire est \\"CCLM SA\\".",\n' +
     '"gerant_nom": "nom du gérant ou gérante technique / contact (ex le nom après \\"Aff. traitée par\\")",\n' +
     '"gerant_tel": "téléphone du gérant",\n' +
     '"gerant_email": "email du gérant",\n' +
@@ -3348,7 +3348,7 @@ async function bonExtractInfosIA(texte) {
     '"numero_bon": "numéro du bon de travaux. ATTENTION : recopie-le INTÉGRALEMENT, sans jamais omettre le premier chiffre. Les bons de la Gérance CPCN / Caisse de pensions de la fonction publique du canton de Neuchâtel portent un numéro à 7 CHIFFRES commençant TOUJOURS par 1 (ex. \\"1 768 235\\", \\"1 892 795\\") : si tu ne lis que 6 chiffres (ex. \\"768 235\\"), c\'est que le 1 initial a été manqué — remets-le.",\n' +
     '"date_bon": "date du bon au format AAAA-MM-JJ",\n' +
     '"immeuble": "ADRESSE D\'INTERVENTION = l\'adresse écrite en face de \\"Immeuble\\" sur le bon (rue + numéro + NPA + ville, ex \\"Matthias Hipp 1A, 2000 Neuchâtel\\"). C\'est le lieu où DERATEK doit intervenir, PAS l\'adresse de la gérance ni de DERATEK.",\n' +
-    '"proprietaire": "nom du propriétaire",\n' +
+    '"proprietaire": "nom du PROPRIÉTAIRE (le mandant pour qui la gérance agit). Sur beaucoup de bons il est écrit après \\"Au nom et pour le compte de …\\" et/ou dans la ligne \\"Facturation : <PROPRIÉTAIRE>, c/o <gérance>\\". Ex : \\"Au nom et pour le compte de CCLM SA\\" → proprietaire = \\"CCLM SA\\". ATTENTION : sur les bons de PATRIMOINE GÉRANCE ce propriétaire CHANGE d\'un bon à l\'autre (CCLM SA, une PPE, une personne…) — lis-le précisément à chaque bon, ne le devine jamais.",\n' +
     '"locataire_nom": "nom complet du/des locataire(s)",\n' +
     '"locataire_tel": "téléphone du locataire",\n' +
     '"locataire_email": "email du locataire",\n' +
@@ -3445,13 +3445,35 @@ function _bonNumCanon(numero) {
   if (/^[789]\d{5}$/.test(d)) d = '1' + d;
   return d;
 }
-function bonShowConfirm(infos, fileName, manual) {
+// Bons PATRIMOINE GÉRANCE : la facturation va TOUJOURS à « <Propriétaire> c/o Patrimoine
+// Gérance SA, Case postale 71, 2068 Hauterive ». La gérance et son adresse sont fixes ;
+// seul le PROPRIÉTAIRE change d'un bon à l'autre (on garde donc celui lu par l'IA).
+// rawText = texte OCR complet éventuel, pour détecter Patrimoine même si l'IA a mal rempli gerance_nom.
+function _fixPatrimoineBon(infos, rawText) {
+  const hay = ((infos.gerance_nom || '') + ' ' + (rawText || '')).toLowerCase();
+  if (!/patrimoine\s*g[eé]rance|patrimoine\.immo/.test(hay)) return infos;
+  infos.gerance_nom = 'Patrimoine Gérance SA';
+  infos.gerance_adresse = 'Case postale 71';
+  infos.gerance_npa = '2068';
+  infos.gerance_ville = 'Hauterive';
+  // Si l'IA a mis le propriétaire dans la gérance par erreur, ou l'inverse, on tente de récupérer
+  // le propriétaire depuis « Au nom et pour le compte de X » ou « Facturation : X, c/o ».
+  if (!String(infos.proprietaire || '').trim() && rawText) {
+    let m = rawText.match(/au nom et pour le compte de\s+([^\n,]+?)(?:\s*,|\s*\n|\s+nous)/i)
+         || rawText.match(/facturation\s*:?\s*([^\n,]+?)\s*,?\s*c\/o/i);
+    if (m) infos.proprietaire = m[1].trim();
+  }
+  return infos;
+}
+function bonShowConfirm(infos, fileName, manual, rawText) {
   const box = $('bon-confirm');
   if (!box) return;
-  // Rétablit le « 1 » de tête oublié par l'IA sur les bons CPCN
   infos = infos || {};
-  if (!manual && infos.numero_bon) {
-    infos.numero_bon = _fixNumeroBonCPCN(infos.numero_bon, infos.gerance_nom);
+  if (!manual) {
+    // Rétablit le « 1 » de tête oublié par l'IA sur les bons CPCN
+    if (infos.numero_bon) infos.numero_bon = _fixNumeroBonCPCN(infos.numero_bon, infos.gerance_nom);
+    // Facturation Patrimoine Gérance : gérance + adresse fixes, propriétaire dynamique
+    infos = _fixPatrimoineBon(infos, rawText || '');
   }
   const champ = (label, key, val) =>
     `<div style="margin-bottom:8px;">
