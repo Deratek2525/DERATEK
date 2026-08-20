@@ -1473,6 +1473,7 @@ function renderClients() {
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+        <button class="btn btn-navy btn-sm" onclick="openClient360('${c.id}')" title="Fiche complète : tout l'historique de ce client">📋 Fiche</button>
         <button class="btn btn-ghost btn-sm" onclick="editClient('${c.id}')" title="Modifier">✏️</button>
         <select onchange="clientCreate('${c.id}', this.value); this.selectedIndex=0;" title="Créer un document ou un rapport pour ce client" style="font-weight:700;font-size:12px;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;border-radius:6px;padding:5.5px 6px;cursor:pointer;max-width:155px;">
           <option value="">➕ Créer ▾</option>
@@ -1553,6 +1554,103 @@ function clientSetDate(id, index, value) {
   renderClients();
 }
 // Action choisie dans la liste déroulante « Créer » d'une fiche client
+// ============================================================
+// FICHE CLIENT « 360° » — tout l'historique d'un client sur une page (lecture seule)
+// ============================================================
+function _c360Norm(s) { return String(s || '').trim().toLowerCase(); }
+function _c360Match(c, obj, idField, nameField) {
+  return (obj[idField] && obj[idField] === c.id) || (!obj[idField] && obj[nameField] && _c360Norm(obj[nameField]) === _c360Norm(c.nom));
+}
+function openClient360(id) {
+  const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
+  const bons  = (DB.bons || []).filter(b => _c360Match(c, b, 'geranceId', 'geranceNom'));
+  const devis = (DB.documents || []).filter(d => (d.type || 'devis') === 'devis' && !_isRappelDoc(d) && !_docIsArchive(d) && !_isDevisArchivedWithFacture(d) && _c360Match(c, d, 'clientId', 'clientNom'));
+  const facts = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d) && _c360Match(c, d, 'clientId', 'clientNom'));
+  const raps  = (DB.rapports || []).filter(r => _c360Match(c, r, 'clientId', 'clientNom') && !_isRapportFactArchived(r));
+  const diags = (DB.diagnostics || []).filter(d => _c360Match(c, d, 'clientId', 'clientNom'));
+  const conts = (DB.contrats || []).filter(x => _c360Match(c, x, 'clientId', 'clientNom'));
+  const locs  = (DB.locataires || []).filter(l => l.clientId === c.id);
+
+  const _num = v => parseFloat(v) || 0;
+  const encaisse = facts.filter(f => f.statut === 'payee').reduce((s, f) => s + _num(f.total), 0);
+  const aEncaisser = facts.filter(f => f.statut !== 'payee' && (f.statut || '') !== 'brouillon' && (f.statut || '') !== 'pret').reduce((s, f) => s + _num(f.total), 0);
+  const devisAcceptes = devis.filter(d => d.statut === 'accepte').reduce((s, d) => s + _num(d.total), 0);
+
+  const stat = (lbl, val, col) => `<div style="flex:1;min-width:120px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;">
+      <div style="font-size:16px;font-weight:800;color:${col};line-height:1;">${val}</div>
+      <div style="font-size:9.5px;color:var(--g500);text-transform:uppercase;letter-spacing:.3px;margin-top:3px;">${lbl}</div></div>`;
+  const secTitle = (ico, t, n) => `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--navy);padding-bottom:4px;margin:14px 0 7px;">${ico} ${t} <span style="font-weight:600;color:var(--g600);">(${n})</span></div>`;
+  const row = (left, right, onclick) => `<div ${onclick ? `onclick="${onclick}" style="cursor:pointer;"` : 'style=""'} onmouseover="this.style.background='#f5f7fb'" onmouseout="this.style.background=''" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 8px;border-bottom:1px solid #f1f3f7;font-size:12px;">
+      <div style="min-width:0;flex:1;">${left}</div><div style="text-align:right;white-space:nowrap;color:var(--g600);">${right}</div></div>`;
+  const empty = t => `<div style="font-size:12px;color:var(--g400);padding:6px 8px;">${t}</div>`;
+
+  const factStatut = f => {
+    const s = f.statut || '';
+    if (s === 'payee') return '<span style="color:#166534;font-weight:700;">✅ payée</span>';
+    if (s === 'impayee') return '<span style="color:#b45309;font-weight:700;">⏳ pas payée</span>';
+    if (s === 'envoyee') return '<span style="color:#1d4ed8;font-weight:700;">📨 envoyée</span>';
+    if (s === 'brouillon') return '<span style="color:#b45309;">🕒 brouillon</span>';
+    return s || '';
+  };
+
+  let modal = document.getElementById('modal-client360');
+  if (!modal) { modal = document.createElement('div'); modal.id = 'modal-client360'; modal.className = 'modal-bg'; document.body.appendChild(modal); }
+  const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+  modal.innerHTML = `
+    <div class="modal" style="max-width:820px;">
+      <div class="modal-hd">
+        <span class="modal-title">📋 Fiche complète — ${esc(c.nom)}</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-client360')">✕</button>
+      </div>
+      <div class="modal-body" style="max-height:74vh;overflow:auto;">
+        <div style="font-size:12px;color:var(--g600);margin-bottom:10px;">
+          ${esc(c.type || '')}${c.contact ? ' · 👤 ' + esc(_rapContactNom(c.contact)) : ''}${c.tel ? ' · 📞 ' + esc(c.tel) : ''}${c.email ? ' · ✉️ ' + esc(c.email) : ''}
+          ${(c.adresse || c.ville) ? '<br>📍 ' + esc([c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')) : ''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          ${stat('CHF encaissés', _displayMontant(encaisse), '#16a34a')}
+          ${stat('à encaisser', _displayMontant(aEncaisser), '#dc2626')}
+          ${stat('devis acceptés', _displayMontant(devisAcceptes), '#7c3aed')}
+          ${stat('bons', bons.length, '#1d4ed8')}
+          ${stat('interventions', raps.length + diags.length, '#0f766e')}
+        </div>
+
+        ${secTitle('📄', 'Bons de travaux', bons.length)}
+        ${bons.length ? bons.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(b =>
+          row(`<b>${esc(b.numero || '(s. n°)')}</b> ${b.locataireNom ? '· 🏠 ' + esc(b.locataireNom) : ''} <span style="color:var(--g500);">${b.statut ? '· ' + esc(b.statut) : ''}</span>`, fmtDate(b.date) || '', `closeModal('modal-client360');goToBon('${b.id}')`)).join('') : empty('Aucun bon.')}
+
+        ${secTitle('📝', 'Devis', devis.length)}
+        ${devis.length ? devis.slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || '')).map(d =>
+          row(`<b>${esc(d.numero || '')}</b> · ${esc(d.statut || 'brouillon')}`, `${_displayMontant(d.total || 0)} CHF · ${fmtDate(d.dateDoc) || ''}`, `closeModal('modal-client360');editDoc('${d.id}')`)).join('') : empty('Aucun devis.')}
+
+        ${secTitle('🧾', 'Factures', facts.length)}
+        ${facts.length ? facts.slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || '')).map(f =>
+          row(`<b>${esc(f.numero || '')}</b> · ${factStatut(f)}`, `${_displayMontant(f.total || 0)} CHF · ${fmtDate(f.dateDoc) || ''}`, `closeModal('modal-client360');editDoc('${f.id}')`)).join('') : empty('Aucune facture.')}
+
+        ${secTitle('📋', 'Rapports & diagnostics', raps.length + diags.length)}
+        ${(raps.length || diags.length) ? (
+          raps.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r =>
+            row(`<b>${esc(r.id || '')}</b> ${(r.nuisibles || []).length ? '· ' + esc((r.nuisibles || []).join(', ')) : ''} <span style="color:var(--g500);">${r.statut ? '· ' + esc(r.statut) : ''}</span>`, fmtDate(r.date) || '', `closeModal('modal-client360');editRapport('${r.id}')`)).join('') +
+          diags.slice().sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || '')).map(d =>
+            row(`<b>${esc(d.numero || '')}</b> ${(d.insectes || []).length ? '· ' + esc((d.insectes || []).join(', ')) : ''}`, fmtDate(d.dateDoc) || '', `closeModal('modal-client360');editDiag('${d.id}')`)).join('')
+        ) : empty('Aucun rapport ni diagnostic.')}
+
+        ${secTitle('📜', 'Contrats', conts.length)}
+        ${conts.length ? conts.map(x =>
+          row(`<b>${esc(x.nom || x.fileName || 'Contrat')}</b> · ${esc(x.categorie || '')}`, x.echeance ? 'échéance ' + fmtDate(x.echeance) : '', x.filePath ? `viewContratFile('${x.id}')` : '')).join('') : empty('Aucun contrat.')}
+
+        ${secTitle('🏠', 'Locataires', locs.length)}
+        ${locs.length ? locs.slice(0, 40).map(l =>
+          row(`${esc(l.nom || '')}${l.adresse ? ' · ' + esc(l.adresse) : ''}`, l.tel ? '📞 ' + esc(l.tel) : '')).join('') : empty('Aucun locataire.')}
+      </div>
+      <div class="modal-ft">
+        <button class="btn btn-ghost" onclick="closeModal('modal-client360')">Fermer</button>
+        <button class="btn btn-navy" onclick="closeModal('modal-client360');editClient('${c.id}')">✏️ Modifier la fiche</button>
+      </div>
+    </div>`;
+  openModal('modal-client360');
+}
+
 function clientCreate(id, what) {
   if (!what) return;
   const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
