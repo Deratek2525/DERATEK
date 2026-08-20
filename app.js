@@ -426,6 +426,7 @@ function showScreen(name) {
   if (name === 'devis')        renderDocuments();
   if (name === 'fournisseurs') renderFournisseurs();
   if (name === 'contrats')     renderContrats();
+  if (name === 'rapprochement') renderRapprochement();
   if (name === 'tva')          renderTVA();
   if (name === 'stats')        renderStats();
   if (name === 'rapport-edit' && typeof _richifyReportFields === 'function') setTimeout(() => { _richifyReportFields(); if (typeof _rapPdfLive === 'function') _rapPdfLive(); }, 0);
@@ -14476,4 +14477,258 @@ function renderFournisseurs() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ============================================================
+// RAPPROCHEMENT BANCAIRE
+// Dépose un relevé mensuel → l'IA détecte les paiements entrants →
+// retrouve les factures correspondantes → validation (auto ou manuel)
+// de l'encaissement (facture passée en « payée »).
+// ============================================================
+let _rappPaiements = [];   // crédits extraits : {date, montant, libelle, reference}
+let _rappMatches   = [];   // {p, facture, methode, confiance, sansNumero, valide}
+let _rappMode      = 'manuel';
+let _rappFileName  = '';
+
+function rappSetMode(m) {
+  _rappMode = (m === 'auto') ? 'auto' : 'manuel';
+  const a = $('rapp-mode-auto'), mn = $('rapp-mode-manuel');
+  if (a && mn) { a.classList.toggle('active', _rappMode === 'auto'); mn.classList.toggle('active', _rappMode === 'manuel'); }
+  if (_rappMode === 'auto') rappValiderAuto(true);
+  else renderRappResults();
+}
+
+function renderRapprochement() {
+  const a = $('rapp-mode-auto'), mn = $('rapp-mode-manuel');
+  if (a && mn) { a.classList.toggle('active', _rappMode === 'auto'); mn.classList.toggle('active', _rappMode === 'manuel'); }
+  renderRappResults();
+}
+
+function rappHandleDrop(e) { e.preventDefault(); const dz = $('rapp-dropzone'); if (dz) dz.classList.remove('drag'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) rappProcessFile(f); }
+function rappHandleInput(e) { const f = e.target.files && e.target.files[0]; if (f) rappProcessFile(f); }
+function _rappStatus(msg) { const s = $('rapp-status'); if (s) { s.style.display = msg ? 'block' : 'none'; s.innerHTML = msg || ''; } }
+function _rappFileToDataUrl(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+
+async function rappProcessFile(file) {
+  _rappFileName = file.name || 'relevé';
+  const name = (file.name || '').toLowerCase();
+  try {
+    let texte = '';
+    if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
+      _rappStatus('⏳ Lecture du relevé PDF…');
+      texte = await bonExtractText(file);
+      if (!texte || texte.length < 20) {
+        _rappStatus('🔍 Relevé scanné — lecture OCR par l\'IA…');
+        const imgs = await bonRenderToImages(file);
+        texte = await bonOcrImages(imgs);
+      }
+    } else if ((file.type || '').startsWith('image/')) {
+      _rappStatus('🔍 Lecture de l\'image par l\'IA…');
+      const dataUrl = await _rappFileToDataUrl(file);
+      texte = await bonOcrImages([dataUrl]);
+    } else if (name.endsWith('.csv') || name.endsWith('.txt') || (file.type || '').indexOf('csv') >= 0 || (file.type || '').indexOf('text') >= 0) {
+      _rappStatus('⏳ Lecture du fichier…');
+      texte = await file.text();
+    } else {
+      _rappStatus('');
+      toast('Format non reconnu. Dépose un PDF, une image, ou un export CSV du relevé (Excel → « Enregistrer sous » CSV).', '#e63946');
+      return;
+    }
+    if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
+    _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
+    _rappPaiements = await rappExtractPaiements(texte);
+    if (!_rappPaiements.length) { _rappStatus(''); _rappMatches = []; renderRappResults(); toast('Aucun paiement entrant détecté dans ce relevé.', '#f4a623'); return; }
+    rappMatch();
+    _rappStatus('');
+    if (_rappMode === 'auto') rappValiderAuto(false);
+    renderRappResults();
+    toast('✓ ' + _rappPaiements.length + ' paiement(s) détecté(s)', '#2d9e6b');
+  } catch (err) { _rappStatus(''); console.error('rapprochement', err); toast('Erreur : ' + err.message, '#e63946'); }
+}
+
+function _rappParseMontant(v) {
+  if (typeof v === 'number') return v;
+  let s = String(v || '').replace(/[’'\s]/g, '').replace(/,/g, '.');
+  const n = parseFloat(s.replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+async function rappExtractPaiements(texte) {
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const prompt =
+    "Tu analyses un RELEVÉ BANCAIRE suisse (montants en CHF). " +
+    "Extrais UNIQUEMENT les paiements ENTRANTS (crédits, argent REÇU sur le compte). " +
+    "Ignore les débits, sorties, virements sortants, frais bancaires et les lignes de solde. " +
+    "Pour chaque crédit, donne : date (AAAA-MM-JJ si possible, sinon le texte), montant (nombre à point décimal, sans apostrophe de milliers), " +
+    "libelle (texte complet : nom du payeur + communication), reference (numéro de facture ou communication si présent, sinon chaîne vide). " +
+    "Réponds STRICTEMENT en JSON sans aucun texte autour : " +
+    "{\"paiements\":[{\"date\":\"\",\"montant\":0,\"libelle\":\"\",\"reference\":\"\"}]}\n\nRELEVÉ :\n" + String(texte).slice(0, 12000);
+  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 3000, messages: [{ role: 'user', content: prompt }] })
+  });
+  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(m); }
+  const data = await resp.json();
+  let txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '{}';
+  let obj = {};
+  try { obj = JSON.parse(txt); } catch (e) { const mm = txt.match(/\{[\s\S]*\}/); if (mm) { try { obj = JSON.parse(mm[0]); } catch (e2) {} } }
+  const arr = (obj.paiements || obj.payments || []).map(p => ({
+    date: _isoFromAny(String(p.date || '')) || String(p.date || ''),
+    montant: _rappParseMontant(p.montant),
+    libelle: String(p.libelle || p.libellé || '').trim(),
+    reference: String(p.reference || p.référence || p.ref || '').trim()
+  })).filter(p => p.montant > 0);
+  return arr;
+}
+
+// Factures encore ouvertes (non payées, hors rappels) — candidates au rapprochement
+function _rappFacturesOuvertes() {
+  return (DB.documents || []).filter(d => d.type === 'facture' && (d.statut || '') !== 'payee' && !_isRappelDoc(d));
+}
+function _rappNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function _rappNomMatch(clientNom, libelle) {
+  const c = _rappNorm(clientNom), l = _rappNorm(libelle);
+  if (!c || !l) return false;
+  if (l.indexOf(c) >= 0 || (c.length >= 6 && c.indexOf(l) >= 0)) return true;
+  const toks = String(clientNom || '').toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(t => t.length >= 4);
+  return toks.some(t => l.indexOf(_rappNorm(t)) >= 0);
+}
+
+function rappMatch() {
+  const ouvertes = _rappFacturesOuvertes();
+  _rappMatches = _rappPaiements.map(p => {
+    const hay = _rappNorm(p.libelle + ' ' + p.reference);
+    const hayDigits = (p.libelle + ' ' + p.reference).replace(/\D/g, '');
+    let fac = null, methode = '';
+    // 1) par numéro de facture (texte normalisé)
+    fac = ouvertes.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && hay.indexOf(num) >= 0; });
+    if (fac) methode = 'numero';
+    // 1bis) par cœur de chiffres (ex : 25247)
+    if (!fac) {
+      fac = ouvertes.find(f => { const dg = String(f.numero || '').replace(/\D/g, ''); return dg.length >= 4 && hayDigits.indexOf(dg) >= 0; });
+      if (fac) methode = 'numero';
+    }
+    // 2) par montant exact + nom du client
+    if (!fac) {
+      const cands = ouvertes.filter(f => Math.abs((parseFloat(f.total) || 0) - p.montant) < 0.05);
+      fac = cands.find(f => _rappNomMatch(f.clientNom, p.libelle)) || null;
+      if (fac) methode = 'montant_nom';
+    }
+    const sansNumero = !!(fac && !String(fac.numero || '').trim());
+    const confiance = methode === 'numero' ? 'haute' : methode === 'montant_nom' ? 'moyenne' : 'aucune';
+    return { p, facture: fac, methode, confiance, sansNumero, valide: false };
+  });
+}
+
+function _rappMarkPaid(fac, p) {
+  const docs = DB.documents; const d = docs.find(x => x.id === fac.id); if (!d) return;
+  d.statut = 'payee';
+  const ref = String(p.reference || '').replace(/[\[\]|]/g, ' ').trim();
+  const marker = '[PAIE:' + (p.date || today()) + (ref ? ('|' + ref) : '') + ']';
+  if (String(d.notes || '').indexOf('[PAIE:') < 0) d.notes = (String(d.notes || '').trim() + ' ' + marker).trim();
+  if (d.type === 'facture' && d.devisId && typeof _syncDevisArchiveWithFacture === 'function') _syncDevisArchiveWithFacture(d, true);
+  DB.documents = docs;
+  if (typeof renderDocuments === 'function') renderDocuments();
+  if (typeof renderClients === 'function') renderClients();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function rappValider(i) {
+  const m = _rappMatches[i]; if (!m || !m.facture || m.valide) return;
+  _rappMarkPaid(m.facture, m.p); m.valide = true;
+  renderRappResults();
+  toast('✅ Encaissement validé : ' + (m.facture.numero || 'facture') + ' → payée', '#2d9e6b');
+}
+function rappValiderAuto(rerender) {
+  let n = 0;
+  _rappMatches.forEach(m => { if (!m.valide && m.facture && m.methode === 'numero') { _rappMarkPaid(m.facture, m.p); m.valide = true; n++; } });
+  if (rerender !== false) renderRappResults();
+  if (n) toast('⚡ ' + n + ' encaissement(s) validé(s) automatiquement (n° reconnu)', '#0f766e');
+}
+function rappValiderTous() {
+  let n = 0;
+  _rappMatches.forEach(m => { if (!m.valide && m.facture) { _rappMarkPaid(m.facture, m.p); m.valide = true; n++; } });
+  renderRappResults();
+  toast(n ? ('✓ ' + n + ' encaissement(s) validé(s)') : 'Rien à valider', '#2d9e6b');
+}
+
+function _rappMoney(n) { return (Math.round((parseFloat(n) || 0) * 100) / 100).toLocaleString('fr-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function _rappRow(m, i) {
+  const p = m.p, f = m.facture;
+  const paie = `<div style="flex:1;min-width:180px;">
+      <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Reçu ${p.date ? '· ' + fmtDate(p.date) : ''}</div>
+      <div style="font-size:13px;font-weight:800;color:var(--navy);">${_rappMoney(p.montant)} CHF</div>
+      <div style="font-size:11px;color:var(--g600);">${_escapeHtml(p.libelle || '')}${p.reference ? ' · réf. ' + _escapeHtml(p.reference) : ''}</div>
+    </div>`;
+  if (!f) {
+    return `<div style="display:flex;gap:12px;align-items:center;background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap;">
+      ${paie}
+      <div style="font-size:12px;color:#b45309;font-weight:700;min-width:150px;">❓ Aucune facture reconnue<br><span style="font-weight:400;">à pointer à la main</span></div>
+    </div>`;
+  }
+  const badge = m.methode === 'numero'
+    ? '<span style="font-size:9px;font-weight:800;color:#fff;background:#0d9488;border-radius:8px;padding:2px 7px;">N° RECONNU</span>'
+    : '<span style="font-size:9px;font-weight:800;color:#fff;background:#f59e0b;border-radius:8px;padding:2px 7px;">MONTANT + NOM</span>';
+  const warnNum = m.sansNumero ? '<div style="font-size:10px;color:#b45309;font-weight:700;">⚠️ facture sans numéro — pense à lui en attribuer un</div>' : '';
+  const ecart = Math.abs((parseFloat(f.total) || 0) - p.montant);
+  const ecartTxt = ecart >= 0.05 ? `<div style="font-size:10px;color:#b45309;">écart ${_rappMoney(ecart)} CHF</div>` : '';
+  const action = m.valide
+    ? '<span style="font-size:12px;font-weight:800;color:#15803d;">✅ Encaissée</span>'
+    : `<button class="btn btn-green btn-sm" onclick="rappValider(${i})" style="font-weight:800;">Valider l'encaissement</button>`;
+  const bg = m.valide ? '#ecfdf5' : (m.methode === 'numero' ? '#f0fdfa' : '#fffbeb');
+  const bd = m.valide ? '#86efac' : (m.methode === 'numero' ? '#5eead4' : '#fde68a');
+  return `<div style="display:flex;gap:12px;align-items:center;background:${bg};border:1px solid ${bd};border-left:4px solid ${m.valide ? '#15803d' : (m.methode === 'numero' ? '#0d9488' : '#f59e0b')};border-radius:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap;">
+    ${paie}
+    <div style="font-size:16px;color:var(--g400);">→</div>
+    <div style="flex:1;min-width:180px;">
+      <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Facture ${badge}</div>
+      <div style="font-size:13px;font-weight:800;color:var(--navy);">${_escapeHtml(f.numero || '(sans n°)')} · ${_rappMoney(f.total)} CHF</div>
+      <div style="font-size:11px;color:var(--g600);">${_escapeHtml(f.clientNom || '')}</div>
+      ${warnNum}${ecartTxt}
+    </div>
+    <div style="min-width:150px;text-align:right;">${action}</div>
+  </div>`;
+}
+
+function renderRappResults() {
+  const box = $('rapp-results'); if (!box) return;
+  if (!_rappMatches.length) {
+    const sansNum = _rappFacturesOuvertes().filter(f => !String(f.numero || '').trim()).length;
+    box.innerHTML = `<div style="text-align:center;color:var(--g500);padding:26px 10px;">Dépose un relevé bancaire pour détecter les paiements reçus et valider les encaissements.</div>` +
+      (sansNum ? `<div style="max-width:640px;margin:0 auto;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;font-size:12px;color:#b45309;">ℹ️ ${sansNum} facture(s) ouverte(s) n'ont pas de numéro — elles ne pourront pas être reconnues par n° dans un relevé. Pense à leur en attribuer un.</div>` : '');
+    return;
+  }
+  const parNum = [], parMN = [], nonRat = [];
+  _rappMatches.forEach((m, i) => { (m.methode === 'numero' ? parNum : m.methode === 'montant_nom' ? parMN : nonRat).push(i); });
+  const totDet = _rappPaiements.reduce((s, p) => s + p.montant, 0);
+  const nbValide = _rappMatches.filter(m => m.valide).length;
+  const nbRat = _rappMatches.filter(m => m.facture).length;
+  const restant = _rappMatches.filter(m => m.facture && !m.valide).length;
+
+  const stat = (lbl, val, col) => `<div style="text-align:center;padding:0 14px;">
+      <div style="font-size:20px;font-weight:800;color:${col};">${val}</div>
+      <div style="font-size:10px;color:var(--g500);text-transform:uppercase;font-weight:700;">${lbl}</div></div>`;
+
+  let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+    ${stat('Paiements', _rappPaiements.length, 'var(--navy)')}
+    ${stat('Total reçu', _rappMoney(totDet) + ' CHF', 'var(--navy)')}
+    ${stat('Rattachés', nbRat, '#0d9488')}
+    ${stat('Validés', nbValide, '#15803d')}
+    <div style="flex:1;"></div>
+    <div style="font-size:11px;color:var(--g600);">Mode : <b>${_rappMode === 'auto' ? '⚡ Auto' : '✋ Manuel'}</b></div>
+    ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements rattachés restants">✓ Tout valider (${restant})</button>` : ''}
+  </div>`;
+
+  const section = (titre, idxs, vide) => {
+    if (!idxs.length) return '';
+    return `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">${titre} (${idxs.length})</div>` +
+      idxs.map(i => _rappRow(_rappMatches[i], i)).join('');
+  };
+  html += section('✅ Reconnus par numéro de facture', parNum);
+  html += section('🟠 Rapprochés par montant + nom (à confirmer)', parMN);
+  html += section('❓ Paiements non rattachés — à identifier', nonRat);
+
+  box.innerHTML = html;
 }

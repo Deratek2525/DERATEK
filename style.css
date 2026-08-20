@@ -682,3 +682,9 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .bon-dropzone-icon { font-size: 38px; margin-bottom: 10px; }
 .bon-dropzone-title { font-size: 16px; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
 .bon-dropzone-sub { font-size: 12.5px; color: var(--g600); max-width: 460px; margin: 0 auto; }
+
+/* Rapprochement bancaire — sélecteur Auto/Manuel */
+.rapp-modeswitch { display:inline-flex; border:1.5px solid #0d9488; border-radius:8px; overflow:hidden; }
+.rapp-mode { background:#fff; color:#0d9488; border:none; padding:6px 13px; font-size:12px; font-weight:800; cursor:pointer; }
+.rapp-mode:not(.active):hover { background:#f0fdfa; }
+.rapp-mode.active { background:#0d9488; color:#fff; }
