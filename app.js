@@ -14596,28 +14596,17 @@ function _rappNomMatch(clientNom, libelle) {
 }
 
 function rappMatch() {
-  const ouvertes = _rappFacturesOuvertes();
+  // Rapprochement UNIQUEMENT par numéro de facture (pas de devinette montant+nom).
+  // On cherche parmi TOUTES les factures (y compris déjà payées) pour pouvoir
+  // afficher en vert celles qui étaient déjà encaissées.
+  const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
   _rappMatches = _rappPaiements.map(p => {
     const hay = _rappNorm(p.libelle + ' ' + p.reference);
     const hayDigits = (p.libelle + ' ' + p.reference).replace(/\D/g, '');
-    let fac = null, methode = '';
-    // 1) par numéro de facture (texte normalisé)
-    fac = ouvertes.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && hay.indexOf(num) >= 0; });
-    if (fac) methode = 'numero';
-    // 1bis) par cœur de chiffres (ex : 25247)
-    if (!fac) {
-      fac = ouvertes.find(f => { const dg = String(f.numero || '').replace(/\D/g, ''); return dg.length >= 4 && hayDigits.indexOf(dg) >= 0; });
-      if (fac) methode = 'numero';
-    }
-    // 2) par montant exact + nom du client
-    if (!fac) {
-      const cands = ouvertes.filter(f => Math.abs((parseFloat(f.total) || 0) - p.montant) < 0.05);
-      fac = cands.find(f => _rappNomMatch(f.clientNom, p.libelle)) || null;
-      if (fac) methode = 'montant_nom';
-    }
-    const sansNumero = !!(fac && !String(fac.numero || '').trim());
-    const confiance = methode === 'numero' ? 'haute' : methode === 'montant_nom' ? 'moyenne' : 'aucune';
-    return { p, facture: fac, methode, confiance, sansNumero, valide: false };
+    let fac = factsAll.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && hay.indexOf(num) >= 0; });
+    if (!fac) fac = factsAll.find(f => { const dg = String(f.numero || '').replace(/\D/g, ''); return dg.length >= 4 && hayDigits.indexOf(dg) >= 0; });
+    const dejaPayee = !!(fac && (fac.statut || '') === 'payee');
+    return { p, facture: fac || null, methode: fac ? 'numero' : '', dejaPayee, valide: dejaPayee };
   });
 }
 
@@ -14668,44 +14657,58 @@ function _rappRow(m, i) {
       <div style="font-size:12px;color:#b45309;font-weight:700;min-width:150px;">❓ Aucune facture reconnue<br><span style="font-weight:400;">à pointer à la main</span></div>
     </div>`;
   }
-  const badge = m.methode === 'numero'
-    ? '<span style="font-size:9px;font-weight:800;color:#fff;background:#0d9488;border-radius:8px;padding:2px 7px;">N° RECONNU</span>'
-    : '<span style="font-size:9px;font-weight:800;color:#fff;background:#f59e0b;border-radius:8px;padding:2px 7px;">MONTANT + NOM</span>';
-  const warnNum = m.sansNumero ? '<div style="font-size:10px;color:#b45309;font-weight:700;">⚠️ facture sans numéro — pense à lui en attribuer un</div>' : '';
   const ecart = Math.abs((parseFloat(f.total) || 0) - p.montant);
-  const ecartTxt = ecart >= 0.05 ? `<div style="font-size:10px;color:#b45309;">écart ${_rappMoney(ecart)} CHF</div>` : '';
-  const action = m.valide
-    ? '<span style="font-size:12px;font-weight:800;color:#15803d;">✅ Encaissée</span>'
-    : `<button class="btn btn-green btn-sm" onclick="rappValider(${i})" style="font-weight:800;">Valider l'encaissement</button>`;
-  const bg = m.valide ? '#ecfdf5' : (m.methode === 'numero' ? '#f0fdfa' : '#fffbeb');
-  const bd = m.valide ? '#86efac' : (m.methode === 'numero' ? '#5eead4' : '#fde68a');
-  return `<div style="display:flex;gap:12px;align-items:center;background:${bg};border:1px solid ${bd};border-left:4px solid ${m.valide ? '#15803d' : (m.methode === 'numero' ? '#0d9488' : '#f59e0b')};border-radius:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap;">
+  const ecartTxt = ecart >= 0.05 ? `<div style="font-size:10px;color:#b45309;">écart ${_rappMoney(ecart)} CHF avec la facture</div>` : '';
+  const vert = m.valide || m.dejaPayee;
+  let action;
+  if (m.dejaPayee) action = '<span style="font-size:12px;font-weight:800;color:#15803d;">✅ Déjà encaissée</span>';
+  else if (m.valide) action = '<span style="font-size:12px;font-weight:800;color:#15803d;">✅ Encaissée</span>';
+  else action = `<button class="btn btn-green btn-sm" onclick="rappValider(${i})" style="font-weight:800;">Valider l'encaissement</button>`;
+  const bg = vert ? '#ecfdf5' : '#f0fdfa';
+  const bd = vert ? '#86efac' : '#5eead4';
+  const barre = vert ? '#15803d' : '#0d9488';
+  return `<div style="display:flex;gap:12px;align-items:center;background:${bg};border:1px solid ${bd};border-left:4px solid ${barre};border-radius:8px;padding:10px 14px;margin-bottom:6px;flex-wrap:wrap;">
     ${paie}
     <div style="font-size:16px;color:var(--g400);">→</div>
     <div style="flex:1;min-width:180px;">
-      <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Facture ${badge}</div>
-      <div style="font-size:13px;font-weight:800;color:var(--navy);">${_escapeHtml(f.numero || '(sans n°)')} · ${_rappMoney(f.total)} CHF</div>
+      <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Facture <span style="font-size:9px;font-weight:800;color:#fff;background:#0d9488;border-radius:8px;padding:2px 7px;">N° RECONNU</span></div>
+      <div style="font-size:13px;font-weight:800;color:var(--navy);">${_escapeHtml(f.numero || '')} · ${_rappMoney(f.total)} CHF</div>
       <div style="font-size:11px;color:var(--g600);">${_escapeHtml(f.clientNom || '')}</div>
-      ${warnNum}${ecartTxt}
+      ${ecartTxt}
     </div>
     <div style="min-width:150px;text-align:right;">${action}</div>
+  </div>`;
+}
+
+// Encadré dédié : factures OUVERTES sans numéro (ne peuvent pas être reconnues dans un relevé)
+function _rappBoxSansNumero() {
+  const sansNum = _rappFacturesOuvertes().filter(f => !String(f.numero || '').trim());
+  if (!sansNum.length) return '';
+  return `<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">🔢 Factures sans numéro (${sansNum.length}) — à numéroter</div>
+    <div style="font-size:11px;color:#92400e;margin-bottom:8px;">Ces factures n'ont pas de numéro : impossible de les reconnaître automatiquement dans un relevé. Attribue-leur un numéro pour qu'elles soient rapprochées.</div>
+    ${sansNum.map(f => `<div style="display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #fed7aa;border-radius:7px;padding:7px 11px;margin-bottom:5px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:160px;font-size:12px;color:var(--navy);"><b>${_escapeHtml(f.clientNom || '(sans client)')}</b>${f.locataireNom ? ' · ' + _escapeHtml(f.locataireNom) : ''}</div>
+        <div style="font-size:12px;font-weight:800;color:var(--navy);">${_rappMoney(f.total)} CHF</div>
+        <div style="font-size:10px;color:var(--g500);">${fmtDate(f.dateDoc) || ''}</div>
+        <button class="btn btn-ghost btn-sm" onclick="editDoc('${f.id}')" title="Ouvrir pour attribuer un numéro">✏️ Numéroter</button>
+      </div>`).join('')}
   </div>`;
 }
 
 function renderRappResults() {
   const box = $('rapp-results'); if (!box) return;
   if (!_rappMatches.length) {
-    const sansNum = _rappFacturesOuvertes().filter(f => !String(f.numero || '').trim()).length;
-    box.innerHTML = `<div style="text-align:center;color:var(--g500);padding:26px 10px;">Dépose un relevé bancaire pour détecter les paiements reçus et valider les encaissements.</div>` +
-      (sansNum ? `<div style="max-width:640px;margin:0 auto;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;font-size:12px;color:#b45309;">ℹ️ ${sansNum} facture(s) ouverte(s) n'ont pas de numéro — elles ne pourront pas être reconnues par n° dans un relevé. Pense à leur en attribuer un.</div>` : '');
+    box.innerHTML = _rappBoxSansNumero() +
+      `<div style="text-align:center;color:var(--g500);padding:26px 10px;">Dépose un relevé bancaire pour détecter les paiements reçus et valider les encaissements.</div>`;
     return;
   }
-  const parNum = [], parMN = [], nonRat = [];
-  _rappMatches.forEach((m, i) => { (m.methode === 'numero' ? parNum : m.methode === 'montant_nom' ? parMN : nonRat).push(i); });
+  const parNum = [], deja = [], nonRat = [];
+  _rappMatches.forEach((m, i) => { (!m.facture ? nonRat : m.dejaPayee ? deja : parNum).push(i); });
   const totDet = _rappPaiements.reduce((s, p) => s + p.montant, 0);
-  const nbValide = _rappMatches.filter(m => m.valide).length;
+  const nbEncaisse = _rappMatches.filter(m => m.valide || m.dejaPayee).length;
   const nbRat = _rappMatches.filter(m => m.facture).length;
-  const restant = _rappMatches.filter(m => m.facture && !m.valide).length;
+  const restant = _rappMatches.filter(m => m.facture && !m.valide && !m.dejaPayee).length;
 
   const stat = (lbl, val, col) => `<div style="text-align:center;padding:0 14px;">
       <div style="font-size:20px;font-weight:800;color:${col};">${val}</div>
@@ -14714,21 +14717,22 @@ function renderRappResults() {
   let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
     ${stat('Paiements', _rappPaiements.length, 'var(--navy)')}
     ${stat('Total reçu', _rappMoney(totDet) + ' CHF', 'var(--navy)')}
-    ${stat('Rattachés', nbRat, '#0d9488')}
-    ${stat('Validés', nbValide, '#15803d')}
+    ${stat('Reconnus', nbRat, '#0d9488')}
+    ${stat('Encaissés', nbEncaisse, '#15803d')}
     <div style="flex:1;"></div>
     <div style="font-size:11px;color:var(--g600);">Mode : <b>${_rappMode === 'auto' ? '⚡ Auto' : '✋ Manuel'}</b></div>
-    ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements rattachés restants">✓ Tout valider (${restant})</button>` : ''}
+    ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements reconnus restants">✓ Tout valider (${restant})</button>` : ''}
   </div>`;
 
-  const section = (titre, idxs, vide) => {
+  const section = (titre, idxs) => {
     if (!idxs.length) return '';
     return `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">${titre} (${idxs.length})</div>` +
       idxs.map(i => _rappRow(_rappMatches[i], i)).join('');
   };
-  html += section('✅ Reconnus par numéro de facture', parNum);
-  html += section('🟠 Rapprochés par montant + nom (à confirmer)', parMN);
+  html += section('✅ Reconnus par numéro — à encaisser', parNum);
+  html += section('🟢 Déjà encaissées (factures déjà payées)', deja);
   html += section('❓ Paiements non rattachés — à identifier', nonRat);
+  html += _rappBoxSansNumero();
 
   box.innerHTML = html;
 }
