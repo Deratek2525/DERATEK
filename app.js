@@ -14520,33 +14520,40 @@ function _rappUpdateTotalInfo() {
     el.innerHTML = '<span style="color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF (combinaison exacte introuvable)</span>';
 }
 
-// Sous-ensemble de montants (en centimes) dont la somme vaut exactement la cible.
-// Renvoie les index retenus, ou null si aucune combinaison exacte.
-function _subsetSum(vals, target) {
-  if (target < 0) return null;
-  const reach = new Uint8Array(target + 1); reach[0] = 1;
-  const fromItem = new Int32Array(target + 1).fill(-1);
-  const prevSum = new Int32Array(target + 1).fill(-1);
+// Sous-ensemble de montants (en centimes) dont la somme est la plus proche de la cible
+// (tolérance ± tol centimes, pour absorber une petite erreur d'OCR sur une ligne non reconnue).
+// Renvoie les index retenus, ou null si rien d'atteignable dans la fenêtre.
+function _subsetSumNear(vals, target, tol) {
+  const cap = target + tol;
+  const reach = new Uint8Array(cap + 1); reach[0] = 1;
+  const fromItem = new Int32Array(cap + 1).fill(-1);
+  const prevSum = new Int32Array(cap + 1).fill(-1);
   for (let k = 0; k < vals.length; k++) {
-    const v = vals[k]; if (v <= 0 || v > target) continue;
-    for (let s = target; s >= v; s--) {
+    const v = vals[k]; if (v <= 0 || v > cap) continue;
+    for (let s = cap; s >= v; s--) {
       if (!reach[s] && reach[s - v]) { reach[s] = 1; fromItem[s] = k; prevSum[s] = s - v; }
     }
   }
-  if (!reach[target]) return null;
-  const idxs = []; let s = target;
+  let best = -1;
+  for (let d = 0; d <= tol; d++) {
+    if (target - d >= 0 && reach[target - d]) { best = target - d; break; }
+    if (target + d <= cap && reach[target + d]) { best = target + d; break; }
+  }
+  if (best < 0) return null;
+  const idxs = []; let s = best;
   while (s > 0) { const k = fromItem[s]; if (k < 0) break; idxs.push(k); s = prevSum[s]; }
   return idxs;
 }
 
-// Applique la somme créditeur : garde uniquement les paiements qui la composent exactement.
+// Applique la somme créditeur : garde la combinaison de paiements qui compose ce total
+// (± 5 CHF de tolérance) et écarte le reste (probables débits).
 function _rappApplyTotal() {
   if (_rappTotalReleve == null) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
   const T = Math.round(_rappTotalReleve * 100);
   if (T > 8000000) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // trop grand pour le calcul
   const cents = _rappPaiementsAll.map(p => Math.round(p.montant * 100));
-  const idxs = _subsetSum(cents, T);
-  if (!idxs) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // pas de combinaison exacte → on garde tout
+  const idxs = _subsetSumNear(cents, T, 500);
+  if (!idxs) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
   const keep = new Set(idxs);
   _rappPaiements = _rappPaiementsAll.filter((p, i) => keep.has(i));
   _rappExclus = _rappPaiementsAll.filter((p, i) => !keep.has(i));
@@ -14599,6 +14606,7 @@ async function rappProcessFile(file) {
     if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
     _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
     _rappPaiementsAll = await rappExtractPaiements(texte);
+    _rappCorrigerMontants();
     _rappApplyTotal();
     if (!_rappPaiements.length) { _rappStatus(''); _rappMatches = []; renderRappResults(); toast('Aucun paiement entrant détecté dans ce relevé.', '#f4a623'); return; }
     rappMatch();
@@ -14656,6 +14664,8 @@ async function _rappExtractChunk(part) {
     "les montants SORTANTS (débits, paiements émis) sont dans la colonne de DROITE. " +
     "Tu ne dois retenir QUE les montants de la colonne de GAUCHE (crédits). " +
     "Ignore totalement la colonne de droite (débits/sorties), les frais bancaires et les lignes de solde/total/état de compte. " +
+    "Le MONTANT est celui de la transaction créditée : lis-le EXACTEMENT, centimes compris. " +
+    "Ne le confonds JAMAIS avec le solde du compte, ni avec les numéros de référence ou de communication (qui sont de longues suites de chiffres/lettres, ex. 60730775091.0355 ou une référence à 20+ caractères). " +
     "Pour chaque crédit : date (AAAA-MM-JJ si possible, sinon le texte), montant (nombre à point décimal, sans apostrophe de milliers), " +
     "libelle (texte complet : nom du payeur + communication), reference (numéro de facture ou communication si présent, sinon chaîne vide). " +
     "Réponds STRICTEMENT en JSON sans aucun texte autour : " +
@@ -14700,26 +14710,44 @@ function _rappFacturesOuvertes() {
   return (DB.documents || []).filter(d => d.type === 'facture' && (d.statut || '') !== 'payee' && !_isRappelDoc(d));
 }
 function _rappNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-function _rappNomMatch(clientNom, libelle) {
-  const c = _rappNorm(clientNom), l = _rappNorm(libelle);
-  if (!c || !l) return false;
-  if (l.indexOf(c) >= 0 || (c.length >= 6 && c.indexOf(l) >= 0)) return true;
-  const toks = String(clientNom || '').toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(t => t.length >= 4);
-  return toks.some(t => l.indexOf(_rappNorm(t)) >= 0);
+
+// Découpe la communication en « mots » (on garde les tirets pour F-2026-205),
+// puis en version canonique (lettres+chiffres) pour comparer à un numéro de facture.
+function _rappTokensCanon(s) {
+  return String(s || '').toLowerCase().split(/[^a-z0-9\-]+/)
+    .map(t => t.replace(/[^a-z0-9]/g, '')).filter(t => t.length >= 3);
+}
+
+// Retrouve la facture d'un paiement par correspondance EXACTE du numéro sur un mot entier
+// (évite de matcher un numéro caché au milieu d'une longue référence bancaire).
+function _rappTrouverFacture(p) {
+  const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
+  const toks = new Set(_rappTokensCanon((p.libelle || '') + ' ' + (p.reference || '')));
+  if (!toks.size) return null;
+  return factsAll.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && toks.has(num); }) || null;
+}
+
+// Corrige le montant lu par l'OCR : si le numéro de facture est reconnu, le montant
+// EXACT est celui de la facture (le relevé sert juste à identifier le payeur).
+function _rappCorrigerMontants() {
+  _rappPaiementsAll.forEach(p => {
+    if (p.montantLu == null) p.montantLu = p.montant;
+    const f = _rappTrouverFacture(p);
+    if (f) {
+      p._facId = f.id;
+      const ft = parseFloat(f.total) || 0;
+      if (ft > 0) { p.corrige = Math.abs(ft - p.montantLu) >= 0.05; p.montant = ft; }
+    } else { p._facId = null; p.montant = p.montantLu; p.corrige = false; }
+  });
 }
 
 function rappMatch() {
-  // Rapprochement UNIQUEMENT par numéro de facture (pas de devinette montant+nom).
-  // On cherche parmi TOUTES les factures (y compris déjà payées) pour pouvoir
-  // afficher en vert celles qui étaient déjà encaissées.
-  const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
+  // Rapprochement UNIQUEMENT par numéro de facture (mot entier). On regarde aussi
+  // les factures déjà payées pour les afficher en vert.
   _rappMatches = _rappPaiements.map(p => {
-    const hay = _rappNorm(p.libelle + ' ' + p.reference);
-    const hayDigits = (p.libelle + ' ' + p.reference).replace(/\D/g, '');
-    let fac = factsAll.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && hay.indexOf(num) >= 0; });
-    if (!fac) fac = factsAll.find(f => { const dg = String(f.numero || '').replace(/\D/g, ''); return dg.length >= 4 && hayDigits.indexOf(dg) >= 0; });
-    const dejaPayee = !!(fac && (fac.statut || '') === 'payee');
-    return { p, facture: fac || null, methode: fac ? 'numero' : '', dejaPayee, valide: dejaPayee };
+    const f = p._facId ? (DB.documents || []).find(d => d.id === p._facId) : _rappTrouverFacture(p);
+    const dejaPayee = !!(f && (f.statut || '') === 'payee');
+    return { p, facture: f || null, methode: f ? 'numero' : '', dejaPayee, valide: dejaPayee };
   });
 }
 
@@ -14770,8 +14798,7 @@ function _rappRow(m, i) {
       <div style="font-size:12px;color:#b45309;font-weight:700;min-width:150px;">❓ Aucune facture reconnue<br><span style="font-weight:400;">à pointer à la main</span></div>
     </div>`;
   }
-  const ecart = Math.abs((parseFloat(f.total) || 0) - p.montant);
-  const ecartTxt = ecart >= 0.05 ? `<div style="font-size:10px;color:#b45309;">écart ${_rappMoney(ecart)} CHF avec la facture</div>` : '';
+  const ecartTxt = p.corrige ? `<div style="font-size:10px;color:#b45309;">montant lu sur le relevé : ${_rappMoney(p.montantLu)} CHF → ajusté au montant exact de la facture</div>` : '';
   const vert = m.valide || m.dejaPayee;
   let action;
   if (m.dejaPayee) action = '<span style="font-size:12px;font-weight:800;color:#15803d;">✅ Déjà encaissée</span>';
