@@ -14670,9 +14670,7 @@ async function rappOcrAllPages(file) {
 async function rappExtractCreditsPositional(file) {
   const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const money = /^\d[\d'’ ]{0,12}[\.,]\d{2}$/;
-  let xC = null, xD = null, xV = null, xS = null;   // centres x des colonnes (en-tête)
-  const out = [];
+  let full = '';
   const n = Math.min(pdf.numPages, 30);
   for (let pn = 1; pn <= n; pn++) {
     _rappStatus('⏳ Lecture du relevé — page ' + pn + '/' + n + '…');
@@ -14680,59 +14678,44 @@ async function rappExtractCreditsPositional(file) {
     const tc = await page.getTextContent();
     const items = tc.items
       .filter(it => it.str && it.str.trim() !== '')
-      .map(it => ({ s: it.str.trim(), x: it.transform[4], y: it.transform[5], w: it.width || 0 }));
+      .map(it => ({ s: it.str.replace(/\s+/g, ' ').trim(), x: it.transform[4], y: it.transform[5] }));
     if (!items.length) continue;
+    // Reconstruit les lignes par position : regroupe par y, ordonne par x (= ordre des colonnes).
     items.sort((a, b) => (b.y - a.y) || (a.x - b.x));
-    // regroupe en lignes (même y, tolérance)
-    const lines = []; let cur = null;
+    let cur = null; const lines = [];
     for (const it of items) {
       if (!cur || Math.abs(it.y - cur.y) > 3) { cur = { y: it.y, its: [it] }; lines.push(cur); }
       else cur.its.push(it);
     }
-    lines.forEach(l => l.its.sort((a, b) => a.x - b.x));
-    // détecte l'en-tête des colonnes (une seule fois)
-    if (xC == null) {
-      for (const l of lines) {
-        const txt = l.its.map(i => i.s).join(' ');
-        if (/Cr[ée]dit/i.test(txt) && /D[ée]bit/i.test(txt) && /Solde/i.test(txt)) {
-          for (const it of l.its) {
-            const c = it.x + it.w / 2;
-            if (/^Cr[ée]dit$/i.test(it.s)) xC = c;
-            else if (/^D[ée]bit$/i.test(it.s)) xD = c;
-            else if (/^Valeur$/i.test(it.s)) xV = c;
-            else if (/^Solde$/i.test(it.s)) xS = c;
-          }
-          break;
-        }
-      }
-    }
-    if (xC == null) continue;   // pas de colonnes reconnues → repli IA
-    const cols = [['C', xC], ['D', xD], ['V', xV], ['S', xS]].filter(c => c[1] != null);
-    for (let li = 0; li < lines.length; li++) {
-      for (const it of lines[li].its) {
-        const norm = it.s.replace(/\s/g, ' ').trim();
-        if (!money.test(norm)) continue;
-        const cx = it.x + it.w / 2;
-        let best = cols[0];
-        for (const c of cols) if (Math.abs(cx - c[1]) < Math.abs(cx - best[1])) best = c;
-        if (best[0] !== 'C') continue;   // pas dans la colonne Crédit → ignoré
-        const val = parseFloat(norm.replace(/[’'\s]/g, '').replace(',', '.'));
-        if (!(val > 0)) continue;
-        // description = cette ligne + les 3 suivantes (nom du payeur + COMMUNICATIONS)
-        const desc = [];
-        for (let k = li; k < Math.min(li + 4, lines.length); k++) desc.push(lines[k].its.map(i => i.s).join(' '));
-        const dtxt = desc.join(' ').replace(/\s+/g, ' ').trim();
-        const dm = dtxt.match(/\b(\d{2})\.(\d{2})\.(\d{2})\b/);
-        out.push({
-          montant: val,
-          date: dm ? ('20' + dm[3] + '-' + dm[2] + '-' + dm[1]) : '',
-          libelle: dtxt.slice(0, 240),
-          reference: dtxt.slice(0, 240)
-        });
-      }
-    }
+    for (const l of lines) { l.its.sort((a, b) => a.x - b.x); full += l.its.map(i => i.s).join(' ') + '\n'; }
   }
-  return out;
+  return _rappParseCreditBlocks(full);
+}
+
+// Découpe le texte (colonnes reconstruites) en transactions via les mots-clés de type,
+// et ne garde que les blocs « CRÉDIT ». Le montant crédité = 1er montant du bloc (hors solde).
+// Les débits (ACHAT/CARTE/RETRAIT/DÉBIT) délimitent les blocs et sont donc ignorés.
+function _rappParseCreditBlocks(T) {
+  T = String(T || '').replace(/\r/g, '');
+  if (!/CR[ÉE]DIT/i.test(T)) return null;   // relevé non étiqueté → repli IA
+  const typeRe = /CR[ÉE]DIT|D[ÉE]BIT|ACHAT\s*\/\s*SERVICE|RETRAIT\s+D['’]ESP[ÈE]CES|ORDRE\s+DE\s+PAIEMENT|E-?DEPOSIT|BONIFICATION|ETAT\s+DE\s+COMPTE|VIREMENT/gi;
+  const marks = []; let m;
+  while ((m = typeRe.exec(T))) marks.push({ idx: m.index, type: m[0].toUpperCase() });
+  marks.push({ idx: T.length, type: 'END' });
+  const amtRe = /\d[\d'’ ]{0,12}[\.,]\d{2}/g;
+  const dateRe = /(\d{2})\.(\d{2})\.(\d{2})/;
+  const out = [];
+  for (let i = 0; i < marks.length - 1; i++) {
+    if (!/^CR[ÉE]DIT/.test(marks[i].type)) continue;
+    const block = T.slice(marks[i].idx, marks[i + 1].idx);
+    const amts = (block.match(amtRe) || []).map(s => parseFloat(s.replace(/[’'\s]/g, '').replace(',', '.')));
+    const cand = amts.filter(a => a > 0 && a < 50000);   // exclut le solde (≈ 100 000)
+    if (!cand.length) continue;
+    const dm = block.match(dateRe);
+    const txt = block.replace(/\s+/g, ' ').trim().slice(0, 240);
+    out.push({ montant: cand[0], date: dm ? ('20' + dm[3] + '-' + dm[2] + '-' + dm[1]) : '', libelle: txt, reference: txt });
+  }
+  return out.length >= 3 ? out : null;
 }
 
 // Découpe un long relevé en tranches (sur les sauts de ligne) pour n'oublier aucune ligne.
