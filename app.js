@@ -14549,15 +14549,22 @@ function _subsetSumNear(vals, target, tol) {
 // Applique la somme créditeur : garde la combinaison de paiements qui compose ce total
 // (± 5 CHF de tolérance) et écarte le reste (probables débits).
 function _rappApplyTotal() {
-  if (_rappTotalReleve == null) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
-  const T = Math.round(_rappTotalReleve * 100);
-  if (T > 8000000) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // trop grand pour le calcul
-  const cents = _rappPaiementsAll.map(p => Math.round((p.montantLu != null ? p.montantLu : p.montant) * 100));
-  const idxs = _subsetSumNear(cents, T, 500);
-  if (!idxs) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
+  const all = _rappPaiementsAll;
+  if (_rappTotalReleve == null) { _rappPaiements = all.slice(); _rappExclus = []; return; }
+  // Une facture RECONNUE est toujours conservée. Le calage sur le total ne sert qu'à
+  // trier les lignes NON reconnues (garder les crédits sans n°, écarter les débits).
+  const matched = all.filter(p => p._facId);
+  const unmatched = all.filter(p => !p._facId);
+  const sumMatched = matched.reduce((s, p) => s + (p.montant || 0), 0);
+  const reste = Math.round((_rappTotalReleve - sumMatched) * 100);
+  if (reste <= 0 || reste > 8000000) { _rappPaiements = all.slice(); _rappExclus = []; return; }
+  const cents = unmatched.map(p => Math.round((p.montantLu != null ? p.montantLu : p.montant) * 100));
+  const idxs = _subsetSumNear(cents, reste, 500);
+  if (!idxs) { _rappPaiements = all.slice(); _rappExclus = []; return; } // pas de tri fiable → on garde tout
   const keep = new Set(idxs);
-  _rappPaiements = _rappPaiementsAll.filter((p, i) => keep.has(i));
-  _rappExclus = _rappPaiementsAll.filter((p, i) => !keep.has(i));
+  const keptUn = unmatched.filter((p, i) => keep.has(i));
+  _rappExclus = unmatched.filter((p, i) => !keep.has(i));
+  _rappPaiements = matched.concat(keptUn);
 }
 
 function rappSetMode(m) {
@@ -14585,12 +14592,19 @@ async function rappProcessFile(file) {
   const name = (file.name || '').toLowerCase();
   try {
     let texte = '';
+    let credits = null;
     if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
-      _rappStatus('⏳ Lecture du relevé PDF…');
-      texte = await bonExtractText(file);
-      if (!texte || texte.length < 40) {
-        // Relevé scanné → OCR de TOUTES les pages (page par page, pour ne rien couper)
-        texte = await rappOcrAllPages(file);
+      _rappStatus('⏳ Lecture du relevé PDF (colonnes crédit/débit)…');
+      // 1) EXTRACTION POSITIONNELLE : on lit le PDF avec les coordonnées x/y pour ne
+      //    prendre QUE la colonne Crédit (les débits/cartes/retraits sont ignorés).
+      try { credits = await rappExtractCreditsPositional(file); } catch (e) { console.warn('positional', e); }
+      if (credits && credits.length >= 3) {
+        _rappPaiementsAll = credits;
+        _rappTexteBrut = credits.map(c => c.libelle).join('\n');
+      } else {
+        // 2) Repli : texte brut + IA (relevé sans colonnes détectables, ou scanné)
+        texte = await bonExtractText(file);
+        if (!texte || texte.length < 40) texte = await rappOcrAllPages(file);
       }
     } else if ((file.type || '').startsWith('image/')) {
       _rappStatus('🔍 Lecture de l\'image par l\'IA…');
@@ -14604,11 +14618,14 @@ async function rappProcessFile(file) {
       toast('Format non reconnu. Dépose un PDF, une image, ou un export CSV du relevé (Excel → « Enregistrer sous » CSV).', '#e63946');
       return;
     }
-    if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
-    _rappTexteBrut = texte;   // conservé pour retrouver les numéros de facture dans TOUT le relevé
-    _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
-    _rappPaiementsAll = await rappExtractPaiements(texte);
+    if (!(credits && credits.length >= 3)) {
+      if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
+      _rappTexteBrut = texte;
+      _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
+      _rappPaiementsAll = await rappExtractPaiements(texte);
+    }
     _rappPaiementsAll.forEach(p => { p.montantLu = p.montant; });
+    _rappMatchAll();
     _rappApplyTotal();
     if (!_rappPaiements.length) { _rappStatus(''); _rappMatches = []; renderRappResults(); toast('Aucun paiement entrant détecté dans ce relevé.', '#f4a623'); return; }
     rappMatch();
@@ -14644,6 +14661,78 @@ async function rappOcrAllPages(file) {
     try { out += (await bonOcrImages([img])) + '\n'; } catch (e) { console.warn('OCR page', p, e); }
   }
   return out.trim();
+}
+
+// EXTRACTION POSITIONNELLE des crédits d'un relevé à colonnes (type PostFinance).
+// On lit chaque bribe de texte avec sa position x/y : on repère la colonne « Crédit »
+// grâce à l'en-tête, et on ne retient QUE les montants de cette colonne. Les débits
+// (colonne de droite : achats carte, retraits, Apple Pay…) sont donc automatiquement ignorés.
+async function rappExtractCreditsPositional(file) {
+  const pdfjsLib = await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const money = /^\d[\d'’ ]{0,12}[\.,]\d{2}$/;
+  let xC = null, xD = null, xV = null, xS = null;   // centres x des colonnes (en-tête)
+  const out = [];
+  const n = Math.min(pdf.numPages, 30);
+  for (let pn = 1; pn <= n; pn++) {
+    _rappStatus('⏳ Lecture du relevé — page ' + pn + '/' + n + '…');
+    const page = await pdf.getPage(pn);
+    const tc = await page.getTextContent();
+    const items = tc.items
+      .filter(it => it.str && it.str.trim() !== '')
+      .map(it => ({ s: it.str.trim(), x: it.transform[4], y: it.transform[5], w: it.width || 0 }));
+    if (!items.length) continue;
+    items.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+    // regroupe en lignes (même y, tolérance)
+    const lines = []; let cur = null;
+    for (const it of items) {
+      if (!cur || Math.abs(it.y - cur.y) > 3) { cur = { y: it.y, its: [it] }; lines.push(cur); }
+      else cur.its.push(it);
+    }
+    lines.forEach(l => l.its.sort((a, b) => a.x - b.x));
+    // détecte l'en-tête des colonnes (une seule fois)
+    if (xC == null) {
+      for (const l of lines) {
+        const txt = l.its.map(i => i.s).join(' ');
+        if (/Cr[ée]dit/i.test(txt) && /D[ée]bit/i.test(txt) && /Solde/i.test(txt)) {
+          for (const it of l.its) {
+            const c = it.x + it.w / 2;
+            if (/^Cr[ée]dit$/i.test(it.s)) xC = c;
+            else if (/^D[ée]bit$/i.test(it.s)) xD = c;
+            else if (/^Valeur$/i.test(it.s)) xV = c;
+            else if (/^Solde$/i.test(it.s)) xS = c;
+          }
+          break;
+        }
+      }
+    }
+    if (xC == null) continue;   // pas de colonnes reconnues → repli IA
+    const cols = [['C', xC], ['D', xD], ['V', xV], ['S', xS]].filter(c => c[1] != null);
+    for (let li = 0; li < lines.length; li++) {
+      for (const it of lines[li].its) {
+        const norm = it.s.replace(/\s/g, ' ').trim();
+        if (!money.test(norm)) continue;
+        const cx = it.x + it.w / 2;
+        let best = cols[0];
+        for (const c of cols) if (Math.abs(cx - c[1]) < Math.abs(cx - best[1])) best = c;
+        if (best[0] !== 'C') continue;   // pas dans la colonne Crédit → ignoré
+        const val = parseFloat(norm.replace(/[’'\s]/g, '').replace(',', '.'));
+        if (!(val > 0)) continue;
+        // description = cette ligne + les 3 suivantes (nom du payeur + COMMUNICATIONS)
+        const desc = [];
+        for (let k = li; k < Math.min(li + 4, lines.length); k++) desc.push(lines[k].its.map(i => i.s).join(' '));
+        const dtxt = desc.join(' ').replace(/\s+/g, ' ').trim();
+        const dm = dtxt.match(/\b(\d{2})\.(\d{2})\.(\d{2})\b/);
+        out.push({
+          montant: val,
+          date: dm ? ('20' + dm[3] + '-' + dm[2] + '-' + dm[1]) : '',
+          libelle: dtxt.slice(0, 240),
+          reference: dtxt.slice(0, 240)
+        });
+      }
+    }
+  }
+  return out;
 }
 
 // Découpe un long relevé en tranches (sur les sauts de ligne) pour n'oublier aucune ligne.
@@ -14742,12 +14831,11 @@ function _rappFactureFromComm(p, factsAll, used) {
   return factsAll.find(f => !used.has(f.id) && _rappFactureDansCands(f, cands)) || null;
 }
 
-// Moteur de rapprochement : d'abord le numéro dans la communication du paiement,
-// sinon on cherche le numéro dans TOUT le texte du relevé et on l'associe par le montant.
-// (L'IA oublie parfois le numéro sur une ligne : le texte brut, lui, le contient.)
-function rappMatch() {
+// Associe CHAQUE paiement extrait à une facture (une seule fois par facture) :
+// 1) numéro dans la communication du paiement, 2) sinon numéro trouvé AILLEURS dans le
+// relevé + même montant. Stocke le résultat sur chaque paiement (p._facId, p.montant corrigé).
+function _rappMatchAll() {
   const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
-  // Factures dont le numéro apparaît QUELQUE PART dans le relevé, indexées par montant.
   const candsGlobal = _rappCandidats(_rappTexteBrut || '');
   const refByCents = new Map();
   factsAll.forEach(f => {
@@ -14757,11 +14845,9 @@ function rappMatch() {
     refByCents.get(c).push(f);
   });
   const used = new Set();
-  _rappMatches = _rappPaiements.map(p => {
+  _rappPaiementsAll.forEach(p => {
     if (p.montantLu == null) p.montantLu = p.montant;
-    // 1) numéro présent dans la communication du paiement (le plus fiable)
     let f = _rappFactureFromComm(p, factsAll, used);
-    // 2) sinon : facture référencée ailleurs dans le relevé, de même montant
     if (!f) {
       const c = Math.round((p.montantLu || 0) * 100);
       const q = refByCents.get(c);
@@ -14770,9 +14856,17 @@ function rappMatch() {
     if (f) {
       used.add(f.id);
       const ft = parseFloat(f.total) || 0;
+      p._facId = f.id;
       p.corrige = ft > 0 && Math.abs(ft - p.montantLu) >= 0.05;
       p.montant = ft > 0 ? ft : p.montantLu;
-    } else { p.montant = p.montantLu; p.corrige = false; }
+    } else { p._facId = null; p.montant = p.montantLu; p.corrige = false; }
+  });
+}
+
+// Construit l'affichage à partir des paiements retenus et de leur facture associée.
+function rappMatch() {
+  _rappMatches = _rappPaiements.map(p => {
+    const f = p._facId ? (DB.documents || []).find(d => d.id === p._facId) : null;
     const dejaPayee = !!(f && (f.statut || '') === 'payee');
     return { p, facture: f || null, methode: f ? 'numero' : '', dejaPayee, valide: dejaPayee };
   });
