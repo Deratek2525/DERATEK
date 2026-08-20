@@ -14596,7 +14596,10 @@ async function _rappExtractChunk(part) {
   const prompt =
     "Tu analyses un extrait de RELEVÉ BANCAIRE suisse (montants en CHF). " +
     "Extrais TOUS les paiements ENTRANTS (crédits, argent REÇU sur le compte) présents dans cet extrait, sans en oublier aucun. " +
-    "Ignore les débits, sorties, virements sortants, frais bancaires et les lignes de solde/total. " +
+    "TRÈS IMPORTANT — disposition des colonnes de ce relevé : les montants REÇUS (crédits) sont dans la colonne de GAUCHE ; " +
+    "les montants SORTANTS (débits, paiements émis) sont dans la colonne de DROITE. " +
+    "Tu ne dois retenir QUE les montants de la colonne de GAUCHE (crédits). " +
+    "Ignore totalement la colonne de droite (débits/sorties), les frais bancaires et les lignes de solde/total/état de compte. " +
     "Pour chaque crédit : date (AAAA-MM-JJ si possible, sinon le texte), montant (nombre à point décimal, sans apostrophe de milliers), " +
     "libelle (texte complet : nom du payeur + communication), reference (numéro de facture ou communication si présent, sinon chaîne vide). " +
     "Réponds STRICTEMENT en JSON sans aucun texte autour : " +
