@@ -14670,14 +14670,14 @@ async function rappExtractCreditsPositional(file) {
   const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
   let full = '';
-  const n = Math.min(pdf.numPages, 30);
+  const n = Math.min(pdf.numPages, 100);   // lecture texte peu coûteuse : ne pas tronquer un long relevé (ex. 32 pages)
   for (let pn = 1; pn <= n; pn++) {
     _rappStatus('⏳ Lecture du relevé — page ' + pn + '/' + n + '…');
     const page = await pdf.getPage(pn);
     const tc = await page.getTextContent();
     const items = tc.items
       .filter(it => it.str && it.str.trim() !== '')
-      .map(it => ({ s: it.str.replace(/\s+/g, ' ').trim(), x: it.transform[4], y: it.transform[5] }));
+      .map(it => ({ s: it.str.replace(/\s+/g, ' ').trim(), x: it.transform[4], y: it.transform[5], w: (typeof it.width === 'number' && it.width > 0) ? it.width : 0 }));
     if (!items.length) continue;
     // Reconstruit les lignes par position : regroupe par y, ordonne par x (= ordre des colonnes).
     items.sort((a, b) => (b.y - a.y) || (a.x - b.x));
@@ -14686,10 +14686,37 @@ async function rappExtractCreditsPositional(file) {
       if (!cur || Math.abs(it.y - cur.y) > 3) { cur = { y: it.y, its: [it] }; lines.push(cur); }
       else cur.its.push(it);
     }
-    for (const l of lines) { l.its.sort((a, b) => a.x - b.x); full += l.its.map(i => i.s).join(' ') + '\n'; }
+    // pdf.js renvoie souvent le texte CARACTÈRE PAR CARACTÈRE (chaque glyphe = un item).
+    // Un join(' ') donnerait « C R É D I T » : on recolle donc selon l'écart horizontal
+    // (voir _rappJoinRow) pour que « CRÉDIT » se reforme et que les colonnes restent séparées.
+    for (const l of lines) { l.its.sort((a, b) => a.x - b.x); full += _rappJoinRow(l.its) + '\n'; }
   }
   _rappTexteBrut = full;   // texte intégral → recherche des numéros de facture partout
   return _rappParseCreditBlocks(full);
+}
+
+// Recolle les items d'une ligne (triés par x) en mots, d'après l'écart horizontal :
+// - écart ≲ 1/3 de caractère → même mot, AUCUNE espace (recolle « C R É D I T » → « CRÉDIT ») ;
+// - écart moyen → une espace (mot suivant) ;
+// - grand écart (> ~4 caractères) → plusieurs espaces (changement de colonne du relevé).
+function _rappJoinRow(its) {
+  let out = '', prev = null, prevEnd = 0, charW = 5;
+  for (const it of its) {
+    // Largeur moyenne d'un caractère, lissée sur les items qui ont une largeur fiable.
+    const cw = (it.w > 0 && it.s.length) ? it.w / it.s.length : 0;
+    if (cw > 0.5) charW = prev ? (charW * 0.7 + cw * 0.3) : cw;
+    const w = it.w > 0 ? it.w : it.s.length * charW;   // largeur estimée si pdf.js ne la donne pas
+    if (prev) {
+      const gap = it.x - prevEnd;
+      if (gap > charW * 4) out += '   ';            // saut de colonne (Texte | Crédit | Débit…)
+      else if (gap > charW * 0.34) out += ' ';      // espace inter-mots
+      // sinon : glyphes contigus du même mot → on recolle sans espace
+    }
+    out += it.s;
+    prevEnd = it.x + w;
+    prev = it;
+  }
+  return out;
 }
 
 // Découpe le texte (colonnes reconstruites) en transactions via les mots-clés de type,
