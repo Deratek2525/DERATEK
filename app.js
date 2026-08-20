@@ -14489,6 +14489,13 @@ let _rappPaiements = [];   // crédits extraits : {date, montant, libelle, refer
 let _rappMatches   = [];   // {p, facture, methode, confiance, sansNumero, valide}
 let _rappMode      = 'manuel';
 let _rappFileName  = '';
+let _rappTotalReleve = null;   // total des crédits saisi par l'utilisateur (contrôle de concordance)
+
+function rappSetTotalReleve(v) {
+  const n = _rappParseMontant(v);
+  _rappTotalReleve = (v && !isNaN(n) && n > 0) ? n : null;
+  renderRappResults();
+}
 
 function rappSetMode(m) {
   _rappMode = (m === 'auto') ? 'auto' : 'manuel';
@@ -14511,16 +14518,16 @@ function _rappFileToDataUrl(file) { return new Promise((res, rej) => { const r =
 
 async function rappProcessFile(file) {
   _rappFileName = file.name || 'relevé';
+  _rappTotalReleve = null;
   const name = (file.name || '').toLowerCase();
   try {
     let texte = '';
     if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
       _rappStatus('⏳ Lecture du relevé PDF…');
       texte = await bonExtractText(file);
-      if (!texte || texte.length < 20) {
-        _rappStatus('🔍 Relevé scanné — lecture OCR par l\'IA…');
-        const imgs = await bonRenderToImages(file);
-        texte = await bonOcrImages(imgs);
+      if (!texte || texte.length < 40) {
+        // Relevé scanné → OCR de TOUTES les pages (page par page, pour ne rien couper)
+        texte = await rappOcrAllPages(file);
       }
     } else if ((file.type || '').startsWith('image/')) {
       _rappStatus('🔍 Lecture de l\'image par l\'IA…');
@@ -14553,33 +14560,80 @@ function _rappParseMontant(v) {
   return isNaN(n) ? 0 : n;
 }
 
-async function rappExtractPaiements(texte) {
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+// OCR de TOUTES les pages d'un PDF scanné, page par page (jusqu'à 25),
+// pour que rien ne soit tronqué sur un relevé de plusieurs pages.
+async function rappOcrAllPages(file) {
+  const pdfjsLib = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const n = Math.min(pdf.numPages, 25);
+  let out = '';
+  for (let p = 1; p <= n; p++) {
+    _rappStatus('🔍 Lecture OCR page ' + p + '/' + n + '…');
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 2 });
+    const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    const img = cv.toDataURL('image/jpeg', 0.85);
+    try { out += (await bonOcrImages([img])) + '\n'; } catch (e) { console.warn('OCR page', p, e); }
+  }
+  return out.trim();
+}
+
+// Découpe un long relevé en tranches (sur les sauts de ligne) pour n'oublier aucune ligne.
+function _rappChunk(text, size) {
+  const lines = String(text || '').split('\n');
+  const chunks = []; let cur = '';
+  for (const ln of lines) {
+    if (cur.length + ln.length + 1 > size && cur) { chunks.push(cur); cur = ''; }
+    cur += ln + '\n';
+  }
+  if (cur.trim()) chunks.push(cur);
+  return chunks.length ? chunks : [String(text || '')];
+}
+
+async function _rappExtractChunk(part) {
   const prompt =
-    "Tu analyses un RELEVÉ BANCAIRE suisse (montants en CHF). " +
-    "Extrais UNIQUEMENT les paiements ENTRANTS (crédits, argent REÇU sur le compte). " +
-    "Ignore les débits, sorties, virements sortants, frais bancaires et les lignes de solde. " +
-    "Pour chaque crédit, donne : date (AAAA-MM-JJ si possible, sinon le texte), montant (nombre à point décimal, sans apostrophe de milliers), " +
+    "Tu analyses un extrait de RELEVÉ BANCAIRE suisse (montants en CHF). " +
+    "Extrais TOUS les paiements ENTRANTS (crédits, argent REÇU sur le compte) présents dans cet extrait, sans en oublier aucun. " +
+    "Ignore les débits, sorties, virements sortants, frais bancaires et les lignes de solde/total. " +
+    "Pour chaque crédit : date (AAAA-MM-JJ si possible, sinon le texte), montant (nombre à point décimal, sans apostrophe de milliers), " +
     "libelle (texte complet : nom du payeur + communication), reference (numéro de facture ou communication si présent, sinon chaîne vide). " +
     "Réponds STRICTEMENT en JSON sans aucun texte autour : " +
-    "{\"paiements\":[{\"date\":\"\",\"montant\":0,\"libelle\":\"\",\"reference\":\"\"}]}\n\nRELEVÉ :\n" + String(texte).slice(0, 12000);
+    "{\"paiements\":[{\"date\":\"\",\"montant\":0,\"libelle\":\"\",\"reference\":\"\"}]}\n\nEXTRAIT :\n" + part;
   const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
-    body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 3000, messages: [{ role: 'user', content: prompt }] })
+    body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 5000, messages: [{ role: 'user', content: prompt }] })
   });
   if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(m); }
   const data = await resp.json();
   let txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '{}';
   let obj = {};
   try { obj = JSON.parse(txt); } catch (e) { const mm = txt.match(/\{[\s\S]*\}/); if (mm) { try { obj = JSON.parse(mm[0]); } catch (e2) {} } }
-  const arr = (obj.paiements || obj.payments || []).map(p => ({
+  return (obj.paiements || obj.payments || []).map(p => ({
     date: _isoFromAny(String(p.date || '')) || String(p.date || ''),
     montant: _rappParseMontant(p.montant),
     libelle: String(p.libelle || p.libellé || '').trim(),
     reference: String(p.reference || p.référence || p.ref || '').trim()
   })).filter(p => p.montant > 0);
-  return arr;
+}
+
+async function rappExtractPaiements(texte) {
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const chunks = _rappChunk(texte, 9000);
+  let all = [];
+  for (let k = 0; k < chunks.length; k++) {
+    if (chunks.length > 1) _rappStatus('🤖 Détection des paiements… (tranche ' + (k + 1) + '/' + chunks.length + ')');
+    try { all = all.concat(await _rappExtractChunk(chunks[k])); } catch (e) { console.warn('extract chunk', k, e); }
+  }
+  // Dédoublonnage (une même ligne peut se retrouver à cheval sur deux tranches)
+  const seen = new Set(); const out = [];
+  all.forEach(p => {
+    const key = (p.date || '') + '|' + p.montant.toFixed(2) + '|' + _rappNorm(p.libelle).slice(0, 24);
+    if (!seen.has(key)) { seen.add(key); out.push(p); }
+  });
+  return out;
 }
 
 // Factures encore ouvertes (non payées, hors rappels) — candidates au rapprochement
@@ -14720,6 +14774,13 @@ function renderRappResults() {
     ${stat('Reconnus', nbRat, '#0d9488')}
     ${stat('Encaissés', nbEncaisse, '#15803d')}
     <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--g600);">
+      <span title="Recopie ici le total des crédits (entrées) indiqué sur ton relevé pour vérifier que l'IA n'a rien oublié">Total crédits du relevé :</span>
+      <input type="text" value="${_rappTotalReleve != null ? _rappMoney(_rappTotalReleve) : ''}" placeholder="ex. 35102.64" onchange="rappSetTotalReleve(this.value)" style="width:92px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;text-align:right;">
+      ${_rappTotalReleve != null ? (Math.abs(_rappTotalReleve - totDet) < 0.05
+        ? '<span style="color:#15803d;font-weight:800;">✓ concorde</span>'
+        : '<span style="color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF</span>') : ''}
+    </div>
     <div style="font-size:11px;color:var(--g600);">Mode : <b>${_rappMode === 'auto' ? '⚡ Auto' : '✋ Manuel'}</b></div>
     ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements reconnus restants">✓ Tout valider (${restant})</button>` : ''}
   </div>`;
