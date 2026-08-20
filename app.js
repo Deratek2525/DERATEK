@@ -14599,8 +14599,7 @@ async function rappProcessFile(file) {
       //    prendre QUE la colonne Crédit (les débits/cartes/retraits sont ignorés).
       try { credits = await rappExtractCreditsPositional(file); } catch (e) { console.warn('positional', e); }
       if (credits && credits.length >= 3) {
-        _rappPaiementsAll = credits;
-        _rappTexteBrut = credits.map(c => c.libelle).join('\n');
+        _rappPaiementsAll = credits;   // _rappTexteBrut (texte intégral) déjà positionné par l'extracteur
       } else {
         // 2) Repli : texte brut + IA (relevé sans colonnes détectables, ou scanné)
         texte = await bonExtractText(file);
@@ -14689,6 +14688,7 @@ async function rappExtractCreditsPositional(file) {
     }
     for (const l of lines) { l.its.sort((a, b) => a.x - b.x); full += l.its.map(i => i.s).join(' ') + '\n'; }
   }
+  _rappTexteBrut = full;   // texte intégral → recherche des numéros de facture partout
   return _rappParseCreditBlocks(full);
 }
 
@@ -14712,8 +14712,9 @@ function _rappParseCreditBlocks(T) {
     const cand = amts.filter(a => a > 0 && a < 50000);   // exclut le solde (≈ 100 000)
     if (!cand.length) continue;
     const dm = block.match(dateRe);
-    const txt = block.replace(/\s+/g, ' ').trim().slice(0, 240);
-    out.push({ montant: cand[0], date: dm ? ('20' + dm[3] + '-' + dm[2] + '-' + dm[1]) : '', libelle: txt, reference: txt });
+    const clean = block.replace(/\s+/g, ' ').trim();
+    // reference = bloc complet (jusqu'à 600 car.) pour ne pas couper « COMMUNICATIONS: FACTURE … »
+    out.push({ montant: cand[0], date: dm ? ('20' + dm[3] + '-' + dm[2] + '-' + dm[1]) : '', libelle: clean.slice(0, 150), reference: clean.slice(0, 600) });
   }
   return out.length >= 3 ? out : null;
 }
