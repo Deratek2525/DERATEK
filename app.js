@@ -6664,6 +6664,63 @@ function duplicateDoc(id) {
   if (typeof renderDocuments === 'function') renderDocuments();
   toast('✓ ' + (copie.type === 'facture' ? 'Facture' : 'Devis') + ' dupliqué → ' + copie.numero, '#2d9e6b');
 }
+// Crée AUTOMATIQUEMENT un bon manuel depuis un devis : reprend gérance, propriétaire,
+// téléphone, gérant, locataire, adresse d'intervention, dates et informations
+// complémentaires (remarques du devis). Rattache le bon au devis pour la facturation.
+function createBonFromDevis(devisId) {
+  const d = (DB.documents || []).find(x => x.id === devisId);
+  if (!d) { toast('Devis introuvable', '#e63946'); return; }
+  // Déjà un bon rattaché ? on y va plutôt que de créer un doublon.
+  if (d.bonId) {
+    const ex = (DB.bons || []).find(b => b.id === d.bonId);
+    if (ex) {
+      if (confirm('Un bon est déjà lié à ce devis (n° ' + (ex.numero || '?') + ').\n\nAller sur ce bon existant ?')) goToBon(ex.id);
+      return;
+    }
+  }
+  // Fiche client (gérance) liée → source du téléphone, de l'e-mail et du nom du gérant.
+  const cli = d.clientId ? (DB.clients || []).find(c => c.id === d.clientId) : null;
+  const geranceNom = (cli && cli.nom) || d.clientNom || '';
+  const adresseGer = [
+    (d.clientAdresse || (cli && cli.adresse) || ''),
+    [(d.clientNpa || (cli && cli.npa) || ''), (d.clientVille || (cli && cli.ville) || '')].filter(Boolean).join(' ')
+  ].filter(Boolean).join(', ');
+  // Dates d'intervention éventuelles inscrites dans le devis.
+  const _dl = (d.lignes || []).find(l => _DOC_DATES_RE.test(String(l.desc || '')));
+  const dates = _dl ? String(_dl.desc).replace(_DOC_DATES_RE, '').split(',').map(x => _isoFromAny(x)).filter(Boolean) : [];
+  // Informations complémentaires = remarques du devis (marqueurs internes retirés).
+  const infosCompl = String(d.notes || '').replace(/\s*\[[^\]]*\]/g, '').trim();
+  const bon = {
+    id: newId(),
+    numero: _nextBonManuelNumero(),
+    date: (typeof today === 'function' ? today() : ''),
+    geranceId: (cli && cli.id) || d.clientId || '',
+    geranceNom: geranceNom,
+    gerantNom: (cli && _rapContactNom(cli.contact)) || '',
+    gerantTel: (cli && cli.tel) || '',
+    gerantEmail: (cli && cli.email) || '',
+    locataireId: d.locataireId || '',
+    locataireNom: d.locataireNom || '',
+    immeuble: d.locataireAdresse || adresseGer || '',
+    proprietaire: d.proprietaire || '',
+    probleme: ('Bon créé automatiquement depuis le devis ' + (d.numero || '') + (infosCompl ? '\n\n' + infosCompl : '')).trim(),
+    contactSurPlace: d.locataireNom || '',
+    concierge: '',
+    pdfPath: '',
+    createdAt: new Date().toISOString()
+  };
+  if (dates.length) _setBonDatesInterv(bon, dates);
+  const bons = DB.bons; bons.push(bon); DB.bons = bons;
+  // Rattache le devis au nouveau bon (→ bouton « Facturer le devis » directement sur le bon).
+  const docs = DB.documents; const dd = docs.find(x => x.id === devisId);
+  if (dd) { dd.bonId = bon.id; DB.documents = docs; }
+  if (typeof renderBons === 'function') renderBons();
+  if (typeof renderDocuments === 'function') renderDocuments();
+  if (typeof renderClients === 'function') renderClients();
+  if (typeof renderLocataires === 'function') renderLocataires();
+  toast('✓ Bon manuel créé depuis ' + (d.numero || 'le devis') + ' → ' + bon.numero, '#2d9e6b');
+  goToBon(bon.id);
+}
 function addDocLigne() { _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 function removeDocLigne(i) { _editingDoc.lignes.splice(i, 1); if (!_editingDoc.lignes.length) _editingDoc.lignes.push({ desc: '', qte: 1, prix: 0 }); renderDocEditor(); }
 // Colle du texte dans une désignation en retirant les marqueurs de gras ** (sinon ils s'affichent en astérisques)
@@ -7028,6 +7085,7 @@ function renderDocuments() {
             <option value="punaises">🛏️ Punaises de lit</option>
           </select>`:''}
           ${(() => { const _nd = _docDatesCount(d); return `<button class="btn btn-sm" onclick="openDocDatesModal('${d.id}')" title="Ajouter / modifier les dates d'intervention" style="font-weight:700;border:1.5px solid ${_nd?'#d97706':'#d1d5db'};background:${_nd?'#fffbeb':'#fff'};color:${_nd?'#b45309':'#6b7280'};">📅 Dates${_nd?' ('+_nd+')':''}</button>`; })()}
+          ${isDevis && !_bon?`<button class="btn btn-sm" onclick="createBonFromDevis('${d.id}')" title="Créer automatiquement un bon manuel reprenant gérance, propriétaire, téléphone, locataire, adresse, dates et remarques de ce devis" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📄 Créer bon</button>`:''}
           ${isDevis?`<button class="btn btn-ghost btn-sm" onclick="duplicateDoc('${d.id}')" title="Dupliquer ce devis (nouveau numéro attribué automatiquement)">⧉ Dupliquer</button>`:''}
           ${isDevis?`<button class="btn btn-navy btn-sm" onclick="convertDevisToFacture('${d.id}')" title="Convertir en facture (les dates d'intervention sont reprises automatiquement)">→ Facture</button>`:''}
           <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteDoc('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
