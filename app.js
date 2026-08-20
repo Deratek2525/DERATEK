@@ -14485,16 +14485,55 @@ function renderFournisseurs() {
 // retrouve les factures correspondantes → validation (auto ou manuel)
 // de l'encaissement (facture passée en « payée »).
 // ============================================================
-let _rappPaiements = [];   // crédits extraits : {date, montant, libelle, reference}
-let _rappMatches   = [];   // {p, facture, methode, confiance, sansNumero, valide}
+let _rappPaiementsAll = [];  // tous les paiements extraits (avant filtrage par total)
+let _rappPaiements = [];   // crédits retenus : {date, montant, libelle, reference}
+let _rappExclus    = [];   // lignes écartées (probables débits) grâce au total saisi
+let _rappMatches   = [];   // {p, facture, methode, dejaPayee, valide}
 let _rappMode      = 'manuel';
 let _rappFileName  = '';
-let _rappTotalReleve = null;   // total des crédits saisi par l'utilisateur (contrôle de concordance)
+let _rappTotalReleve = null;   // somme créditeur saisie par l'utilisateur
 
+// Recopie la somme créditeur du relevé → l'app retrouve la combinaison exacte de crédits
+// qui compose ce total et écarte les lignes en trop (débits mal lus).
 function rappSetTotalReleve(v) {
   const n = _rappParseMontant(v);
   _rappTotalReleve = (v && !isNaN(n) && n > 0) ? n : null;
+  _rappApplyTotal();
+  rappMatch();
+  if (_rappMode === 'auto') rappValiderAuto(false);
   renderRappResults();
+}
+
+// Sous-ensemble de montants (en centimes) dont la somme vaut exactement la cible.
+// Renvoie les index retenus, ou null si aucune combinaison exacte.
+function _subsetSum(vals, target) {
+  if (target < 0) return null;
+  const reach = new Uint8Array(target + 1); reach[0] = 1;
+  const fromItem = new Int32Array(target + 1).fill(-1);
+  const prevSum = new Int32Array(target + 1).fill(-1);
+  for (let k = 0; k < vals.length; k++) {
+    const v = vals[k]; if (v <= 0 || v > target) continue;
+    for (let s = target; s >= v; s--) {
+      if (!reach[s] && reach[s - v]) { reach[s] = 1; fromItem[s] = k; prevSum[s] = s - v; }
+    }
+  }
+  if (!reach[target]) return null;
+  const idxs = []; let s = target;
+  while (s > 0) { const k = fromItem[s]; if (k < 0) break; idxs.push(k); s = prevSum[s]; }
+  return idxs;
+}
+
+// Applique la somme créditeur : garde uniquement les paiements qui la composent exactement.
+function _rappApplyTotal() {
+  if (_rappTotalReleve == null) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
+  const T = Math.round(_rappTotalReleve * 100);
+  if (T > 8000000) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // trop grand pour le calcul
+  const cents = _rappPaiementsAll.map(p => Math.round(p.montant * 100));
+  const idxs = _subsetSum(cents, T);
+  if (!idxs) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // pas de combinaison exacte → on garde tout
+  const keep = new Set(idxs);
+  _rappPaiements = _rappPaiementsAll.filter((p, i) => keep.has(i));
+  _rappExclus = _rappPaiementsAll.filter((p, i) => !keep.has(i));
 }
 
 function rappSetMode(m) {
@@ -14543,7 +14582,8 @@ async function rappProcessFile(file) {
     }
     if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
     _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
-    _rappPaiements = await rappExtractPaiements(texte);
+    _rappPaiementsAll = await rappExtractPaiements(texte);
+    _rappApplyTotal();
     if (!_rappPaiements.length) { _rappStatus(''); _rappMatches = []; renderRappResults(); toast('Aucun paiement entrant détecté dans ce relevé.', '#f4a623'); return; }
     rappMatch();
     _rappStatus('');
@@ -14777,16 +14817,24 @@ function renderRappResults() {
     ${stat('Reconnus', nbRat, '#0d9488')}
     ${stat('Encaissés', nbEncaisse, '#15803d')}
     <div style="flex:1;"></div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--g600);">
-      <span title="Recopie ici le total des crédits (entrées) indiqué sur ton relevé pour vérifier que l'IA n'a rien oublié">Total crédits du relevé :</span>
-      <input type="text" value="${_rappTotalReleve != null ? _rappMoney(_rappTotalReleve) : ''}" placeholder="ex. 35102.64" onchange="rappSetTotalReleve(this.value)" style="width:92px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;text-align:right;">
-      ${_rappTotalReleve != null ? (Math.abs(_rappTotalReleve - totDet) < 0.05
-        ? '<span style="color:#15803d;font-weight:800;">✓ concorde</span>'
-        : '<span style="color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF</span>') : ''}
-    </div>
     <div style="font-size:11px;color:var(--g600);">Mode : <b>${_rappMode === 'auto' ? '⚡ Auto' : '✋ Manuel'}</b></div>
     ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements reconnus restants">✓ Tout valider (${restant})</button>` : ''}
   </div>`;
+
+  // Encadré : somme créditeur du relevé → retrouve la combinaison exacte
+  const concord = _rappTotalReleve != null && Math.abs(_rappTotalReleve - totDet) < 0.05;
+  html = `<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:800;color:#1d4ed8;">🎯 Somme créditeur du relevé (colonne de gauche)</div>
+      <input type="text" value="${_rappTotalReleve != null ? _rappMoney(_rappTotalReleve) : ''}" placeholder="ex. 35102.64" onchange="rappSetTotalReleve(this.value)" style="width:120px;padding:7px 9px;border:1.5px solid #60a5fa;border-radius:8px;font-size:14px;font-weight:800;text-align:right;color:#1e3a8a;">
+      <span style="font-size:12px;color:#1e40af;">CHF</span>
+      ${_rappTotalReleve != null ? (concord
+        ? '<span style="font-size:12px;color:#15803d;font-weight:800;">✓ Total détecté concordant</span>'
+        : '<span style="font-size:12px;color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF — combinaison exacte introuvable, vérifie une ligne</span>') : ''}
+      <div style="flex:1;min-width:120px;"></div>
+      <span style="font-size:11px;color:#3b82f6;max-width:280px;">Saisis le total des entrées : l'app ne garde que les montants qui le composent et écarte les débits mal lus.</span>
+    </div>` +
+    (_rappExclus.length ? `<div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--g600);">↩️ ${_rappExclus.length} ligne(s) écartée(s) automatiquement (probables débits / colonne de droite) : ${_rappExclus.map(p => _escapeHtml((p.libelle || '').slice(0, 28)) + ' (' + _rappMoney(p.montant) + ')').join(' · ')}</div>` : '') +
+    html;
 
   const section = (titre, idxs) => {
     if (!idxs.length) return '';
