@@ -14491,6 +14491,7 @@ let _rappExclus    = [];   // lignes écartées (probables débits) grâce au to
 let _rappMatches   = [];   // {p, facture, methode, dejaPayee, valide}
 let _rappMode      = 'manuel';
 let _rappFileName  = '';
+let _rappTexteBrut = '';       // texte intégral du relevé (pour retrouver les n° partout)
 let _rappTotalReleve = null;   // somme créditeur saisie par l'utilisateur
 
 // Recopie la somme créditeur du relevé → l'app retrouve la combinaison exacte de crédits
@@ -14551,7 +14552,7 @@ function _rappApplyTotal() {
   if (_rappTotalReleve == null) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
   const T = Math.round(_rappTotalReleve * 100);
   if (T > 8000000) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; } // trop grand pour le calcul
-  const cents = _rappPaiementsAll.map(p => Math.round(p.montant * 100));
+  const cents = _rappPaiementsAll.map(p => Math.round((p.montantLu != null ? p.montantLu : p.montant) * 100));
   const idxs = _subsetSumNear(cents, T, 500);
   if (!idxs) { _rappPaiements = _rappPaiementsAll.slice(); _rappExclus = []; return; }
   const keep = new Set(idxs);
@@ -14604,9 +14605,10 @@ async function rappProcessFile(file) {
       return;
     }
     if (!texte || texte.trim().length < 10) { _rappStatus(''); toast('Relevé illisible — essaie un PDF plus net ou un export CSV.', '#e63946'); return; }
+    _rappTexteBrut = texte;   // conservé pour retrouver les numéros de facture dans TOUT le relevé
     _rappStatus('🤖 Détection des paiements entrants par l\'IA…');
     _rappPaiementsAll = await rappExtractPaiements(texte);
-    _rappCorrigerMontants();
+    _rappPaiementsAll.forEach(p => { p.montantLu = p.montant; });
     _rappApplyTotal();
     if (!_rappPaiements.length) { _rappStatus(''); _rappMatches = []; renderRappResults(); toast('Aucun paiement entrant détecté dans ce relevé.', '#f4a623'); return; }
     rappMatch();
@@ -14725,39 +14727,52 @@ function _rappCandidats(s) {
   return set;
 }
 
-// Retrouve la facture d'un paiement par correspondance EXACTE du numéro sur un mot (ou
-// groupe de mots) entier — jamais un numéro caché au milieu d'une longue référence.
-function _rappTrouverFacture(p) {
-  const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
+// Une facture correspond-elle à un ensemble de candidats numéro ?
+function _rappFactureDansCands(f, cands) {
+  const num = _rappNorm(f.numero); if (num.length < 3) return false;
+  if (cands.has(num)) return true;                 // ex. « f2026167 » ou « 25137 »
+  const digits = num.replace(/^[a-z]+/, '');        // « f2026167 » → « 2026167 » (payeur sans le F)
+  return digits.length >= 4 && cands.has(digits);
+}
+
+// Retrouve la facture d'après la communication PROPRE au paiement (précis).
+function _rappFactureFromComm(p, factsAll, used) {
   const cands = _rappCandidats((p.libelle || '') + ' ' + (p.reference || ''));
   if (!cands.size) return null;
-  return factsAll.find(f => {
-    const num = _rappNorm(f.numero); if (num.length < 3) return false;
-    if (cands.has(num)) return true;                 // ex. « f2026167 » ou « 25137 »
-    const digits = num.replace(/^[a-z]+/, '');        // « f2026167 » → « 2026167 » (payeur sans le F)
-    return digits.length >= 4 && cands.has(digits);
-  }) || null;
+  return factsAll.find(f => !used.has(f.id) && _rappFactureDansCands(f, cands)) || null;
 }
 
-// Corrige le montant lu par l'OCR : si le numéro de facture est reconnu, le montant
-// EXACT est celui de la facture (le relevé sert juste à identifier le payeur).
-function _rappCorrigerMontants() {
-  _rappPaiementsAll.forEach(p => {
-    if (p.montantLu == null) p.montantLu = p.montant;
-    const f = _rappTrouverFacture(p);
-    if (f) {
-      p._facId = f.id;
-      const ft = parseFloat(f.total) || 0;
-      if (ft > 0) { p.corrige = Math.abs(ft - p.montantLu) >= 0.05; p.montant = ft; }
-    } else { p._facId = null; p.montant = p.montantLu; p.corrige = false; }
-  });
-}
-
+// Moteur de rapprochement : d'abord le numéro dans la communication du paiement,
+// sinon on cherche le numéro dans TOUT le texte du relevé et on l'associe par le montant.
+// (L'IA oublie parfois le numéro sur une ligne : le texte brut, lui, le contient.)
 function rappMatch() {
-  // Rapprochement UNIQUEMENT par numéro de facture (mot entier). On regarde aussi
-  // les factures déjà payées pour les afficher en vert.
+  const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
+  // Factures dont le numéro apparaît QUELQUE PART dans le relevé, indexées par montant.
+  const candsGlobal = _rappCandidats(_rappTexteBrut || '');
+  const refByCents = new Map();
+  factsAll.forEach(f => {
+    if (!_rappFactureDansCands(f, candsGlobal)) return;
+    const c = Math.round((parseFloat(f.total) || 0) * 100);
+    if (!refByCents.has(c)) refByCents.set(c, []);
+    refByCents.get(c).push(f);
+  });
+  const used = new Set();
   _rappMatches = _rappPaiements.map(p => {
-    const f = p._facId ? (DB.documents || []).find(d => d.id === p._facId) : _rappTrouverFacture(p);
+    if (p.montantLu == null) p.montantLu = p.montant;
+    // 1) numéro présent dans la communication du paiement (le plus fiable)
+    let f = _rappFactureFromComm(p, factsAll, used);
+    // 2) sinon : facture référencée ailleurs dans le relevé, de même montant
+    if (!f) {
+      const c = Math.round((p.montantLu || 0) * 100);
+      const q = refByCents.get(c);
+      if (q) { for (let x = 0; x < q.length; x++) { if (!used.has(q[x].id)) { f = q[x]; break; } } }
+    }
+    if (f) {
+      used.add(f.id);
+      const ft = parseFloat(f.total) || 0;
+      p.corrige = ft > 0 && Math.abs(ft - p.montantLu) >= 0.05;
+      p.montant = ft > 0 ? ft : p.montantLu;
+    } else { p.montant = p.montantLu; p.corrige = false; }
     const dejaPayee = !!(f && (f.statut || '') === 'payee');
     return { p, facture: f || null, methode: f ? 'numero' : '', dejaPayee, valide: dejaPayee };
   });
