@@ -14711,20 +14711,32 @@ function _rappFacturesOuvertes() {
 }
 function _rappNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
-// Découpe la communication en « mots » (on garde les tirets pour F-2026-205),
-// puis en version canonique (lettres+chiffres) pour comparer à un numéro de facture.
-function _rappTokensCanon(s) {
-  return String(s || '').toLowerCase().split(/[^a-z0-9\-]+/)
-    .map(t => t.replace(/[^a-z0-9]/g, '')).filter(t => t.length >= 3);
+// Construit l'ensemble des « candidats numéro » d'une communication : chaque mot,
+// mais aussi la concaténation de 2-3 mots voisins (pour « F 2026 167 » → « f2026167 »,
+// ou « 2026 167 » → « 2026167 »). Formats gérés : F-2026-167, 25137, avec ou sans espaces/tirets.
+function _rappCandidats(s) {
+  const toks = String(s || '').toLowerCase().split(/[^a-z0-9\-]+/)
+    .map(t => t.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  const set = new Set();
+  for (let i = 0; i < toks.length; i++) {
+    let acc = '';
+    for (let j = i; j < i + 3 && j < toks.length; j++) { acc += toks[j]; if (acc.length >= 3) set.add(acc); }
+  }
+  return set;
 }
 
-// Retrouve la facture d'un paiement par correspondance EXACTE du numéro sur un mot entier
-// (évite de matcher un numéro caché au milieu d'une longue référence bancaire).
+// Retrouve la facture d'un paiement par correspondance EXACTE du numéro sur un mot (ou
+// groupe de mots) entier — jamais un numéro caché au milieu d'une longue référence.
 function _rappTrouverFacture(p) {
   const factsAll = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d));
-  const toks = new Set(_rappTokensCanon((p.libelle || '') + ' ' + (p.reference || '')));
-  if (!toks.size) return null;
-  return factsAll.find(f => { const num = _rappNorm(f.numero); return num.length >= 3 && toks.has(num); }) || null;
+  const cands = _rappCandidats((p.libelle || '') + ' ' + (p.reference || ''));
+  if (!cands.size) return null;
+  return factsAll.find(f => {
+    const num = _rappNorm(f.numero); if (num.length < 3) return false;
+    if (cands.has(num)) return true;                 // ex. « f2026167 » ou « 25137 »
+    const digits = num.replace(/^[a-z]+/, '');        // « f2026167 » → « 2026167 » (payeur sans le F)
+    return digits.length >= 4 && cands.has(digits);
+  }) || null;
 }
 
 // Corrige le montant lu par l'OCR : si le numéro de facture est reconnu, le montant
