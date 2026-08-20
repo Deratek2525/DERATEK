@@ -1563,13 +1563,22 @@ function _c360Match(c, obj, idField, nameField) {
 }
 function openClient360(id) {
   const c = (DB.clients || []).find(x => x.id === id); if (!c) { toast('Client introuvable', '#e63946'); return; }
-  const bons  = (DB.bons || []).filter(b => _c360Match(c, b, 'geranceId', 'geranceNom'));
-  const devis = (DB.documents || []).filter(d => (d.type || 'devis') === 'devis' && !_isRappelDoc(d) && !_docIsArchive(d) && !_isDevisArchivedWithFacture(d) && _c360Match(c, d, 'clientId', 'clientNom'));
-  const facts = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d) && _c360Match(c, d, 'clientId', 'clientNom'));
-  const raps  = (DB.rapports || []).filter(r => _c360Match(c, r, 'clientId', 'clientNom') && !_isRapportFactArchived(r));
-  const diags = (DB.diagnostics || []).filter(d => _c360Match(c, d, 'clientId', 'clientNom'));
-  const conts = (DB.contrats || []).filter(x => _c360Match(c, x, 'clientId', 'clientNom'));
-  const locs  = (DB.locataires || []).filter(l => l.clientId === c.id);
+  // CONSOLIDATION PAR GÉRANCE : comme il y a une carte par gérant, on regroupe TOUTES les fiches
+  // de la même gérance (nom canonique — ex. « CPCN » = « Gérance CPCN »). Un particulier reste seul.
+  const _canon = _geranceCanon(c.nom);
+  const _groupCards = (DB.clients || []).filter(x => _geranceCanon(x.nom) === _canon);
+  const _groupIds = new Set(_groupCards.map(x => x.id));
+  const _gmatch = (obj, idField, nameField) =>
+    (obj[idField] && _groupIds.has(obj[idField])) ||
+    (obj[nameField] && _geranceCanon(obj[nameField]) === _canon);
+
+  const bons  = (DB.bons || []).filter(b => _gmatch(b, 'geranceId', 'geranceNom'));
+  const devis = (DB.documents || []).filter(d => (d.type || 'devis') === 'devis' && !_isRappelDoc(d) && !_docIsArchive(d) && !_isDevisArchivedWithFacture(d) && _gmatch(d, 'clientId', 'clientNom'));
+  const facts = (DB.documents || []).filter(d => d.type === 'facture' && !_isRappelDoc(d) && _gmatch(d, 'clientId', 'clientNom'));
+  const raps  = (DB.rapports || []).filter(r => _gmatch(r, 'clientId', 'clientNom') && !_isRapportFactArchived(r));
+  const diags = (DB.diagnostics || []).filter(d => _gmatch(d, 'clientId', 'clientNom'));
+  const conts = (DB.contrats || []).filter(x => _gmatch(x, 'clientId', 'clientNom'));
+  const locs  = (DB.locataires || []).filter(l => _groupIds.has(l.clientId));
 
   const _num = v => parseFloat(v) || 0;
   const encaisse = facts.filter(f => f.statut === 'payee').reduce((s, f) => s + _num(f.total), 0);
@@ -1599,10 +1608,11 @@ function openClient360(id) {
   modal.innerHTML = `
     <div class="modal" style="max-width:820px;">
       <div class="modal-hd">
-        <span class="modal-title">📋 Fiche complète — ${esc(c.nom)}</span>
+        <span class="modal-title">📋 Fiche complète — ${esc(_groupCards.length > 1 ? _canon : c.nom)}</span>
         <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-client360')">✕</button>
       </div>
       <div class="modal-body" style="max-height:74vh;overflow:auto;">
+        ${_groupCards.length > 1 ? `<div style="font-size:11px;font-weight:700;color:#3730a3;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:6px 10px;margin-bottom:8px;">👥 Vue consolidée de toute la gérance — ${_groupCards.length} fiches gérant regroupées : ${_groupCards.map(x => esc(_rapContactNom(x.contact) || x.nom)).join(', ')}</div>` : ''}
         <div style="font-size:12px;color:var(--g600);margin-bottom:10px;">
           ${esc(c.type || '')}${c.contact ? ' · 👤 ' + esc(_rapContactNom(c.contact)) : ''}${c.tel ? ' · 📞 ' + esc(c.tel) : ''}${c.email ? ' · ✉️ ' + esc(c.email) : ''}
           ${(c.adresse || c.ville) ? '<br>📍 ' + esc([c.adresse, [c.npa, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')) : ''}
