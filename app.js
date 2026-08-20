@@ -14502,6 +14502,22 @@ function rappSetTotalReleve(v) {
   rappMatch();
   if (_rappMode === 'auto') rappValiderAuto(false);
   renderRappResults();
+  _rappUpdateTotalInfo();
+}
+
+// Met à jour l'indicateur de concordance à côté du champ « Somme créditeur »
+function _rappUpdateTotalInfo() {
+  const el = $('rapp-total-info'); if (!el) return;
+  const inp = $('rapp-total-input');
+  if (inp && document.activeElement !== inp) inp.value = (_rappTotalReleve != null ? _rappMoney(_rappTotalReleve) : '');
+  if (_rappTotalReleve == null) { el.innerHTML = ''; return; }
+  const totDet = _rappPaiements.reduce((s, p) => s + p.montant, 0);
+  if (Math.abs(_rappTotalReleve - totDet) < 0.05)
+    el.innerHTML = '<span style="color:#15803d;font-weight:800;">✓ concordant' + (_rappExclus.length ? (' — ' + _rappExclus.length + ' débit(s) écarté(s)') : '') + '</span>';
+  else if (!_rappPaiementsAll.length)
+    el.innerHTML = '<span style="color:#1e40af;">enregistré — glisse ton relevé</span>';
+  else
+    el.innerHTML = '<span style="color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF (combinaison exacte introuvable)</span>';
 }
 
 // Sous-ensemble de montants (en centimes) dont la somme vaut exactement la cible.
@@ -14557,7 +14573,7 @@ function _rappFileToDataUrl(file) { return new Promise((res, rej) => { const r =
 
 async function rappProcessFile(file) {
   _rappFileName = file.name || 'relevé';
-  _rappTotalReleve = null;
+  // On NE réinitialise PAS _rappTotalReleve : l'utilisateur peut l'avoir saisi avant de glisser le relevé.
   const name = (file.name || '').toLowerCase();
   try {
     let texte = '';
@@ -14798,6 +14814,7 @@ function renderRappResults() {
   if (!_rappMatches.length) {
     box.innerHTML = _rappBoxSansNumero() +
       `<div style="text-align:center;color:var(--g500);padding:26px 10px;">Dépose un relevé bancaire pour détecter les paiements reçus et valider les encaissements.</div>`;
+    _rappUpdateTotalInfo();
     return;
   }
   const parNum = [], deja = [], nonRat = [];
@@ -14821,20 +14838,10 @@ function renderRappResults() {
     ${restant ? `<button class="btn btn-navy btn-sm" onclick="rappValiderTous()" title="Valider tous les encaissements reconnus restants">✓ Tout valider (${restant})</button>` : ''}
   </div>`;
 
-  // Encadré : somme créditeur du relevé → retrouve la combinaison exacte
-  const concord = _rappTotalReleve != null && Math.abs(_rappTotalReleve - totDet) < 0.05;
-  html = `<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div style="font-size:13px;font-weight:800;color:#1d4ed8;">🎯 Somme créditeur du relevé (colonne de gauche)</div>
-      <input type="text" value="${_rappTotalReleve != null ? _rappMoney(_rappTotalReleve) : ''}" placeholder="ex. 35102.64" onchange="rappSetTotalReleve(this.value)" style="width:120px;padding:7px 9px;border:1.5px solid #60a5fa;border-radius:8px;font-size:14px;font-weight:800;text-align:right;color:#1e3a8a;">
-      <span style="font-size:12px;color:#1e40af;">CHF</span>
-      ${_rappTotalReleve != null ? (concord
-        ? '<span style="font-size:12px;color:#15803d;font-weight:800;">✓ Total détecté concordant</span>'
-        : '<span style="font-size:12px;color:#dc2626;font-weight:800;">écart ' + _rappMoney(Math.abs(_rappTotalReleve - totDet)) + ' CHF — combinaison exacte introuvable, vérifie une ligne</span>') : ''}
-      <div style="flex:1;min-width:120px;"></div>
-      <span style="font-size:11px;color:#3b82f6;max-width:280px;">Saisis le total des entrées : l'app ne garde que les montants qui le composent et écarte les débits mal lus.</span>
-    </div>` +
-    (_rappExclus.length ? `<div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--g600);">↩️ ${_rappExclus.length} ligne(s) écartée(s) automatiquement (probables débits / colonne de droite) : ${_rappExclus.map(p => _escapeHtml((p.libelle || '').slice(0, 28)) + ' (' + _rappMoney(p.montant) + ')').join(' · ')}</div>` : '') +
-    html;
+  // Note des lignes écartées automatiquement grâce au total saisi
+  if (_rappExclus.length) {
+    html = `<div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--g600);">↩️ ${_rappExclus.length} ligne(s) écartée(s) automatiquement (probables débits / colonne de droite) : ${_rappExclus.map(p => _escapeHtml((p.libelle || '').slice(0, 28)) + ' (' + _rappMoney(p.montant) + ')').join(' · ')}</div>` + html;
+  }
 
   const section = (titre, idxs) => {
     if (!idxs.length) return '';
@@ -14847,4 +14854,5 @@ function renderRappResults() {
   html += _rappBoxSansNumero();
 
   box.innerHTML = html;
+  _rappUpdateTotalInfo();
 }

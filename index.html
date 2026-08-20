@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260612bj">
+<link rel="stylesheet" href="./style.css?v=20260612bk">
 </head>
 <body>
 
@@ -1321,6 +1321,15 @@
       </div>
     </div>
     <div class="page-body">
+      <div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:800;color:#1d4ed8;">🎯 Somme créditeur du relevé (colonne de gauche)</div>
+        <input id="rapp-total-input" type="text" placeholder="ex. 35102.64" onchange="rappSetTotalReleve(this.value)"
+               style="width:130px;padding:8px 10px;border:1.5px solid #60a5fa;border-radius:8px;font-size:15px;font-weight:800;text-align:right;color:#1e3a8a;">
+        <span style="font-size:12px;color:#1e40af;">CHF</span>
+        <span id="rapp-total-info" style="font-size:12px;"></span>
+        <div style="flex:1;min-width:100px;"></div>
+        <span style="font-size:11px;color:#3b82f6;max-width:340px;">Saisis le total des entrées <b>avant</b> de glisser le relevé : l'app ne gardera que les montants qui composent exactement ce total et écartera les débits mal lus.</span>
+      </div>
       <div id="rapp-dropzone" class="bon-dropzone"
            onclick="document.getElementById('rapp-file-input').click()"
            ondragover="event.preventDefault();this.classList.add('drag')"
@@ -1487,16 +1496,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260612bj"></script>
+  <script src="./fonts_arial.js?v=20260612bk"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260612bj"></script>
-<script src="./footer_prestations.js?v=20260612bj"></script>
-<script src="./config.js?v=20260612bj"></script>
-<script src="./app.js?v=20260612bj"></script>
-<script src="./pdf.js?v=20260612bj"></script>
+<script src="./logo.js?v=20260612bk"></script>
+<script src="./footer_prestations.js?v=20260612bk"></script>
+<script src="./config.js?v=20260612bk"></script>
+<script src="./app.js?v=20260612bk"></script>
+<script src="./pdf.js?v=20260612bk"></script>
 
 </body></html>
