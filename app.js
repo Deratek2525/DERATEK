@@ -14816,6 +14816,8 @@ function _rappNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/
 // Construit l'ensemble des « candidats numéro » d'une communication : chaque mot,
 // mais aussi la concaténation de 2-3 mots voisins (pour « F 2026 167 » → « f2026167 »,
 // ou « 2026 167 » → « 2026167 »). Formats gérés : F-2026-167, 25137, avec ou sans espaces/tirets.
+// Gère aussi les préfixes collés au numéro : « NO37026 », « N°37026 », « FACTURE37026 »
+// → ajoute la partie chiffres seule (« 37026 ») comme candidat.
 function _rappCandidats(s) {
   const toks = String(s || '').toLowerCase().split(/[^a-z0-9\-]+/)
     .map(t => t.replace(/[^a-z0-9]/g, '')).filter(Boolean);
@@ -14823,6 +14825,8 @@ function _rappCandidats(s) {
   for (let i = 0; i < toks.length; i++) {
     let acc = '';
     for (let j = i; j < i + 3 && j < toks.length; j++) { acc += toks[j]; if (acc.length >= 3) set.add(acc); }
+    const d = toks[i].replace(/^[a-z]+/, '');          // « no37026 » → « 37026 »
+    if (d !== toks[i] && d.length >= 4) set.add(d);
   }
   return set;
 }
