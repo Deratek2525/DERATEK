@@ -14850,14 +14850,19 @@ function _rappFactureParMontantNom(p, factsAll, used) {
   const lib = String((p.libelle || '') + ' ' + (p.reference || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const cents = Math.round(((p.montantLu != null ? p.montantLu : p.montant) || 0) * 100);
   if (!cents) return null;
-  return factsAll.find(f => {
-    if (used.has(f.id)) return false;
-    if (Math.round((parseFloat(f.total) || 0) * 100) !== cents) return false;
+  // Tolérance de 2 ct : arrondi suisse aux 5 centimes (ex. facture 431.32 payée 431.30)
+  let best = null, bestDiff = 3;
+  for (let k = 0; k < factsAll.length; k++) {
+    const f = factsAll[k];
+    if (used.has(f.id)) continue;
+    const diff = Math.abs(Math.round((parseFloat(f.total) || 0) * 100) - cents);
+    if (diff > 2 || diff >= bestDiff) continue;
     const toks = _rappNomTokens(f.clientNom);
-    if (!toks.length) return false;
+    if (!toks.length) continue;
     const hits = toks.filter(t => lib.indexOf(t) >= 0).length;
-    return hits >= Math.min(2, toks.length);
-  }) || null;
+    if (hits >= Math.min(2, toks.length)) { best = f; bestDiff = diff; if (!diff) break; }
+  }
+  return best;
 }
 
 // Retrouve la facture d'après la communication PROPRE au paiement (précis).
@@ -14896,7 +14901,7 @@ function _rappMatchAll() {
       used.add(f.id);
       const ft = parseFloat(f.total) || 0;
       p._facId = f.id;
-      p.corrige = ft > 0 && Math.abs(ft - p.montantLu) >= 0.05;
+      p.corrige = ft > 0 && Math.abs(ft - p.montantLu) >= 0.01;
       p.montant = ft > 0 ? ft : p.montantLu;
     } else { p._facId = null; p.montant = p.montantLu; p.corrige = false; }
   });
