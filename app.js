@@ -59,6 +59,7 @@ const TABLE_FIELDS = {
     clientId: 'client_id', clientNom: 'client_nom',
     dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
     dateDebut: 'date_debut', controlesAn: 'controles_an',
+    clientAdresse: 'client_adresse', entrepriseAdresse: 'entreprise_adresse',
     createdAt: 'created_at',
   } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
@@ -14369,6 +14370,10 @@ function _openContratModal(id) {
           <div class="form-group"><label class="form-label">Client (gérance / entreprise)</label>
             <select class="form-input" id="ct-client" onchange="_ctClientPick(this.value)"><option value="">— Aucun / saisir ci-dessous —</option>${clientOpts}</select>
             <input class="form-input" id="ct-client-nom" style="margin-top:5px;font-size:12px;" value="${v(c && c.clientNom)}" placeholder="ou nom du client (texte libre)"></div>
+          <div class="form-group"><label class="form-label">Adresse du client (sur le contrat)</label>
+            <textarea class="form-input" id="ct-client-adresse" rows="2" style="font-size:12px;" placeholder="Rue, NPA Ville — pré-remplie en choisissant un client, modifiable (ex. adresse du site sous contrat)">${(c && c.clientAdresse ? String(c.clientAdresse) : '').replace(/</g, '&lt;')}</textarea></div>
+          <div class="form-group"><label class="form-label">Adresse de l'entreprise (Deratek, sur le contrat)</label>
+            <textarea class="form-input" id="ct-entreprise-adresse" rows="2" style="font-size:12px;" placeholder="Par défaut : adresse configurée de Deratek">${(c && c.entrepriseAdresse ? String(c.entrepriseAdresse) : (() => { const co = (DERATEK_CONFIG || {}).company || {}; return [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim()].filter(Boolean).join('\n'); })()).replace(/</g, '&lt;')}</textarea></div>
           <div class="form-group"><label class="form-label">Date de signature</label>
             <input class="form-input" id="ct-date" type="date" value="${v(c && c.dateSignature)}"></div>
           <div class="form-group"><label class="form-label">Date de début</label>
@@ -14402,6 +14407,8 @@ function _openContratModal(id) {
 function _ctClientPick(id) {
   const c = (DB.clients || []).find(x => x.id === id);
   const el = $('ct-client-nom'); if (el && c) el.value = c.nom || '';
+  const ad = $('ct-client-adresse');
+  if (ad && c) ad.value = [c.adresse, ((c.npa || '') + ' ' + (c.ville || '')).trim()].filter(Boolean).join('\n');
 }
 function _ctFilePick(e) {
   const f = e.target.files && e.target.files[0];
@@ -14446,6 +14453,8 @@ async function saveContrat() {
     categorie: val('ct-categorie') || 'Autre',
     clientId: clientId || '',
     clientNom: val('ct-client-nom') || '',
+    clientAdresse: (($('ct-client-adresse') || {}).value || '').trim(),
+    entrepriseAdresse: (($('ct-entreprise-adresse') || {}).value || '').trim(),
     dateSignature: val('ct-date') || '',
     dateDebut: val('ct-debut') || '',
     echeance: val('ct-echeance') || '',
@@ -14513,8 +14522,12 @@ function contratGenererPdf(id) {
   const co = DERATEK_CONFIG.company || {};
   const cl = c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null;
   const clientLines = [c.clientNom || (cl && cl.nom) || 'Le Client'];
-  if (cl && cl.adresse) clientLines.push(cl.adresse);
-  if (cl && (cl.npa || cl.ville)) clientLines.push(((cl.npa || '') + ' ' + (cl.ville || '')).trim());
+  if (c.clientAdresse) {
+    String(c.clientAdresse).split('\n').map(s => s.trim()).filter(Boolean).forEach(l => clientLines.push(l));
+  } else {
+    if (cl && cl.adresse) clientLines.push(cl.adresse);
+    if (cl && (cl.npa || cl.ville)) clientLines.push(((cl.npa || '') + ' ' + (cl.ville || '')).trim());
+  }
   const [catLabel, objet] = CONTRAT_OBJETS[c.categorie] || CONTRAT_OBJETS['Autre'];
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -14555,7 +14568,10 @@ function contratGenererPdf(id) {
   };
   para('Entre les soussignés :', { bold: true, after: 3 });
   para('Deratek Anti-Nuisibles', { bold: true, after: 0 });
-  para('Entreprise de dératisation, désinsectisation et désinfection\n' + [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim()].filter(Boolean).join('\n'), { after: 3 });
+  const entLines = c.entrepriseAdresse
+    ? String(c.entrepriseAdresse).split('\n').map(s => s.trim()).filter(Boolean)
+    : [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim()].filter(Boolean);
+  para('Entreprise de dératisation, désinsectisation et désinfection\n' + entLines.join('\n'), { after: 3 });
   para('ET', { bold: true, after: 3 });
   para(clientLines.join('\n') + '\n(le « Client »)', { after: 4 });
   para('Il est convenu ce qui suit :', { bold: true, after: 5 });
