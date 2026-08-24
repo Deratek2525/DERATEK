@@ -58,6 +58,7 @@ const TABLE_FIELDS = {
   contrats:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom',
     dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
+    dateDebut: 'date_debut', controlesAn: 'controles_an',
     createdAt: 'created_at',
   } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
@@ -81,6 +82,7 @@ const DATE_COLS = {
   bons:         new Set(['date', 'date_intervention']),
   diagnostics:  new Set(['date_doc']),
   releves:      new Set(['date_import']),
+  contrats:     new Set(['date_signature', 'echeance', 'date_debut']),
 };
 
 // Colonnes de type UUID côté Supabase (liens entre tables) : une chaîne vide y est invalide → null
@@ -14212,14 +14214,14 @@ function confirmDeleteFourn(id, label) {
 // Documents (PDF / Word / Excel) stockés dans le cloud, classés par catégorie.
 // ============================================================
 const CONTRAT_CATEGORIES = [
-  'Désinfection', 'Dératisation', 'Désourisation (souris)', 'Mouches',
-  'Blattes / Cafards', 'Punaises de lit', 'Guêpes / Frelons', 'Fourmis',
-  'Pigeons / Volatiles', 'Contrat annuel multi-nuisibles', 'Autre',
+  'Dératisation (rats)', 'Désourisation (souris)', 'Blattes / Cafards', 'Araignées',
+  'Punaises de lit', 'Guêpes / Frelons', 'Fourmis', 'Mouches', 'Pigeons / Volatiles',
+  'Désinfection', 'Contrat annuel multi-nuisibles', 'Autre',
 ];
 const CONTRAT_CAT_ICON = {
-  'Désinfection': '🧴', 'Dératisation': '🐀', 'Désourisation (souris)': '🐭', 'Mouches': '🪰',
-  'Blattes / Cafards': '🪳', 'Punaises de lit': '🛏️', 'Guêpes / Frelons': '🐝', 'Fourmis': '🐜',
-  'Pigeons / Volatiles': '🐦', 'Contrat annuel multi-nuisibles': '📅', 'Autre': '📄',
+  'Dératisation (rats)': '🐀', 'Dératisation': '🐀', 'Désourisation (souris)': '🐭', 'Mouches': '🪰',
+  'Blattes / Cafards': '🪳', 'Araignées': '🕷️', 'Punaises de lit': '🛏️', 'Guêpes / Frelons': '🐝', 'Fourmis': '🐜',
+  'Pigeons / Volatiles': '🐦', 'Désinfection': '🧴', 'Contrat annuel multi-nuisibles': '📅', 'Autre': '📄',
 };
 function _contratFileIcon(t) {
   t = String(t || '').toLowerCase();
@@ -14243,16 +14245,48 @@ function updateContratsCount() {
   const el = $('nb-contrats-count'); if (el) el.textContent = (DB.contrats || []).length;
 }
 
+let _contratCatFilter = '';
+function contratSetCat(cat) { _contratCatFilter = (_contratCatFilter === cat) ? '' : cat; renderContrats(); }
 function renderContrats() {
   updateContratsCount();
   const box = $('contrats-list'); if (!box) return;
   const q = (($('contrat-search') || {}).value || '').trim().toLowerCase();
-  let list = (DB.contrats || []).slice();
-  if (q) list = list.filter(c => [c.nom, c.clientNom, c.categorie, c.notes, c.fileName].filter(Boolean).join(' ').toLowerCase().includes(q));
+  const all = (DB.contrats || []).slice();
+  let list = all;
+  if (q) list = list.filter(c => [c.numero, c.nom, c.clientNom, c.categorie, c.notes, c.fileName].filter(Boolean).join(' ').toLowerCase().includes(q));
+  if (_contratCatFilter) list = list.filter(c => (c.categorie || 'Autre') === _contratCatFilter);
   const sub = $('contrats-sub');
-  if (sub) sub.textContent = (DB.contrats || []).length + ' contrat(s)' + (q ? ' · ' + list.length + ' trouvé(s)' : '');
+  if (sub) sub.textContent = all.length + ' contrat(s)' + ((q || _contratCatFilter) ? ' · ' + list.length + ' affiché(s)' : '');
+
+  // Barre de statistiques + filtres par nuisible
+  const _days = c => { if (!c.echeance) return null; const d = new Date(c.echeance); return isNaN(d.getTime()) ? null : Math.round((d.getTime() - Date.now()) / 86400000); };
+  const nEchu = all.filter(c => { const d = _days(c); return d != null && d < 0; }).length;
+  const nBientot = all.filter(c => { const d = _days(c); return d != null && d >= 0 && d <= 30; }).length;
+  const nActif = all.length - nEchu;
+  const totMontant = all.reduce((s, c) => s + (parseFloat(String(c.montant || '').replace(/[^0-9.]/g, '')) || 0), 0);
+  const stat = (lbl, val, col) => `<div style="text-align:center;padding:0 14px;">
+      <div style="font-size:20px;font-weight:800;color:${col};">${val}</div>
+      <div style="font-size:10px;color:var(--g500);text-transform:uppercase;font-weight:700;">${lbl}</div></div>`;
+  const counts = {};
+  all.forEach(c => { const k = c.categorie || 'Autre'; counts[k] = (counts[k] || 0) + 1; });
+  const chipCats = CONTRAT_CATEGORIES.filter(k => counts[k]).concat(Object.keys(counts).filter(k => !CONTRAT_CATEGORIES.includes(k)));
+  const chips = chipCats.map(k => {
+    const on = _contratCatFilter === k;
+    return `<button onclick="contratSetCat('${k.replace(/'/g, "\\'")}')" style="border:1.5px solid ${on ? 'var(--navy)' : '#d1d5db'};background:${on ? 'var(--navy)' : '#fff'};color:${on ? '#fff' : 'var(--navy)'};border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">${CONTRAT_CAT_ICON[k] || '📄'} ${k} <span style="opacity:.7;">(${counts[k]})</span></button>`;
+  }).join('');
+  let head = '';
+  if (all.length) {
+    head = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+        ${stat('Contrats', all.length, 'var(--navy)')}
+        ${stat('Actifs', nActif, '#15803d')}
+        ${stat('À renouveler ≤ 30 j', nBientot, nBientot ? '#b45309' : 'var(--g400)')}
+        ${stat('Échus', nEchu, nEchu ? '#dc2626' : 'var(--g400)')}
+        ${totMontant ? stat('Montant total', _rappMoney(totMontant) + ' CHF', 'var(--navy)') : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${chips}${_contratCatFilter ? `<button onclick="contratSetCat('')" style="border:none;background:none;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">✕ tout afficher</button>` : ''}</div>`;
+  }
   if (!list.length) {
-    box.innerHTML = '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + (q ? 'Aucun contrat pour cette recherche.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour déposer un PDF, Word ou Excel.') + '</div></div>';
+    box.innerHTML = head + '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + ((q || _contratCatFilter) ? 'Aucun contrat pour ce filtre.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour créer un contrat (dératisation, blattes, souris, rats, araignées…) et y joindre le PDF, Word ou Excel.') + '</div></div>';
     return;
   }
   // Regroupement par catégorie
@@ -14280,10 +14314,10 @@ function renderContrats() {
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${arr.map(c => `
             <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-              <div style="font-size:22px;flex-shrink:0;">${_contratFileIcon(c.fileType)}</div>
+              <div style="font-size:22px;flex-shrink:0;">${CONTRAT_CAT_ICON[c.categorie] || _contratFileIcon(c.fileType)}</div>
               <div style="flex:1.5;min-width:180px;">
-                <div style="font-size:13px;font-weight:800;color:var(--navy);">${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
-                <div style="font-size:11px;color:var(--g600);">${c.clientNom ? '🏢 ' + c.clientNom.replace(/</g,'&lt;') : ''}${c.dateSignature ? ' · 📅 ' + fmtDate(c.dateSignature) : ''}${c.montant ? ' · ' + _displayMontant(c.montant) + ' CHF' : ''}</div>
+                <div style="font-size:13px;font-weight:800;color:var(--navy);">${c.numero ? '<span style="font-size:10px;font-weight:800;color:#fff;background:var(--navy);border-radius:6px;padding:2px 7px;margin-right:6px;">N° ' + String(c.numero).replace(/</g,'&lt;') + '</span>' : ''}${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--g600);">${c.clientNom ? '🏢 ' + c.clientNom.replace(/</g,'&lt;') : ''}${(c.dateDebut || c.echeance) ? ' · 📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? ' · 📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
                 ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
               </div>
               <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
@@ -14322,20 +14356,32 @@ function _openContratModal(id) {
         <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-contrat')">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-group"><label class="form-label">Nom / intitulé du contrat</label>
-          <input class="form-input" id="ct-nom" value="${v(c && c.nom)}" placeholder="Ex. Contrat annuel dératisation restaurant"></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:0 14px;">
+          <div class="form-group"><label class="form-label">N° de contrat</label>
+            <input class="form-input" id="ct-numero" value="${v(c && c.numero)}" placeholder="Ex. 772602"></div>
+          <div class="form-group"><label class="form-label">Nom / intitulé du contrat</label>
+            <input class="form-input" id="ct-nom" value="${v(c && c.nom)}" placeholder="Ex. Contrat annuel dératisation restaurant"></div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
-          <div class="form-group"><label class="form-label">Catégorie</label>
+          <div class="form-group"><label class="form-label">Catégorie (nuisible)</label>
             <select class="form-input" id="ct-categorie">${catOpts}</select></div>
           <div class="form-group"><label class="form-label">Client (gérance / entreprise)</label>
             <select class="form-input" id="ct-client" onchange="_ctClientPick(this.value)"><option value="">— Aucun / saisir ci-dessous —</option>${clientOpts}</select>
             <input class="form-input" id="ct-client-nom" style="margin-top:5px;font-size:12px;" value="${v(c && c.clientNom)}" placeholder="ou nom du client (texte libre)"></div>
           <div class="form-group"><label class="form-label">Date de signature</label>
             <input class="form-input" id="ct-date" type="date" value="${v(c && c.dateSignature)}"></div>
+          <div class="form-group"><label class="form-label">Date de début</label>
+            <input class="form-input" id="ct-debut" type="date" value="${v(c && c.dateDebut)}"></div>
           <div class="form-group"><label class="form-label">Échéance / renouvellement</label>
             <input class="form-input" id="ct-echeance" type="date" value="${v(c && c.echeance)}"></div>
-          <div class="form-group"><label class="form-label">Montant (CHF)</label>
-            <input class="form-input" id="ct-montant" type="number" step="0.01" value="${v(c && c.montant)}" placeholder="Ex. 480"></div>
+          <div class="form-group"><label class="form-label">Montant annuel (CHF, HT)</label>
+            <input class="form-input" id="ct-montant" type="number" step="0.01" value="${v(c && c.montant)}" placeholder="Ex. 1120.00"></div>
+          <div class="form-group"><label class="form-label">Contrôles / an</label>
+            <input class="form-input" id="ct-controles" type="number" min="0" step="1" value="${v(c && c.controlesAn)}" placeholder="Ex. 4"></div>
+          <div class="form-group"><label class="form-label" style="visibility:hidden;">.</label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--navy);padding:9px 0;cursor:pointer;">
+              <input type="checkbox" id="ct-tacite" ${c && c.tacite ? 'checked' : ''} style="accent-color:var(--navy);width:16px;height:16px;"> 🔁 Renouvellement tacite (reconduction annuelle)
+            </label></div>
         </div>
         <div class="form-group"><label class="form-label">Note</label>
           <textarea class="form-input" id="ct-notes" rows="2" placeholder="Nb de passages, zones couvertes, conditions…">${(c && c.notes ? String(c.notes) : '').replace(/</g, '&lt;')}</textarea></div>
@@ -14394,13 +14440,17 @@ async function saveContrat() {
   }
   const contrat = {
     id,
+    numero: val('ct-numero') || '',
     nom: val('ct-nom') || fileName || 'Contrat',
     categorie: val('ct-categorie') || 'Autre',
     clientId: clientId || '',
     clientNom: val('ct-client-nom') || '',
     dateSignature: val('ct-date') || '',
+    dateDebut: val('ct-debut') || '',
     echeance: val('ct-echeance') || '',
     montant: val('ct-montant') === '' ? null : (parseFloat(val('ct-montant')) || 0),
+    controlesAn: val('ct-controles') === '' ? null : (parseInt(val('ct-controles'), 10) || 0),
+    tacite: !!($('ct-tacite') && $('ct-tacite').checked),
     notes: val('ct-notes') || '',
     filePath, fileName, fileType,
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
