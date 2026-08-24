@@ -14315,10 +14315,14 @@ function renderContrats() {
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${arr.map(c => `
             <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-              <div style="font-size:22px;flex-shrink:0;">${CONTRAT_CAT_ICON[c.categorie] || _contratFileIcon(c.fileType)}</div>
+              <div style="font-size:26px;flex-shrink:0;">${CONTRAT_CAT_ICON[c.categorie] || _contratFileIcon(c.fileType)}</div>
               <div style="flex:1.5;min-width:180px;">
-                <div style="font-size:13px;font-weight:800;color:var(--navy);">${c.numero ? '<span style="font-size:10px;font-weight:800;color:#fff;background:var(--navy);border-radius:6px;padding:2px 7px;margin-right:6px;">N° ' + String(c.numero).replace(/</g,'&lt;') + '</span>' : ''}${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
-                <div style="font-size:11px;color:var(--g600);">${c.clientNom ? '🏢 ' + c.clientNom.replace(/</g,'&lt;') : ''}${(c.dateDebut || c.echeance) ? ' · 📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? ' · 📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  ${c.numero ? '<span style="font-size:13px;font-weight:900;color:#fff;background:var(--navy);border-radius:7px;padding:3px 10px;letter-spacing:.3px;">N° ' + String(c.numero).replace(/</g,'&lt;') + '</span>' : ''}
+                  <span style="font-size:16px;font-weight:900;color:var(--navy);letter-spacing:.2px;">🏢 ${(c.clientNom || '— Sans client —').replace(/</g,'&lt;')}</span>
+                </div>
+                <div style="font-size:12px;font-weight:600;color:var(--g600);margin-top:2px;">${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--g600);margin-top:1px;">${(c.dateDebut || c.echeance) ? '📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? '📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
                 ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
               </div>
               <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
