@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260612bu">
+<link rel="stylesheet" href="./style.css?v=20260612bv">
 </head>
 <body>
 
@@ -332,7 +332,7 @@
     <button id="nb-factures" class="nav-btn" onclick="showDocsScreen(&#39;facture&#39;)" style="background:#2d9e6b;color:#fff;">🧾 <span>Factures</span> <span id="nb-factures-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-anciennes" class="nav-btn" onclick="showScreen(&#39;anciennes&#39;)" style="background:#475569;color:#fff;">📁 <span>Anciennes factures</span> <span id="nb-anciennes-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-fact-archive" class="nav-btn" onclick="showScreen(&#39;fact-archive&#39;)" style="background:#0f766e;color:#fff;">📦 <span>Facturation archivée</span> <span id="nb-fact-archive-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
-    <button id="nb-rapprochement" class="nav-btn" onclick="showScreen(&#39;rapprochement&#39;)" style="background:#0d9488;color:#fff;">💰 <span>Rapprochement</span></button>
+    <button id="nb-rapprochement" class="nav-btn" onclick="showScreen(&#39;rapprochement&#39;)" style="background:#0d9488;color:#fff;">🏦 <span>Relevés</span></button>
     <button id="nb-clients" class="nav-btn" onclick="showScreen(&#39;clients&#39;)">👥 <span>Clients</span> <span id="nb-clients-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-locataires" class="nav-btn" onclick="showScreen(&#39;locataires&#39;)">🏠 <span>Locataires</span> <span id="nb-locataires-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-fournisseurs" class="nav-btn" onclick="showScreen(&#39;fournisseurs&#39;)">📦 <span>Fournisseurs</span> <span id="nb-fournisseurs-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
@@ -1309,7 +1309,7 @@
   <div id="screen-rapprochement" class="screen">
     <div class="page-hd">
       <div>
-        <div class="page-title">💰 Rapprochement bancaire</div>
+        <div class="page-title">🏦 Relevés bancaires — rapprochement des encaissements</div>
         <div class="page-sub">Dépose ton relevé mensuel — l'IA détecte les paiements reçus et valide l'encaissement des factures.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1342,6 +1342,7 @@
       </div>
       <div id="rapp-status" style="display:none;margin:14px 0;text-align:center;font-size:13px;color:var(--navy);"></div>
       <div id="rapp-results" style="margin-top:16px;"></div>
+      <div id="rapp-archives" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -1496,16 +1497,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260612bu"></script>
+  <script src="./fonts_arial.js?v=20260612bv"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260612bu"></script>
-<script src="./footer_prestations.js?v=20260612bu"></script>
-<script src="./config.js?v=20260612bu"></script>
-<script src="./app.js?v=20260612bu"></script>
-<script src="./pdf.js?v=20260612bu"></script>
+<script src="./logo.js?v=20260612bv"></script>
+<script src="./footer_prestations.js?v=20260612bv"></script>
+<script src="./config.js?v=20260612bv"></script>
+<script src="./app.js?v=20260612bv"></script>
+<script src="./pdf.js?v=20260612bv"></script>
 
 </body></html>

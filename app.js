@@ -54,6 +54,7 @@ const TABLE_FIELDS = {
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
   fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht' } },
+  releves:    { js2db: { pdfPath: 'pdf_path', dateImport: 'date_import', nbPaiements: 'nb_paiements', nbReconnus: 'nb_reconnus', createdAt: 'created_at' } },
   contrats:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom',
     dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
@@ -79,6 +80,7 @@ const DATE_COLS = {
   fournisseurs: new Set(['date_doc']),
   bons:         new Set(['date', 'date_intervention']),
   diagnostics:  new Set(['date_doc']),
+  releves:      new Set(['date_import']),
 };
 
 // Colonnes de type UUID côté Supabase (liens entre tables) : une chaîne vide y est invalide → null
@@ -123,15 +125,15 @@ function toJs(table, row) {
 }
 
 const DB = {
-  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] },
-  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [] },
+  _cache:      { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [], releves: [] },
+  _lastSync:   { techs: [], clients: [], rapports: [], intervs: [], locataires: [], bons: [], documents: [], prestations: [], diagnostics: [], fournisseurs: [], contrats: [], releves: [] },
   _pending:    new Set(),
   _processing: false,
   _notifyOnSync: {},   // ex. { rapports: '✓ Rapport enregistré dans le cloud' } → toast vert après succès réel
   // Ordre IMPORTANT : tables sans dépendance FK d'abord, puis tables dépendantes
   // clients, locataires (qui dépendent de clients), rapports/intervs (qui dépendent de clients),
   // bons (qui dépendent de clients ET de locataires), documents (devis/factures)
-  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents', 'diagnostics', 'fournisseurs'],
+  _syncOrder:  ['techs', 'prestations', 'clients', 'locataires', 'rapports', 'intervs', 'bons', 'documents', 'diagnostics', 'fournisseurs', 'contrats', 'releves'],
 
   get techs()       { return this._cache.techs; },
   set techs(v)      { this._cache.techs = v;      this._queue('techs'); },
@@ -155,6 +157,8 @@ const DB = {
   set fournisseurs(v){ this._cache.fournisseurs = v; this._queue('fournisseurs'); },
   get contrats()    { return this._cache.contrats; },
   set contrats(v)   { this._cache.contrats = v;    this._queue('contrats'); },
+  get releves()     { return this._cache.releves; },
+  set releves(v)    { this._cache.releves = v;     this._queue('releves'); },
 
   _queue(table) {
     this._pending.add(table);
@@ -181,7 +185,7 @@ const DB = {
 
   async loadAll() {
     if (!sb) return;
-    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics', 'fournisseurs', 'contrats'];
+    const tables = ['clients', 'locataires', 'bons', 'rapports', 'techs', 'intervs', 'documents', 'prestations', 'diagnostics', 'fournisseurs', 'contrats', 'releves'];
     for (const t of tables) {
       try {
         const { data, error } = await sb.from(t).select('*');
@@ -14579,6 +14583,72 @@ function renderRapprochement() {
   const a = $('rapp-mode-auto'), mn = $('rapp-mode-manuel');
   if (a && mn) { a.classList.toggle('active', _rappMode === 'auto'); mn.classList.toggle('active', _rappMode === 'manuel'); }
   renderRappResults();
+  renderRappArchives();
+}
+
+// ——— Archivage des relevés importés : le PDF reste consultable dans la rubrique ———
+async function _rappArchiveReleve(file) {
+  try {
+    if (!file || !((file.type === 'application/pdf') || /\.pdf$/i.test(file.name || ''))) return;
+    const nbP = _rappPaiements.length;
+    const nbR = _rappMatches.filter(m => m.facture).length;
+    const tot = _rappPaiements.reduce((s, p) => s + (p.montant || 0), 0);
+    const fname = file.name || 'releve.pdf';
+    const existant = (DB.releves || []).find(r => r.filename === fname);
+    const id = existant ? existant.id : newId();
+    let pdfPath = existant ? (existant.pdfPath || '') : '';
+    if (sb) {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) {
+          const safeName = fname.replace(/[^\w.-]+/g, '_');
+          const path = pdfPath || (session.user.id + '/' + id + '-' + safeName);
+          const { error } = await sb.storage.from('releves-pdfs').upload(path, file, { contentType: 'application/pdf', upsert: true });
+          if (!error) pdfPath = path; else console.warn('Upload relevé', error);
+        }
+      } catch (e) { console.warn('Upload relevé', e); }
+    }
+    const releves = (DB.releves || []).filter(r => r.id !== id);
+    releves.unshift({ id, filename: fname, pdfPath, dateImport: today(), nbPaiements: nbP, nbReconnus: nbR, total: Math.round(tot * 100) / 100 });
+    DB.releves = releves;
+    renderRappArchives();
+  } catch (e) { console.warn('Archive relevé', e); }
+}
+
+async function rappVoirReleve(id) {
+  const r = (DB.releves || []).find(x => x.id === id);
+  if (!r || !r.pdfPath) { toast('PDF non disponible pour ce relevé', '#e63946'); return; }
+  if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
+  try {
+    const { data, error } = await sb.storage.from('releves-pdfs').createSignedUrl(r.pdfPath, 3600);
+    if (error || !data || !data.signedUrl) { toast('Erreur génération du lien : ' + (error?.message || '?'), '#e63946'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
+}
+
+function rappSupprimerReleve(id) {
+  const r = (DB.releves || []).find(x => x.id === id); if (!r) return;
+  if (!confirm('Supprimer le relevé « ' + (r.filename || '') + ' » de l\'archive ?\n(Le PDF sera aussi supprimé du cloud.)')) return;
+  if (r.pdfPath && sb) { try { sb.storage.from('releves-pdfs').remove([r.pdfPath]); } catch (e) {} }
+  DB.releves = (DB.releves || []).filter(x => x.id !== id);
+  renderRappArchives();
+  toast('Relevé supprimé de l\'archive', '#2d9e6b');
+}
+
+function renderRappArchives() {
+  const box = $('rapp-archives'); if (!box) return;
+  const list = (DB.releves || []).slice().sort((a, b) => String(b.dateImport || '').localeCompare(String(a.dateImport || '')));
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:18px 0 6px;">📂 Relevés archivés (${list.length})</div>` +
+    list.map(r => `<div style="display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;margin-bottom:6px;flex-wrap:wrap;">
+      <div style="font-size:16px;">🏦</div>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-size:12px;font-weight:800;color:var(--navy);word-break:break-all;">${_escapeHtml(r.filename || 'relevé')}</div>
+        <div style="font-size:11px;color:var(--g500);">importé le ${fmtDate(r.dateImport)} · ${r.nbPaiements || 0} paiement(s) · ${_rappMoney(r.total || 0)} CHF · ${r.nbReconnus || 0} reconnu(s)</div>
+      </div>
+      ${r.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="rappVoirReleve('${r.id}')" title="Ouvrir le PDF du relevé">📄 Voir le PDF</button>` : '<span style="font-size:11px;color:var(--g400);">PDF non conservé</span>'}
+      <button class="btn btn-ghost btn-sm" onclick="rappSupprimerReleve('${r.id}')" title="Supprimer de l'archive">🗑️</button>
+    </div>`).join('');
 }
 
 function rappHandleDrop(e) { e.preventDefault(); const dz = $('rapp-dropzone'); if (dz) dz.classList.remove('drag'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) rappProcessFile(f); }
@@ -14632,6 +14702,7 @@ async function rappProcessFile(file) {
     if (_rappMode === 'auto') rappValiderAuto(false);
     renderRappResults();
     toast('✓ ' + _rappPaiements.length + ' paiement(s) détecté(s)', '#2d9e6b');
+    _rappArchiveReleve(file);   // archive le PDF du relevé dans la rubrique (asynchrone)
   } catch (err) { _rappStatus(''); console.error('rapprochement', err); toast('Erreur : ' + err.message, '#e63946'); }
 }
 
