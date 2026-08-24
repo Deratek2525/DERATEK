@@ -14323,7 +14323,8 @@ function renderContrats() {
               <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
               <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
                 ${c.filePath ? `<span style="font-size:10px;font-weight:700;color:var(--g600);background:#f3f4f6;border-radius:6px;padding:2px 7px;">${_contratFileKind(c.fileName)}</span>
-                <button class="btn btn-ghost btn-sm" onclick="viewContratFile('${c.id}')" title="Ouvrir le fichier">📥 Ouvrir</button>` : '<span style="font-size:10px;color:#b91c1c;">Aucun fichier</span>'}
+                <button class="btn btn-ghost btn-sm" onclick="viewContratFile('${c.id}')" title="Ouvrir le fichier joint">📥 Ouvrir</button>` : ''}
+                <button class="btn btn-green btn-sm" onclick="contratGenererPdf('${c.id}')" title="L'app rédige le contrat complet en PDF à partir des infos saisies">📄 Générer PDF</button>
                 <button class="btn btn-navy btn-sm" onclick="editContrat('${c.id}')" title="Modifier">✏️</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="deleteContrat('${c.id}')" title="Supprimer">🗑</button>
               </div>
@@ -14484,6 +14485,130 @@ function deleteContrat(id) {
   DB.contrats = (DB.contrats || []).filter(x => x.id !== id);
   renderContrats();
   toast('Contrat supprimé', '#e63946');
+}
+
+// ============================================================
+// GÉNÉRATION DU CONTRAT EN PDF — modèle « CONTRAT N° 772602 »
+// L'app rédige le contrat complet (9 articles) à partir des infos saisies.
+// ============================================================
+const CONTRAT_OBJETS = {
+  'Dératisation (rats)':            ['DÉRATISATION', 'le monitoring, la prévention et la lutte contre les rongeurs (rats)'],
+  'Dératisation':                   ['DÉRATISATION', 'le monitoring, la prévention et la lutte contre les rongeurs (rats et souris)'],
+  'Désourisation (souris)':         ['DÉSOURISATION', 'le monitoring, la prévention et la lutte contre les rongeurs (souris)'],
+  'Blattes / Cafards':              ['LUTTE CONTRE LES BLATTES', 'le monitoring, la prévention et la lutte contre les blattes (cafards)'],
+  'Araignées':                      ['LUTTE CONTRE LES ARAIGNÉES', 'la prévention et la lutte contre les araignées'],
+  'Punaises de lit':                ['LUTTE CONTRE LES PUNAISES DE LIT', 'le monitoring, la prévention et la lutte contre les punaises de lit'],
+  'Guêpes / Frelons':               ['LUTTE CONTRE LES GUÊPES ET FRELONS', 'la prévention et la lutte contre les guêpes et frelons'],
+  'Fourmis':                        ['LUTTE CONTRE LES FOURMIS', 'le monitoring, la prévention et la lutte contre les fourmis'],
+  'Mouches':                        ['LUTTE CONTRE LES MOUCHES', 'la prévention et la lutte contre les mouches'],
+  'Pigeons / Volatiles':            ['LUTTE CONTRE LES VOLATILES', 'la prévention et la lutte contre les pigeons et autres volatiles'],
+  'Désinfection':                   ['DÉSINFECTION', 'la désinfection des locaux'],
+  'Contrat annuel multi-nuisibles': ['LUTTE ANTINUISIBLE MULTI-NUISIBLES', 'le monitoring, la prévention et la lutte contre l’ensemble des nuisibles'],
+  'Autre':                          ['LUTTE ANTINUISIBLE', 'la prévention et la lutte antinuisible'],
+};
+function contratGenererPdf(id) {
+  const c = (DB.contrats || []).find(x => x.id === id);
+  if (!c) return;
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
+  const co = DERATEK_CONFIG.company || {};
+  const cl = c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null;
+  const clientLines = [c.clientNom || (cl && cl.nom) || 'Le Client'];
+  if (cl && cl.adresse) clientLines.push(cl.adresse);
+  if (cl && (cl.npa || cl.ville)) clientLines.push(((cl.npa || '') + ' ' + (cl.ville || '')).trim());
+  const [catLabel, objet] = CONTRAT_OBJETS[c.categorie] || CONTRAT_OBJETS['Autre'];
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, M = 22, TW = W - 2 * M;
+  const FONT = (function () { try { return doc.getFontList().Arial ? 'Arial' : 'helvetica'; } catch (e) { return 'helvetica'; } })();
+  let y = 13;
+  // En-tête logo + coordonnées (comme les devis/factures)
+  const logoW = 55, logoH = logoW * 199 / 900;
+  if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', M, y, logoW, logoH); } catch (e) {} }
+  doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim(), co.tel ? 'Tél. ' + co.tel : '', co.email, co.tva]
+    .filter(Boolean).forEach((l, i) => doc.text(String(l), W - M, y + 3 + i * 4.2, { align: 'right' }));
+  y += logoH + 8;
+  doc.setDrawColor(13, 27, 62); doc.setLineWidth(0.5); doc.line(M, y, W - M, y); y += 12;
+  // Titres
+  doc.setTextColor(13, 27, 62); doc.setFont(FONT, 'bold'); doc.setFontSize(16);
+  doc.text('C O N T R A T' + (c.numero ? '   N° ' + c.numero : ''), W / 2, y, { align: 'center' }); y += 9;
+  doc.setFontSize(12.5);
+  doc.text('CONTRAT ANNUEL DE ' + catLabel, W / 2, y, { align: 'center' }); y += 12;
+  // Parties
+  doc.setTextColor(0);
+  const _pageBreak = need => { if (y + need > 272) { doc.addPage(); y = 22; } };
+  const para = (txt, opts) => {
+    opts = opts || {};
+    doc.setFont(FONT, opts.bold ? 'bold' : 'normal'); doc.setFontSize(opts.size || 10);
+    if (opts.color) doc.setTextColor.apply(doc, opts.color); else doc.setTextColor(0);
+    const lines = doc.splitTextToSize(String(txt), opts.width || TW);
+    _pageBreak(lines.length * 4.7 + (opts.after || 0));
+    lines.forEach(l => { doc.text(l, opts.x || M, y); y += 4.7; });
+    y += (opts.after != null ? opts.after : 2.2);
+  };
+  const article = (titre, corps, bullets) => {
+    _pageBreak(12);
+    para(titre, { bold: true, size: 10.5, color: [13, 27, 62], after: 1 });
+    if (corps) para(corps);
+    (bullets || []).forEach(b => para('•  ' + b, { x: M + 4, width: TW - 6 }));
+    y += 2.5;
+  };
+  para('Entre les soussignés :', { bold: true, after: 3 });
+  para('Deratek Anti-Nuisibles', { bold: true, after: 0 });
+  para('Entreprise de dératisation, désinsectisation et désinfection\n' + [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim()].filter(Boolean).join('\n'), { after: 3 });
+  para('ET', { bold: true, after: 3 });
+  para(clientLines.join('\n') + '\n(le « Client »)', { after: 4 });
+  para('Il est convenu ce qui suit :', { bold: true, after: 5 });
+  // Articles
+  article('Article 1 – Objet du contrat',
+    'Deratek Anti-Nuisibles s’engage à assurer ' + objet + ' dans les locaux du Client, conformément aux conditions définies ci-après.');
+  let duree = 'Le présent contrat est conclu pour une durée déterminée d’un an.';
+  if (c.dateDebut && c.echeance) duree += '\nIl prend effet le ' + fmtDate(c.dateDebut) + ' et se termine le ' + fmtDate(c.echeance) + '.';
+  else if (c.echeance) duree += '\nIl se termine le ' + fmtDate(c.echeance) + '.';
+  duree += c.tacite
+    ? '\nSauf résiliation notifiée par écrit par l’une ou l’autre des parties au moins trois (3) mois avant son échéance, le contrat sera renouvelé tacitement pour une durée d’un an, aux mêmes conditions, et ainsi de suite d’année en année.'
+    : '\nIl prend fin à son échéance, sans reconduction tacite.';
+  article('Article 2 – Durée du contrat', duree);
+  const nbC = c.controlesAn || 0;
+  const _enLettres = { 1: 'Un (1)', 2: 'Deux (2)', 3: 'Trois (3)', 4: 'Quatre (4)', 5: 'Cinq (5)', 6: 'Six (6)', 7: 'Sept (7)', 8: 'Huit (8)', 9: 'Neuf (9)', 10: 'Dix (10)', 11: 'Onze (11)', 12: 'Douze (12)' };
+  article('Article 3 – Prestations incluses', 'Pendant toute la durée du contrat, Deratek s’engage à effectuer :', [
+    (nbC ? (_enLettres[nbC] || nbC) + (nbC > 1 ? ' contrôles annuels' : ' contrôle annuel') + ', incluant la vérification des dispositifs de monitoring et de lutte' : 'Des contrôles réguliers, incluant la vérification des dispositifs de monitoring et de lutte'),
+    'Toute intervention complémentaire jugée nécessaire, en dehors des contrôles programmés, sera facturée séparément.',
+    (nbC ? (_enLettres[nbC] || nbC) + (nbC > 1 ? ' rapports' : ' rapport') : 'Des rapports') + ' récapitulant les contrôles, observations et actions réalisées',
+  ]);
+  article('Article 4 – Rapports',
+    'L’ensemble des rapports d’intervention et de suivi sera transmis par voie électronique (courriel).');
+  article('Article 5 – Responsabilité',
+    'Deratek décline toute responsabilité en cas de dommages corporels ou matériels résultant directement ou indirectement des opérations réalisées, dès lors que les recommandations et consignes de sécurité transmises n’ont pas été strictement respectées par le Client ou les occupants.');
+  article('Article 6 – Méthodes et produits',
+    'Deratek est seule habilitée à déterminer les méthodes, techniques et produits utilisés dans le cadre des interventions, conformément aux normes en vigueur et à la législation applicable.');
+  article('Article 7 – Obligations du Client', 'Le Client s’engage à :', [
+    'Faciliter l’accès aux locaux concernés aux dates d’intervention',
+    'Mettre en œuvre les mesures d’hygiène recommandées',
+    'Faire exécuter, dans la mesure du possible, les réparations ou aménagements immobiliers jugés nécessaires afin de limiter les risques d’infestation',
+  ]);
+  let prix = 'Le prix annuel des prestations faisant l’objet du présent contrat est fixé à :';
+  article('Article 8 – Prix et conditions de paiement', prix);
+  para('CHF ' + (c.montant != null ? _rappMoney(c.montant) : '________') + '.– HT par année', { bold: true, size: 11.5, after: 0 });
+  para('(TVA non comprise)', { after: 2 });
+  para('Le montant est payable sur présentation de facture.', { after: 4 });
+  article('Article 9 – Résiliation anticipée avec préavis',
+    'Le présent contrat peut être résilié de manière anticipée par l’une ou l’autre des parties, sans justification, sous réserve du respect d’un préavis de trois (3) mois, notifié par écrit (courrier ou courriel).\nPendant la durée du préavis, le contrat reste pleinement en vigueur et l’ensemble des prestations prévues continue d’être exécuté par Deratek.\nToute résiliation anticipée notifiée sans respect du préavis de trois mois entraînera la facturation au Client des prestations déjà réalisées, ainsi que du solde correspondant à la période de préavis non respectée, calculé sur la base du montant annuel convenu.\nEn cas de manquement grave de l’une des parties à ses obligations contractuelles, la résiliation pourra être prononcée sans préavis ni indemnité, après mise en demeure écrite restée sans effet durant un délai de 30 jours.');
+  if (c.notes) article('Conditions particulières', String(c.notes));
+  // Signatures
+  _pageBreak(42);
+  y += 6;
+  para('Fait à ' + (co.ville || 'Neuchâtel') + (c.dateSignature ? ' le ' + fmtDate(c.dateSignature) : ', le ____________'), { after: 10 });
+  doc.setFont(FONT, 'bold'); doc.setFontSize(10);
+  doc.text('Pour Deratek Anti-Nuisibles', M, y);
+  doc.text('Pour ' + (clientLines[0] || 'le Client'), 118, y);
+  y += 14;
+  doc.setFont(FONT, 'normal');
+  doc.text('Signature : ____________________', M, y);
+  doc.text('Signature : ____________________', 118, y);
+  const fname = 'contrat-' + (c.numero || c.nom || 'deratek').toString().replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.pdf';
+  doc.save(fname);
+  toast('📄 Contrat généré : ' + fname, '#2d9e6b');
 }
 
 function renderFournisseurs() {
