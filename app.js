@@ -2536,12 +2536,74 @@ function saveRapportReprendre() {
 // ============================================================
 // Aperçu PDF RÉEL en direct du rapport d'intervention (panneau de droite) :
 // on génère le vrai PDF (sans les photos, pour la vitesse) et on l'affiche dans l'iframe.
-let _rapPdfLiveTimer = null, _rapPdfLiveUrl = null, _rapPdfZoom = 0;
+// ——— Aperçu PDF fluide (partagé devis/factures + rapports) ———
+// Les pages sont rendues UNE fois en canvas via pdf.js ; le zoom n'est ensuite
+// qu'un redimensionnement CSS → instantané, plus aucun rechargement du PDF.
+const _PDF_PREV_ZOOMS = [50, 75, 100, 125, 150, 200, 300];
+const _pdfPrevState = {};
+function _pdfPrevSt(boxId) { return _pdfPrevState[boxId] = _pdfPrevState[boxId] || { seq: 0, zoom: 0 }; }
+function _pdfPrevApplyZoom(boxId) {
+  const st = _pdfPrevSt(boxId);
+  const wrap = document.getElementById(boxId); if (!wrap) return;
+  const pages = wrap.firstElementChild; if (!pages) return;
+  const fitW = Math.max(200, wrap.clientWidth - 26);
+  const w = st.zoom ? fitW * st.zoom / 100 : fitW;
+  pages.style.alignItems = (w > wrap.clientWidth - 26) ? 'flex-start' : 'center';
+  Array.prototype.forEach.call(pages.children, cv => { cv.style.width = w + 'px'; });
+}
+async function _pdfPrevRender(boxId, url) {
+  const st = _pdfPrevSt(boxId);
+  const wrap = document.getElementById(boxId); if (!wrap) return;
+  let pages = wrap.firstElementChild;
+  if (!pages || !pages.classList || !pages.classList.contains('pdfprev-pages')) {
+    wrap.innerHTML = '<div class="pdfprev-pages" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:13px;"></div>';
+    pages = wrap.firstElementChild;
+  }
+  const seq = ++st.seq;
+  try {
+    const pdfjsLib = await loadPdfJs();
+    const pdf = await pdfjsLib.getDocument(url).promise;
+    if (seq !== st.seq) { try { pdf.destroy(); } catch (e) {} return; }
+    const RENDER_W = 1500;   // largeur de rendu (net jusqu'à ~200 %)
+    const cvs = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const vp1 = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: RENDER_W / vp1.width });
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+      cv.style.cssText = 'background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35);border-radius:3px;height:auto;';
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      if (seq !== st.seq) { try { pdf.destroy(); } catch (e) {} return; }
+      cvs.push(cv);
+    }
+    try { pdf.destroy(); } catch (e) {}
+    const keepScroll = wrap.scrollTop;
+    pages.innerHTML = ''; cvs.forEach(cv => pages.appendChild(cv));
+    _pdfPrevApplyZoom(boxId);
+    wrap.scrollTop = keepScroll;
+  } catch (e) { console.warn('aperçu pdf', boxId, e); }
+}
+function _pdfPrevZoom(boxId, delta, lblId) {
+  const st = _pdfPrevSt(boxId);
+  if (!delta) st.zoom = 0;
+  else {
+    const cur = st.zoom || 100;
+    let i = _PDF_PREV_ZOOMS.indexOf(cur);
+    if (i < 0) { i = _PDF_PREV_ZOOMS.findIndex(s => s >= cur); if (i < 0) i = _PDF_PREV_ZOOMS.length - 1; }
+    i = Math.max(0, Math.min(_PDF_PREV_ZOOMS.length - 1, i + delta));
+    st.zoom = _PDF_PREV_ZOOMS[i];
+  }
+  const lbl = document.getElementById(lblId); if (lbl) lbl.textContent = st.zoom ? st.zoom + '%' : 'Ajusté';
+  _pdfPrevApplyZoom(boxId);   // zoom instantané : simple CSS, aucun re-rendu
+}
+
+let _rapPdfLiveTimer = null, _rapPdfLiveUrl = null;
 function _rapPdfLive() {
   clearTimeout(_rapPdfLiveTimer);
   _rapPdfLiveTimer = setTimeout(() => {
-    const ifr = document.getElementById('rap-pdf-live');
-    if (!ifr || typeof getCurrentRapportData !== 'function' || typeof generatePDF !== 'function') return;
+    const box = document.getElementById('rap-pdf-live');
+    if (!box || typeof getCurrentRapportData !== 'function' || typeof generatePDF !== 'function') return;
     try {
       const r = getCurrentRapportData();
       r.photos = [];   // aperçu rapide : les photos sont incluses uniquement au téléchargement
@@ -2550,17 +2612,11 @@ function _rapPdfLive() {
       const url = doc.output('bloburl');
       if (_rapPdfLiveUrl) { try { URL.revokeObjectURL(_rapPdfLiveUrl); } catch (e) {} }
       _rapPdfLiveUrl = url;
-      ifr.src = url + '#toolbar=0&navpanes=0&' + (_rapPdfZoom ? ('zoom=' + _rapPdfZoom) : 'view=FitH');
+      _pdfPrevRender('rap-pdf-live', url);
     } catch (e) { console.warn('aperçu rapport live', e); }
   }, 400);
 }
-function rapPdfZoom(delta) {
-  const Z = [50, 75, 100, 125, 150, 200, 300];
-  if (!delta) _rapPdfZoom = 0;
-  else { const cur = _rapPdfZoom || 100; let i = Z.indexOf(cur); if (i < 0) i = 2; i = Math.max(0, Math.min(Z.length - 1, i + delta)); _rapPdfZoom = Z[i]; }
-  const lbl = document.getElementById('rap-pdf-zoom-lbl'); if (lbl) lbl.textContent = _rapPdfZoom ? _rapPdfZoom + '%' : 'Ajusté';
-  const ifr = document.getElementById('rap-pdf-live'); if (ifr && _rapPdfLiveUrl) ifr.src = _rapPdfLiveUrl + '#toolbar=0&navpanes=0&' + (_rapPdfZoom ? ('zoom=' + _rapPdfZoom) : 'view=FitH');
-}
+function rapPdfZoom(delta) { _pdfPrevZoom('rap-pdf-live', delta, 'rap-pdf-zoom-lbl'); }
 function rapPdfFull() { if (_rapPdfLiveUrl) window.open(_rapPdfLiveUrl, '_blank'); else { _rapPdfLive(); toast('Aperçu en préparation, réessaie dans un instant', '#d97706'); } }
 
 function updatePDF() {
@@ -6423,27 +6479,8 @@ function renderDocEditor() {
 
 // Aperçu PDF en direct du document en cours d'édition (panneau de droite de l'éditeur).
 let _docPdfLiveTimer = null, _docPdfLiveUrl = null;
-let _docPdfZoom = 0;   // 0 = ajusté à la largeur ; sinon zoom en pourcentage
-const _DOC_PDF_ZOOMS = [50, 75, 100, 125, 150, 200, 300];
-function _docPdfSrc(url) {
-  return url + '#toolbar=0&navpanes=0&' + (_docPdfZoom ? ('zoom=' + _docPdfZoom) : 'view=FitH');
-}
-// delta : +1 / -1 pour zoomer, 0 pour revenir à « ajusté à la largeur »
-function docPdfZoom(delta) {
-  if (!delta) {
-    _docPdfZoom = 0;
-  } else {
-    const cur = _docPdfZoom || 100;
-    let i = _DOC_PDF_ZOOMS.indexOf(cur);
-    if (i < 0) { i = _DOC_PDF_ZOOMS.findIndex(s => s >= cur); if (i < 0) i = _DOC_PDF_ZOOMS.length - 1; }
-    i = Math.max(0, Math.min(_DOC_PDF_ZOOMS.length - 1, i + delta));
-    _docPdfZoom = _DOC_PDF_ZOOMS[i];
-  }
-  const lbl = document.getElementById('doc-pdf-zoom-lbl');
-  if (lbl) lbl.textContent = _docPdfZoom ? (_docPdfZoom + '%') : 'Ajusté';
-  const ifr = document.getElementById('doc-pdf-preview');
-  if (ifr && _docPdfLiveUrl) ifr.src = _docPdfSrc(_docPdfLiveUrl);
-}
+// delta : +1 / -1 pour zoomer, 0 pour revenir à « ajusté à la largeur » — instantané (CSS)
+function docPdfZoom(delta) { _pdfPrevZoom('doc-pdf-preview', delta, 'doc-pdf-zoom-lbl'); }
 // Ouvre l'aperçu en grand dans un nouvel onglet (pleine page)
 function docPdfOpenFull() {
   let u = _docPdfLiveUrl;
@@ -6455,14 +6492,14 @@ function _docPdfLive() {
   if (!_editingDoc) return;
   clearTimeout(_docPdfLiveTimer);
   _docPdfLiveTimer = setTimeout(() => {
-    const ifr = document.getElementById('doc-pdf-preview');
-    if (!ifr) return;
+    const box = document.getElementById('doc-pdf-preview');
+    if (!box) return;
     try {
       const url = downloadDocPDF(_editingDoc, 'blob');
       if (!url) return;
       if (_docPdfLiveUrl) { try { URL.revokeObjectURL(_docPdfLiveUrl); } catch (e) {} }
       _docPdfLiveUrl = url;
-      ifr.src = _docPdfSrc(url);
+      _pdfPrevRender('doc-pdf-preview', url);
     } catch (e) { console.warn('aperçu live', e); }
   }, 350);
 }
