@@ -4799,7 +4799,7 @@ function updateNavCounts() {
     const s = b.statut || '';
     if (s === 'termine') nT++;
     else if (s === 'en-cours') nE++;
-    else if (s === 'demande-devis' || s === 'attente-devis') { /* comptés côté Devis, pas dans Bons actifs — cohérent avec la liste */ }
+    else if (s === 'demande-devis') { /* compté côté Devis, pas dans Bons actifs — cohérent avec la liste */ }
     else nA++;
   });
   const docs = DB.documents || [];
@@ -5020,8 +5020,9 @@ function renderBons() {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
     // Actifs = ni terminés, ni en cours, ni en demande de devis
-    // (en cours → onglet dédié ; demande de devis → écran Devis)
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis' && (b.statut || '') !== 'attente-devis');
+    // (en cours → onglet dédié ; demande de devis → écran Devis ;
+    //  « attente-devis » RESTE dans les bons actifs — demande de Dany)
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
   }
   if (q) {
     bons = bons.filter(b =>
