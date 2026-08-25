@@ -14542,9 +14542,10 @@ function contratGenererPdf(id) {
   const logoW = 55, logoH = logoW * 199 / 900;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', M, y, logoW, logoH); } catch (e) {} }
   doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
-  [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim(), co.tel ? 'Tél. ' + co.tel : '', co.email, co.tva]
-    .filter(Boolean).forEach((l, i) => doc.text(String(l), W - M, y + 3 + i * 4.2, { align: 'right' }));
-  y += logoH + 8;
+  const headLines = [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim(), co.tel ? 'Tél. ' + co.tel : '', co.email, co.tva].filter(Boolean);
+  headLines.forEach((l, i) => doc.text(String(l), W - M, y + 3 + i * 4.2, { align: 'right' }));
+  // Le filet passe SOUS le bloc le plus bas (logo ou colonne d'adresse), jamais sur le texte
+  y = Math.max(y + logoH + 8, y + 3 + headLines.length * 4.2 + 4);
   doc.setDrawColor(13, 27, 62); doc.setLineWidth(0.5); doc.line(M, y, W - M, y); y += 12;
   // Titres
   doc.setTextColor(13, 27, 62); doc.setFont(FONT, 'bold'); doc.setFontSize(16);
