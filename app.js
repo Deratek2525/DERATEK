@@ -10547,6 +10547,30 @@ function _genDiagPDF(d, mode) {
     y += 2;
   }
 
+  // Cycle de vie : titre sur sa propre ligne, puis un stade par ligne (Œuf / Larve / Nymphe / Adulte)
+  const fieldCycle = (val, indent) => {
+    if (!val) return;
+    const x = indent || M;
+    ensure(11);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.text("Cycle de vie (de l'œuf à l'adulte) :", x, y);
+    y += 5.4;
+    const sx = x + 4, vx = x + 26;   // colonne fixe : tous les stades alignés
+    String(val).split('\n').map(s => s.trim()).filter(Boolean).forEach(st => {
+      const m = st.match(/^([^:]{2,12})\s*:\s*([\s\S]*)$/);
+      const stade = m ? m[1] + ' :' : '';
+      const texte = m ? m[2] : st;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      const lines = doc.splitTextToSize(texte, R - vx - 2);
+      ensure(Math.max(lines.length*4.8, 5.5) + 1);
+      if (stade) { doc.setTextColor(90); doc.text(stade, sx, y); }
+      doc.setFont('helvetica','normal'); doc.setTextColor(0);
+      doc.text(lines, vx, y);
+      y += Math.max(lines.length*4.8, 5.5);
+    });
+    y += 1.5;
+  };
+
   // --- Fiches descriptives des insectes détectés -------------------------
   const fiches = (d.insectes||[]).filter(n => INSECTES_BOIS_INFO[n]);
   if (fiches.length) {
@@ -10570,7 +10594,7 @@ function _genDiagPDF(d, mode) {
       field('Description', f.description, M+3);
       field('Bois attaqués', f.bois, M+3);
       field('Indices typiques', f.indices, M+3);
-      field('Cycle de vie (œuf → adulte)', f.cycle, M+3);
+      fieldCycle(f.cycle, M+3);
       field('Risque', f.risque, M+3);
       y += 3;
     });
