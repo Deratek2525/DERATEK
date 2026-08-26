@@ -3201,6 +3201,18 @@ document.addEventListener('click', () => setTimeout(adjustStickyOffsets, 50));
 
 // Charge pdf.js (Mozilla) depuis le CDN, une seule fois.
 let _pdfjsLoading = null;
+// ============================================================
+// POLICE DES PDF : Arial partout (Liberation Sans embarquée via fonts_arial.js).
+// L'italique n'existe pas dans la police embarquée → repli sur Helvetica italique.
+// Arial gère aussi les caractères spéciaux (flèches, œ) que Helvetica rend mal.
+// ============================================================
+function _PDFF(style) {
+  if (String(style || '').indexOf('italic') >= 0) return 'helvetica';
+  return _PDFF._ok !== undefined ? (_PDFF._ok ? 'Arial' : 'helvetica')
+    : (_PDFF._ok = !!(window.jspdf && window.jspdf.jsPDF &&
+        (function () { try { return new window.jspdf.jsPDF().getFontList().Arial; } catch (e) { return false; } })())) ? 'Arial' : 'helvetica';
+}
+
 function loadPdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
   if (_pdfjsLoading) return _pdfjsLoading;
@@ -7729,11 +7741,11 @@ function generateBonPDF(bonId) {
     const logoW = 62, logoH = logoW * 199 / 900, logoY = 13;
     const headerFiletY = logoY + logoH + 5;
     if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); } catch (e) {} }
-    else { doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23); }
+    else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23); }
     const cy0 = logoY + 4;
     const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
     const colB = [co.email, co.tva];
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
     colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
     colB.forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
     doc.setTextColor(13, 27, 62);
@@ -7743,12 +7755,12 @@ function generateBonPDF(bonId) {
     // --- Bandeau titre ---
     let y = headerFiletY + 8;
     doc.setFillColor(13, 27, 62); doc.rect(20, y, 170, 11, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(13); doc.setTextColor(255);
     doc.text('BON DE TRAVAIL', 24, y + 7.4);
     doc.setFontSize(11); doc.text(String(b.numero || ''), 186, y + 7.4, { align: 'right' });
     doc.setTextColor(0); y += 17;
     // Date
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     doc.text('Date : ' + (fmtDate(b.date) || '—'), 20, y); y += 9;
     // Fiches liées : on récupère les coordonnées complètes (téléphones, e-mails, adresses)
     const cli = (b.geranceId && (DB.clients || []).find(c => c.id === b.geranceId))
@@ -7781,8 +7793,8 @@ function generateBonPDF(bonId) {
     ].filter(r => r[1]);
     doc.setFontSize(10);
     rows.forEach(([k, v]) => {
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(90); doc.text(k + ' :', 20, y);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(90); doc.text(k + ' :', 20, y);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
       const lines = doc.splitTextToSize(String(v), 110);
       lines.forEach((ln, i) => doc.text(ln, 74, y + i * 5));
       y += Math.max(6, lines.length * 5 + 1);
@@ -7790,15 +7802,15 @@ function generateBonPDF(bonId) {
     y += 4;
     // --- Nuisible / problème ---
     doc.setFillColor(245, 247, 250); doc.rect(20, y, 170, 8, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
     doc.text('NUISIBLE / PROBLÈME SIGNALÉ', 24, y + 5.5); doc.setTextColor(0); y += 12;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     doc.splitTextToSize(_bonProblemeClean(b) || '—', 168).forEach(ln => { doc.text(ln, 22, y); y += 5; });
     y += 6;
     // --- Dates d'intervention ---
     const dates = _bonDatesInterv(b);
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(90); doc.text('Dates d\'intervention :', 20, y);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(90); doc.text('Dates d\'intervention :', 20, y);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(dates.length ? dates.map(fmtDate).join(', ') : '—', 74, y);
     y += 22;
     // --- Zone de signatures ---
@@ -8100,7 +8112,7 @@ function downloadDocPDF(id, mode) {
         try {
           doc.addImage(p.data, 'JPEG', px, ty, pw, ph);
           doc.setDrawColor(225,228,238); doc.rect(px, ty, pw, ph, 'D');
-          if (p.caption) { doc.setFont(FONT,'italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
+          if (p.caption) { doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
         } catch (e) {}
         if (col === 1 || i === dphotos.length - 1) ty += ph + 11;
       });
@@ -10182,15 +10194,15 @@ function _diagRows2Col(doc, pairs, y, M, CW) {
   const gap = 6, colW = (CW - gap) / 2, colTextW = colW - 6;
   for (let i = 0; i < items.length; i += 2) {
     const left = items[i], right = items[i+1];
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5);
     const lL = doc.splitTextToSize(String(left[1]), colTextW);
     const rL = right ? doc.splitTextToSize(String(right[1]), colTextW) : [];
     const cellH = Math.max(8, lL.length*5 + 5, rL.length*5 + 5);
     if ((Math.floor(i/2) % 2) === 1) { doc.setFillColor(249,250,251); doc.rect(M, y, CW, cellH, 'F'); }
     const cell = (it, lines, x) => {
-      doc.setTextColor(107,114,128); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.setTextColor(107,114,128); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5);
       doc.text(String(it[0]).toUpperCase(), x+2, y+4);
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(31,41,55);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5); doc.setTextColor(31,41,55);
       doc.text(lines, x+2, y+9);
     };
     cell(left, lL, M);
@@ -10238,9 +10250,9 @@ function _diagDatesStrip(doc, d, y, M, CW) {
   items.forEach((it, i) => {
     const x = M + i*colW + 5;
     if (i) { doc.setDrawColor(240, 220, 170); doc.setLineWidth(0.3); doc.line(M + i*colW, y+2.5, M + i*colW, y+h-2.5); }
-    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(160, 115, 20);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(6.8); doc.setTextColor(160, 115, 20);
     doc.text(it[0], x, y+4.6);
-    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(13,27,62);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10.5); doc.setTextColor(13,27,62);
     doc.text(fmtDate(it[1]) || '', x, y+10.3);
   });
   doc.setTextColor(0);
@@ -10278,7 +10290,7 @@ function _pdfHtmlToMarked(s) {
 }
 // Découpe un texte enrichi en lignes de segments {t,b,c} tenant dans maxW (police helvetica).
 function _pdfWrapRich(doc, text, maxW, size) {
-  const measure = (t, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); if (size) doc.setFontSize(size); return doc.getTextWidth(t); };
+  const measure = (t, b) => { doc.setFont(_PDFF(b ? 'bold' : 'normal'), b ? 'bold' : 'normal'); if (size) doc.setFontSize(size); return doc.getTextWidth(t); };
   const spaceW = measure(' ', false);
   const lines = [];
   _pdfHtmlToMarked(text).split('\n').forEach(para => {
@@ -10340,7 +10352,7 @@ function _pdfDrawRichLine(doc, segs, x, y, size, defRGB) {
   let cx = x;
   (segs || []).forEach(sg => {
     if (!sg.t) return;
-    doc.setFont('helvetica', sg.b ? 'bold' : 'normal'); if (size) doc.setFontSize(size);
+    doc.setFont(_PDFF(sg.b ? 'bold' : 'normal'), sg.b ? 'bold' : 'normal'); if (size) doc.setFontSize(size);
     if (sg.c) doc.setTextColor(sg.c[0], sg.c[1], sg.c[2]); else doc.setTextColor(d0[0], d0[1], d0[2]);
     doc.text(sg.t, cx, y);
     cx += doc.getTextWidth(sg.t);
@@ -10366,32 +10378,32 @@ function _genDiagPDF(d, mode) {
   const section = (titre, keep) => {
     ensure(14 + (keep || 0));
     doc.setFillColor(BROWN[0],BROWN[1],BROWN[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
     doc.setDrawColor(BROWN[0],BROWN[1],BROWN[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
-    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    y += 7.5; doc.setTextColor(0); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
     val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
     const lines = doc.splitTextToSize(String(val), R - vx - 2);
     ensure(Math.max(lines.length*4.8, 5.5) + 2);
     doc.setTextColor(60);
     doc.text(lbl + ' :', x, y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(lines, vx, y);
     y += Math.max(lines.length*4.8, 5.5);
   };
   const para = (txt) => {
     if (!txt) return;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(0);
     _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5);
     const w = doc.getTextWidth(txt) + 6;
     doc.setFillColor(rgb[0],rgb[1],rgb[2]);
     doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
@@ -10410,9 +10422,9 @@ function _genDiagPDF(d, mode) {
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
-  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
   [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
@@ -10420,9 +10432,9 @@ function _genDiagPDF(d, mode) {
   doc.setTextColor(0);
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
   // Date à droite sous le filet (comme les factures)
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
@@ -10431,11 +10443,11 @@ function _genDiagPDF(d, mode) {
   y = headerFiletY + 9;
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   doc.text('Insectes xylophages — bois & charpentes', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.setFontSize(10.5); doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
@@ -10477,12 +10489,12 @@ function _genDiagPDF(d, mode) {
     synth.forEach((s, i) => {
       const cx = M + i*colW + 4;
       if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
       doc.text(s[0], cx, y+5);
-      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (!s[1]) { doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
       if (s[2]) { badge(String(s[1]).replace(' (structure menacée)',''), s[2], cx, y+11.2); }
       else {
-        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
         doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
       }
     });
@@ -10496,7 +10508,7 @@ function _genDiagPDF(d, mode) {
   field('Éléments / bois touchés', d.elementsTouches);
   if (d.diagnostic) {
     y += 1.5;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
     para(d.diagnostic);
   }
@@ -10515,7 +10527,7 @@ function _genDiagPDF(d, mode) {
       DIAG_COLORS.forEach(c => {
         const rgb = [parseInt(c.hex.slice(1,3),16), parseInt(c.hex.slice(3,5),16), parseInt(c.hex.slice(5,7),16)];
         doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.circle(lx+1.5, y-1.2, 1.5, 'F');
-        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70);
+        doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8); doc.setTextColor(70);
         doc.text(c.label, lx+4.5, y);
         lx += 4.5 + doc.getTextWidth(c.label) + 8;
       });
@@ -10538,7 +10550,7 @@ function _genDiagPDF(d, mode) {
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
-        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
         doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
@@ -10552,7 +10564,7 @@ function _genDiagPDF(d, mode) {
     if (!val) return;
     const x = indent || M;
     ensure(11);
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     doc.text("Cycle de vie (de l'œuf à l'adulte) :", x, y);
     y += 5.4;
     const sx = x + 4, vx = x + 26;   // colonne fixe : tous les stades alignés
@@ -10560,11 +10572,11 @@ function _genDiagPDF(d, mode) {
       const m = st.match(/^([^:]{2,12})\s*:\s*([\s\S]*)$/);
       const stade = m ? m[1] + ' :' : '';
       const texte = m ? m[2] : st;
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
       const lines = doc.splitTextToSize(texte, R - vx - 2);
       ensure(Math.max(lines.length*4.8, 5.5) + 1);
       if (stade) { doc.setTextColor(90); doc.text(stade, sx, y); }
-      doc.setFont('helvetica','normal'); doc.setTextColor(0);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
       doc.text(lines, vx, y);
       y += Math.max(lines.length*4.8, 5.5);
     });
@@ -10578,16 +10590,16 @@ function _genDiagPDF(d, mode) {
     fiches.forEach(nom => {
       const f = INSECTES_BOIS_INFO[nom];
       // Hauteur estimée de la fiche pour la garder entière sur une page
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5);
       const estH = 13 + [f.description, f.bois, f.indices, f.cycle, f.risque].filter(Boolean).reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
       ensure(Math.min(estH, 120));
       doc.setFillColor(247,242,235);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10);
       const nomW = doc.getTextWidth(nom);
       doc.setTextColor(BROWN[0],BROWN[1],BROWN[2]);
       doc.text(nom, M+3, y+3.6);
-      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(9); doc.setTextColor(110);
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
@@ -10622,14 +10634,14 @@ function _genDiagPDF(d, mode) {
   if (d.conclusion) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
@@ -10639,7 +10651,7 @@ function _genDiagPDF(d, mode) {
   if (!d.noSign) {
     ensure(32);
     y += 8;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(40);
     doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
     doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
     if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
@@ -10654,7 +10666,7 @@ function _genDiagPDF(d, mode) {
   for (let i = 1; i <= nb; i++) {
     doc.setPage(i);
     doc.setDrawColor(BROWN[0],BROWN[1],BROWN[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
     doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
     doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
     doc.setTextColor(0);
@@ -11053,32 +11065,32 @@ function _genRongeursPDF(d, mode) {
   const section = (titre, keep) => {
     ensure(14 + (keep || 0));
     doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
-    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    y += 7.5; doc.setTextColor(0); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
     val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
     const lines = doc.splitTextToSize(String(val), R - vx - 2);
     ensure(Math.max(lines.length*4.8, 5.5) + 2);
     doc.setTextColor(60);
     doc.text(lbl + ' :', x, y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(lines, vx, y);
     y += Math.max(lines.length*4.8, 5.5);
   };
   const para = (txt) => {
     if (!txt) return;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(0);
     _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5);
     const w = doc.getTextWidth(txt) + 6;
     doc.setFillColor(rgb[0],rgb[1],rgb[2]);
     doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
@@ -11097,9 +11109,9 @@ function _genRongeursPDF(d, mode) {
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
-  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
   [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
@@ -11107,9 +11119,9 @@ function _genRongeursPDF(d, mode) {
   doc.setTextColor(0);
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
   // Date à droite sous le filet (comme les factures)
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
   // Informations sur 2 colonnes au-dessus du ruban (style rapport classique,
   // enrichies depuis le bon enregistré quand il y en a un)
   const bi = _diagBonInfo(d) || {};
@@ -11118,12 +11130,12 @@ function _genRongeursPDF(d, mode) {
   y = headerFiletY + 9;
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Dératisation');
   doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.setFontSize(10.5); doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
@@ -11166,12 +11178,12 @@ function _genRongeursPDF(d, mode) {
     synth.forEach((s, i) => {
       const cx = M + i*colW + 4;
       if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
       doc.text(s[0], cx, y+5);
-      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (!s[1]) { doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
       if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
       else {
-        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
         doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
       }
     });
@@ -11185,7 +11197,7 @@ function _genRongeursPDF(d, mode) {
   field('Signes observés', (d.signes||[]).join(', '));
   if (d.diagnostic) {
     y += 1.5;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
     para(d.diagnostic);
   }
@@ -11203,7 +11215,7 @@ function _genRongeursPDF(d, mode) {
       RONGEUR_COLORS.forEach(c => {
         const rgb = [parseInt(c.hex.slice(1,3),16), parseInt(c.hex.slice(3,5),16), parseInt(c.hex.slice(5,7),16)];
         doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.circle(lx+1.5, y-1.2, 1.5, 'F');
-        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70);
+        doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8); doc.setTextColor(70);
         doc.text(c.label, lx+4.5, y);
         lx += 4.5 + doc.getTextWidth(c.label) + 8;
       });
@@ -11226,7 +11238,7 @@ function _genRongeursPDF(d, mode) {
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
-        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
         doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
@@ -11242,7 +11254,7 @@ function _genRongeursPDF(d, mode) {
     const drawPostesHeader = () => {
       doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
       doc.rect(M, y-4, CW, 6.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5); doc.setTextColor(255);
       doc.text('N°', c1+2, y); doc.text('Emplacement', c2+2, y); doc.text('Produit / piège', c3+2, y);
       doc.setTextColor(0);
       y += 5;
@@ -11255,8 +11267,8 @@ function _genRongeursPDF(d, mode) {
       const rowH = Math.max(lines1.length, lines2.length)*4.6 + 2.4;
       if (y + rowH + 2 > MAX_Y) { newPage(); drawPostesHeader(); }
       if (i % 2 === 0) { doc.setFillColor(246,247,250); doc.rect(M, y-3.4, CW, rowH, 'F'); }
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
-      doc.setFont('helvetica','normal');
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
+      doc.setFont(_PDFF('normal'), 'normal');
       doc.text(lines1, c2+2, y);
       doc.text(lines2, c3+2, y);
       y += rowH;
@@ -11271,16 +11283,16 @@ function _genRongeursPDF(d, mode) {
     y += 2; section('Fiches des espèces détectées', 38);
     fiches.forEach(nom => {
       const f = RONGEURS_INFO[nom];
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5);
       const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
       ensure(Math.min(estH, 75));
       doc.setFillColor(238,241,246);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10);
       const nomW = doc.getTextWidth(nom);
       doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
       doc.text(nom, M+3, y+3.6);
-      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(9); doc.setTextColor(110);
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
@@ -11304,7 +11316,7 @@ function _genRongeursPDF(d, mode) {
     doc.rect(M, y-3, 3.2, 3.2);
     doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
     doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(0);
     doc.text(lines, M+5.5, y);
     y += lines.length*4.8 + 1;
   };
@@ -11343,14 +11355,14 @@ function _genRongeursPDF(d, mode) {
   if (d.conclusion) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
@@ -11360,7 +11372,7 @@ function _genRongeursPDF(d, mode) {
   if (!d.noSign) {
     ensure(32);
     y += 8;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(40);
     doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
     doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
     if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
@@ -11375,7 +11387,7 @@ function _genRongeursPDF(d, mode) {
   for (let i = 1; i <= nb; i++) {
     doc.setPage(i);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
     doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
     doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
     doc.setTextColor(0);
@@ -11862,32 +11874,32 @@ function _genBlattesPDF(d, mode) {
   const section = (titre, keep) => {
     ensure(14 + (keep || 0));
     doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
-    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    y += 7.5; doc.setTextColor(0); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
     val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
     const lines = doc.splitTextToSize(String(val), R - vx - 2);
     ensure(Math.max(lines.length*4.8, 5.5) + 2);
     doc.setTextColor(60);
     doc.text(lbl + ' :', x, y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(lines, vx, y);
     y += Math.max(lines.length*4.8, 5.5);
   };
   const para = (txt) => {
     if (!txt) return;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(0);
     _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5);
     const w = doc.getTextWidth(txt) + 6;
     doc.setFillColor(rgb[0],rgb[1],rgb[2]);
     doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
@@ -11904,30 +11916,30 @@ function _genBlattesPDF(d, mode) {
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
-  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
   [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
   try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
   doc.setTextColor(0);
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
   const bi = _diagBonInfo(d) || {};
 
   // Bandeau titre
   y = headerFiletY + 9;
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Blattes');
   doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.setFontSize(10.5); doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
@@ -11968,12 +11980,12 @@ function _genBlattesPDF(d, mode) {
     synth.forEach((s, i) => {
       const cx = M + i*colW + 4;
       if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
       doc.text(s[0], cx, y+5);
-      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (!s[1]) { doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
       if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
       else {
-        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
         doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
       }
     });
@@ -11988,7 +12000,7 @@ function _genBlattesPDF(d, mode) {
   field('Foyers / zones chaudes', d.elementsTouches);
   if (d.diagnostic) {
     y += 1.5;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
     para(d.diagnostic);
   }
@@ -12007,7 +12019,7 @@ function _genBlattesPDF(d, mode) {
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
-        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
         doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
@@ -12023,7 +12035,7 @@ function _genBlattesPDF(d, mode) {
     const drawPostesHeader = () => {
       doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
       doc.rect(M, y-4, CW, 6.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5); doc.setTextColor(255);
       doc.text('N°', c1+2, y); doc.text('Emplacement', c2+2, y); doc.text('Produit / dispositif', c3+2, y);
       doc.setTextColor(0);
       y += 5;
@@ -12036,8 +12048,8 @@ function _genBlattesPDF(d, mode) {
       const rowH = Math.max(lines1.length, lines2.length)*4.6 + 2.4;
       if (y + rowH + 2 > MAX_Y) { newPage(); drawPostesHeader(); }
       if (i % 2 === 0) { doc.setFillColor(246,247,250); doc.rect(M, y-3.4, CW, rowH, 'F'); }
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
-      doc.setFont('helvetica','normal');
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
+      doc.setFont(_PDFF('normal'), 'normal');
       doc.text(lines1, c2+2, y);
       doc.text(lines2, c3+2, y);
       y += rowH;
@@ -12052,16 +12064,16 @@ function _genBlattesPDF(d, mode) {
     y += 2; section('Fiches des espèces détectées', 38);
     fiches.forEach(nom => {
       const f = BLATTES_INFO[nom];
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5);
       const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
       ensure(Math.min(estH, 75));
       doc.setFillColor(238,241,246);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10);
       const nomW = doc.getTextWidth(nom);
       doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
       doc.text(nom, M+3, y+3.6);
-      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(9); doc.setTextColor(110);
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
@@ -12084,7 +12096,7 @@ function _genBlattesPDF(d, mode) {
     doc.rect(M, y-3, 3.2, 3.2);
     doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
     doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(0);
     doc.text(lines, M+5.5, y);
     y += lines.length*4.8 + 1;
   };
@@ -12129,14 +12141,14 @@ function _genBlattesPDF(d, mode) {
   if (d.conclusion) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
@@ -12146,7 +12158,7 @@ function _genBlattesPDF(d, mode) {
   if (!d.noSign) {
     ensure(32);
     y += 8;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(40);
     doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
     doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
     if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
@@ -12161,7 +12173,7 @@ function _genBlattesPDF(d, mode) {
   for (let i = 1; i <= nb; i++) {
     doc.setPage(i);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
     doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
     doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
     doc.setTextColor(0);
@@ -12188,32 +12200,32 @@ function _genPunaisesPDF(d, mode) {
   const section = (titre, keep) => {
     ensure(14 + (keep || 0));
     doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
-    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    y += 7.5; doc.setTextColor(0); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
     val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
     const lines = doc.splitTextToSize(String(val), R - vx - 2);
     ensure(Math.max(lines.length*4.8, 5.5) + 2);
     doc.setTextColor(60);
     doc.text(lbl + ' :', x, y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(lines, vx, y);
     y += Math.max(lines.length*4.8, 5.5);
   };
   const para = (txt) => {
     if (!txt) return;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(0);
     _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5);
     const w = doc.getTextWidth(txt) + 6;
     doc.setFillColor(rgb[0],rgb[1],rgb[2]);
     doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
@@ -12230,30 +12242,30 @@ function _genPunaisesPDF(d, mode) {
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
-  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
   [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
   try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
   doc.setTextColor(0);
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
   const bi = _diagBonInfo(d) || {};
 
   // Bandeau titre
   y = headerFiletY + 9;
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Punaises de lit');
   doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.setFontSize(10.5); doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
@@ -12294,12 +12306,12 @@ function _genPunaisesPDF(d, mode) {
     synth.forEach((s, i) => {
       const cx = M + i*colW + 4;
       if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
       doc.text(s[0], cx, y+5);
-      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (!s[1]) { doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
       if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
       else {
-        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
         doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
       }
     });
@@ -12314,7 +12326,7 @@ function _genPunaisesPDF(d, mode) {
   field('Foyers / zones chaudes', d.elementsTouches);
   if (d.diagnostic) {
     y += 1.5;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
     para(d.diagnostic);
   }
@@ -12333,7 +12345,7 @@ function _genPunaisesPDF(d, mode) {
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
-        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
         doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
@@ -12349,7 +12361,7 @@ function _genPunaisesPDF(d, mode) {
     const drawPostesHeader = () => {
       doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
       doc.rect(M, y-4, CW, 6.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5); doc.setTextColor(255);
       doc.text('N°', c1+2, y); doc.text('Emplacement', c2+2, y); doc.text('Produit / dispositif', c3+2, y);
       doc.setTextColor(0);
       y += 5;
@@ -12362,8 +12374,8 @@ function _genPunaisesPDF(d, mode) {
       const rowH = Math.max(lines1.length, lines2.length)*4.6 + 2.4;
       if (y + rowH + 2 > MAX_Y) { newPage(); drawPostesHeader(); }
       if (i % 2 === 0) { doc.setFillColor(246,247,250); doc.rect(M, y-3.4, CW, rowH, 'F'); }
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
-      doc.setFont('helvetica','normal');
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9); doc.text(String(i+1), c1+2, y);
+      doc.setFont(_PDFF('normal'), 'normal');
       doc.text(lines1, c2+2, y);
       doc.text(lines2, c3+2, y);
       y += rowH;
@@ -12378,16 +12390,16 @@ function _genPunaisesPDF(d, mode) {
     y += 2; section('Fiches des espèces détectées', 38);
     fiches.forEach(nom => {
       const f = PUNAISES_INFO[nom];
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5);
       const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
       ensure(Math.min(estH, 75));
       doc.setFillColor(238,241,246);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10);
       const nomW = doc.getTextWidth(nom);
       doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
       doc.text(nom, M+3, y+3.6);
-      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(9); doc.setTextColor(110);
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
@@ -12410,7 +12422,7 @@ function _genPunaisesPDF(d, mode) {
     doc.rect(M, y-3, 3.2, 3.2);
     doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
     doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(0);
     doc.text(lines, M+5.5, y);
     y += lines.length*4.8 + 1;
   };
@@ -12467,14 +12479,14 @@ function _genPunaisesPDF(d, mode) {
   if (d.conclusion) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
@@ -12484,7 +12496,7 @@ function _genPunaisesPDF(d, mode) {
   if (!d.noSign) {
     ensure(32);
     y += 8;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(40);
     doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
     doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
     if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
@@ -12499,7 +12511,7 @@ function _genPunaisesPDF(d, mode) {
   for (let i = 1; i <= nb; i++) {
     doc.setPage(i);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
     doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
     doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
     doc.setTextColor(0);
@@ -13142,32 +13154,32 @@ function _genFourmisPDF(d, mode) {
   const section = (titre, keep) => {
     ensure(14 + (keep || 0));
     doc.setFillColor(SLATE[0],SLATE[1],SLATE[2]); doc.rect(M, y-3.2, 2.4, 4.4, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     doc.text(titre, M+4.5, y);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.4); doc.line(M, y+1.8, R, y+1.8);
-    y += 7.5; doc.setTextColor(0); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    y += 7.5; doc.setTextColor(0); doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
   };
   const field = (lbl, val, indent) => {
     if (!val) return;
     val = String(val).replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown
     const x = indent || M;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5);
     const vx = x + Math.max(40, doc.getTextWidth(lbl + ' :') + 3);
     const lines = doc.splitTextToSize(String(val), R - vx - 2);
     ensure(Math.max(lines.length*4.8, 5.5) + 2);
     doc.setTextColor(60);
     doc.text(lbl + ' :', x, y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
     doc.text(lines, vx, y);
     y += Math.max(lines.length*4.8, 5.5);
   };
   const para = (txt) => {
     if (!txt) return;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(0);
     _pdfWrapRich(doc, txt, CW, 10).forEach(segs => { ensure(6); _pdfDrawRichLine(doc, segs, M, y, 10); y += 4.9; });
   };
   const badge = (txt, rgb, x, yy) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(8.5);
     const w = doc.getTextWidth(txt) + 6;
     doc.setFillColor(rgb[0],rgb[1],rgb[2]);
     doc.roundedRect(x, yy-4.1, w, 5.6, 2.8, 2.8, 'F');
@@ -13183,29 +13195,29 @@ function _genFourmisPDF(d, mode) {
   const logoY = 13;
   const headerFiletY = logoY + logoH + 5;
   if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64,'PNG',20,logoY,logoW,logoH); } catch(e){} }
-  else { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
+  else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13,27,62); doc.text('DERATEK', 20, 23); }
   const cy0 = logoY + 4;
-  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
   [bu.rue, `${bu.npa} ${bu.ville}`, 'Tél. '+(bu.tel||co.tel)].forEach((l,i)=>{ if(l) doc.text(l, 92, cy0 + i*4.4); });
   [co.email, co.tva].forEach((l,i)=>{ if(l) doc.text(l, 146, cy0 + i*4.4); });
   doc.setTextColor(13,27,62);
   try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2*4.4, { url:'https://www.deratek.ch' }); } catch(e) { doc.text('www.deratek.ch', 146, cy0 + 2*4.4); }
   doc.setTextColor(0);
   doc.setDrawColor(200,205,213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10); doc.setTextColor(13,27,62);
   doc.text((bu.ville||'Neuchâtel') + ', le ' + (fmtDate(d.dateDoc)||''), 190, headerFiletY + 5, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setTextColor(0);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
   const bi = _diagBonInfo(d) || {};
 
   y = headerFiletY + 9;
   doc.setFillColor(NAVY[0],NAVY[1],NAVY[2]);
   doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(255);
+  doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(14); doc.setTextColor(255);
   doc.text((d.doctype==='Expertise'?'EXPERTISE':'RAPPORT') + ' N° ' + (d.numero||''), M+6, y+6.8);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
+  doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225,228,238);
   const rubanTxt = d.ruban || (((d.insectes||[]).length === 1) ? d.insectes[0] : 'Fourmis');
   doc.text(rubanTxt + ' — détection & plan d\'action', M+6, y+12.4);
-  doc.setFontSize(10.5); doc.setFont('helvetica','bold'); doc.setTextColor(255);
+  doc.setFontSize(10.5); doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(255);
   doc.text(fmtDate(d.dateDoc)||'', R-6, y+6.8, { align:'right' });
   doc.setTextColor(0);
   y += 21;
@@ -13244,12 +13256,12 @@ function _genFourmisPDF(d, mode) {
     synth.forEach((s, i) => {
       const cx = M + i*colW + 4;
       if (i) doc.line(M + i*colW, y+2.5, M + i*colW, y+12.5);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
       doc.text(s[0], cx, y+5);
-      if (!s[1]) { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
+      if (!s[1]) { doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9); doc.setTextColor(150); doc.text('—', cx, y+11.2); return; }
       if (s[2]) { badge(String(s[1]).replace(' (infestation massive)',''), s[2], cx, y+11.2); }
       else {
-        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+        doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
         doc.text(doc.splitTextToSize(String(s[1]), colW-8)[0]||'', cx, y+11.2);
       }
     });
@@ -13263,7 +13275,7 @@ function _genFourmisPDF(d, mode) {
   field('Origine / points d\'entrée', d.elementsTouches);
   if (d.diagnostic) {
     y += 1.5;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
     ensure(8); doc.text('Observations :', M, y); y += 5; doc.setTextColor(0);
     para(d.diagnostic);
   }
@@ -13281,7 +13293,7 @@ function _genFourmisPDF(d, mode) {
         doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
-        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(70);
+        doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
         doc.text(doc.splitTextToSize(cap, pw).slice(0, 2), px, y+ph+3.6);
         doc.setTextColor(0);
       } catch (e) {}
@@ -13295,16 +13307,16 @@ function _genFourmisPDF(d, mode) {
     y += 2; section('Fiches des espèces détectées', 38);
     fiches.forEach(nom => {
       const f = FOURMIS_INFO[nom];
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5);
       const estH = 13 + [f.habitat, f.indices, f.biologie, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
       ensure(Math.min(estH, 75));
       doc.setFillColor(238,241,246);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(10);
       const nomW = doc.getTextWidth(nom);
       doc.setTextColor(SLATE[0],SLATE[1],SLATE[2]);
       doc.text(nom, M+3, y+3.6);
-      doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(110);
+      doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(9); doc.setTextColor(110);
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
@@ -13326,7 +13338,7 @@ function _genFourmisPDF(d, mode) {
     doc.rect(M, y-3, 3.2, 3.2);
     doc.setDrawColor(45,158,107); doc.setLineWidth(0.6);
     doc.line(M+0.7, y-1.4, M+1.4, y-0.6); doc.line(M+1.4, y-0.6, M+2.7, y-2.6);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(0);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(0);
     doc.text(lines, M+5.5, y);
     y += lines.length*4.8 + 1;
   };
@@ -13361,14 +13373,14 @@ function _genFourmisPDF(d, mode) {
   if (d.conclusion) {
     // On fixe la police AVANT de découper : sinon le calcul de largeur se fait avec
     // la taille laissée par la section précédente et les lignes débordent du cadre.
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
     const lines = _pdfWrapRich(doc, d.conclusion, CW-13, 10);
     const boxH = lines.length*4.9 + 8;
     if (y + boxH + 12 > MAX_Y) newPage();
     y += 2; section('Conclusion / recommandations');
     doc.setFillColor(240,243,250); doc.setDrawColor(NAVY[0],NAVY[1],NAVY[2]); doc.setLineWidth(0.3);
     doc.roundedRect(M, y-2, CW, boxH, 2, 2, 'FD');
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10); doc.setTextColor(NAVY[0],NAVY[1],NAVY[2]);
     lines.forEach((segs, i) => _pdfDrawRichLine(doc, segs, M+5, y+3.5 + i*4.9, 10, NAVY));
     doc.setTextColor(0);
     y += boxH + 4;
@@ -13383,7 +13395,7 @@ function _genFourmisPDF(d, mode) {
   if (!d.noSign) {
     ensure(32);
     y += 8;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(9.5); doc.setTextColor(40);
     doc.text(bu.ville + ', le ' + (fmtDate(d.dateDoc)||''), M, y);
     doc.text('DERATEK' + (d.tech && !d.noTech ? ' — ' + d.tech : ''), 120, y);
     if (d.signature) { try { doc.addImage(d.signature, 'PNG', 120, y+1.5, 45, 15.75); } catch (e) {} }
@@ -13397,7 +13409,7 @@ function _genFourmisPDF(d, mode) {
   for (let i = 1; i <= nb; i++) {
     doc.setPage(i);
     doc.setDrawColor(SLATE[0],SLATE[1],SLATE[2]); doc.setLineWidth(0.3); doc.line(M, 283, R, 283);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
     doc.text('DERATEK Professional Pest Control — ' + co.rue + ', ' + co.npa + ' ' + co.ville + ' — ' + co.email, M, 287.5);
     doc.text('Page ' + i + '/' + nb, R, 287.5, { align:'right' });
     doc.setTextColor(0);
