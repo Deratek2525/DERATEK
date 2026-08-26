@@ -8226,59 +8226,83 @@ function downloadDocPDF(id, mode) {
 // ============================================================
 // RAPPORT DIAGNOSTIC INSECTES DU BOIS
 // ============================================================
-const INSECTES_BOIS = ['Capricornes des maisons', 'Vrillettes (petite/grosse)', 'Lyctus', 'Termites', 'Fourmis charpentières', 'Sirex', 'Hespérophanes'];
+const INSECTES_BOIS = ['Capricornes des maisons', 'Petite vrillette', 'Grosse vrillette', 'Lyctus', 'Termites', 'Fourmis charpentières', 'Sirex', 'Hespérophanes'];
 
 // Fiches descriptives des insectes xylophages — incluses automatiquement
 // dans le PDF pour chaque insecte coché dans le diagnostic.
 const INSECTES_BOIS_INFO = {
   'Capricornes des maisons': {
     latin: 'Hylotrupes bajulus',
-    bois: 'Résineux (sapin, épicéa, pin) — aubier des charpentes',
-    indices: "Trous d'envol ovales de 6 à 10 mm, galeries remplies de vermoulure tassée, surface du bois souvent intacte en apparence, grignotement parfois audible",
-    cycle: 'Larve active 3 à 10 ans dans le bois avant l\'envol de l\'adulte (juin–août)',
+    description: "Adulte noir à brun de 8 à 25 mm aux longues antennes ; larve blanc ivoire, jusqu'à 30 mm, aux puissantes mandibules — c'est elle qui dévore le bois",
+    bois: 'Résineux (sapin, épicéa, pin) — aubier des charpentes, pannes, chevrons',
+    indices: "Trous d'envol ovales de 6 à 10 mm, galeries remplies de vermoulure tassée, surface du bois souvent intacte en apparence, grignotement parfois audible par temps calme",
+    cycle: "Œuf : 20 à 80 œufs pondus en été dans les fentes et fissures du bois ; éclosion en 1 à 3 semaines.\nLarve : 3 à 10 ans dans l'aubier — c'est le stade destructeur ; la larve creuse des galeries parallèles au fil, sa croissance dépend de la température et de l'humidité du bois.\nNymphe : 3 à 6 semaines dans une loge aménagée juste sous la surface.\nAdulte : envol de juin à août par le trou ovale ; il ne se nourrit pas, vit 2 à 4 semaines, s'accouple, et la femelle pond souvent sur la même charpente → réinfestation continue.",
     risque: 'Peut compromettre la résistance mécanique de la charpente ; traitement indispensable dès détection',
   },
-  'Vrillettes (petite/grosse)': {
-    latin: 'Anobium punctatum / Xestobium rufovillosum',
-    bois: 'Feuillus et résineux ; la grosse vrillette préfère les bois humides ou dégradés par des champignons (chêne ancien)',
-    indices: "Trous d'envol ronds de 1 à 3 mm (petite) ou 2,5 à 4 mm (grosse), vermoulure granuleuse s'écoulant des trous, bois criblé",
-    cycle: 'Larve 2 à 4 ans, davantage en bois sec',
-    risque: "Affaiblissement progressif ; la grosse vrillette révèle souvent un problème d'humidité à traiter en parallèle",
+  'Petite vrillette': {
+    latin: 'Anobium punctatum',
+    description: "Adulte brun foncé de 2,5 à 5 mm, tête cachée sous un pronotum en capuchon ; larve blanc crème arquée de 1 à 6 mm",
+    bois: "Feuillus et résineux, aubier surtout : meubles, parquets, planchers, escaliers, charpentes anciennes ; s'installe dès 10-12 % d'humidité du bois",
+    indices: "Trous d'envol ronds de 1 à 3 mm, vermoulure granuleuse (en grains de citron) s'écoulant des trous, bois criblé en surface",
+    cycle: "Œuf : 20 à 50 œufs pondus en été dans les fentes, pores et anciens trous d'envol ; éclosion en 4 à 5 semaines.\nLarve : 2 à 4 ans (jusqu'à 5 ans en bois très sec) à creuser des galeries dans le sens du fil — stade responsable de tous les dégâts.\nNymphe : 2 à 8 semaines dans une loge proche de la surface.\nAdulte : émerge d'avril à août en perçant le trou d'envol rond ; il ne se nourrit pas, vit 3 à 4 semaines, s'accouple et repond très souvent dans le même bois → l'infestation s'entretient d'elle-même.",
+    risque: "Affaiblissement progressif de l'aubier ; infestations anciennes pouvant devenir massives dans les planchers et les meubles",
+  },
+  'Grosse vrillette': {
+    latin: 'Xestobium rufovillosum',
+    description: "Adulte brun chocolat de 5 à 9 mm, moucheté de touffes de poils jaunâtres ; larve blanchâtre arquée jusqu'à 10 mm",
+    bois: "Feuillus — chêne ancien surtout — préalablement dégradés par des champignons lignivores ; bois humides : abouts de poutres, encastrements, zones d'infiltration",
+    indices: "Trous d'envol ronds de 2,5 à 4 mm, vermoulure en pastilles (petites lentilles), et le fameux « toc-toc » de l'horloge de la mort : les adultes tambourinent dans les galeries au printemps pour s'appeler",
+    cycle: "Œuf : 40 à 80 œufs déposés au printemps dans les fissures et anfractuosités ; éclosion en 2 à 5 semaines.\nLarve : 3 à 10 ans selon l'humidité et la dégradation fongique du bois — plus le bois est sain et sec, plus le cycle s'allonge ; elle creuse en profondeur vers le cœur.\nNymphe : 3 à 4 semaines en fin d'été, dans une loge sous la surface.\nAdulte : sortie d'avril à juin ; vit environ 8 semaines, tambourine pour attirer un partenaire, s'accouple et repond dans les mêmes bois dégradés.",
+    risque: "Dégâts profonds dans les bois de structure anciens ; révèle presque toujours un problème d'humidité et de champignons à traiter en parallèle",
   },
   'Lyctus': {
     latin: 'Lyctus brunneus / Lyctus linearis',
-    bois: "Feuillus riches en amidon : aubier de chêne, frêne, châtaignier, bois exotiques (parquets, menuiseries récentes)",
-    indices: "Trous d'envol ronds de 1 à 2 mm, vermoulure très fine semblable à du talc",
-    cycle: 'Cycle court : 8 à 12 mois',
+    description: "Adulte brun-roux allongé de 2,5 à 8 mm ; larve blanche arquée d'environ 5 mm à tête brune",
+    bois: "Feuillus riches en amidon : aubier de chêne, frêne, châtaignier, bois exotiques (parquets, menuiseries et meubles récents)",
+    indices: "Trous d'envol ronds de 1 à 2 mm, vermoulure extrêmement fine semblable à du talc, petits tas de farine sous les ouvrages",
+    cycle: "Œuf : 40 à 70 œufs pondus directement dans les gros vaisseaux du bois (d'où la préférence pour les feuillus à pores ouverts) ; éclosion en 1 à 2 semaines.\nLarve : 8 à 12 mois en conditions favorables (bois riche en amidon, ~20 °C) ; elle réduit l'aubier en farine en respectant une fine pellicule de surface.\nNymphe : 2 à 4 semaines près de la surface.\nAdulte : émerge surtout de mai à septembre, actif la nuit, vit quelques semaines et repond aussitôt — plusieurs générations peuvent se succéder dans le même ouvrage, d'où une propagation rapide.",
     risque: "Réduit l'aubier en poudre ; propagation rapide dans les bois mis en œuvre récemment",
   },
   'Termites': {
     latin: 'Reticulitermes spp.',
+    description: "Insectes sociaux : ouvriers blanchâtres de 3 à 5 mm, soldats à grosse tête armée, sexués ailés bruns lors de l'essaimage",
     bois: 'Tous bois et matériaux cellulosiques, en progression depuis le sol',
-    indices: "Pas de trous d'envol visibles : bois feuilleté vidé de l'intérieur, cordonnets terreux, surface intacte",
-    cycle: 'Colonie pérenne de plusieurs milliers à millions d\'individus',
+    indices: "Pas de trous d'envol visibles : bois feuilleté vidé de l'intérieur, cordonnets terreux (galeries-tunnels), surface intacte qui sonne creux",
+    cycle: "Œuf : la reine pond en continu, jusqu'à plusieurs milliers d'œufs par an ; éclosion en quelques semaines.\nLarve : selon les besoins de la colonie, elle devient ouvrier (récolte et dégâts), soldat (défense) ou sexué.\nColonie : pérenne, de plusieurs milliers à plusieurs millions d'individus, cachée dans le sol et les maçonneries.\nEssaimage : au printemps, les sexués ailés s'envolent, perdent leurs ailes et fondent de nouvelles colonies — signe d'alerte majeur.",
     risque: 'Dégâts structurels majeurs et rapides ; traitement spécialisé de la zone entière requis',
   },
   'Fourmis charpentières': {
     latin: 'Camponotus spp.',
+    description: "Ouvrières noires ou bicolores de 6 à 14 mm (parmi les plus grandes fourmis d'Europe) ; reine jusqu'à 18 mm",
     bois: 'Bois humides, tendres ou déjà dégradés',
-    indices: 'Galeries lisses et propres (sans vermoulure interne), sciure grossière rejetée à proximité, ouvrières visibles',
-    cycle: 'Colonie installée plusieurs années, essaimage au printemps',
+    indices: 'Galeries lisses et propres (sans vermoulure interne), sciure grossière rejetée en tas à proximité, ouvrières visibles le soir',
+    cycle: "Œuf : pondu par la reine au nid ; éclosion en ~2 semaines.\nLarve : nourrie par les ouvrières, 3 à 4 semaines.\nNymphe : dans un cocon soyeux, 3 à 4 semaines — de l'œuf à l'adulte il faut 6 à 10 semaines.\nAdulte / colonie : la colonie mère s'installe plusieurs années et crée des colonies satellites dans les bois humides ; essaimage des sexués ailés au printemps.",
     risque: "Ne mangent pas le bois mais le creusent pour nicher ; révèlent presque toujours un problème d'humidité",
   },
   'Sirex': {
     latin: 'Sirex / Urocerus spp. (guêpes du bois)',
-    bois: 'Résineux, généralement infestés avant la mise en œuvre du bois',
-    indices: "Trous d'envol parfaitement circulaires de 4 à 7 mm, galeries fourrées de vermoulure compacte",
-    cycle: 'Larve 1 à 3 ans',
+    description: "Grande « guêpe du bois » de 15 à 40 mm munie d'une tarière ; larve cylindrique blanche terminée par une petite épine",
+    bois: 'Résineux, généralement infestés avant la mise en œuvre du bois (arbre sur pied ou grume)',
+    indices: "Trous d'envol parfaitement circulaires de 4 à 7 mm, galeries fourrées de vermoulure compacte ; l'adulte peut percer plâtre, parquet ou revêtement en sortant",
+    cycle: "Œuf : déposé profondément dans le bois d'arbres affaiblis ou fraîchement abattus, avec un champignon symbiotique qui prédigère le bois ; éclosion en 3 à 4 semaines.\nLarve : 1 à 3 ans à creuser vers le cœur puis revenir vers la surface — l'infestation date presque toujours d'avant le sciage.\nNymphe : quelques semaines près de la surface.\nAdulte : émerge en perçant son trou rond caractéristique, y compris à travers les finitions ; il ne repond pas dans le bois sec mis en œuvre → pas de réinfestation.",
     risque: 'Pas de réinfestation du bois sec mis en œuvre ; dégâts limités mais trous inesthétiques',
   },
   'Hespérophanes': {
     latin: 'Trichoferus holosericeus',
+    description: "Adulte brun grisâtre au fin duvet soyeux, 13 à 24 mm ; larve blanc ivoire jusqu'à 25 mm, semblable à celle du capricorne",
     bois: 'Feuillus : chêne, peuplier, arbres fruitiers',
     indices: "Trous d'envol ovales de 3 à 7 mm, vermoulure fine et tassée — l'équivalent du capricorne pour les feuillus",
-    cycle: 'Larve 2 à 5 ans',
+    cycle: "Œuf : pondu en été dans les fentes des feuillus secs ; éclosion en 1 à 2 semaines.\nLarve : 2 à 5 ans (parfois davantage) dans l'aubier puis le bois parfait, galeries ovales tassées de vermoulure.\nNymphe : quelques semaines sous la surface.\nAdulte : envol de juin à août, mœurs nocturnes, vit quelques semaines pour se reproduire.",
     risque: 'Peut affaiblir fortement les éléments porteurs en feuillus',
+  },
+  // Ancien intitulé combiné — conservé pour les diagnostics déjà enregistrés
+  'Vrillettes (petite/grosse)': {
+    latin: 'Anobium punctatum / Xestobium rufovillosum',
+    description: "Petite vrillette : adulte brun de 2,5 à 5 mm ; grosse vrillette : adulte brun chocolat moucheté de 5 à 9 mm",
+    bois: 'Feuillus et résineux ; la grosse vrillette préfère les bois humides ou dégradés par des champignons (chêne ancien)',
+    indices: "Trous d'envol ronds de 1 à 3 mm (petite) ou 2,5 à 4 mm (grosse), vermoulure granuleuse s'écoulant des trous, bois criblé",
+    cycle: "Œuf : pondu l'été dans fentes et anciens trous (éclosion 2 à 5 semaines).\nLarve : 2 à 4 ans (petite) ou 3 à 10 ans (grosse) — stade destructeur.\nNymphe : quelques semaines sous la surface.\nAdulte : envol au printemps-été, vit quelques semaines et repond dans le même bois.",
+    risque: "Affaiblissement progressif ; la grosse vrillette révèle souvent un problème d'humidité à traiter en parallèle",
   },
 };
 
@@ -10531,8 +10555,8 @@ function _genDiagPDF(d, mode) {
       const f = INSECTES_BOIS_INFO[nom];
       // Hauteur estimée de la fiche pour la garder entière sur une page
       doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
-      const estH = 13 + [f.bois, f.indices, f.cycle, f.risque].reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
-      ensure(Math.min(estH, 75));
+      const estH = 13 + [f.description, f.bois, f.indices, f.cycle, f.risque].filter(Boolean).reduce((s,v)=> s + Math.max(doc.splitTextToSize(String(v),135).length*4.8, 5.5), 0);
+      ensure(Math.min(estH, 120));
       doc.setFillColor(247,242,235);
       doc.roundedRect(M, y-1, CW, 7, 1.5, 1.5, 'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(10);
@@ -10543,9 +10567,10 @@ function _genDiagPDF(d, mode) {
       doc.text(f.latin, M+3+nomW+4, y+3.6);
       doc.setTextColor(0);
       y += 10;
+      field('Description', f.description, M+3);
       field('Bois attaqués', f.bois, M+3);
       field('Indices typiques', f.indices, M+3);
-      field('Cycle de vie', f.cycle, M+3);
+      field('Cycle de vie (œuf → adulte)', f.cycle, M+3);
       field('Risque', f.risque, M+3);
       y += 3;
     });
