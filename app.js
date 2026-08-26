@@ -5595,6 +5595,8 @@ function _docNotesClean(d) {
     .replace(/\s*\[ORD:\d+\]\s*/g, ' ')
     .replace(/\s*\[EXPERT:[^\]]*\]\s*/g, ' ')
     .replace(/\s*\[DEVISARCH\]\s*/g, ' ')
+    .replace(/\s*\[ENVOI:[^\]]*\]\s*/g, ' ')
+    .replace(/\s*\[PAIE:[^\]]*\]\s*/g, ' ')
     .trim();
 }
 // Ordre manuel d'affichage dans Anciennes factures (glisser-déposer) — marqueur [ORD:n]
@@ -6919,11 +6921,44 @@ function saveDoc() {
 }
 
 // Change le statut d'un document
+// Date d'envoi d'un devis : marqueur [ENVOI:AAAA-MM-JJ] posé dans les notes au passage
+// au statut « Envoyé » (repli sur la date du document pour les devis déjà envoyés).
+function _devisDateEnvoi(d) {
+  const m = String((d && d.notes) || '').match(/\[ENVOI:([0-9]{4}-[0-9]{2}-[0-9]{2})\]/);
+  return (m && m[1]) || (d && d.dateDoc) || '';
+}
+const DEVIS_VALIDITE_JOURS = 30;   // durée de validité d'un devis envoyé
+// Jours restants avant expiration (négatif = expiré), null si non applicable
+function _devisJoursRestants(d) {
+  if (!d || d.type !== 'devis' || d.statut !== 'envoye') return null;
+  const dep = _devisDateEnvoi(d); if (!dep) return null;
+  const t = new Date(dep + 'T00:00:00'); if (isNaN(t.getTime())) return null;
+  t.setDate(t.getDate() + DEVIS_VALIDITE_JOURS);
+  const auj = new Date(); auj.setHours(0, 0, 0, 0);
+  return Math.round((t.getTime() - auj.getTime()) / 86400000);
+}
+// Pastille compte à rebours affichée sur la carte du devis
+function _devisCountdownChip(d) {
+  const j = _devisJoursRestants(d);
+  if (j === null) return '';
+  const chip = (txt, bg, col, bd) => `<span title="Devis valable ${DEVIS_VALIDITE_JOURS} jours — envoyé le ${fmtDate(_devisDateEnvoi(d))}" style="font-size:10px;font-weight:800;color:${col};background:${bg};border:1px solid ${bd};border-radius:8px;padding:2px 8px;white-space:nowrap;">${txt}</span>`;
+  if (j < 0)   return chip('⛔ Expiré depuis ' + (-j) + ' j', '#fee2e2', '#991b1b', '#fca5a5');
+  if (j === 0) return chip('⚠️ Expire aujourd\'hui', '#fee2e2', '#991b1b', '#fca5a5');
+  if (j <= 7)  return chip('⏳ J-' + j + ' — à relancer', '#fef3c7', '#92400e', '#fcd34d');
+  return chip('⏳ J-' + j, '#eff6ff', '#1d4ed8', '#bfdbfe');
+}
+
 function updateDocStatut(id, value) {
   const docs = DB.documents;
   const d = docs.find(x => x.id === id);
   if (!d) return;
+  const _avant = d.statut;
   d.statut = value;
+  // Passage à « Envoyé » : on horodate l'envoi pour le compte à rebours de validité
+  if (d.type === 'devis' && value === 'envoye' && _avant !== 'envoye') {
+    d.notes = String(d.notes || '').replace(/\s*\[ENVOI:[^\]]*\]/g, '').trim();
+    d.notes = (d.notes + ' [ENVOI:' + today() + ']').trim();
+  }
   // Facture payée → on archive aussi le devis source (et on le ressort si on dé-paie)
   if (d.type === 'facture' && d.devisId) _syncDevisArchiveWithFacture(d, value === 'payee');
   DB.documents = docs;
@@ -7140,6 +7175,7 @@ function renderDocuments() {
       <div style="min-width:130px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}${_isRappelDoc(d)?` <span style="font-size:9px;font-weight:800;color:#fff;background:#dc2626;border-radius:8px;padding:1px 6px;vertical-align:middle;">RAPPEL ${(_rappelMeta(d)||{}).niveau||''}</span>`:''}</div>
         <div style="font-size:11px;${d.statut==='envoyee'?'color:var(--navy);font-weight:800;':'color:var(--g600);'}">📅 ${fmtDate(d.dateDoc)||'—'}</div>
+        ${(() => { const _cd = _devisCountdownChip(d); return _cd ? `<div style="margin-top:3px;">${_cd}</div>` : ''; })()}
       </div>
       <div style="flex:1.4;min-width:160px;">
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
