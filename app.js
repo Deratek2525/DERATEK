@@ -8573,7 +8573,7 @@ function renderDiagEditor() {
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔬 Diagnostic</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
       <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Activité de l'infestation ${_diagSectionToggle('noAct','Afficher dans le PDF')}</label>
-        <select class="form-input" oninput="_editingDiag.activite=this.value">
+        <select class="form-input" ${d.noAct?'style="opacity:.45;"':''} oninput="_editingDiag.activite=this.value">
           <option value="" ${!d.activite?'selected':''}>-- Choisir --</option>
           <option ${d.activite==='Active'?'selected':''}>Active</option>
           <option ${d.activite==='Ancienne'?'selected':''}>Ancienne</option>
@@ -8581,7 +8581,7 @@ function renderDiagEditor() {
         </select>
       </div>
       <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Gravité ${_diagSectionToggle('noGrav','Afficher dans le PDF')}</label>
-        <select class="form-input" oninput="_editingDiag.gravite=this.value">
+        <select class="form-input" ${d.noGrav?'style="opacity:.45;"':''} oninput="_editingDiag.gravite=this.value">
           <option value="" ${!d.gravite?'selected':''}>-- Choisir --</option>
           <option ${d.gravite==='Faible'?'selected':''}>Faible</option>
           <option ${d.gravite==='Modérée'?'selected':''}>Modérée</option>
@@ -8589,7 +8589,7 @@ function renderDiagEditor() {
           <option ${d.gravite==='Critique (structure menacée)'?'selected':''}>Critique (structure menacée)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Étendue / surface concernée ${_diagSectionToggle('noEtend','Afficher dans le PDF')}</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Étendue / surface concernée ${_diagSectionToggle('noEtend','Afficher dans le PDF')}</label><input class="form-input" ${d.noEtend?'style="opacity:.45;"':''} value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
       <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Taux d'humidité du bois ${_diagSectionToggle('noHum','Afficher dans le PDF')}</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%" ${d.noHum?'style="display:none;"':''}></div>
       <div class="form-group"><label class="form-label">Méthode d'inspection</label>
         <select class="form-input" oninput="_editingDiag.methode=this.value">
