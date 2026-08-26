@@ -1789,14 +1789,44 @@ function renderRapports() {
   // Section "Reprendre plus tard" : tous les rapports en brouillon, accès direct
   const draftsBox = $('rapports-drafts');
   if (draftsBox) {
-    const drafts = (DB.rapports || []).filter(r => r.statut === 'Brouillon' && !_isRapportFactArchived(r))
-      .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    // Rapports classiques + diagnostics (bois, rongeurs, blattes, fourmis, punaises) en brouillon
+    const draftsRap = (DB.rapports || []).filter(r => r.statut === 'Brouillon' && !_isRapportFactArchived(r))
+      .map(r => ({ _kind: 'rap', r }));
+    const _DIAG_LBL = { bois: '🪵 Diagnostic bois', rongeurs: '🐀 Rapport rongeurs', blattes: '🪳 Rapport blattes', fourmis: '🐜 Rapport fourmis', punaises: '🛏️ Rapport punaises' };
+    const draftsDiag = (DB.diagnostics || []).filter(d => (d.statut || 'Brouillon') === 'Brouillon')
+      .map(d => ({ _kind: 'diag', d }));
+    const drafts = draftsRap.concat(draftsDiag)
+      .sort((a, b) => String((b.r ? b.r.date : b.d.dateDoc) || '').localeCompare(String((a.r ? a.r.date : a.d.dateDoc) || '')));
     if (drafts.length) {
       draftsBox.innerHTML = `
         <div style="border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;background:#fffbeb;">
           <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:10px;">🕒 Reprendre plus tard (${drafts.length}) — brouillons non finalisés</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            ${drafts.map(r => {
+            ${drafts.map(_it => {
+              // --- Diagnostic en brouillon ---
+              if (_it._kind === 'diag') {
+                const d = _it.d;
+                const titre = _DIAG_LBL[_diagType(d)] || '🔬 Diagnostic';
+                const nuisD = (d.insectes && d.insectes.length) ? d.insectes.join(', ') : '';
+                const sousD = [d.locataireNom ? '🏠 ' + d.locataireNom : '', d.locataireAdresse ? '📍 ' + d.locataireAdresse : '', d.tech ? '👷 ' + d.tech : ''].filter(Boolean).join(' &nbsp;·&nbsp; ');
+                return `
+                <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
+                  <div style="min-width:120px;">
+                    <div style="font-size:12px;font-weight:800;color:var(--navy);">${titre}</div>
+                    <div style="font-size:11px;color:var(--g600);">${_escapeHtml(d.numero || '')} · 📅 ${fmtDate(d.dateDoc) || '—'}</div>
+                  </div>
+                  <div style="flex:1;min-width:180px;font-size:12px;color:var(--g600);">
+                    <div style="font-weight:600;color:var(--navy);">${_escapeHtml(d.clientNom || '— Sans client —')}${nuisD ? ' · 🐛 ' + _escapeHtml(nuisD) : ''}</div>
+                    ${sousD ? `<div style="font-size:11px;margin-top:2px;">${sousD}</div>` : ''}
+                  </div>
+                  <div style="display:flex;gap:5px;flex-shrink:0;">
+                    <button class="btn btn-navy btn-sm" onclick="editDiag('${d.id}')" title="Reprendre ce rapport">▶ Reprendre</button>
+                    <button class="btn btn-red btn-sm btn-xs" onclick="event.stopPropagation();confirmDeleteDiag('${d.id}','${String(d.numero || '').replace(/'/g, "\\'")}')" title="Supprimer ce brouillon">🗑</button>
+                  </div>
+                </div>`;
+              }
+              // --- Rapport d'intervention classique ---
+              const r = _it.r;
               const loc = _rapLoc(r);
               const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
               // Adresse D'INTERVENTION (locataire / immeuble du bon) — jamais celle de la gérance
@@ -8470,7 +8500,8 @@ function openNewDiagnostic() {
     id: newId(), numero: _nextDiagNumero(), dateDoc: today(), tech: '',
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
-    activite: '', etendue: '', humidite: '', noHum: '', noAct: '', noGrav: '', noEtend: '', gravite: '', diagnostic: '', conclusion: '',
+    // Par défaut : Gravité et Étendue NE sont PAS imprimées sur le PDF (choix Dany)
+    activite: '', etendue: '', humidite: '', noHum: '', noAct: '', noGrav: '1', noEtend: '1', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
     bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', noSign: '1',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
