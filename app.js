@@ -8329,11 +8329,12 @@ const _DIAG_MARKERS = {
   contrat: 'CONTRAT', contratPassages: 'CONTRATP', contratMontant: 'CONTRATM', contratZones: 'CONTRATZ', contratRem: 'CONTRATR',
   dateInt1: 'DI1', dateInt2: 'DI2', dateInt3: 'DI3', dateProchain: 'DIP',
   statut: 'STATUT', noSign: 'NOSIGN', ruban: 'RUBAN', noHum: 'NOHUM', hygiene: 'HYGIENE', fiche: 'FICHE',
+  noAct: 'NOACT', noGrav: 'NOGRAV', noEtend: 'NOETEND',
   // Rapport punaises de lit : consignes de préparation du locataire
   preparation: 'PREPA', preparationRem: 'PREPAREM',
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions', 'preparation']);   // tableaux/objets → JSON dans le marqueur
-const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|HYGIENE|FICHE|PREPAREM|PREPA):[^\]]*\]/g;
+const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|NOACT|NOGRAV|NOETEND|HYGIENE|FICHE|PREPAREM|PREPA):[^\]]*\]/g;
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -8469,7 +8470,7 @@ function openNewDiagnostic() {
     id: newId(), numero: _nextDiagNumero(), dateDoc: today(), tech: '',
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
-    activite: '', etendue: '', humidite: '', noHum: '', gravite: '', diagnostic: '', conclusion: '',
+    activite: '', etendue: '', humidite: '', noHum: '', noAct: '', noGrav: '', noEtend: '', gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
     bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', noSign: '1',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
@@ -8571,7 +8572,7 @@ function renderDiagEditor() {
 
     <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:8px;">🔬 Diagnostic</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
-      <div class="form-group"><label class="form-label">Activité de l'infestation</label>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Activité de l'infestation ${_diagSectionToggle('noAct','Afficher dans le PDF')}</label>
         <select class="form-input" oninput="_editingDiag.activite=this.value">
           <option value="" ${!d.activite?'selected':''}>-- Choisir --</option>
           <option ${d.activite==='Active'?'selected':''}>Active</option>
@@ -8579,7 +8580,7 @@ function renderDiagEditor() {
           <option ${d.activite==='Mixte (active + ancienne)'?'selected':''}>Mixte (active + ancienne)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Gravité</label>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Gravité ${_diagSectionToggle('noGrav','Afficher dans le PDF')}</label>
         <select class="form-input" oninput="_editingDiag.gravite=this.value">
           <option value="" ${!d.gravite?'selected':''}>-- Choisir --</option>
           <option ${d.gravite==='Faible'?'selected':''}>Faible</option>
@@ -8588,7 +8589,7 @@ function renderDiagEditor() {
           <option ${d.gravite==='Critique (structure menacée)'?'selected':''}>Critique (structure menacée)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Étendue / surface concernée</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Étendue / surface concernée ${_diagSectionToggle('noEtend','Afficher dans le PDF')}</label><input class="form-input" value="${(d.etendue||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.etendue=this.value" placeholder="Ex. ~20 m² de charpente"></div>
       <div class="form-group"><label class="form-label" style="display:flex;align-items:center;flex-wrap:wrap;">Taux d'humidité du bois ${_diagSectionToggle('noHum','Afficher dans le PDF')}</label><input class="form-input" value="${(d.humidite||'').replace(/"/g,'&quot;')}" oninput="_editingDiag.humidite=this.value" placeholder="Ex. 14%" ${d.noHum?'style="display:none;"':''}></div>
       <div class="form-group"><label class="form-label">Méthode d'inspection</label>
         <select class="form-input" oninput="_editingDiag.methode=this.value">
@@ -10475,12 +10476,12 @@ function _genDiagPDF(d, mode) {
   y += 1;
 
   // --- Synthèse : activité / gravité / étendue / humidité --------------
-  const synth = [
-    ['ACTIVITÉ', d.activite, ACT_RGB[d.activite]],
-    ['GRAVITÉ', d.gravite, GRAV_RGB[d.gravite]],
-    ['ÉTENDUE', d.etendue, null],
-  ];
-  if (!d.noHum) synth.push(['HUMIDITÉ DU BOIS', d.humidite, null]);
+  // Chaque colonne n'apparaît que si sa case « Afficher dans le PDF » est cochée
+  const synth = [];
+  if (!d.noAct)   synth.push(['ACTIVITÉ', d.activite, ACT_RGB[d.activite]]);
+  if (!d.noGrav)  synth.push(['GRAVITÉ', d.gravite, GRAV_RGB[d.gravite]]);
+  if (!d.noEtend) synth.push(['ÉTENDUE', d.etendue, null]);
+  if (!d.noHum)   synth.push(['HUMIDITÉ DU BOIS', d.humidite, null]);
   if (synth.some(s => s[1])) {
     ensure(20);
     const colW = CW/synth.length;
