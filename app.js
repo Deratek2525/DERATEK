@@ -6941,11 +6941,13 @@ function _devisJoursRestants(d) {
 function _devisCountdownChip(d) {
   const j = _devisJoursRestants(d);
   if (j === null) return '';
-  const chip = (txt, bg, col, bd) => `<span title="Devis valable ${DEVIS_VALIDITE_JOURS} jours — envoyé le ${fmtDate(_devisDateEnvoi(d))}" style="font-size:10px;font-weight:800;color:${col};background:${bg};border:1px solid ${bd};border-radius:8px;padding:2px 8px;white-space:nowrap;">${txt}</span>`;
-  if (j < 0)   return chip('⛔ Expiré depuis ' + (-j) + ' j', '#fee2e2', '#991b1b', '#fca5a5');
-  if (j === 0) return chip('⚠️ Expire aujourd\'hui', '#fee2e2', '#991b1b', '#fca5a5');
-  if (j <= 7)  return chip('⏳ J-' + j + ' — à relancer', '#fef3c7', '#92400e', '#fcd34d');
-  return chip('⏳ J-' + j, '#eff6ff', '#1d4ed8', '#bfdbfe');
+  // flash = pastille clignotante (urgence) ; sinon pastille fixe, mais toujours bien lisible
+  const chip = (txt, bg, col, bd, flash) => `<span class="devis-cd${flash ? ' devis-cd-flash' : ''}" title="Devis valable ${DEVIS_VALIDITE_JOURS} jours — envoyé le ${fmtDate(_devisDateEnvoi(d))}" style="color:${col};background:${bg};border:2px solid ${bd};">${txt}</span>`;
+  if (j < 0)   return chip('⛔ EXPIRÉ depuis ' + (-j) + ' j', '#fee2e2', '#991b1b', '#dc2626', true);
+  if (j === 0) return chip('⚠️ EXPIRE AUJOURD\'HUI', '#fee2e2', '#991b1b', '#dc2626', true);
+  if (j <= 7)  return chip('⏳ J-' + j + ' — À RELANCER', '#fef3c7', '#92400e', '#f59e0b', true);
+  if (j <= 14) return chip('⏳ J-' + j, '#fff7ed', '#b45309', '#fdba74', false);
+  return chip('⏳ J-' + j, '#eff6ff', '#1d4ed8', '#60a5fa', false);
 }
 
 function updateDocStatut(id, value) {
