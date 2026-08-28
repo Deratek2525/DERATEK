@@ -3407,12 +3407,19 @@ function _cockpitFamilles(actif) {
   });
 }
 
+let _optStylePrec;
 function optApply() {
   const r = document.documentElement;
   const cockpit = (OPT.style === 'cockpit');
   r.setAttribute('data-style', cockpit ? 'cockpit' : 'classique');
   _cockpitFamilles(cockpit && window.innerWidth > 820);
   if (typeof adjustStickyOffsets === 'function') setTimeout(adjustStickyOffsets, 30);
+  // Les cartes changent de présentation selon le style : on les redessine
+  if (_optStylePrec !== undefined && _optStylePrec !== OPT.style) {
+    ['renderBons', 'renderDocuments', 'renderClients', 'renderRapports', 'renderMonPoste']
+      .forEach(f => { if (typeof window[f] === 'function') { try { window[f](); } catch (e) {} } });
+  }
+  _optStylePrec = OPT.style;
   r.setAttribute('data-theme', OPT.theme === 'sombre' ? 'sombre' : 'clair');
   r.setAttribute('data-densite', OPT.densite || 'normale');
   r.setAttribute('data-anim', OPT.animations === '1' ? '1' : '0');
@@ -5654,7 +5661,10 @@ function renderBonCard(b, solid) {
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
   const gerColor = colorForGeranceName(g);          // couleur de la gérance
   const gColor = customColor || gerColor;
-  const fillSolid = (solid === true);               // fond plein (onglet « Bons ») ou clair (en cours, terminés…)
+  // Style Cockpit : cartes blanches à liseré coloré, comme les lignes de la maquette.
+  // Le fond plein coloré est réservé au style Classique.
+  const _cockpit = (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820);
+  const fillSolid = (solid === true) && !_cockpit;  // fond plein (onglet « Bons ») ou clair (en cours, terminés…)
   // Dans les autres onglets (En cours, Terminés…), on reprend la couleur de la GÉRANCE (pas la couleur perso).
   const displayColor = fillSolid ? gColor : gerColor;
   const loc = (b.locataireId && (DB.locataires||[]).find(l => l.id === b.locataireId))
@@ -5685,9 +5695,9 @@ function renderBonCard(b, solid) {
   // Fond PLEIN (onglet « Bons ») → texte auto-contrasté ; sinon fond CLAIR → texte foncé normal.
   const _lum = (h => { const m = String(h||'').replace('#','').match(/^([0-9a-f]{6})$/i); if(!m) return 1; const n=parseInt(m[1],16); return 0.2126*((n>>16&255)/255)+0.7152*((n>>8&255)/255)+0.0722*((n&255)/255); })(displayColor);
   const _dark = _lum < 0.62;
-  const bg         = fillSolid ? displayColor : _hexTint(displayColor, 0.12);
-  const borderCard = fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(displayColor, 0.30);
-  const borderLeft = fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : displayColor;
+  const bg         = _cockpit ? '#ffffff' : (fillSolid ? displayColor : _hexTint(displayColor, 0.12));
+  const borderCard = _cockpit ? '#e4e9f2' : (fillSolid ? 'rgba(0,0,0,.12)' : _hexTint(displayColor, 0.30));
+  const borderLeft = _cockpit ? (customColor || gerColor) : (fillSolid ? (_dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.28)') : displayColor);
   const T  = fillSolid ? (_dark ? '#ffffff' : '#0d1b3e') : '#0d1b3e';
   const TL = fillSolid ? (_dark ? 'rgba(255,255,255,.72)' : '#475569') : '#64748b';
   const T2 = fillSolid ? (_dark ? 'rgba(255,255,255,.9)' : '#334155') : '#475569';
