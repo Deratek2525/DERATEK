@@ -3593,11 +3593,23 @@ function _mobBonsPrioritaires() {
 
 function mobGo(onglet) {
   _mobOnglet = onglet;
+  _mobFiche = null;
   document.body.classList.add('mob-on');   // on quitte l'écran complet éventuel
-  if (onglet === 'rapport') { openNewRapport(); return; }
-  if (onglet === 'photos')  { showScreen('rapports'); }
   renderMobile();
   window.scrollTo(0, 0);
+}
+// Les types de rapport proposés sur le téléphone
+const MOB_TYPES_RAPPORT = [
+  ['general',  '📋', 'Rapport d\'intervention', 'Le rapport classique, tous nuisibles', 'openNewRapport()'],
+  ['rongeurs', '🐀', 'Rapport rongeurs',        'Rats et souris · postes d\'appâtage',  'openNewRongeurs()'],
+  ['blattes',  '🪳', 'Rapport blattes',         'Cafards · gels et monitoring',         'openNewBlattes()'],
+  ['punaises', '🛏️', 'Rapport punaises de lit', 'Traitement vapeur et insecticide',    'openNewPunaises()'],
+  ['fourmis',  '🐜', 'Rapport fourmis',         'Gels professionnels par espèce',       'openNewFourmis()'],
+  ['bois',     '🪵', 'Diagnostic insectes du bois', 'Capricornes, vrillettes, lyctus…', 'openNewDiagnostic()'],
+];
+function mobNouveauRapport(fn) {
+  document.body.classList.remove('mob-on');
+  try { eval(fn); } catch (e) { console.warn('rapport', e); toast('Impossible d\'ouvrir ce rapport', '#e63946'); }
 }
 
 function renderMobile() {
@@ -3640,6 +3652,30 @@ function renderMobile() {
       </div>`;
   } else if (_mobOnglet === 'bons') {
     corps = _mobFiche ? _mobFicheBon() : _mobListeBons();
+  } else if (_mobOnglet === 'rapport') {
+    // Brouillons en cours (rapports classiques + diagnostics)
+    const brR = (DB.rapports || []).filter(r => r.statut === 'Brouillon' && !_isRapportFactArchived(r))
+      .map(r => ({ id: r.id, titre: '📋 ' + (r.id || ''), sous: (r.clientNom || '— Sans client —'), date: r.date, act: `editRapport('${r.id}')` }));
+    const LBL = { bois: '🪵 Diagnostic bois', rongeurs: '🐀 Rapport rongeurs', blattes: '🪳 Rapport blattes', fourmis: '🐜 Rapport fourmis', punaises: '🛏️ Rapport punaises' };
+    const brD = (DB.diagnostics || []).filter(d => (d.statut || 'Brouillon') === 'Brouillon')
+      .map(d => ({ id: d.id, titre: (LBL[_diagType(d)] || '🔬 Diagnostic') + ' ' + (d.numero || ''), sous: (d.clientNom || '— Sans client —'), date: d.dateDoc, act: `editDiag('${d.id}')` }));
+    const brouillons = brR.concat(brD).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    corps = `
+      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Nouveau rapport</h2>
+        <div class="s">Choisis le type de rapport à remplir</div></div>
+      <div class="mob-body">
+        ${MOB_TYPES_RAPPORT.map(t => `
+          <div class="mob-type" onclick="mobNouveauRapport(&quot;${t[4]}&quot;)">
+            <div class="ic">${t[1]}</div>
+            <div><div class="t">${t[2]}</div><div class="s">${t[3]}</div></div>
+            <div class="ch">›</div>
+          </div>`).join('')}
+        ${brouillons.length ? `<div class="mob-sec">🕒 Reprendre plus tard (${brouillons.length})</div>` + brouillons.map(b => `
+          <div class="mob-c" style="border-left-color:#f59e0b" onclick="mobNouveauRapport(&quot;${b.act}&quot;)">
+            <div class="t">${_escapeHtml(b.titre)}</div>
+            <div class="s">${_escapeHtml(b.sous)}${b.date ? ' · ' + fmtDate(b.date) : ''}</div>
+          </div>`).join('') : ''}
+      </div>`;
   } else {
     const it = (ico, lbl, act) => `<div class="mob-menu" onclick="${act}"><span>${ico}</span>${lbl}<span class="ch">›</span></div>`;
     corps = `
