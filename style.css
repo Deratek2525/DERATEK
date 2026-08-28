@@ -1000,10 +1000,36 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   .ck-b-btns { display: flex; gap: 4px; }
   /* Boutons pictogrammes : l'intitule apparait au survol */
   .ck-b-btns .ck-b-b {
+    position: relative;
     flex: 1 1 0; min-width: 0; padding: 0; height: 28px;
     font-size: 13px; line-height: 1; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
   }
+  /* Infobulle maison : elle s'affiche tout de suite, contrairement au title */
+  .ck-b-b::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: #0d1b3e; color: #fff;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .1px;
+    padding: 6px 10px; border-radius: 7px; white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(13, 27, 62, .3);
+    opacity: 0; visibility: hidden; transition: opacity .12s ease;
+    pointer-events: none; z-index: 90;
+  }
+  .ck-b-b::before {
+    content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent; border-bottom-width: 0; border-top-color: #0d1b3e;
+    opacity: 0; visibility: hidden; transition: opacity .12s ease;
+    pointer-events: none; z-index: 90;
+  }
+  .ck-b-b:hover::after, .ck-b-b:hover::before,
+  .ck-b-b:focus-visible::after, .ck-b-b:focus-visible::before { opacity: 1; visibility: visible; }
+  /* Les bulles des boutons de bord se recalent pour ne pas depasser de la carte */
+  .ck-b-btns .ck-b-b:nth-child(-n+2)::after { left: -6px; transform: none; }
+  .ck-b-btns .ck-b-b:nth-last-child(-n+3)::after { left: auto; right: -6px; transform: none; }
+  /* La bulle doit pouvoir sortir de la carte */
+  .ck-bon, .ck-b-act, .ck-b-btns { overflow: visible; }
   /* Ecrans moins larges : le probleme passe sous le nom, la ligne reste courte */
   @media (max-width: 1500px) {
     .ck-bon {

@@ -5687,7 +5687,9 @@ function renderBonCardCockpit(b) {
   const pb = _bonProblemeClean(b);
   // En Cockpit les actions sont des pictogrammes : l'intitule complet reste
   // accessible au survol, ce qui permet de tenir toute la ligne sur une rangee.
-  const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" title="${titre}" aria-label="${titre}">${ico}</button>`;
+  // data-tip : bulle d'aide immediate au survol (le title natif met 1 a 2 s
+  // a apparaitre, on le remplace donc par une infobulle maison).
+  const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
   return `
     <div id="bonrow-${b.id}" class="ck-bon" style="border-left-color:${coul};">
       <div class="ck-b-ico" style="background:${_hexTint(coul, 0.16)};color:${coul};">📄${alerte ? '<span class="bon-blink"></span>' : ''}</div>
@@ -5717,7 +5719,7 @@ function renderBonCardCockpit(b) {
           ${bt(`createDevisFromBon('${b.id}')`, '💰', 'Créer un devis depuis ce bon')}
           ${bt(`createFactureFromBon('${b.id}')`, '🧾', 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
           ${bt(`editBon('${b.id}')`, '✏️', 'Ouvrir la fiche complète du bon', 'btn-navy')}
-          <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" title="Supprimer ce bon" aria-label="Supprimer ce bon">🗑</button>
+          <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" data-tip="Supprimer ce bon" aria-label="Supprimer ce bon">🗑</button>
         </div>
       </div>
     </div>`;
