@@ -1269,3 +1269,21 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   background: #fee2e2; border-color: #ef4444; color: #991b1b; font-weight: 800;
 }
 .fb-nuis.on:focus { box-shadow: 0 0 0 2px rgba(239, 68, 68, .2); border-color: #ef4444; }
+
+/* Pastilles nuisible / etat sur la carte d'un bon (style Cockpit) */
+@media (min-width: 821px) {
+  .ck-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .ck-chip {
+    font-size: 10px; font-weight: 800; border-radius: 20px; padding: 2px 8px;
+    white-space: nowrap; border: 1px solid transparent;
+  }
+  .ck-chip.nuis  { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .ck-chip.nuis2 { background: #fef3f2; color: #b91c1c; border-color: #fecaca; }
+  .ck-chip.agir  { background: #fff7ed; color: #b45309; border-color: #fed7aa; }
+  .ck-chip.fait  { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+  .ck-chip.info  { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .ck-b-pb { display: block; }
+  .ck-pb-txt {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+}

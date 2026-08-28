@@ -6451,6 +6451,15 @@ function bonPlanRefresh() {
     </div>`;
 }
 
+// Couleur de la pastille « Où en est-on ? » : ce qui demande une action
+// ressort en orange, ce qui est fait en vert, le reste en bleu.
+function _ckClasseStatutNote(st) {
+  const t = String(st || '').toLowerCase();
+  if (/reprogrammer|report|annul|absent|attente/.test(t)) return 'agir';
+  if (/réalis|realis|confirm/.test(t)) return 'fait';
+  return 'info';
+}
+
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
@@ -6481,6 +6490,7 @@ function renderBonCardCockpit(b) {
   const aff = _bonAffecte(b);
   const note = _bonNote(b);
   const nbPj = _bonPJ(b).length;
+  const nd = _bonNoteData(b);
   const pb = _bonProblemeClean(b);
   // En Cockpit les actions sont des pictogrammes : l'intitule complet reste
   // accessible au survol, ce qui permet de tenir toute la ligne sur une rangee.
@@ -6499,7 +6509,14 @@ function renderBonCardCockpit(b) {
         <div class="s">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : ''}${adresse ? (b.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(adresse) : ''}</div>
         ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
       </div>
-      <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
+      <div class="ck-b-pb">
+        ${nd.nuisible || nd.nuisible2 || nd.statut ? `<div class="ck-chips">
+          ${nd.nuisible ? `<span class="ck-chip nuis" title="Nuisible concerné">🐛 ${_escapeHtml(nd.nuisible)}</span>` : ''}
+          ${nd.nuisible2 ? `<span class="ck-chip nuis2" title="Second nuisible">${_escapeHtml(nd.nuisible2)}</span>` : ''}
+          ${nd.statut ? `<span class="ck-chip ${_ckClasseStatutNote(nd.statut)}" title="Où en est-on ?">${_escapeHtml(nd.statut)}</span>` : ''}
+        </div>` : ''}
+        <div class="ck-pb-txt">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
+      </div>
       <button type="button" class="ck-b-rdv${b.dateIntervention ? ' on' : ''}"
         onclick="openBonPlanning('${b.id}')"
         data-tip="Planifier : rendez-vous et passages effectués"
