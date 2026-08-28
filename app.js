@@ -469,13 +469,24 @@ function toast(msg, color) {
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 
+// Chaque fenetre ouverte passe au-dessus de la precedente : une fenetre
+// ouverte depuis la fiche complete ne se retrouve jamais cachee derriere elle.
+let _modalZ = 300;
 function openModal(id)  {
   const bg = $(id); if (!bg) return;
   // Réinitialise la position : une modale rouverte revient toujours centrée
   const box = bg.querySelector('.modal'); if (box) box.style.transform = '';
+  _modalZ += 2;
+  bg.style.zIndex = _modalZ;
   bg.classList.add('open');
 }
-function closeModal(id) { $(id).classList.remove('open'); }
+function closeModal(id) {
+  const bg = $(id); if (!bg) return;
+  bg.classList.remove('open');
+  bg.style.zIndex = '';
+  // Aucune fenetre ouverte : on repart du niveau de base
+  if (!document.querySelector('.modal-bg.open')) _modalZ = 300;
+}
 
 // ============================================================
 // MODALES DÉPLAÇABLES — glisser la fenêtre par son en-tête
@@ -4302,8 +4313,29 @@ function ficheBonModifie() {
 
 // Rafraichit la fiche si elle est ouverte, sans toucher aux champs en cours
 // de saisie : seuls l'en-tete et la colonne de suivi sont redessines.
-function _ficheBonMaj() {
-  if (_ficheBonId && document.querySelector('#modal-fiche-bon.open')) ficheBonRefresh(false);
+function _ficheBonMaj(noteAussi) {
+  if (!_ficheBonId || !document.querySelector('#modal-fiche-bon.open')) return;
+  ficheBonRefresh(false);
+  if (!noteAussi) return;
+  // La note vient d'etre modifiee dans sa propre fenetre : on remet a jour les
+  // champs correspondants de la fiche (les autres saisies ne sont pas touchees).
+  const b = (DB.bons || []).find(x => x.id === _ficheBonId); if (!b) return;
+  const d = _bonNoteData(b);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('fb-nuisible', d.nuisible); set('fb-nuisible2', d.nuisible2);
+  set('fb-noteStatut', d.statut); set('fb-noteTexte', d.texte);
+  const n1 = document.getElementById('fb-nuisible');
+  if (n1) n1.classList.toggle('on', !!d.nuisible);
+  const box = document.getElementById('fb-calcnote');
+  if (box) {
+    const c = _bonNoteCalc(d);
+    box.innerHTML = c.ht ? `<div class="fb-calc">
+      <div><span>Prix HT</span><b>${_displayMontant(c.ht)} CHF</b></div>
+      ${c.rab ? `<div><span>Rabais ${c.rab} %</span><b>− ${_displayMontant(c.montantRabais)} CHF</b></div>` : ''}
+      ${c.tva ? `<div><span>TVA ${c.tva} %</span><b>+ ${_displayMontant(c.montantTVA)} CHF</b></div>` : ''}
+      <div class="ttc"><span>Total TTC</span><b>${_displayMontant(c.ttc)} CHF</b></div>
+    </div>` : '';
+  }
 }
 
 // complet !== false : redessine tout. complet === false : en-tete + suivi seulement.
@@ -4482,12 +4514,12 @@ function ficheBonRefresh(complet) {
             <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonNote('${b.id}')" title="Ouvrir la fenêtre complète : calcul de prix, prestations, correction par l'IA">Prix et prestations</button></div>
           <div class="fb-aide">Écrivez librement : constatations, ce qui reste à faire, ce que vous a dit le locataire. Enregistré avec le bouton vert en bas.</div>
           <textarea id="fb-noteTexte" class="fb-ta" rows="7" placeholder="Vos notes sur ce bon…" oninput="ficheBonModifie()">${_escapeHtml(nd.texte || '')}</textarea>
-          ${calc.ht ? `<div class="fb-calc">
+          <div id="fb-calcnote">${calc.ht ? `<div class="fb-calc">
             <div><span>Prix HT</span><b>${_displayMontant(calc.ht)} CHF</b></div>
             ${calc.rab ? `<div><span>Rabais ${calc.rab} %</span><b>− ${_displayMontant(calc.montantRabais)} CHF</b></div>` : ''}
             ${calc.tva ? `<div><span>TVA ${calc.tva} %</span><b>+ ${_displayMontant(calc.montantTVA)} CHF</b></div>` : ''}
             <div class="ttc"><span>Total TTC</span><b>${_displayMontant(calc.ttc)} CHF</b></div>
-          </div>` : ''}
+          </div>` : ''}</div>
         </div>
 
         <div class="fb-card">
@@ -6205,7 +6237,7 @@ function saveBonNote() {
   closeModal('modal-bon-note');
   toast(payload ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
   _bonNoteEditingId = null;
-  _ficheBonMaj();
+  _ficheBonMaj(true);
 }
 // Corrige et structure la note via Mistral (orthographe + mise en forme prix/traitement)
 async function bonNoteAICorrect() {
