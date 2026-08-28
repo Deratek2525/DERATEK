@@ -367,12 +367,22 @@ function _geranceCanon(nom) {
   if (ALIAS[cle]) return ALIAS[cle];
   return s; // sinon on garde le nom tel quel
 }
+// Clé unique d'un nom pour les couleurs personnalisées : minuscules, sans accents,
+// sans le préfixe « Gérance / Régie / Agence », ponctuation neutralisée.
+function _couleurKey(nom) {
+  return String(_geranceCanon(nom) || '')
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/^(gerance|regie|agence|immobiliere?)\s+/i, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
 function colorForGeranceName(nom) {
   const key = String(_geranceCanon(nom) || '').toLowerCase().trim();
   if (!key) return '#6b7280';
   // Couleur choisie à la main dans ⚙️ Options → prioritaire sur la couleur automatique
   try {
     const perso = (typeof OPT !== 'undefined' && OPT.couleursGerances) || {};
+    const k2 = _couleurKey(nom);
+    if (perso[k2]) return perso[k2];
     if (perso[key]) return perso[key];
   } catch (e) {}
   let hash = 0x811c9dc5;
@@ -3452,7 +3462,7 @@ function _optNomsCategorie(cat) {
     (DB.bons || []).forEach(b => { tous.push(b.geranceNom); tous.push(b.proprietaire); tous.push(b.locataireNom); });
     (DB.documents || []).forEach(d => { tous.push(d.clientNom); tous.push(d.proprietaire); tous.push(d.locataireNom); });
     (DB.locataires || []).forEach(l => tous.push(l.nom));
-    tous.forEach(n => { const c = _geranceCanon(n); if (!c) return; const k = c.toLowerCase().trim(); if (perso[k] && !vus[k]) { vus[k] = 1; noms.push(c); } });
+    tous.forEach(n => { const c = _geranceCanon(n); if (!c) return; const k = _couleurKey(c); if (perso[k] && !vus[k]) { vus[k] = 1; noms.push(c); } });
     Object.keys(perso).forEach(k => { if (!vus[k]) { vus[k] = 1; noms.push(k); } });
   } else if (cat === 'proprietaires') {
     (DB.bons || []).forEach(b => push(b.proprietaire));
@@ -3473,13 +3483,14 @@ function _optNomsCategorie(cat) {
 }
 function optSetCouleurGerance(nomB64, couleur) {
   const nom = decodeURIComponent(escape(atob(nomB64)));
-  const key = String(nom).toLowerCase().trim();
+  const key = _couleurKey(nom);
   const map = Object.assign({}, OPT.couleursGerances || {});
   if (couleur) map[key] = couleur; else delete map[key];
   OPT.couleursGerances = map; optSave();
-  ['renderBons', 'renderDocuments', 'renderClients', 'renderRapports', 'renderDashboard']
+  ['renderBons', 'renderDocuments', 'renderClients', 'renderRapports', 'renderDiagnostics', 'renderDashboard', 'renderAnciennesList', 'renderFactArchive']
     .forEach(f => { if (typeof window[f] === 'function') { try { window[f](); } catch (e) {} } });
   _optRefreshCouleurs();
+  toast('🎨 Couleur appliquée', '#0d9488');
 }
 function optResetCouleurGerance(nomB64) { optSetCouleurGerance(nomB64, ''); }
 function optSetCatCouleurs(cat) { OPT.couleursCat = cat; OPT._filtreCoul = ''; optSave(); _optRefreshCouleurs(); }
@@ -3509,7 +3520,7 @@ function _optListeCouleurs() {
   return `<div style="font-size:11px;color:var(--g500);margin-bottom:6px;">${noms.length} nom(s)</div>
     <div style="max-height:290px;overflow:auto;padding-right:4px;">` +
     noms.map(n => {
-      const key = String(n).toLowerCase().trim();
+      const key = _couleurKey(n);
       const b64 = btoa(unescape(encodeURIComponent(n)));
       const cur = perso[key] || colorForGeranceName(n);
       const perso_ = !!perso[key];
