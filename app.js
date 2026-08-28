@@ -3325,6 +3325,7 @@ const OPT_DEFAUTS = {
   alerteBonH: 48,
   couleursGerances: {},      // { 'nom normalisé' : '#rrggbb' }
   couleursCat: 'gerances',   // catégorie affichée dans le bloc couleurs
+  style: 'classique',        // classique | cockpit
 };
 let OPT = Object.assign({}, OPT_DEFAUTS);
 function optLoad() {
@@ -3340,8 +3341,55 @@ function optSet(cle, val) { OPT[cle] = val; optSave(); }
 function optNum(cle) { const n = parseFloat(OPT[cle]); return isNaN(n) ? OPT_DEFAUTS[cle] : n; }
 
 // Applique les réglages à l'interface
+// Familles affichées dans la barre latérale du style Cockpit.
+// Chaque entrée : [intitulé, id du bouton devant lequel on l'insère]
+const COCKPIT_FAMILLES = [
+  ['Pilotage',    'nb-dashboard'],
+  ['Terrain',     'nb-bons'],
+  ['Facturation', 'nb-devis'],
+  ['Répertoire',  'nb-clients'],
+  ['Suivi',       'nb-tva'],
+];
+// En barre latérale, les gros aplats de couleur des boutons deviennent illisibles :
+// on transforme la couleur en simple liseré à gauche, et on la restaure à l'identique
+// dès qu'on revient au style Classique.
+function _cockpitCouleurs(actif) {
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (actif) {
+      if (b.dataset.bgOrig === undefined) {
+        b.dataset.bgOrig = b.style.background || '';
+        b.dataset.colOrig = b.style.color || '';
+      }
+      const c = b.dataset.bgOrig;
+      if (c) { b.style.setProperty('--c', c); b.style.background = ''; b.style.color = ''; }
+    } else if (b.dataset.bgOrig !== undefined) {
+      b.style.background = b.dataset.bgOrig;
+      b.style.color = b.dataset.colOrig;
+      b.style.removeProperty('--c');
+      delete b.dataset.bgOrig; delete b.dataset.colOrig;
+    }
+  });
+}
+function _cockpitFamilles(actif) {
+  document.querySelectorAll('.nav-famille').forEach(e => e.remove());
+  _cockpitCouleurs(actif);
+  if (!actif) return;
+  COCKPIT_FAMILLES.forEach(([titre, id]) => {
+    const btn = document.getElementById(id);
+    if (!btn || !btn.parentNode) return;
+    const d = document.createElement('div');
+    d.className = 'nav-famille';
+    d.textContent = titre;
+    btn.parentNode.insertBefore(d, btn);
+  });
+}
+
 function optApply() {
   const r = document.documentElement;
+  const cockpit = (OPT.style === 'cockpit');
+  r.setAttribute('data-style', cockpit ? 'cockpit' : 'classique');
+  _cockpitFamilles(cockpit && window.innerWidth > 820);
+  if (typeof adjustStickyOffsets === 'function') setTimeout(adjustStickyOffsets, 30);
   r.setAttribute('data-theme', OPT.theme === 'sombre' ? 'sombre' : 'clair');
   r.setAttribute('data-densite', OPT.densite || 'normale');
   r.setAttribute('data-anim', OPT.animations === '1' ? '1' : '0');
@@ -3398,6 +3446,10 @@ function openOptions() {
       </div>
       <div class="modal-body" style="background:#f7f8fb;max-height:76vh;overflow:auto;">
         <div style="font-size:12px;color:var(--g600);margin-bottom:12px;">Ces réglages sont enregistrés sur <b>cet ordinateur</b> uniquement. Ils prennent effet immédiatement.</div>
+        ${bloc('🖥️ Style d\'interface', [
+          ligne('Présentation', sel('style', [['classique', '🏠 Classique — barre du haut'], ['cockpit', '🎛️ Cockpit — barre latérale']]),
+            'Le Cockpit range la navigation sur le côté et ajoute l\'écran « Mon poste ». Sur téléphone, le mode terrain reste prioritaire.'),
+        ].join(''))}
         ${bloc('🎨 Apparence', [
           ligne('Thème', sel('theme', [['clair', '☀️ Clair'], ['sombre', '🌙 Sombre (bêta)']])),
           ligne('Taille du texte', sel('taille', [[90, 'Compact (90 %)'], [100, 'Normal (100 %)'], [110, 'Grand (110 %)'], [125, 'Très grand (125 %)']])),
