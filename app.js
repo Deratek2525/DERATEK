@@ -437,6 +437,11 @@ function showScreen(name) {
   const nb = $(`nb-${name}`);
   if (nb) nb.classList.add('active');
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
+  // Sur téléphone, les écrans bureau restent masqués sauf ceux qu'on ouvre exprès
+  if (typeof mobActif === 'function' && mobActif()) {
+    const plein = ['rapport-edit', 'agenda', 'rapports', 'devis', 'factures', 'clients', 'locataires', 'contrats', 'rapprochement', 'bons'];
+    document.body.classList.toggle('mob-on', plein.indexOf(name) < 0);
+  }
   if (name === 'anciennes' && typeof renderAnciennesList === 'function') renderAnciennesList();
   if (name === 'fact-archive' && typeof renderFactArchive === 'function') renderFactArchive();
   if (name === 'dashboard')    renderDashboard();
@@ -3081,6 +3086,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         renderDashboard();
         optApply();
+        renderMobile();   // 📱 interface terrain si on est sur téléphone
         // Écran d'ouverture choisi dans les options
         if (OPT.ecranDepart && OPT.ecranDepart !== 'dashboard') { try { showScreen(OPT.ecranDepart); } catch (e) {} }
         setTimeout(_autoBackupCheck, 1500);
@@ -3538,6 +3544,129 @@ function optReset() {
   OPT = Object.assign({}, OPT_DEFAUTS); optSave(); openOptions();
   toast('Options réinitialisées', '#2d9e6b');
 }
+
+// ============================================================
+// 📱 MODE TERRAIN — interface mobile (téléphone) — étape 1
+// Même app, mêmes données : seul l'habillage change sous 820 px de large.
+// Sur ordinateur, rien de tout ceci ne s'affiche.
+// ============================================================
+const MOB_SEUIL = 820;
+let _mobOnglet = 'journee';
+function mobActif() { return window.innerWidth <= MOB_SEUIL; }
+
+// Interventions du jour (agenda), triées par heure
+function _mobInterventionsJour(dateStr) {
+  const d = dateStr || today();
+  return (DB.intervs || []).filter(iv => iv.date === d)
+    .slice().sort((a, b) => String(a.heure || '').localeCompare(String(b.heure || '')));
+}
+// Bons à traiter en priorité : sans statut, urgents, à contacter, en cours
+function _mobBonsPrioritaires() {
+  const ordre = { '': 0, 'urgent': 1, 'a-contacter': 2, 'en-cours': 3, 'a-transmettre': 4 };
+  return (DB.bons || [])
+    .filter(b => !_isBonFactArchived(b) && (b.statut || '') !== 'termine')
+    .filter(b => ordre[b.statut || ''] !== undefined)
+    .sort((a, b) => (ordre[a.statut || ''] - ordre[b.statut || '']) || String(b.date || '').localeCompare(String(a.date || '')));
+}
+
+function mobGo(onglet) {
+  _mobOnglet = onglet;
+  document.body.classList.add('mob-on');   // on quitte l'écran complet éventuel
+  if (onglet === 'rapport') { openNewRapport(); return; }
+  if (onglet === 'photos')  { showScreen('rapports'); }
+  renderMobile();
+  window.scrollTo(0, 0);
+}
+
+function renderMobile() {
+  const box = document.getElementById('mob-shell');
+  if (!box) return;
+  if (!mobActif()) { box.style.display = 'none'; document.body.classList.remove('mob-on'); return; }
+  box.style.display = 'block';
+  // mob-on = on affiche l'accueil terrain ; sinon un écran complet est ouvert par-dessus
+  if (!document.querySelector('.screen.active') || _mobOnglet !== 'ecran') document.body.classList.add('mob-on');
+
+  const tab = (id, ico, lbl) => `<div class="mob-tab ${_mobOnglet === id ? 'on' : ''}" onclick="mobGo('${id}')"><span class="i">${ico}</span>${lbl}</div>`;
+  let corps = '';
+
+  if (_mobOnglet === 'journee') {
+    const ivs = _mobInterventionsJour();
+    const prochaine = ivs[0];
+    const j = new Date();
+    const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    corps = `
+      <div class="mob-hd">
+        <div class="mob-logo">DER<span>A</span>TEK</div>
+        <h2>Ma journée</h2>
+        <div class="s">${jours[j.getDay()]} ${j.getDate()} ${mois[j.getMonth()]} · ${ivs.length} intervention${ivs.length > 1 ? 's' : ''}</div>
+      </div>
+      <div class="mob-body">
+        ${prochaine ? `<div class="mob-big" onclick="mobGo('rapport')">▶️ Démarrer l'intervention de ${prochaine.heure || ''}</div>` : ''}
+        ${ivs.length ? ivs.map(iv => `
+          <div class="mob-c" style="border-left-color:${iv.couleur || '#e63946'}" onclick="showScreen('agenda')">
+            <div class="t">${_escapeHtml(iv.heure || '--:--')} · ${_escapeHtml(iv.adresse || iv.clientNom || '')}</div>
+            <div class="s">${iv.nuisible ? _escapeHtml(iv.nuisible) + ' · ' : ''}${_escapeHtml(iv.clientNom || '')}${iv.bonNumero ? '<br>📄 Bon ' + _escapeHtml(iv.bonNumero) : ''}</div>
+          </div>`).join('')
+        : '<div class="mob-vide">🎉 Aucune intervention planifiée aujourd\'hui.</div>'}
+        <div class="mob-sec">À traiter</div>
+        ${_mobBonsPrioritaires().slice(0, 4).map(b => `
+          <div class="mob-c" style="border-left-color:${(b.statut || '') === '' ? '#e63946' : '#f59e0b'}" onclick="editBon('${b.id}')">
+            <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}</div>
+            <div class="s">${_escapeHtml(b.geranceNom || '')}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
+          </div>`).join('') || '<div class="mob-vide">Rien en attente. 👍</div>'}
+      </div>`;
+  } else if (_mobOnglet === 'bons') {
+    const bons = _mobBonsPrioritaires();
+    corps = `
+      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Bons</h2><div class="s">${bons.length} en cours</div></div>
+      <div class="mob-body">
+        ${bons.map(b => `
+          <div class="mob-c" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="editBon('${b.id}')">
+            <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}</div>
+            <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
+            ${b.gerantTel ? `<a class="mob-tel" href="tel:${String(b.gerantTel).replace(/\\s/g, '')}" onclick="event.stopPropagation()">📞 Appeler la gérance</a>` : ''}
+          </div>`).join('') || '<div class="mob-vide">Aucun bon en cours.</div>'}
+      </div>`;
+  } else if (_mobOnglet === 'photos') {
+    corps = `
+      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Photos</h2><div class="s">Prends une photo, elle rejoint le rapport en cours</div></div>
+      <div class="mob-body">
+        <div class="mob-big" onclick="document.getElementById('mob-photo-input').click()">📷 Prendre une photo</div>
+        <input type="file" id="mob-photo-input" accept="image/*" capture="environment" style="display:none" onchange="mobPhotoPrise(event)">
+        <div class="mob-vide" style="margin-top:14px;">Les photos s'ajoutent au rapport ouvert.<br>Ouvre d'abord un rapport dans l'onglet 📋.</div>
+      </div>`;
+  } else {
+    const it = (ico, lbl, act) => `<div class="mob-menu" onclick="${act}"><span>${ico}</span>${lbl}<span class="ch">›</span></div>`;
+    corps = `
+      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Plus</h2><div class="s">Le reste de l'application</div></div>
+      <div class="mob-body">
+        ${it('📅', 'Agenda', "showScreen('agenda')")}
+        ${it('📋', 'Rapports', "showScreen('rapports')")}
+        ${it('📝', 'Devis', "showScreen('devis')")}
+        ${it('🧾', 'Factures', "showScreen('factures')")}
+        ${it('🏦', 'Relevés', "showScreen('rapprochement')")}
+        ${it('🏢', 'Clients', "showScreen('clients')")}
+        ${it('🏠', 'Locataires', "showScreen('locataires')")}
+        ${it('📜', 'Contrats', "showScreen('contrats')")}
+        ${it('⚙️', 'Options d\'affichage', 'openOptions()')}
+        ${it('🚪', 'Déconnexion', 'doLogout()')}
+      </div>`;
+  }
+
+  box.innerHTML = `<div id="mob-corps">${corps}</div>
+    <div class="mob-tabbar">
+      ${tab('journee', '📅', 'Journée')}${tab('bons', '📄', 'Bons')}${tab('rapport', '📋', 'Rapport')}${tab('photos', '📷', 'Photos')}${tab('plus', '⋯', 'Plus')}
+    </div>`;
+}
+function mobPhotoPrise(e) {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  toast('📷 Photo prise — ouvre un rapport pour l\'y ajouter', '#0d9488');
+}
+// Bascule automatique quand on tourne le téléphone ou redimensionne
+let _mobTimer = null;
+window.addEventListener('resize', () => { clearTimeout(_mobTimer); _mobTimer = setTimeout(renderMobile, 200); });
 
 function loadPdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
