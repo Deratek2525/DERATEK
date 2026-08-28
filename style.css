@@ -700,3 +700,31 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   letter-spacing: .2px; line-height: 1.25;
 }
 .devis-cd-flash { animation: devisFlash 1.1s ease-in-out infinite; }
+
+/* ============================================================
+   ⚙️ OPTIONS D'AFFICHAGE — thème, densité, animations
+   ============================================================ */
+
+/* Thème sombre (bêta) : inversion intelligente qui préserve images, PDF et signatures */
+html[data-theme="sombre"] { background: #14161a; }
+html[data-theme="sombre"] body { filter: invert(1) hue-rotate(180deg); background: #ebeaea; }
+html[data-theme="sombre"] img,
+html[data-theme="sombre"] canvas,
+html[data-theme="sombre"] video,
+html[data-theme="sombre"] iframe,
+html[data-theme="sombre"] .no-invert {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Densité des listes */
+html[data-densite="compacte"] .card,
+html[data-densite="compacte"] .bon-card { padding-top: 6px; padding-bottom: 6px; }
+html[data-densite="compacte"] .page-body { padding-top: 8px; }
+html[data-densite="aeree"] .card,
+html[data-densite="aeree"] .bon-card { padding-top: 18px; padding-bottom: 18px; }
+html[data-densite="aeree"] .page-body { padding-top: 22px; }
+
+/* Clignotements désactivés */
+html[data-anim="0"] .bon-blink,
+html[data-anim="0"] .bon-blink-txt,
+html[data-anim="0"] .devis-cd-flash { animation: none !important; }

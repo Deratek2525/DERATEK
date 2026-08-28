@@ -2571,7 +2571,7 @@ function saveRapportReprendre() {
 // qu'un redimensionnement CSS → instantané, plus aucun rechargement du PDF.
 const _PDF_PREV_ZOOMS = [50, 75, 100, 125, 150, 200, 300];
 const _pdfPrevState = {};
-function _pdfPrevSt(boxId) { return _pdfPrevState[boxId] = _pdfPrevState[boxId] || { seq: 0, zoom: 0, url: '', renderW: 0, timer: null }; }
+function _pdfPrevSt(boxId) { return _pdfPrevState[boxId] = _pdfPrevState[boxId] || { seq: 0, zoom: (parseInt((typeof OPT !== 'undefined' && OPT.apercuZoom) || 0, 10) || 0), url: '', renderW: 0, timer: null }; }
 // Largeur d'affichage réelle d'une page, en PIXELS ÉCRAN (tient compte du zoom et
 // de la densité de l'écran Retina) → c'est la résolution minimale pour un rendu net.
 function _pdfPrevNeededW(boxId) {
@@ -3035,6 +3035,7 @@ function deleteTech(el) {
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  optLoad(); optApply();   // ⚙️ préférences d'affichage de ce poste
   initSig();
 
   // Logo de connexion en version foncée (le PNG blanc d'origine est invisible sur fond blanc)
@@ -3064,6 +3065,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
         }
         renderDashboard();
+        optApply();
+        // Écran d'ouverture choisi dans les options
+        if (OPT.ecranDepart && OPT.ecranDepart !== 'dashboard') { try { showScreen(OPT.ecranDepart); } catch (e) {} }
         setTimeout(_autoBackupCheck, 1500);
       }
     } catch (err) { console.warn('Auto-login', err); }
@@ -3275,6 +3279,153 @@ function _PDFF(style) {
   return _PDFF._ok !== undefined ? (_PDFF._ok ? 'Arial' : 'helvetica')
     : (_PDFF._ok = !!(window.jspdf && window.jspdf.jsPDF &&
         (function () { try { return new window.jspdf.jsPDF().getFontList().Arial; } catch (e) { return false; } })())) ? 'Arial' : 'helvetica';
+}
+
+// ============================================================
+// ⚙️ OPTIONS D'AFFICHAGE — préférences locales (navigateur de Dany)
+// Stockées dans localStorage : propres à ce poste, jamais envoyées au cloud.
+// ============================================================
+const OPT_DEFAUTS = {
+  theme: 'clair',            // clair | sombre
+  taille: 100,               // 90 | 100 | 110 | 125  (%)
+  densite: 'normale',        // compacte | normale | aeree
+  animations: '1',           // '1' = clignotements actifs
+  ecranDepart: 'dashboard',
+  ongletsMasques: [],        // ex. ['tva','stats']
+  apercuPart: 50,            // 50 | 60 | 70 (part du formulaire en %) ; 100 = aperçu masqué
+  apercuZoom: 0,             // 0 = ajusté ; sinon %
+  apercuAuto: '1',
+  devisValidite: 30,
+  devisRelance: 7,
+  tvaDefaut: '',             // vide = valeur de config.js
+  rabaisDefaut: 5,
+  boisAct: '1', boisGrav: '', boisEtend: '', boisHum: '1',   // '1' = imprimé sur le PDF
+  alerteBonH: 48,
+};
+let OPT = Object.assign({}, OPT_DEFAUTS);
+function optLoad() {
+  try { OPT = Object.assign({}, OPT_DEFAUTS, JSON.parse(localStorage.getItem('deratek_options') || '{}')); }
+  catch (e) { OPT = Object.assign({}, OPT_DEFAUTS); }
+  return OPT;
+}
+function optSave() {
+  try { localStorage.setItem('deratek_options', JSON.stringify(OPT)); } catch (e) {}
+  optApply();
+}
+function optSet(cle, val) { OPT[cle] = val; optSave(); }
+function optNum(cle) { const n = parseFloat(OPT[cle]); return isNaN(n) ? OPT_DEFAUTS[cle] : n; }
+
+// Applique les réglages à l'interface
+function optApply() {
+  const r = document.documentElement;
+  r.setAttribute('data-theme', OPT.theme === 'sombre' ? 'sombre' : 'clair');
+  r.setAttribute('data-densite', OPT.densite || 'normale');
+  r.setAttribute('data-anim', OPT.animations === '1' ? '1' : '0');
+  r.style.setProperty('--opt-echelle', (optNum('taille') / 100));
+  document.body.style.zoom = (optNum('taille') / 100);
+  // Onglets masqués
+  const masq = Array.isArray(OPT.ongletsMasques) ? OPT.ongletsMasques : [];
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    const id = (b.id || '').replace(/^nb-/, '');
+    if (id) b.style.display = masq.indexOf(id) >= 0 ? 'none' : '';
+  });
+  // Répartition formulaire / aperçu dans l'éditeur devis-facture
+  const form = document.getElementById('modal-doc-form');
+  const prev = document.getElementById('modal-doc-preview');
+  if (form && prev) {
+    const part = optNum('apercuPart');
+    if (part >= 100) { prev.style.display = 'none'; form.style.flex = '1 1 100%'; }
+    else { prev.style.display = 'flex'; form.style.flex = '1 1 ' + part + '%'; prev.style.flex = '1 1 ' + (100 - part) + '%'; }
+  }
+}
+
+// Liste des onglets (pour les cases « afficher / masquer »)
+function _optOnglets() {
+  return Array.prototype.map.call(document.querySelectorAll('.nav-btn'), b => ({
+    id: (b.id || '').replace(/^nb-/, ''),
+    label: (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 26),
+  })).filter(x => x.id);
+}
+
+function openOptions() {
+  optLoad();
+  let m = document.getElementById('modal-options');
+  if (!m) { m = document.createElement('div'); m.id = 'modal-options'; m.className = 'modal-bg'; document.body.appendChild(m); }
+  const sel = (cle, opts) => `<select class="form-input" onchange="optSet('${cle}', this.value)">${
+    opts.map(o => `<option value="${o[0]}" ${String(OPT[cle]) === String(o[0]) ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>`;
+  const chk = (cle, label) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;padding:4px 0;">
+      <input type="checkbox" ${OPT[cle] === '1' ? 'checked' : ''} onchange="optSet('${cle}', this.checked?'1':'')" style="accent-color:var(--navy);width:16px;height:16px;"> ${label}</label>`;
+  const num = (cle, suffixe, min, max) => `<div style="display:flex;align-items:center;gap:6px;">
+      <input class="form-input" type="number" min="${min}" max="${max}" value="${OPT[cle]}" oninput="optSet('${cle}', this.value)" style="width:90px;"> <span style="font-size:12px;color:var(--g600);">${suffixe}</span></div>`;
+  const bloc = (titre, corps) => `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff;">
+      <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;">${titre}</div>${corps}</div>`;
+  const ligne = (label, champ, aide) => `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
+      <div style="min-width:210px;font-size:13px;font-weight:600;color:var(--navy);">${label}${aide ? `<div style="font-size:11px;font-weight:400;color:var(--g500);">${aide}</div>` : ''}</div>
+      <div style="flex:1;min-width:160px;">${champ}</div></div>`;
+  const masq = Array.isArray(OPT.ongletsMasques) ? OPT.ongletsMasques : [];
+  const onglets = _optOnglets().map(o => `<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--navy);background:#f9fafb;border:1px solid #e5e7eb;border-radius:20px;padding:4px 10px;margin:0 6px 6px 0;cursor:pointer;">
+      <input type="checkbox" ${masq.indexOf(o.id) < 0 ? 'checked' : ''} onchange="optToggleOnglet('${o.id}', this.checked)" style="accent-color:var(--navy);"> ${o.label}</label>`).join('');
+
+  m.innerHTML = `
+    <div class="modal" style="max-width:820px;width:96vw;">
+      <div class="modal-hd">
+        <span class="modal-title">⚙️ Options d'affichage</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-options')">✕</button>
+      </div>
+      <div class="modal-body" style="background:#f7f8fb;max-height:76vh;overflow:auto;">
+        <div style="font-size:12px;color:var(--g600);margin-bottom:12px;">Ces réglages sont enregistrés sur <b>cet ordinateur</b> uniquement. Ils prennent effet immédiatement.</div>
+        ${bloc('🎨 Apparence', [
+          ligne('Thème', sel('theme', [['clair', '☀️ Clair'], ['sombre', '🌙 Sombre (bêta)']])),
+          ligne('Taille du texte', sel('taille', [[90, 'Compact (90 %)'], [100, 'Normal (100 %)'], [110, 'Grand (110 %)'], [125, 'Très grand (125 %)']])),
+          ligne('Densité des listes', sel('densite', [['compacte', 'Compacte'], ['normale', 'Normale'], ['aeree', 'Aérée']])),
+          ligne('Clignotements', chk('animations', 'Faire clignoter les alertes (bons +48 h, devis expirés)')),
+        ].join(''))}
+        ${bloc('🧭 Navigation', [
+          ligne('Écran d\'ouverture', sel('ecranDepart', [['dashboard', '📊 Dashboard'], ['bons', '📄 Bons'], ['rapports', '📋 Rapports'], ['devis', '📝 Devis'], ['factures', '🧾 Factures'], ['agenda', '📅 Agenda'], ['rapprochement', '🏦 Relevés'], ['contrats', '📜 Contrats']])),
+          `<div style="font-size:13px;font-weight:600;color:var(--navy);margin:10px 0 6px;">Onglets affichés <span style="font-weight:400;font-size:11px;color:var(--g500);">— décoche ceux dont tu ne te sers pas</span></div><div>${onglets}</div>`,
+        ].join(''))}
+        ${bloc('👁️ Aperçu PDF en direct', [
+          ligne('Largeur du formulaire', sel('apercuPart', [[50, '50 % — aperçu aussi grand'], [60, '60 % — formulaire plus large'], [70, '70 % — aperçu réduit'], [100, 'Aperçu masqué']]), 'L\'aperçu occupe le reste'),
+          ligne('Zoom par défaut', sel('apercuZoom', [[0, 'Ajusté à la largeur'], [75, '75 %'], [100, '100 %'], [125, '125 %'], [150, '150 %']])),
+          ligne('Mise à jour', chk('apercuAuto', 'Rafraîchir l\'aperçu pendant la saisie')),
+        ].join(''))}
+        ${bloc('🧾 Devis & factures', [
+          ligne('Validité d\'un devis', num('devisValidite', 'jours', 1, 365), 'Base du compte à rebours'),
+          ligne('Alerte « à relancer »', num('devisRelance', 'jours avant expiration', 0, 90), 'La pastille passe à l\'orange et clignote'),
+          ligne('TVA par défaut', `<div style="display:flex;align-items:center;gap:6px;"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1 — vide = valeur d'origine" oninput="optSet('tvaDefaut', this.value)" style="width:180px;"> <span style="font-size:12px;color:var(--g600);">%</span></div>`),
+          ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100)),
+        ].join(''))}
+        ${bloc('📋 Rapport insectes du bois — bandeau imprimé', [
+          `<div style="font-size:12px;color:var(--g600);margin-bottom:8px;">Cases cochées d\'office sur les <b>nouveaux</b> rapports :</div>`,
+          chk('boisAct', 'Activité de l\'infestation'),
+          chk('boisGrav', 'Gravité'),
+          chk('boisEtend', 'Étendue / surface'),
+          chk('boisHum', 'Taux d\'humidité du bois'),
+        ].join(''))}
+        ${bloc('🔔 Alertes', [
+          ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Pastille rouge sur le bon'),
+        ].join(''))}
+        <div style="text-align:center;margin-top:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="optReset()">↩️ Tout remettre par défaut</button>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn btn-navy" onclick="closeModal('modal-options')">✓ Terminé</button>
+      </div>
+    </div>`;
+  openModal('modal-options');
+}
+function optToggleOnglet(id, visible) {
+  const masq = Array.isArray(OPT.ongletsMasques) ? OPT.ongletsMasques.slice() : [];
+  const i = masq.indexOf(id);
+  if (visible && i >= 0) masq.splice(i, 1);
+  if (!visible && i < 0) masq.push(id);
+  OPT.ongletsMasques = masq; optSave();
+}
+function optReset() {
+  if (!confirm('Remettre toutes les options d\'affichage par défaut ?')) return;
+  OPT = Object.assign({}, OPT_DEFAUTS); optSave(); openOptions();
+  toast('Options réinitialisées', '#2d9e6b');
 }
 
 function loadPdfJs() {
@@ -4656,7 +4807,8 @@ function _bonAlerteNouveau48h(b) {
   if (!b.createdAt) return false;
   const t = new Date(b.createdAt).getTime();
   if (isNaN(t)) return false;
-  return (Date.now() - t) >= 48 * 3600 * 1000;
+  const h = parseInt((typeof OPT !== 'undefined' && OPT.alerteBonH) || 48, 10) || 48;
+  return (Date.now() - t) >= h * 3600 * 1000;
 }
 function _bonProblemeClean(b) {
   return String((b && b.probleme) || '')
@@ -5986,7 +6138,7 @@ function createDocFromBon(bonId, type) {
     proprietaire: bon.proprietaire || '',
     bonId: bon.id,
     lignes: lignes,
-    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1,
+    tvaTaux: ((typeof OPT !== 'undefined' && String(OPT.tvaDefaut).trim()) ? parseFloat(OPT.tvaDefaut) : (DERATEK_CONFIG.company.tvaTaux || 8.1)),
     rabais: 5,
     statut: 'brouillon',
     notes: '',
@@ -6038,7 +6190,7 @@ function createDocFromClient(clientId, type) {
     clientNpa: c.npa || '', clientVille: c.ville || '',
     locataireNom: '', locataireAdresse: '', proprietaire: '', bonId: '', nuisible: '',
     lignes: [{ desc: '', qte: 1, prix: 0 }, { desc: "Dates d'intervention : ", qte: 1, prix: 0 }],
-    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
+    tvaTaux: ((typeof OPT !== 'undefined' && String(OPT.tvaDefaut).trim()) ? parseFloat(OPT.tvaDefaut) : (DERATEK_CONFIG.company.tvaTaux || 8.1)), rabais: ((typeof OPT !== 'undefined' && OPT.rabaisDefaut !== '') ? (parseFloat(OPT.rabaisDefaut) || 0) : 5), statut: 'brouillon', notes: ''
   };
   // Bascule sur l'onglet Devis / Factures puis ouvre l'éditeur (le document se crée « dans Factures »)
   if (typeof showDocsScreen === 'function') showDocsScreen(type);
@@ -6150,7 +6302,7 @@ function openNewDoc(type) {
     dateDoc: today(), clientId: '', clientNom: '', clientAdresse: '', clientNpa: '', clientVille: '',
     locataireNom: '', bonId: '', nuisible: '',
     lignes: [{ desc: '', qte: 1, prix: 0 }, { desc: "Dates d'intervention : ", qte: 1, prix: 0 }],
-    tvaTaux: DERATEK_CONFIG.company.tvaTaux || 8.1, rabais: 5, statut: 'brouillon', notes: ''
+    tvaTaux: ((typeof OPT !== 'undefined' && String(OPT.tvaDefaut).trim()) ? parseFloat(OPT.tvaDefaut) : (DERATEK_CONFIG.company.tvaTaux || 8.1)), rabais: ((typeof OPT !== 'undefined' && OPT.rabaisDefaut !== '') ? (parseFloat(OPT.rabaisDefaut) || 0) : 5), statut: 'brouillon', notes: ''
   };
   openDocEditor();
 }
@@ -6569,6 +6721,7 @@ function docPdfOpenFull() {
 }
 function _docPdfLive() {
   if (!_editingDoc) return;
+  if (typeof OPT !== 'undefined' && OPT.apercuAuto !== '1' && _docPdfLiveUrl) return;   // rafraîchissement auto désactivé
   clearTimeout(_docPdfLiveTimer);
   _docPdfLiveTimer = setTimeout(() => {
     const box = document.getElementById('doc-pdf-preview');
@@ -6961,13 +7114,15 @@ function _devisDateEnvoi(d) {
   const m = String((d && d.notes) || '').match(/\[ENVOI:([0-9]{4}-[0-9]{2}-[0-9]{2})\]/);
   return (m && m[1]) || (d && d.dateDoc) || '';
 }
-const DEVIS_VALIDITE_JOURS = 30;   // durée de validité d'un devis envoyé
+// Durée de validité d'un devis envoyé — réglable dans ⚙️ Options
+function _devisValiditeJours() { const n = parseInt((typeof OPT !== 'undefined' && OPT.devisValidite) || 30, 10); return (n > 0 ? n : 30); }
+function _devisSeuilRelance() { const n = parseInt((typeof OPT !== 'undefined' && OPT.devisRelance) != null ? OPT.devisRelance : 7, 10); return (isNaN(n) ? 7 : n); }
 // Jours restants avant expiration (négatif = expiré), null si non applicable
 function _devisJoursRestants(d) {
   if (!d || d.type !== 'devis' || d.statut !== 'envoye') return null;
   const dep = _devisDateEnvoi(d); if (!dep) return null;
   const t = new Date(dep + 'T00:00:00'); if (isNaN(t.getTime())) return null;
-  t.setDate(t.getDate() + DEVIS_VALIDITE_JOURS);
+  t.setDate(t.getDate() + _devisValiditeJours());
   const auj = new Date(); auj.setHours(0, 0, 0, 0);
   return Math.round((t.getTime() - auj.getTime()) / 86400000);
 }
@@ -6976,10 +7131,10 @@ function _devisCountdownChip(d) {
   const j = _devisJoursRestants(d);
   if (j === null) return '';
   // flash = pastille clignotante (urgence) ; sinon pastille fixe, mais toujours bien lisible
-  const chip = (txt, bg, col, bd, flash) => `<span class="devis-cd${flash ? ' devis-cd-flash' : ''}" title="Devis valable ${DEVIS_VALIDITE_JOURS} jours — envoyé le ${fmtDate(_devisDateEnvoi(d))}" style="color:${col};background:${bg};border:2px solid ${bd};">${txt}</span>`;
+  const chip = (txt, bg, col, bd, flash) => `<span class="devis-cd${flash ? ' devis-cd-flash' : ''}" title="Devis valable ${_devisValiditeJours()} jours — envoyé le ${fmtDate(_devisDateEnvoi(d))}" style="color:${col};background:${bg};border:2px solid ${bd};">${txt}</span>`;
   if (j < 0)   return chip('⛔ EXPIRÉ depuis ' + (-j) + ' j', '#fee2e2', '#991b1b', '#dc2626', true);
   if (j === 0) return chip('⚠️ EXPIRE AUJOURD\'HUI', '#fee2e2', '#991b1b', '#dc2626', true);
-  if (j <= 7)  return chip('⏳ J-' + j + ' — À RELANCER', '#fef3c7', '#92400e', '#f59e0b', true);
+  if (j <= _devisSeuilRelance())  return chip('⏳ J-' + j + ' — À RELANCER', '#fef3c7', '#92400e', '#f59e0b', true);
   if (j <= 14) return chip('⏳ J-' + j, '#fff7ed', '#b45309', '#fdba74', false);
   return chip('⏳ J-' + j, '#eff6ff', '#1d4ed8', '#60a5fa', false);
 }
@@ -8573,7 +8728,13 @@ function openNewDiagnostic() {
     clientId: '', clientNom: '', locataireNom: '', locataireAdresse: '',
     batiment: '', bonId: '', insectes: [], elementsTouches: '',
     // Par défaut : Gravité et Étendue NE sont PAS imprimées sur le PDF (choix Dany)
-    activite: '', etendue: '', humidite: '', noHum: '', noAct: '', noGrav: '1', noEtend: '1', gravite: '', diagnostic: '', conclusion: '',
+    activite: '', etendue: '', humidite: '',
+    // Cases « Afficher dans le PDF » : valeurs par défaut réglées dans ⚙️ Options
+    noHum: (typeof OPT !== 'undefined' && OPT.boisHum === '1') ? '' : '1',
+    noAct: (typeof OPT !== 'undefined' && OPT.boisAct === '1') ? '' : '1',
+    noGrav: (typeof OPT !== 'undefined' && OPT.boisGrav === '1') ? '' : '1',
+    noEtend: (typeof OPT !== 'undefined' && OPT.boisEtend === '1') ? '' : '1',
+    gravite: '', diagnostic: '', conclusion: '',
     methode: '', zones: '', traitement: '', suivi: '', photos: [],
     bureau: 'ne', doctype: 'Rapport', noPlan: '', noPhotos: '', noTech: '', statut: '', noSign: '1',
     suiviRem: '', contrat: '', contratPassages: '', contratMontant: '', contratZones: '', contratRem: '',
