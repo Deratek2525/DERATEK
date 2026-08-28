@@ -2628,6 +2628,21 @@ async function _pdfPrevRender(boxId, url) {
     wrap.scrollTop = keepScroll;
   } catch (e) { console.warn('aperçu pdf', boxId, e); }
 }
+// Le panneau change de largeur (fenêtre redimensionnée, modale ouverte) → on recale
+// l'affichage et on redessine en haute définition si la finesse actuelle ne suffit plus.
+let _pdfPrevResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_pdfPrevResizeTimer);
+  _pdfPrevResizeTimer = setTimeout(() => {
+    Object.keys(_pdfPrevState).forEach(boxId => {
+      const st = _pdfPrevState[boxId];
+      if (!document.getElementById(boxId)) return;
+      _pdfPrevApplyZoom(boxId);
+      if (st.url && _pdfPrevNeededW(boxId) > st.renderW * 1.1) _pdfPrevRender(boxId, st.url);
+    });
+  }, 250);
+});
+
 function _pdfPrevZoom(boxId, delta, lblId) {
   const st = _pdfPrevSt(boxId);
   if (!delta) st.zoom = 0;
