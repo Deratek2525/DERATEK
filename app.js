@@ -370,6 +370,11 @@ function _geranceCanon(nom) {
 function colorForGeranceName(nom) {
   const key = String(_geranceCanon(nom) || '').toLowerCase().trim();
   if (!key) return '#6b7280';
+  // Couleur choisie à la main dans ⚙️ Options → prioritaire sur la couleur automatique
+  try {
+    const perso = (typeof OPT !== 'undefined' && OPT.couleursGerances) || {};
+    if (perso[key]) return perso[key];
+  } catch (e) {}
   let hash = 0x811c9dc5;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
@@ -3301,6 +3306,7 @@ const OPT_DEFAUTS = {
   rabaisDefaut: 5,
   boisAct: '1', boisGrav: '', boisEtend: '', boisHum: '1',   // '1' = imprimé sur le PDF
   alerteBonH: 48,
+  couleursGerances: {},      // { 'nom normalisé de la gérance' : '#rrggbb' }
 };
 let OPT = Object.assign({}, OPT_DEFAUTS);
 function optLoad() {
@@ -3402,6 +3408,7 @@ function openOptions() {
           chk('boisEtend', 'Étendue / surface'),
           chk('boisHum', 'Taux d\'humidité du bois'),
         ].join(''))}
+        ${bloc('🎨 Couleurs des gérances', _optBlocCouleurs())}
         ${bloc('🔔 Alertes', [
           ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Pastille rouge sur le bon'),
         ].join(''))}
@@ -3422,6 +3429,46 @@ function optToggleOnglet(id, visible) {
   if (!visible && i < 0) masq.push(id);
   OPT.ongletsMasques = masq; optSave();
 }
+// --- Couleurs des gérances ---------------------------------------------------
+// Liste des gérances réellement utilisées (bons, documents, clients), sans doublon
+function _optGerances() {
+  const noms = [];
+  const push = n => { const c = _geranceCanon(n); if (c && noms.indexOf(c) < 0) noms.push(c); };
+  (DB.bons || []).forEach(b => push(b.geranceNom));
+  (DB.documents || []).forEach(d => push(d.clientNom));
+  (DB.clients || []).forEach(c => push(c.nom));
+  return noms.sort((a, b) => a.localeCompare(b, 'fr'));
+}
+function optSetCouleurGerance(nomB64, couleur) {
+  const nom = decodeURIComponent(escape(atob(nomB64)));
+  const key = String(nom).toLowerCase().trim();
+  const map = Object.assign({}, OPT.couleursGerances || {});
+  if (couleur) map[key] = couleur; else delete map[key];
+  OPT.couleursGerances = map; optSave();
+  ['renderBons', 'renderDocuments', 'renderClients', 'renderRapports', 'renderDashboard']
+    .forEach(f => { if (typeof window[f] === 'function') { try { window[f](); } catch (e) {} } });
+}
+function optResetCouleurGerance(nomB64) { optSetCouleurGerance(nomB64, ''); openOptions(); }
+function _optBlocCouleurs() {
+  const noms = _optGerances();
+  if (!noms.length) return '<div style="font-size:12px;color:var(--g500);">Aucune gérance enregistrée pour le moment.</div>';
+  const perso = OPT.couleursGerances || {};
+  return `<div style="font-size:12px;color:var(--g600);margin-bottom:10px;">Choisis une couleur par gérance : elle colore les bons, devis, factures et cartes clients. Le point ● montre la couleur actuelle.</div>
+    <div style="max-height:290px;overflow:auto;padding-right:4px;">` +
+    noms.map(n => {
+      const key = String(n).toLowerCase().trim();
+      const b64 = btoa(unescape(encodeURIComponent(n)));
+      const cur = perso[key] || colorForGeranceName(n);
+      const perso_ = !!perso[key];
+      return `<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-left:5px solid ${cur};border-radius:8px;padding:7px 11px;margin-bottom:5px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:150px;font-size:13px;font-weight:700;color:var(--navy);">${_escapeHtml(n)}</div>
+        <span style="font-size:10px;font-weight:700;color:${perso_ ? '#0d9488' : 'var(--g400)'};">${perso_ ? '● personnalisée' : '● automatique'}</span>
+        <input type="color" value="${cur}" onchange="optSetCouleurGerance('${b64}', this.value)" title="Choisir la couleur de cette gérance" style="width:44px;height:30px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;padding:2px;">
+        ${perso_ ? `<button class="btn btn-ghost btn-xs" onclick="optResetCouleurGerance('${b64}')" title="Revenir à la couleur automatique">↩️</button>` : ''}
+      </div>`;
+    }).join('') + '</div>';
+}
+
 function optReset() {
   if (!confirm('Remettre toutes les options d\'affichage par défaut ?')) return;
   OPT = Object.assign({}, OPT_DEFAUTS); optSave(); openOptions();
