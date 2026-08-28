@@ -4256,7 +4256,14 @@ function ficheBonModifie() {
   if (el) { el.textContent = '● Modifications non enregistrées'; el.classList.add('sur'); }
 }
 
-function ficheBonRefresh() {
+// Rafraichit la fiche si elle est ouverte, sans toucher aux champs en cours
+// de saisie : seuls l'en-tete et la colonne de suivi sont redessines.
+function _ficheBonMaj() {
+  if (_ficheBonId && document.querySelector('#modal-fiche-bon.open')) ficheBonRefresh(false);
+}
+
+// complet !== false : redessine tout. complet === false : en-tete + suivi seulement.
+function ficheBonRefresh(complet) {
   const b = (DB.bons || []).find(x => x.id === _ficheBonId);
   const hd = document.getElementById('fb-hd');
   const body = document.getElementById('fb-body');
@@ -4293,7 +4300,7 @@ function ficheBonRefresh() {
           ${pj.length ? `<span class="fb-badge ambre">📎 ${pj.length} pièce${pj.length > 1 ? 's' : ''} jointe${pj.length > 1 ? 's' : ''}</span>` : ''}
         </div>
       </div>
-      <select class="fb-statut" onchange="updateBonStatut('${b.id}', this.value); ficheBonRefresh();" title="Statut du bon">
+      <select class="fb-statut" onchange="updateBonStatut('${b.id}', this.value); ficheBonRefresh(false);" title="Statut du bon">
         ${Object.keys(SB).map(k => `<option value="${k}" ${(b.statut || '') === k ? 'selected' : ''}>${SB[k]}</option>`).join('')}
       </select>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-fiche-bon')" title="Fermer">✕</button>
@@ -4344,9 +4351,8 @@ function ficheBonRefresh() {
   facts.forEach(d => evts.push([d.dateDoc, '🧾', 'Facture ' + (d.numero || '')]));
   evts.sort((a, b2) => String(a[0] || '').localeCompare(String(b2[0] || '')));
 
-  body.innerHTML = `
-    <div class="fb-cols">
-      <div class="fb-col">
+  const gaucheHtml = `
+      <div class="fb-col" id="fb-gauche">
         <div class="fb-card">
           <div class="fb-t">🏢 Gérance</div>
           ${ch('Nom de la gérance', 'geranceNom', b.geranceNom)}
@@ -4391,9 +4397,10 @@ function ficheBonRefresh() {
             </div>
           </div>
         </div>
-      </div>
+      </div>`;
 
-      <div class="fb-col">
+  const droiteHtml = `
+      <div class="fb-col" id="fb-suivi">
         <div class="fb-card">
           <div class="fb-t">📅 Planification
             <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonPlanning('${b.id}')">Modifier</button></div>
@@ -4452,9 +4459,13 @@ function ficheBonRefresh() {
             <div class="fb-ev"><div class="d">${fmtDate(e[0]) || '—'}</div><div class="i">${e[1]}</div><div class="t">${e[2]}</div></div>`).join('')}</div>`
             : '<div class="fb-vide">Rien à afficher pour le moment.</div>'}
         </div>
-      </div>
-    </div>`;
+      </div>`;
 
+  if (complet === false) {
+    const suivi = document.getElementById('fb-suivi');
+    if (suivi) { suivi.outerHTML = droiteHtml; return; }
+  }
+  body.innerHTML = `<div class="fb-cols">${gaucheHtml}${droiteHtml}</div>`;
   const et = document.getElementById('fb-etat');
   if (et) { et.textContent = ''; et.classList.remove('sur'); }
 }
@@ -4555,6 +4566,7 @@ async function _bonPJAjouterInterne(bonId, fileList) {
   DB.bons = bons;
   bonPJRefresh(); renderBons();
   toast(ok > 1 ? (ok + ' pièces ajoutées') : 'Pièce jointe ajoutée', '#2d9e6b');
+  _ficheBonMaj();
 }
 
 // Ouvre une piece jointe dans un nouvel onglet (lien signe valable 1 h)
@@ -4582,6 +4594,7 @@ async function bonPJSupprimer(bonId, index) {
   DB.bons = bons;
   bonPJRefresh(); renderBons();
   toast('Pièce jointe supprimée', '#e63946');
+  _ficheBonMaj();
 }
 
 // --- Fenetre des pieces jointes ---
@@ -5944,12 +5957,14 @@ function bonSetAffecte(id, value) {
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
+  _ficheBonMaj();
 }
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
   const bons = DB.bons; DB.bons = bons;
+  _ficheBonMaj();
 }
 // Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
 function bonToggleRapFait(id) {
@@ -6049,6 +6064,7 @@ function saveBonNote() {
   closeModal('modal-bon-note');
   toast(payload ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
   _bonNoteEditingId = null;
+  _ficheBonMaj();
 }
 // Corrige et structure la note via Mistral (orthographe + mise en forme prix/traitement)
 async function bonNoteAICorrect() {
@@ -6100,6 +6116,7 @@ function bonAddDateEffectuee(id) {
   dates.push(today());
   const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
   renderBons();
+  _ficheBonMaj();
 }
 function bonSetDateEffectuee(id, index, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
@@ -6107,6 +6124,7 @@ function bonSetDateEffectuee(id, index, value) {
   if (value) dates[index] = value; else dates.splice(index, 1);
   const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
   renderBons();
+  _ficheBonMaj();
 }
 
 // Met à jour les compteurs de TOUS les boutons de navigation
@@ -6717,6 +6735,7 @@ function updateBonDateInterv(id, value) {
   DB.bons = bons;
   _syncBonIntervention(b);
   toast(value ? ('📅 Planifié dans l\'agenda le ' + fmtDate(value)) : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
+  _ficheBonMaj();
 }
 // Enregistre l'heure de prochaine intervention sur un bon + met à jour l'agenda
 function updateBonHeureInterv(id, value) {
@@ -6727,6 +6746,7 @@ function updateBonHeureInterv(id, value) {
   DB.bons = bons;
   _syncBonIntervention(b);
   toast(value ? ('🕒 Heure : ' + value + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
+  _ficheBonMaj();
 }
 // Ajoute le bon à Google Agenda à la date/heure de prochaine intervention
 function addBonToGoogle(id) {
