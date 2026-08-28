@@ -437,10 +437,11 @@ function showScreen(name) {
   const nb = $(`nb-${name}`);
   if (nb) nb.classList.add('active');
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
-  // Sur téléphone, les écrans bureau restent masqués sauf ceux qu'on ouvre exprès
+  // Sur téléphone : un écran complet ouvert reste ouvert tant qu'on ne touche pas la barre d'onglets
   if (typeof mobActif === 'function' && mobActif()) {
     const plein = ['rapport-edit', 'agenda', 'rapports', 'devis', 'factures', 'clients', 'locataires', 'contrats', 'rapprochement', 'bons'];
-    document.body.classList.toggle('mob-on', plein.indexOf(name) < 0);
+    _mobEcranOuvert = plein.indexOf(name) >= 0;
+    document.body.classList.toggle('mob-on', !_mobEcranOuvert);
   }
   if (name === 'anciennes' && typeof renderAnciennesList === 'function') renderAnciennesList();
   if (name === 'fact-archive' && typeof renderFactArchive === 'function') renderFactArchive();
@@ -3574,6 +3575,7 @@ function optReset() {
 // ============================================================
 const MOB_SEUIL = 820;
 let _mobOnglet = 'journee';
+let _mobEcranOuvert = false;   // un écran complet (rapport, agenda…) est ouvert par-dessus
 function mobActif() { return window.innerWidth <= MOB_SEUIL; }
 
 // Interventions du jour (agenda), triées par heure
@@ -3594,7 +3596,8 @@ function _mobBonsPrioritaires() {
 function mobGo(onglet) {
   _mobOnglet = onglet;
   _mobFiche = null;
-  document.body.classList.add('mob-on');   // on quitte l'écran complet éventuel
+  _mobEcranOuvert = false;                 // on quitte l'écran complet éventuel
+  document.body.classList.add('mob-on');
   renderMobile();
   window.scrollTo(0, 0);
 }
@@ -3608,6 +3611,7 @@ const MOB_TYPES_RAPPORT = [
   ['bois',     '🪵', 'Diagnostic insectes du bois', 'Capricornes, vrillettes, lyctus…', 'openNewDiagnostic()'],
 ];
 function mobNouveauRapport(fn) {
+  _mobEcranOuvert = true;
   document.body.classList.remove('mob-on');
   try { eval(fn); } catch (e) { console.warn('rapport', e); toast('Impossible d\'ouvrir ce rapport', '#e63946'); }
 }
@@ -3617,8 +3621,9 @@ function renderMobile() {
   if (!box) return;
   if (!mobActif()) { box.style.display = 'none'; document.body.classList.remove('mob-on'); return; }
   box.style.display = 'block';
-  // mob-on = on affiche l'accueil terrain ; sinon un écran complet est ouvert par-dessus
-  if (!document.querySelector('.screen.active') || _mobOnglet !== 'ecran') document.body.classList.add('mob-on');
+  // mob-on = accueil terrain visible. Si un écran complet est ouvert (rapport en cours
+  // de saisie), on ne le referme JAMAIS : seule la barre d'onglets reste par-dessus.
+  document.body.classList.toggle('mob-on', !_mobEcranOuvert);
 
   const tab = (id, ico, lbl) => `<div class="mob-tab ${_mobOnglet === id ? 'on' : ''}" onclick="mobGo('${id}')"><span class="i">${ico}</span>${lbl}</div>`;
   let corps = '';
@@ -3782,9 +3787,16 @@ function mobPhotoPrise(e) {
   if (!f) return;
   toast('📷 Photo prise — ouvre un rapport pour l\'y ajouter', '#0d9488');
 }
-// Bascule automatique quand on tourne le téléphone ou redimensionne
-let _mobTimer = null;
-window.addEventListener('resize', () => { clearTimeout(_mobTimer); _mobTimer = setTimeout(renderMobile, 200); });
+// Bascule automatique quand on TOURNE le téléphone. On ignore les redimensionnements
+// de hauteur seule : sur iPhone, faire défiler ou ouvrir le clavier en déclenche un,
+// ce qui refermait le formulaire en cours de saisie.
+let _mobTimer = null, _mobLargeur = window.innerWidth;
+window.addEventListener('resize', () => {
+  if (window.innerWidth === _mobLargeur) return;   // seule la hauteur a bougé → on ne touche à rien
+  _mobLargeur = window.innerWidth;
+  clearTimeout(_mobTimer);
+  _mobTimer = setTimeout(renderMobile, 200);
+});
 
 function loadPdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
