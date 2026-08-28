@@ -3429,6 +3429,12 @@ function openOptions() {
         ${bloc('🔔 Alertes', [
           ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Pastille rouge sur le bon'),
         ].join(''))}
+        ${bloc('🔐 Mon compte', `
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:180px;font-size:13px;font-weight:600;color:var(--navy);">Mot de passe de connexion
+              <div style="font-size:11px;font-weight:400;color:var(--g500);">Il sert sur l'ordinateur et sur le téléphone</div></div>
+            <button class="btn btn-navy btn-sm" onclick="changerMotDePasse()">Changer mon mot de passe</button>
+          </div>`)}
         <div style="text-align:center;margin-top:6px;">
           <button class="btn btn-ghost btn-sm" onclick="optReset()">↩️ Tout remettre par défaut</button>
         </div>
@@ -3537,6 +3543,22 @@ function _optListeCouleurs() {
         ${perso_ ? `<button class="btn btn-ghost btn-xs" onclick="optResetCouleurGerance('${b64}')" title="Revenir à la couleur automatique">↩️</button>` : ''}
       </div>`;
     }).join('') + '</div>';
+}
+
+// --- Changer son mot de passe ------------------------------------------------
+async function changerMotDePasse() {
+  if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
+  const p1 = prompt('Nouveau mot de passe (8 caractères minimum) :');
+  if (p1 === null) return;
+  if (String(p1).length < 8) { toast('Trop court : 8 caractères minimum', '#e63946'); return; }
+  const p2 = prompt('Retape-le pour confirmer :');
+  if (p2 === null) return;
+  if (p1 !== p2) { toast('Les deux mots de passe ne correspondent pas', '#e63946'); return; }
+  try {
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) { toast('Erreur : ' + error.message, '#e63946'); return; }
+    toast('✅ Mot de passe modifié — garde-le précieusement', '#2d9e6b');
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
 }
 
 function optReset() {
@@ -3650,6 +3672,7 @@ function renderMobile() {
         ${it('🏠', 'Locataires', "showScreen('locataires')")}
         ${it('📜', 'Contrats', "showScreen('contrats')")}
         ${it('⚙️', 'Options d\'affichage', 'openOptions()')}
+        ${it('🔐', 'Changer mon mot de passe', 'changerMotDePasse()')}
         ${it('🚪', 'Déconnexion', 'doLogout()')}
       </div>`;
   }
