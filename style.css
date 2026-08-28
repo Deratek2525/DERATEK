@@ -1264,3 +1264,8 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 }
 .fb-sugg .s { font-size: 13px; font-weight: 700; color: var(--navy); }
 .fb-sugg .o { font-size: 11.5px; color: #b45309; margin: 3px 0 8px; line-height: 1.4; }
+/* Nuisible principal : en rouge des qu'un insecte est designe */
+.fb-nuis.on {
+  background: #fee2e2; border-color: #ef4444; color: #991b1b; font-weight: 800;
+}
+.fb-nuis.on:focus { box-shadow: 0 0 0 2px rgba(239, 68, 68, .2); border-color: #ef4444; }

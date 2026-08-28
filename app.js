@@ -4455,34 +4455,25 @@ function ficheBonRefresh(complet) {
 
         <div class="fb-card">
           <div class="fb-t">🐛 Nuisible et intervention</div>
-          <div class="fb-aide">Ces trois informations alimentent la note interne, les rapports et les devis.</div>
+          <div class="fb-aide">Le nuisible passe en rouge dès qu'il est renseigné. Ces informations alimentent la note interne, les rapports et les devis.</div>
           <div class="fb-2">
             <div class="fb-ch">
               <label for="fb-nuisible">Nuisible principal</label>
-              <select id="fb-nuisible" class="fb-in" onchange="ficheBonModifie()">${_bonNoteNuisibleOptions(nd.nuisible)}</select>
+              <select id="fb-nuisible" class="fb-in fb-nuis${nd.nuisible ? ' on' : ''}"
+                onchange="ficheBonModifie(); this.classList.toggle('on', !!this.value);">${_bonNoteNuisibleOptions(nd.nuisible)}</select>
             </div>
             <div class="fb-ch">
               <label for="fb-nuisible2">Second nuisible</label>
               <select id="fb-nuisible2" class="fb-in" onchange="ficheBonModifie()">${_bonNoteNuisibleOptions(nd.nuisible2)}</select>
             </div>
           </div>
-          <div class="fb-2">
-            <div class="fb-ch">
-              <label for="fb-typeInterv">Type d'intervention</label>
-              <select id="fb-typeInterv" class="fb-in" onchange="ficheBonModifie()">
-                <option value="">— Aucun —</option>
-                ${BON_NOTE_TYPES_INTERV.map(t => `<option value="${t}" ${nd.typeInterv === t ? 'selected' : ''}>${t}</option>`).join('')}
-                ${nd.typeInterv && BON_NOTE_TYPES_INTERV.indexOf(nd.typeInterv) === -1 ? `<option value="${_escapeHtml(nd.typeInterv)}" selected>${_escapeHtml(nd.typeInterv)}</option>` : ''}
-              </select>
-            </div>
-            <div class="fb-ch">
-              <label for="fb-noteStatut">Où en est-on ?</label>
-              <select id="fb-noteStatut" class="fb-in" onchange="ficheBonModifie()">
-                <option value="">— Aucun —</option>
-                ${BON_NOTE_STATUTS.map(t => `<option value="${t}" ${nd.statut === t ? 'selected' : ''}>${t}</option>`).join('')}
-                ${nd.statut && BON_NOTE_STATUTS.indexOf(nd.statut) === -1 ? `<option value="${_escapeHtml(nd.statut)}" selected>${_escapeHtml(nd.statut)}</option>` : ''}
-              </select>
-            </div>
+          <div class="fb-ch">
+            <label for="fb-noteStatut">Où en est-on ?</label>
+            <select id="fb-noteStatut" class="fb-in" onchange="ficheBonModifie()">
+              <option value="">— Aucun —</option>
+              ${BON_NOTE_STATUTS.map(t => `<option value="${t}" ${nd.statut === t ? 'selected' : ''}>${t}</option>`).join('')}
+              ${nd.statut && BON_NOTE_STATUTS.indexOf(nd.statut) === -1 ? `<option value="${_escapeHtml(nd.statut)}" selected>${_escapeHtml(nd.statut)}</option>` : ''}
+            </select>
           </div>
         </div>
 
