@@ -938,7 +938,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 @media (min-width: 821px) {
   .ck-bon {
     display: grid;
-    grid-template-columns: 42px 118px minmax(180px, 1fr) minmax(170px, 1.15fr) 146px 240px;
+    grid-template-columns: 42px 118px minmax(165px, 1fr) minmax(150px, 1fr) 200px 240px;
     grid-template-areas: "ico id qui pb rdv act";
     align-items: center;
     gap: 12px;
@@ -988,14 +988,39 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     font-size: 9px; font-weight: 800; letter-spacing: .5px;
     text-transform: uppercase; color: var(--g500);
   }
-  .ck-b-rdv .v {
-    font-size: 12px; font-weight: 700; color: var(--navy); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
+  .ck-b-rdv.on { background: #f0fdf4; border-color: #bbf7d0; }
+  .ck-b-rdv.on .l { color: #15803d; }
+  .ck-b-rdv:not(.on) .l { color: #b45309; }
   .ck-b-rdv .f {
-    font-size: 10.5px; color: var(--g500); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10.5px; color: var(--g500); margin-top: 3px;
+    overflow: hidden; white-space: nowrap;
   }
+  /* Champs de planification directement dans la liste */
+  .ck-rdv-l { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+  .ck-rdv-d, .ck-rdv-h {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11.5px; font-weight: 700; color: var(--navy);
+    height: 24px; padding: 0 5px; border-radius: 6px;
+    border: 1.5px solid #cbd5e1; background: #fff; cursor: pointer;
+  }
+  .ck-rdv-d { flex: 1 1 auto; min-width: 0; }
+  .ck-rdv-h { width: 74px; flex: 0 0 auto; }
+  .ck-b-rdv:not(.on) .ck-rdv-d, .ck-b-rdv:not(.on) .ck-rdv-h {
+    border-style: dashed; border-color: #f59e0b; color: #b45309; background: #fffbeb;
+  }
+  .ck-rdv-d:hover, .ck-rdv-h:hover, .ck-rdv-d:focus, .ck-rdv-h:focus {
+    border-color: var(--navy); outline: none; box-shadow: 0 0 0 2px rgba(26,39,68,.12);
+  }
+  .ck-rdv-g, .ck-rdv-p {
+    position: relative; flex: 0 0 auto; padding: 0; color: #334155;
+    width: 24px; height: 24px; border-radius: 6px; border: 1.5px solid #e5e7eb; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ck-rdv-p { width: 20px; height: 20px; }
+  .ck-rdv-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .ck-rdv-p .ck-i { width: 12px; height: 12px; }
+  .ck-rdv-g:hover, .ck-rdv-p:hover { border-color: #94a3b8; }
   .ck-b-act { grid-area: act; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .ck-b-btns { display: flex; gap: 4px; }
   /* Boutons pictogrammes : l'intitule apparait au survol */
@@ -1015,7 +1040,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   .ck-b-btns .ck-b-b:hover { border-color: #94a3b8; }
   .ck-b-btns .btn-navy, .ck-b-btns .btn-red { color: #fff; }
   /* Infobulle maison : elle s'affiche tout de suite, contrairement au title */
-  .ck-b-b::after {
+  .ck-b-b::after, .ck-rdv-g::after, .ck-rdv-p::after {
     content: attr(data-tip);
     position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
     background: #0d1b3e; color: #fff;
@@ -1025,7 +1050,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     opacity: 0; visibility: hidden; transition: opacity .12s ease;
     pointer-events: none; z-index: 90;
   }
-  .ck-b-b::before {
+  .ck-b-b::before, .ck-rdv-g::before, .ck-rdv-p::before {
     content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent; border-bottom-width: 0; border-top-color: #0d1b3e;
@@ -1033,7 +1058,10 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     pointer-events: none; z-index: 90;
   }
   .ck-b-b:hover::after, .ck-b-b:hover::before,
-  .ck-b-b:focus-visible::after, .ck-b-b:focus-visible::before { opacity: 1; visibility: visible; }
+  .ck-b-b:focus-visible::after, .ck-b-b:focus-visible::before,
+  .ck-rdv-g:hover::after, .ck-rdv-g:hover::before,
+  .ck-rdv-p:hover::after, .ck-rdv-p:hover::before { opacity: 1; visibility: visible; }
+  .ck-rdv-g::after, .ck-rdv-p::after { left: -6px; transform: none; }
   /* Les bulles des boutons de bord se recalent pour ne pas depasser de la carte */
   .ck-b-btns .ck-b-b:nth-child(-n+2)::after { left: -6px; transform: none; }
   .ck-b-btns .ck-b-b:nth-last-child(-n+3)::after { left: auto; right: -6px; transform: none; }

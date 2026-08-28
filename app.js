@@ -5666,9 +5666,22 @@ const CK_ICO = {
   rapport: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><polyline points="9 13 11 15 15 11"/></svg>',
   devis:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
   facture: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v18l-2.7-1.8L14.7 21 12 19.2 9.3 21l-2.6-1.8L4 21z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>',
+  agenda:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  plus:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   ouvrir:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
   suppr:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
 };
+
+// Rafraichit l'encadre rendez-vous (couleur + intitule) sans redessiner la liste
+function _ckRdvMaj(el) {
+  const box = el && el.closest ? el.closest('.ck-b-rdv') : null;
+  if (!box) return;
+  const d = box.querySelector('.ck-rdv-d');
+  const on = !!(d && d.value);
+  box.classList.toggle('on', on);
+  const l = box.querySelector('.l');
+  if (l) l.textContent = on ? 'Rendez-vous' : 'Rendez-vous — à planifier';
+}
 
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
@@ -5718,11 +5731,20 @@ function renderBonCardCockpit(b) {
         ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
       </div>
       <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
-      <div class="ck-b-rdv">
-        <div class="l">Rendez-vous</div>
-        <div class="v">${rdv || '<span style="color:#b6bfd0;font-weight:600;">à planifier</span>'}</div>
-        ${faits.length ? `<div class="f">✅ ${faits.length} passage(s)</div>` : ''}
-        ${aff ? `<div class="f">👷 ${_escapeHtml(aff)}</div>` : ''}
+      <div class="ck-b-rdv${b.dateIntervention ? ' on' : ''}">
+        <div class="l">Rendez-vous${b.dateIntervention ? '' : ' — à planifier'}</div>
+        <div class="ck-rdv-l">
+          <input type="date" class="ck-rdv-d" value="${b.dateIntervention || ''}"
+            onchange="updateBonDateInterv('${b.id}', this.value); _ckRdvMaj(this)" title="Date du rendez-vous">
+          <input type="time" class="ck-rdv-h" value="${b.heureIntervention || ''}"
+            onchange="updateBonHeureInterv('${b.id}', this.value); _ckRdvMaj(this)" title="Heure du rendez-vous">
+        </div>
+        <div class="f">
+          <span>✅ ${faits.length} passage(s)</span>
+          ${faits.length < 5 ? `<button class="btn btn-ghost ck-rdv-p" onclick="bonAddDateEffectuee('${b.id}')" data-tip="Ajouter une intervention effectuée" aria-label="Ajouter une intervention effectuée">${CK_ICO.plus}</button>` : ''}
+          <button class="btn btn-ghost ck-rdv-p" onclick="addBonToGoogle('${b.id}')" data-tip="Ajouter à Google Agenda" aria-label="Ajouter à Google Agenda">${CK_ICO.agenda}</button>
+          ${aff ? `<span class="ck-rdv-a" title="Technicien affecté">👷 ${_escapeHtml(aff)}</span>` : ''}
+        </div>
       </div>
       <div class="ck-b-act">
         <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon"
