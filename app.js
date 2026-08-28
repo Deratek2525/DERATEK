@@ -5654,9 +5654,79 @@ function updateNavCounts() {
   set('nb-contrats-count', (DB.contrats || []).length);
 }
 
+
+// ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
+// Reprend exactement les mêmes actions que la carte classique ; seule la mise
+// en page change (les réglages fins se font en ouvrant la fiche du bon).
+function renderBonCardCockpit(b) {
+  const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+  const coul = _bonColor(b) || colorForGeranceName(g);
+  const statut = b.statut || '';
+  const SB = {
+    '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db', lbl: '— Sans statut —' },
+    'urgent':        { bg: '#fee2e2', color: '#991b1b', border: '#ef4444', lbl: '🚨 Urgent' },
+    'a-contacter':   { bg: '#cffafe', color: '#155e75', border: '#06b6d4', lbl: '📞 À contacter' },
+    'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626', lbl: '📕 Rapport à transmettre' },
+    'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6', lbl: '📨 Transmis' },
+    'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1', lbl: '📝 Demande de devis' },
+    'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6', lbl: '⏸️ Attente de devis' },
+    'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6', lbl: '✅ Devis validé' },
+    'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316', lbl: '🔧 En cours' },
+    'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e', lbl: '✔️ Terminé' },
+    'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444', lbl: '💰 À facturer' },
+  };
+  const st = SB[statut] || SB[''];
+  const opts = Object.keys(SB).map(k => `<option value="${k}" ${statut === k ? 'selected' : ''}>${SB[k].lbl}</option>`).join('');
+  const alerte = _bonAlerteNouveau48h(b);
+  const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId)) || null;
+  const adresse = (loc && loc.adresse) || b.immeuble || '';
+  const rdv = b.dateIntervention ? (fmtDate(b.dateIntervention) + (b.heureIntervention ? ' · ' + b.heureIntervention : '')) : '';
+  const faits = _bonDatesInterv(b);
+  const aff = _bonAffecte(b);
+  const note = _bonNote(b);
+  const pb = _bonProblemeClean(b);
+  // En Cockpit les actions sont des pictogrammes : l'intitule complet reste
+  // accessible au survol, ce qui permet de tenir toute la ligne sur une rangee.
+  const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" title="${titre}" aria-label="${titre}">${ico}</button>`;
+  return `
+    <div id="bonrow-${b.id}" class="ck-bon" style="border-left-color:${coul};">
+      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.16)};color:${coul};">📄${alerte ? '<span class="bon-blink"></span>' : ''}</div>
+      <div class="ck-b-id">
+        <div class="n">Bon ${_escapeHtml(b.numero || '(s. n°)')}${alerte ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
+        <div class="d">📅 ${fmtDate(b.date) || '—'}</div>
+      </div>
+      <div class="ck-b-qui">
+        <div class="t">${_escapeHtml(g)}</div>
+        <div class="s">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : ''}${adresse ? (b.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(adresse) : ''}</div>
+        ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
+      </div>
+      <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Note interne" style="color:#d97706;">📝</span>' : ''}</div>
+      <div class="ck-b-rdv">
+        <div class="l">Rendez-vous</div>
+        <div class="v">${rdv || '<span style="color:#b6bfd0;font-weight:600;">à planifier</span>'}</div>
+        ${faits.length ? `<div class="f">✅ ${faits.length} passage(s)</div>` : ''}
+        ${aff ? `<div class="f">👷 ${_escapeHtml(aff)}</div>` : ''}
+      </div>
+      <div class="ck-b-act">
+        <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon"
+          style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
+        <div class="ck-b-btns">
+          ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, '📄', 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, '🖨', 'Générer un PDF de ce bon')}
+          ${bt(`openBonNote('${b.id}')`, note ? '🟠' : '📝', note ? 'Note interne — modifier' : 'Ajouter une note interne')}
+          ${bt(`createRapportFromBon('${b.id}')`, '📋', 'Créer le rapport depuis ce bon')}
+          ${bt(`createDevisFromBon('${b.id}')`, '💰', 'Créer un devis depuis ce bon')}
+          ${bt(`createFactureFromBon('${b.id}')`, '🧾', 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
+          ${bt(`editBon('${b.id}')`, '✏️', 'Ouvrir la fiche complète du bon', 'btn-navy')}
+          <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" title="Supprimer ce bon" aria-label="Supprimer ce bon">🗑</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 // Carte complète d'un bon (réutilisée dans l'écran Bons ET dans la section
 // "Bons en demande de devis" de l'écran Devis) — source unique de vérité.
 function renderBonCard(b, solid) {
+  if (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820) return renderBonCardCockpit(b);
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
   const gerColor = colorForGeranceName(g);          // couleur de la gérance
