@@ -3306,7 +3306,8 @@ const OPT_DEFAUTS = {
   rabaisDefaut: 5,
   boisAct: '1', boisGrav: '', boisEtend: '', boisHum: '1',   // '1' = imprimé sur le PDF
   alerteBonH: 48,
-  couleursGerances: {},      // { 'nom normalisé de la gérance' : '#rrggbb' }
+  couleursGerances: {},      // { 'nom normalisé' : '#rrggbb' }
+  couleursCat: 'gerances',   // catégorie affichée dans le bloc couleurs
 };
 let OPT = Object.assign({}, OPT_DEFAUTS);
 function optLoad() {
@@ -3408,7 +3409,7 @@ function openOptions() {
           chk('boisEtend', 'Étendue / surface'),
           chk('boisHum', 'Taux d\'humidité du bois'),
         ].join(''))}
-        ${bloc('🎨 Couleurs des gérances', _optBlocCouleurs())}
+        ${bloc('🎨 Couleurs par nom', _optBlocCouleurs())}
         ${bloc('🔔 Alertes', [
           ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Pastille rouge sur le bon'),
         ].join(''))}
@@ -3430,13 +3431,44 @@ function optToggleOnglet(id, visible) {
   OPT.ongletsMasques = masq; optSave();
 }
 // --- Couleurs des gérances ---------------------------------------------------
-// Liste des gérances réellement utilisées (bons, documents, clients), sans doublon
-function _optGerances() {
+// Catégories proposées dans la liste déroulante du bloc « Couleurs »
+const OPT_CAT_COULEURS = [
+  ['gerances',      '🏢 Gérances'],
+  ['proprietaires', '👤 Propriétaires'],
+  ['locataires',    '🏠 Locataires'],
+  ['particuliers',  '🙋 Particuliers & entreprises'],
+  ['tous',          '📋 Tous les clients'],
+  ['perso',         '⭐ Couleurs personnalisées'],
+];
+// Noms d'une catégorie, dédoublonnés et triés
+function _optNomsCategorie(cat) {
   const noms = [];
   const push = n => { const c = _geranceCanon(n); if (c && noms.indexOf(c) < 0) noms.push(c); };
-  (DB.bons || []).forEach(b => push(b.geranceNom));
-  (DB.documents || []).forEach(d => push(d.clientNom));
-  (DB.clients || []).forEach(c => push(c.nom));
+  const cls = DB.clients || [];
+  if (cat === 'perso') {
+    const perso = OPT.couleursGerances || {};
+    const vus = {}, tous = [];
+    cls.forEach(c => tous.push(c.nom));
+    (DB.bons || []).forEach(b => { tous.push(b.geranceNom); tous.push(b.proprietaire); tous.push(b.locataireNom); });
+    (DB.documents || []).forEach(d => { tous.push(d.clientNom); tous.push(d.proprietaire); tous.push(d.locataireNom); });
+    (DB.locataires || []).forEach(l => tous.push(l.nom));
+    tous.forEach(n => { const c = _geranceCanon(n); if (!c) return; const k = c.toLowerCase().trim(); if (perso[k] && !vus[k]) { vus[k] = 1; noms.push(c); } });
+    Object.keys(perso).forEach(k => { if (!vus[k]) { vus[k] = 1; noms.push(k); } });
+  } else if (cat === 'proprietaires') {
+    (DB.bons || []).forEach(b => push(b.proprietaire));
+    (DB.documents || []).forEach(d => push(d.proprietaire));
+  } else if (cat === 'locataires') {
+    (DB.locataires || []).forEach(l => push(l.nom));
+    (DB.bons || []).forEach(b => push(b.locataireNom));
+    (DB.documents || []).forEach(d => push(d.locataireNom));
+  } else if (cat === 'particuliers') {
+    cls.filter(c => c.type && c.type !== 'Gérance').forEach(c => push(c.nom));
+  } else if (cat === 'tous') {
+    cls.forEach(c => push(c.nom));
+  } else {
+    cls.filter(c => (c.type || 'Gérance') === 'Gérance').forEach(c => push(c.nom));
+    (DB.bons || []).forEach(b => push(b.geranceNom));
+  }
   return noms.sort((a, b) => a.localeCompare(b, 'fr'));
 }
 function optSetCouleurGerance(nomB64, couleur) {
@@ -3447,13 +3479,34 @@ function optSetCouleurGerance(nomB64, couleur) {
   OPT.couleursGerances = map; optSave();
   ['renderBons', 'renderDocuments', 'renderClients', 'renderRapports', 'renderDashboard']
     .forEach(f => { if (typeof window[f] === 'function') { try { window[f](); } catch (e) {} } });
+  _optRefreshCouleurs();
 }
-function optResetCouleurGerance(nomB64) { optSetCouleurGerance(nomB64, ''); openOptions(); }
+function optResetCouleurGerance(nomB64) { optSetCouleurGerance(nomB64, ''); }
+function optSetCatCouleurs(cat) { OPT.couleursCat = cat; OPT._filtreCoul = ''; optSave(); _optRefreshCouleurs(); }
+function optFiltreCouleurs(txt) { OPT._filtreCoul = txt || ''; _optRefreshCouleurs(); }
+function _optRefreshCouleurs() {
+  const box = document.getElementById('opt-couleurs-liste');
+  if (box) box.innerHTML = _optListeCouleurs();
+}
 function _optBlocCouleurs() {
-  const noms = _optGerances();
-  if (!noms.length) return '<div style="font-size:12px;color:var(--g500);">Aucune gérance enregistrée pour le moment.</div>';
+  const cat = OPT.couleursCat || 'gerances';
+  const opts = OPT_CAT_COULEURS.map(c => `<option value="${c[0]}" ${cat === c[0] ? 'selected' : ''}>${c[1]}</option>`).join('');
+  return `<div style="font-size:12px;color:var(--g600);margin-bottom:10px;">Choisis la liste à colorer, puis la couleur de chaque ligne. Elle s'applique aux bons, devis, factures et cartes.</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <select class="form-input" style="max-width:250px;" onchange="optSetCatCouleurs(this.value)">${opts}</select>
+      <input class="form-input" style="flex:1;min-width:150px;" placeholder="Rechercher un nom…" oninput="optFiltreCouleurs(this.value)">
+    </div>
+    <div id="opt-couleurs-liste">${_optListeCouleurs()}</div>`;
+}
+function _optListeCouleurs() {
+  const cat = OPT.couleursCat || 'gerances';
+  let noms = _optNomsCategorie(cat);
+  const f = String(OPT._filtreCoul || '').toLowerCase().trim();
+  if (f) noms = noms.filter(n => n.toLowerCase().includes(f));
+  const libelle = (OPT_CAT_COULEURS.find(c => c[0] === cat) || ['', 'cette liste'])[1];
+  if (!noms.length) return `<div style="font-size:12px;color:var(--g500);padding:8px 0;">Aucun nom dans « ${libelle} »${f ? ' pour cette recherche' : ''}.</div>`;
   const perso = OPT.couleursGerances || {};
-  return `<div style="font-size:12px;color:var(--g600);margin-bottom:10px;">Choisis une couleur par gérance : elle colore les bons, devis, factures et cartes clients. Le point ● montre la couleur actuelle.</div>
+  return `<div style="font-size:11px;color:var(--g500);margin-bottom:6px;">${noms.length} nom(s)</div>
     <div style="max-height:290px;overflow:auto;padding-right:4px;">` +
     noms.map(n => {
       const key = String(n).toLowerCase().trim();
