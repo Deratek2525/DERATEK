@@ -2571,7 +2571,17 @@ function saveRapportReprendre() {
 // qu'un redimensionnement CSS → instantané, plus aucun rechargement du PDF.
 const _PDF_PREV_ZOOMS = [50, 75, 100, 125, 150, 200, 300];
 const _pdfPrevState = {};
-function _pdfPrevSt(boxId) { return _pdfPrevState[boxId] = _pdfPrevState[boxId] || { seq: 0, zoom: 0 }; }
+function _pdfPrevSt(boxId) { return _pdfPrevState[boxId] = _pdfPrevState[boxId] || { seq: 0, zoom: 0, url: '', renderW: 0, timer: null }; }
+// Largeur d'affichage réelle d'une page, en PIXELS ÉCRAN (tient compte du zoom et
+// de la densité de l'écran Retina) → c'est la résolution minimale pour un rendu net.
+function _pdfPrevNeededW(boxId) {
+  const st = _pdfPrevSt(boxId);
+  const wrap = document.getElementById(boxId); if (!wrap) return 1200;
+  const fitW = Math.max(200, wrap.clientWidth - 26);
+  const cssW = st.zoom ? fitW * st.zoom / 100 : fitW;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  return Math.round(cssW * dpr);
+}
 function _pdfPrevApplyZoom(boxId) {
   const st = _pdfPrevSt(boxId);
   const wrap = document.getElementById(boxId); if (!wrap) return;
@@ -2589,12 +2599,16 @@ async function _pdfPrevRender(boxId, url) {
     wrap.innerHTML = '<div class="pdfprev-pages" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:13px;"></div>';
     pages = wrap.firstElementChild;
   }
+  st.url = url;
   const seq = ++st.seq;
   try {
     const pdfjsLib = await loadPdfJs();
     const pdf = await pdfjsLib.getDocument(url).promise;
     if (seq !== st.seq) { try { pdf.destroy(); } catch (e) {} return; }
-    const RENDER_W = 1500;   // largeur de rendu (net jusqu'à ~200 %)
+    // Résolution de rendu calée sur la taille d'affichage réelle (écran Retina inclus),
+    // avec une marge pour que le zoom reste net sans re-rendu à chaque clic.
+    const RENDER_W = Math.max(800, Math.min(4000, Math.round(_pdfPrevNeededW(boxId) * 1.7)));
+    st.renderW = RENDER_W;
     const cvs = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       const page = await pdf.getPage(n);
@@ -2626,6 +2640,11 @@ function _pdfPrevZoom(boxId, delta, lblId) {
   }
   const lbl = document.getElementById(lblId); if (lbl) lbl.textContent = st.zoom ? st.zoom + '%' : 'Ajusté';
   _pdfPrevApplyZoom(boxId);   // zoom instantané : simple CSS, aucun re-rendu
+  // Si le zoom dépasse la finesse déjà rendue, on re-rend en haute résolution juste après
+  clearTimeout(st.timer);
+  st.timer = setTimeout(() => {
+    if (st.url && _pdfPrevNeededW(boxId) > st.renderW * 1.1) _pdfPrevRender(boxId, st.url);
+  }, 220);
 }
 
 let _rapPdfLiveTimer = null, _rapPdfLiveUrl = null;
