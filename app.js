@@ -445,6 +445,7 @@ function showScreen(name) {
   }
   if (name === 'anciennes' && typeof renderAnciennesList === 'function') renderAnciennesList();
   if (name === 'fact-archive' && typeof renderFactArchive === 'function') renderFactArchive();
+  if (name === 'monposte')     renderMonPoste();
   if (name === 'dashboard')    renderDashboard();
   if (name === 'clients')      renderClients();
   if (name === 'rapports')     { renderRapports(); renderDiagnostics(); }
@@ -3088,8 +3089,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderDashboard();
         optApply();
         renderMobile();   // 📱 interface terrain si on est sur téléphone
-        // Écran d'ouverture choisi dans les options
-        if (OPT.ecranDepart && OPT.ecranDepart !== 'dashboard') { try { showScreen(OPT.ecranDepart); } catch (e) {} }
+        // Écran d'ouverture : « Mon poste » en style Cockpit, sinon le choix des options
+        if (OPT.style === 'cockpit' && (!OPT.ecranDepart || OPT.ecranDepart === 'dashboard')) {
+          try { showScreen('monposte'); } catch (e) {}
+        } else if (OPT.ecranDepart && OPT.ecranDepart !== 'dashboard') {
+          try { showScreen(OPT.ecranDepart); } catch (e) {}
+        }
         setTimeout(_autoBackupCheck, 1500);
       }
     } catch (err) { console.warn('Auto-login', err); }
@@ -3373,6 +3378,21 @@ function _cockpitCouleurs(actif) {
 function _cockpitFamilles(actif) {
   document.querySelectorAll('.nav-famille').forEach(e => e.remove());
   _cockpitCouleurs(actif);
+  // Bouton « Mon poste » : présent uniquement dans le style Cockpit
+  let mp = document.getElementById('nb-monposte');
+  if (actif && !mp) {
+    const dash = document.getElementById('nb-dashboard');
+    if (dash && dash.parentNode) {
+      mp = document.createElement('button');
+      mp.id = 'nb-monposte'; mp.className = 'nav-btn';
+      mp.setAttribute('onclick', "showScreen('monposte')");
+      mp.innerHTML = '🎛️ <span>Mon poste</span>';
+      dash.parentNode.insertBefore(mp, dash);
+    }
+  } else if (!actif && mp) {
+    mp.remove();
+    if ((document.querySelector('.screen.active') || {}).id === 'screen-monposte') showScreen('dashboard');
+  }
   if (!actif) return;
   COCKPIT_FAMILLES.forEach(([titre, id]) => {
     const btn = document.getElementById(id);
@@ -3457,7 +3477,7 @@ function openOptions() {
           ligne('Clignotements', chk('animations', 'Faire clignoter les alertes (bons +48 h, devis expirés)')),
         ].join(''))}
         ${bloc('🧭 Navigation', [
-          ligne('Écran d\'ouverture', sel('ecranDepart', [['dashboard', '📊 Dashboard'], ['bons', '📄 Bons'], ['rapports', '📋 Rapports'], ['devis', '📝 Devis'], ['factures', '🧾 Factures'], ['agenda', '📅 Agenda'], ['rapprochement', '🏦 Relevés'], ['contrats', '📜 Contrats']])),
+          ligne('Écran d\'ouverture', sel('ecranDepart', [['dashboard', '📊 Dashboard (ou Mon poste en Cockpit)'], ['monposte', '🎛️ Mon poste'], ['bons', '📄 Bons'], ['rapports', '📋 Rapports'], ['devis', '📝 Devis'], ['factures', '🧾 Factures'], ['agenda', '📅 Agenda'], ['rapprochement', '🏦 Relevés'], ['contrats', '📜 Contrats']])),
           `<div style="font-size:13px;font-weight:600;color:var(--navy);margin:10px 0 6px;">Onglets affichés <span style="font-weight:400;font-size:11px;color:var(--g500);">— décoche ceux dont tu ne te sers pas</span></div><div>${onglets}</div>`,
         ].join(''))}
         ${bloc('👁️ Aperçu PDF en direct', [
@@ -3849,6 +3869,151 @@ window.addEventListener('resize', () => {
   clearTimeout(_mobTimer);
   _mobTimer = setTimeout(renderMobile, 200);
 });
+
+// ============================================================
+// 🎛️ MON POSTE — écran d'accueil du style Cockpit
+// Rassemble ce qu'il y a à traiter aujourd'hui. Ne modifie aucune donnée :
+// chaque bouton ouvre l'écran habituel.
+// ============================================================
+function _mpJour() {
+  const j = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const m = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const d = new Date();
+  return j[d.getDay()] + ' ' + d.getDate() + ' ' + m[d.getMonth()] + ' ' + d.getFullYear();
+}
+// Les éléments qui demandent une action, du plus urgent au moins pressant
+function _mpAFaire() {
+  const out = [];
+  const bons = (DB.bons || []).filter(b => !_isBonFactArchived(b));
+  bons.filter(b => (b.statut || '') === '' && _bonAlerteNouveau48h(b)).forEach(b => out.push({
+    p: 1, c: '#e63946', t: 'Bon ' + (b.numero || '(s. n°)') + ' · ' + (b.geranceNom || ''),
+    s: (b.immeuble ? '📍 ' + b.immeuble + ' · ' : '') + 'reçu sans statut depuis plus de 48 h',
+    act: `editBon('${b.id}')`, bt: 'Traiter',
+  }));
+  bons.filter(b => (b.statut || '') === 'urgent').forEach(b => out.push({
+    p: 2, c: '#dc2626', t: 'Bon ' + (b.numero || '') + ' · urgent',
+    s: (b.geranceNom || '') + (b.immeuble ? ' · 📍 ' + b.immeuble : ''),
+    act: `editBon('${b.id}')`, bt: 'Ouvrir',
+  }));
+  bons.filter(b => (b.statut || '') === 'a-contacter').forEach(b => out.push({
+    p: 3, c: '#06b6d4', t: 'Bon ' + (b.numero || '') + ' · à contacter',
+    s: (b.geranceNom || '') + (b.gerantTel ? ' · ☎ ' + b.gerantTel : ''),
+    act: `editBon('${b.id}')`, bt: 'Ouvrir',
+  }));
+  bons.filter(b => (b.statut || '') === 'a-transmettre').forEach(b => out.push({
+    p: 4, c: '#6366f1', t: 'Rapport à transmettre · ' + (b.geranceNom || ''),
+    s: 'Bon ' + (b.numero || '') + (b.immeuble ? ' · ' + b.immeuble : ''),
+    act: `showScreen('rapports')`, bt: 'Voir',
+  }));
+  // Devis envoyés proches de l'expiration
+  (DB.documents || []).filter(d => (d.type || 'devis') === 'devis' && d.statut === 'envoye' && !_docIsArchive(d)).forEach(d => {
+    const j = _devisJoursRestants(d);
+    if (j === null || j > _devisSeuilRelance()) return;
+    out.push({
+      p: 5, c: j < 0 ? '#dc2626' : '#f59e0b',
+      t: 'Devis ' + (d.numero || '') + ' · ' + (d.clientNom || ''),
+      s: j < 0 ? 'expiré depuis ' + (-j) + ' jour(s) — à relancer' : 'expire dans ' + j + ' jour(s) — à relancer',
+      act: `editDoc('${d.id}')`, bt: 'Relancer',
+    });
+  });
+  // Factures prêtes à envoyer
+  (DB.documents || []).filter(d => d.type === 'facture' && d.statut === 'pret' && !_docIsArchive(d) && !_isRappelDoc(d)).forEach(d => out.push({
+    p: 6, c: '#0d9488', t: 'Facture ' + (d.numero || '') + ' · ' + (d.clientNom || ''),
+    s: 'prête à envoyer · ' + _displayMontant(d.total || 0) + ' CHF',
+    act: `editDoc('${d.id}')`, bt: 'Envoyer',
+  }));
+  // Bons terminés qui attendent leur facture
+  const nAFact = bons.filter(b => (b.statut || '') === 'a-facturer').length;
+  if (nAFact) out.push({
+    p: 7, c: '#8b5cf6', t: nAFact + ' bon(s) terminé(s) à facturer',
+    s: 'à transformer en facture', act: `showScreen('bons')`, bt: 'Facturer',
+  });
+  return out.sort((a, b) => a.p - b.p);
+}
+function renderMonPoste() {
+  const box = document.getElementById('monposte-body');
+  if (!box) return;
+  const docs = DB.documents || [];
+  const aFaire = _mpAFaire();
+  const ivs = (DB.intervs || []).filter(iv => iv.date === today())
+    .slice().sort((a, b) => String(a.heure || '').localeCompare(String(b.heure || '')));
+
+  // Chiffres clés
+  const factOuvertes = docs.filter(d => d.type === 'facture' && (d.statut || '') !== 'payee'
+    && !_docIsArchive(d) && !_isFactureFactArchived(d) && !_isRappelDoc(d));
+  const aEncaisser = factOuvertes.reduce((s, f) => s + (parseFloat(f.total) || 0), 0);
+  const pretes = docs.filter(d => d.type === 'facture' && d.statut === 'pret' && !_docIsArchive(d));
+  const pretMontant = pretes.reduce((s, f) => s + (parseFloat(f.total) || 0), 0);
+  const devisOuverts = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d) && d.statut !== 'refuse' && d.statut !== 'accepte').length;
+  const devisChauds = docs.filter(d => (d.type || 'devis') === 'devis' && d.statut === 'envoye' && !_docIsArchive(d))
+    .filter(d => { const j = _devisJoursRestants(d); return j !== null && j <= _devisSeuilRelance(); }).length;
+
+  const stat = (lbl, val, det, col) => `<div class="mp-kpi">
+      <div class="l">${lbl}</div><div class="v" style="color:${col || 'var(--navy)'}">${val}</div>
+      <div class="d">${det}</div></div>`;
+
+  // Top gérances du mois en cours (factures émises)
+  const moisISO = new Date().toISOString().slice(0, 7);
+  const parGer = {};
+  docs.filter(d => d.type === 'facture' && !_isRappelDoc(d) && String(d.dateDoc || '').slice(0, 7) === moisISO)
+    .forEach(d => { const g = _geranceCanon(d.clientNom) || '—'; parGer[g] = (parGer[g] || 0) + (parseFloat(d.total) || 0); });
+  const top = Object.keys(parGer).sort((a, b) => parGer[b] - parGer[a]).slice(0, 4);
+
+  box.innerHTML = `
+    <div class="mp-tete">
+      <div>
+        <h1 class="mp-h1">Bonjour ${_escapeHtml((DERATEK_CONFIG.company && DERATEK_CONFIG.company.prenom) || 'Dany')}</h1>
+        <div class="mp-date">${_mpJour()} · ${ivs.length} intervention${ivs.length > 1 ? 's' : ''} prévue${ivs.length > 1 ? 's' : ''}</div>
+      </div>
+    </div>
+
+    <div class="mp-kpis">
+      ${stat('À traiter', aFaire.length, aFaire.filter(x => x.p === 1).length + ' bon(s) sans statut +48 h', aFaire.length ? '#e63946' : 'var(--navy)')}
+      ${stat('Devis en cours', devisOuverts, devisChauds ? devisChauds + ' à relancer' : 'aucun à relancer', devisChauds ? '#b45309' : 'var(--navy)')}
+      ${stat('À encaisser', _rappMoney(aEncaisser) + ' <span style="font-size:14px">CHF</span>', factOuvertes.length + ' facture(s) ouverte(s)')}
+      ${stat('Prêt à envoyer', _rappMoney(pretMontant) + ' <span style="font-size:14px">CHF</span>', pretes.length + ' facture(s) prête(s)', pretes.length ? '#0d9488' : 'var(--navy)')}
+    </div>
+
+    <div class="mp-cols">
+      <div class="mp-card">
+        <div class="mp-ch">🔥 À traiter aujourd'hui
+          <span class="mp-pill" style="background:#fee2e2;color:#991b1b;">${aFaire.length} élément(s)</span></div>
+        ${aFaire.length ? aFaire.slice(0, 8).map(x => `
+          <div class="mp-row">
+            <div class="mp-bar" style="background:${x.c}"></div>
+            <div style="flex:1;min-width:0;">
+              <div class="t">${_escapeHtml(x.t)}</div>
+              <div class="s">${_escapeHtml(x.s)}</div>
+            </div>
+            <button class="btn btn-navy btn-sm" onclick="${x.act}">${x.bt}</button>
+          </div>`).join('') + (aFaire.length > 8 ? `<div class="mp-plus">+ ${aFaire.length - 8} autre(s)</div>` : '')
+        : '<div class="mp-vide">🎉 Rien en attente. Tout est à jour.</div>'}
+      </div>
+
+      <div>
+        <div class="mp-card" style="margin-bottom:14px;">
+          <div class="mp-ch">📅 Aujourd'hui <button class="btn btn-ghost btn-xs" style="margin-left:auto;" onclick="showScreen('agenda')">Agenda →</button></div>
+          ${ivs.length ? ivs.map(iv => `
+            <div class="mp-row">
+              <div class="mp-h">${_escapeHtml(iv.heure || '--:--')}</div>
+              <div style="flex:1;min-width:0;">
+                <div class="t">${_escapeHtml(iv.nuisible || 'Intervention')}${iv.adresse ? ' — ' + _escapeHtml(iv.adresse) : ''}</div>
+                <div class="s">${_escapeHtml(iv.clientNom || '')}${iv.bonNumero ? ' · Bon ' + _escapeHtml(iv.bonNumero) : ''}</div>
+              </div>
+            </div>`).join('') : '<div class="mp-vide">Aucune intervention aujourd\'hui.</div>'}
+        </div>
+        <div class="mp-card">
+          <div class="mp-ch">🏢 Top gérances du mois</div>
+          ${top.length ? top.map(g => `
+            <div class="mp-row">
+              <div class="mp-bar" style="background:${colorForGeranceName(g)}"></div>
+              <div style="flex:1;min-width:0;" class="t">${_escapeHtml(g)}</div>
+              <div style="font-weight:800;font-size:13px;">${_rappMoney(parGer[g])} CHF</div>
+            </div>`).join('') : '<div class="mp-vide">Aucune facture ce mois-ci.</div>'}
+        </div>
+      </div>
+    </div>`;
+}
 
 function loadPdfJs() {
   if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
