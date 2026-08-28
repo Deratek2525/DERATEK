@@ -2543,7 +2543,7 @@ function saveRapport(statut) {
       const stPrev = bon.statut || '';
       // On ne rétrograde pas un bon déjà « à facturer » ou déjà terminé.
       if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
-      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon));
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon), _bonNolienRaw(bon));
       DB.bons = bons;
     }
   }
@@ -4415,8 +4415,10 @@ function ficheBonRefresh(complet) {
   // Devis et factures du meme client qui ne sont rattaches a aucun bon :
   // on les propose ici pour que rien n'echappe a la fiche.
   const gKey = _couleurKey(b.geranceNom || '');
+  const ecartes = _bonNolien(b);
   const probables = gKey
     ? (DB.documents || []).filter(d => !d.bonId && !_docIsArchive(d) && !_isRappelDoc(d)
+        && ecartes.indexOf(d.id) === -1
         && _couleurKey(d.clientNom || '') === gKey)
         .sort((x, y) => String(y.dateDoc || '').localeCompare(String(x.dateDoc || '')))
         .slice(0, 8)
@@ -4581,8 +4583,13 @@ function ficheBonRefresh(complet) {
                 ((d.type === 'facture' ? 'Facture ' : 'Devis ') + _escapeHtml(d.numero || '')),
                 (fmtDate(d.dateDoc) || '') + ' · ' + _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'),
                 `editDoc('${d.id}')`,
-                btLien(`ficheBonRattacher('${d.id}')`, '🔗 Rattacher', 'Rattacher définitivement ce document à ce bon', 'btn-navy'))).join('')}
+                btLien(`ficheBonRattacher('${d.id}')`, '🔗 Oui', 'Oui — rattacher ce document à ce bon', 'btn-navy')
+                + btLien(`ficheBonEcarter('${d.id}')`, '✕ Non', 'Non — ce document ne concerne pas ce bon, ne plus le proposer'))).join('')}
           ` : ''}
+          ${ecartes.length ? `<div class="fb-ecartes">
+            ${ecartes.length} document${ecartes.length > 1 ? 's' : ''} écarté${ecartes.length > 1 ? 's' : ''} pour ce bon
+            <button class="btn btn-ghost btn-sm fb-blien" onclick="ficheBonReproposer()" title="Reproposer les documents écartés">Reproposer</button>
+          </div>` : ''}
         </div>
 
         <div class="fb-card">
@@ -4612,6 +4619,28 @@ function ficheBonRattacher(docId) {
   _ficheBonMaj();
   if (typeof renderDocuments === 'function') renderDocuments();
   toast('✓ ' + ((d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '')) + ' rattaché à ce bon', '#2d9e6b');
+}
+
+// « Non » : ce document ne concerne pas ce bon, on cesse de le proposer
+function ficheBonEcarter(docId) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === _ficheBonId);
+  if (!b) return;
+  _setBonNolien(b, _bonNolien(b).concat([docId]));
+  DB.bons = bons;
+  _ficheBonMaj();
+  toast('Document écarté de ce bon', '#6b7280');
+}
+
+// Remet toutes les suggestions ecartees
+function ficheBonReproposer() {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === _ficheBonId);
+  if (!b) return;
+  _setBonNolien(b, []);
+  DB.bons = bons;
+  _ficheBonMaj();
+  toast('Suggestions rétablies', '#2d9e6b');
 }
 
 // Retire le lien entre un document et le bon (le document n'est pas supprime)
@@ -4645,7 +4674,7 @@ function ficheBonEnregistrer() {
   if (txt !== undefined) {
     b.probleme = _bonAssembleProbleme(
       txt, _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
-      _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+      _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   }
   // Nuisible, type d'intervention, statut et texte de la note : on repart de la
   // note existante pour ne pas effacer le calcul de prix saisi dans la fenetre.
@@ -4662,7 +4691,7 @@ function ficheBonEnregistrer() {
   b.probleme = _bonAssembleProbleme(
     _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b),
     _bonNoteHasData(nv) ? JSON.stringify(nv) : '',
-    _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 
   DB.bons = bons;
   ficheBonRefresh();
@@ -6066,6 +6095,7 @@ function _bonProblemeClean(b) {
     .replace(/\s*\[ALERTE:[^\]]*\]/g, '')
     .replace(/\s*\[COLOR:[^\]]*\]/g, '')
     .replace(/\s*\[PJ:[^\]]*\]/g, '')
+    .replace(/\s*\[NOLIEN:[^\]]*\]/g, '')
     .trim();
 }
 // Couleur de fond personnalisée du bon (marqueur [COLOR:#hex] dans probleme). Vide = couleur auto (gérance).
@@ -6075,6 +6105,23 @@ function _bonColor(b) {
 }
 // Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait, alerte).
 // Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
+// ---- Documents ecartes ------------------------------------------------------
+// Quand on repond « Non » a une suggestion de rattachement, l'identifiant du
+// document est memorise ici pour que la fiche cesse de le proposer.
+function _bonNolienRaw(b) {
+  const m = String((b && b.probleme) || '').match(/\[NOLIEN:([^\]]*)\]/);
+  return m ? m[1] : '';
+}
+function _bonNolien(b) {
+  return _bonNolienRaw(b).split(',').map(x => x.trim()).filter(Boolean);
+}
+function _setBonNolien(b, ids) {
+  const liste = [...new Set((ids || []).map(x => String(x).trim()).filter(Boolean))].slice(0, 60);
+  b.probleme = _bonAssembleProbleme(
+    _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), liste.join(','));
+}
+
 // ---- Pieces jointes d'un bon (PDF et images) --------------------------------
 // Stockees dans le champ "probleme" via le marqueur [PJ:<base64 JSON>], comme
 // la note interne : aucun changement de base de donnees, synchro automatique.
@@ -6096,14 +6143,14 @@ function _setBonPJ(b, arr) {
   const pj = list.length ? _encNote(JSON.stringify(list)) : '';
   b.probleme = _bonAssembleProbleme(
     _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
-    _bonRapFait(b), _bonAlerte(b), _bonColor(b), pj);
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), pj, _bonNolienRaw(b));
 }
 // Vrai si la piece est une image (pour l'apercu et le pictogramme)
 function _pjEstImage(f) {
   return /^image\//i.test(String((f && f.t) || '')) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(String((f && f.n) || ''));
 }
 
-function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color, pj) {
+function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color, pj, nolien) {
   let out = String(clean || '').trim();
   const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
   if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
@@ -6113,20 +6160,21 @@ function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color, p
   if (alerte) out += (out ? '\n' : '') + '[ALERTE:' + alerte + ']';
   if (color) out += (out ? '\n' : '') + '[COLOR:' + color + ']';
   if (pj) out += (out ? '\n' : '') + '[PJ:' + pj + ']';
+  if (nolien) out += (out ? '\n' : '') + '[NOLIEN:' + nolien + ']';
   return out;
 }
 // Réécrit probleme propre + tous les marqueurs existants
 function _bonComposeProbleme(b) {
-  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
@@ -6135,7 +6183,7 @@ function bonSetAffecte(id, value) {
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   const bons = DB.bons; DB.bons = bons;
   _ficheBonMaj();
 }
@@ -6143,7 +6191,7 @@ function bonSetNote(id, text) {
 function bonToggleRapFait(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const nv = !_bonRapFait(b);
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
@@ -6151,7 +6199,7 @@ function bonToggleRapFait(id) {
 // Couleur de fond personnalisée de la carte du bon (vide = couleur auto de la gérance)
 function bonSetColor(id, color) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), color || '', _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), color || '', _bonPJraw(b), _bonNolienRaw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(color ? '🎨 Couleur du bon modifiée' : '↺ Couleur automatique (gérance) rétablie', '#2d9e6b');
@@ -6971,7 +7019,7 @@ function updateBonStatut(id, value) {
   } else {
     alerte = '';
   }
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte, _bonColor(b), _bonPJraw(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte, _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
     '':              'Statut effacé',
@@ -11979,7 +12027,7 @@ function saveDiag(statut, keepOpen) {
     if (bon) {
       const stPrev = bon.statut || '';
       if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
-      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon));
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon), _bonNolienRaw(bon));
       DB.bons = bons;
       if (typeof renderBons === 'function') renderBons();
     }

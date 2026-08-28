@@ -1287,3 +1287,13 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
 }
+.fb-ecartes {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--g500); font-style: italic;
+  margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--g200);
+}
+.fb-ecartes {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--g500); font-style: italic;
+  margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--g200);
+}
