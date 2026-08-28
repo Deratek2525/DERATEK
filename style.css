@@ -913,3 +913,23 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 .mp-row .s { font-size: 11.5px; color: var(--g500); margin-top: 2px; }
 .mp-vide { padding: 24px 16px; text-align: center; font-size: 13px; color: var(--g500); }
 .mp-plus { padding: 10px 16px; font-size: 12px; color: var(--g500); text-align: center; }
+
+/* ---- Style Cockpit : habillage des écrans et des listes ---- */
+@media (min-width: 821px) {
+  html[data-style="cockpit"] body { background: #eef1f6; }
+  /* En-tête de page plus sobre : le titre respire, l'ombre disparaît */
+  html[data-style="cockpit"] .page-hd {
+    background: transparent; border-bottom: 1px solid var(--g200); box-shadow: none;
+    padding: 20px 26px 16px;
+  }
+  html[data-style="cockpit"] .page-title { font-size: 23px; font-weight: 800; }
+  html[data-style="cockpit"] .page-body { padding: 18px 26px 40px; }
+  /* Cartes : coins plus doux, ombre légère, meilleure lisibilité en pleine largeur */
+  html[data-style="cockpit"] .card,
+  html[data-style="cockpit"] .client-card {
+    border-radius: 13px; box-shadow: 0 1px 2px rgba(13,27,62,.05), 0 6px 18px rgba(13,27,62,.05);
+  }
+  html[data-style="cockpit"] .clients-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 15px; }
+  /* Le titre de droite devient un simple intitulé de section dans la barre */
+  html[data-style="cockpit"] .nav-title { margin-bottom: 2px; }
+}

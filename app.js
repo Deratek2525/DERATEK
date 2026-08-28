@@ -3267,7 +3267,10 @@ function showAIModal(fieldId, type, original, corrected) {
 // ============================================================
 function adjustStickyOffsets() {
   const nav = document.querySelector('.topnav');
-  const navH = nav ? nav.getBoundingClientRect().height : 220;
+  // En style Cockpit la navigation est sur le côté : elle ne mange aucune hauteur.
+  // Sans cela, la liste des bons se retrouvait avec une hauteur nulle.
+  const lateral = document.documentElement.getAttribute('data-style') === 'cockpit' && window.innerWidth > 820;
+  const navH = lateral ? 0 : (nav ? nav.getBoundingClientRect().height : 220);
   // Barre d'actions du rapport (Retour / PDF / Sauvegarder...)
   const pageHd = document.querySelector('#screen-rapport-edit .page-hd, .rapport-shell');
   const actionBar = document.querySelector('.page-hd[style*="sticky"]');
