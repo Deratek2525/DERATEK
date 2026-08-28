@@ -1174,6 +1174,8 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 .fb-badge.rouge { background: #fee2e2; color: #991b1b; }
 .fb-badge.vert  { background: #dcfce7; color: #166534; }
 .fb-badge.ambre { background: #fef3c7; color: #b45309; }
+.fb-badge.nuis  { background: #ede9fe; color: #5b21b6; }
+.fb-badge.bleu  { background: #dbeafe; color: #1d4ed8; }
 .fb-statut {
   font-size: 12.5px; font-weight: 700; padding: 7px 10px; border-radius: 8px;
   border: 1.5px solid var(--g300, #d1d5db); background: #fff; color: var(--navy); cursor: pointer;

@@ -4342,6 +4342,8 @@ function ficheBonRefresh(complet) {
           ${alerte ? '<span class="fb-badge rouge">● non traité depuis plus de 48 h</span>' : ''}
           ${rapFait ? '<span class="fb-badge vert">✓ rapport fait</span>' : ''}
           ${pj.length ? `<span class="fb-badge ambre">📎 ${pj.length} pièce${pj.length > 1 ? 's' : ''} jointe${pj.length > 1 ? 's' : ''}</span>` : ''}
+          ${nd.nuisible || nd.nuisible2 ? `<span class="fb-badge nuis">🐛 ${_escapeHtml([nd.nuisible, nd.nuisible2].filter(Boolean).join(' + '))}</span>` : ''}
+          ${nd.statut ? `<span class="fb-badge bleu">${_escapeHtml(nd.statut)}</span>` : ''}
         </div>
       </div>
       <select class="fb-statut" onchange="updateBonStatut('${b.id}', this.value); ficheBonRefresh(false);" title="Statut du bon">
@@ -4452,7 +4454,53 @@ function ficheBonRefresh(complet) {
         </div>
 
         <div class="fb-card">
-          <div class="fb-t">🐛 Demande de la gérance</div>
+          <div class="fb-t">🐛 Nuisible et intervention</div>
+          <div class="fb-aide">Ces trois informations alimentent la note interne, les rapports et les devis.</div>
+          <div class="fb-2">
+            <div class="fb-ch">
+              <label for="fb-nuisible">Nuisible principal</label>
+              <select id="fb-nuisible" class="fb-in" onchange="ficheBonModifie()">${_bonNoteNuisibleOptions(nd.nuisible)}</select>
+            </div>
+            <div class="fb-ch">
+              <label for="fb-nuisible2">Second nuisible</label>
+              <select id="fb-nuisible2" class="fb-in" onchange="ficheBonModifie()">${_bonNoteNuisibleOptions(nd.nuisible2)}</select>
+            </div>
+          </div>
+          <div class="fb-2">
+            <div class="fb-ch">
+              <label for="fb-typeInterv">Type d'intervention</label>
+              <select id="fb-typeInterv" class="fb-in" onchange="ficheBonModifie()">
+                <option value="">— Aucun —</option>
+                ${BON_NOTE_TYPES_INTERV.map(t => `<option value="${t}" ${nd.typeInterv === t ? 'selected' : ''}>${t}</option>`).join('')}
+                ${nd.typeInterv && BON_NOTE_TYPES_INTERV.indexOf(nd.typeInterv) === -1 ? `<option value="${_escapeHtml(nd.typeInterv)}" selected>${_escapeHtml(nd.typeInterv)}</option>` : ''}
+              </select>
+            </div>
+            <div class="fb-ch">
+              <label for="fb-noteStatut">Où en est-on ?</label>
+              <select id="fb-noteStatut" class="fb-in" onchange="ficheBonModifie()">
+                <option value="">— Aucun —</option>
+                ${BON_NOTE_STATUTS.map(t => `<option value="${t}" ${nd.statut === t ? 'selected' : ''}>${t}</option>`).join('')}
+                ${nd.statut && BON_NOTE_STATUTS.indexOf(nd.statut) === -1 ? `<option value="${_escapeHtml(nd.statut)}" selected>${_escapeHtml(nd.statut)}</option>` : ''}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">📝 Ma note interne
+            <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonNote('${b.id}')" title="Ouvrir la fenêtre complète : calcul de prix, prestations, correction par l'IA">Prix et prestations</button></div>
+          <div class="fb-aide">Écrivez librement : constatations, ce qui reste à faire, ce que vous a dit le locataire. Enregistré avec le bouton vert en bas.</div>
+          <textarea id="fb-noteTexte" class="fb-ta" rows="7" placeholder="Vos notes sur ce bon…" oninput="ficheBonModifie()">${_escapeHtml(nd.texte || '')}</textarea>
+          ${calc.ht ? `<div class="fb-calc">
+            <div><span>Prix HT</span><b>${_displayMontant(calc.ht)} CHF</b></div>
+            ${calc.rab ? `<div><span>Rabais ${calc.rab} %</span><b>− ${_displayMontant(calc.montantRabais)} CHF</b></div>` : ''}
+            ${calc.tva ? `<div><span>TVA ${calc.tva} %</span><b>+ ${_displayMontant(calc.montantTVA)} CHF</b></div>` : ''}
+            <div class="ttc"><span>Total TTC</span><b>${_displayMontant(calc.ttc)} CHF</b></div>
+          </div>` : ''}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">🏢 Demande de la gérance</div>
           <div class="fb-aide">Le texte du bon. Les informations techniques (dates, technicien, note, pièces jointes) sont conservées automatiquement.</div>
           <textarea id="fb-probleme" class="fb-ta" rows="6" oninput="ficheBonModifie()">${_escapeHtml(_bonProblemeClean(b))}</textarea>
         </div>
@@ -4480,23 +4528,6 @@ function ficheBonRefresh(complet) {
           <div class="fb-l"><b>Passages effectués</b>${faits.length
             ? faits.map(d => fmtDate(d)).join(' · ') : '<span class="fb-vide">aucun</span>'}</div>
           <div class="fb-l"><b>Technicien affecté</b>${aff ? _escapeHtml(aff) : '<span class="fb-vide">personne</span>'}</div>
-        </div>
-
-        <div class="fb-card">
-          <div class="fb-t">📝 Note interne
-            <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonNote('${b.id}')">Modifier</button></div>
-          ${_bonNoteHasData(nd) ? `
-            ${nd.statut ? `<div class="fb-l"><b>Statut</b>${_escapeHtml(nd.statut)}</div>` : ''}
-            ${nd.nuisible || nd.nuisible2 ? `<div class="fb-l"><b>Nuisible</b>${_escapeHtml([nd.nuisible, nd.nuisible2].filter(Boolean).join(', '))}</div>` : ''}
-            ${nd.typeInterv ? `<div class="fb-l"><b>Type d'intervention</b>${_escapeHtml(nd.typeInterv)}</div>` : ''}
-            ${calc.ht ? `<div class="fb-calc">
-              <div><span>Prix HT</span><b>${_displayMontant(calc.ht)} CHF</b></div>
-              ${calc.rab ? `<div><span>Rabais ${calc.rab} %</span><b>− ${_displayMontant(calc.montantRabais)} CHF</b></div>` : ''}
-              ${calc.tva ? `<div><span>TVA ${calc.tva} %</span><b>+ ${_displayMontant(calc.montantTVA)} CHF</b></div>` : ''}
-              <div class="ttc"><span>Total TTC</span><b>${_displayMontant(calc.ttc)} CHF</b></div>
-            </div>` : ''}
-            ${nd.texte ? `<div class="fb-note">${_escapeHtml(nd.texte).replace(/\n/g, '<br>')}</div>` : ''}
-          ` : '<div class="fb-vide">Aucune note interne pour ce bon.</div>'}
         </div>
 
         <div class="fb-card">
@@ -4593,6 +4624,23 @@ function ficheBonEnregistrer() {
       txt, _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
       _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
   }
+  // Nuisible, type d'intervention, statut et texte de la note : on repart de la
+  // note existante pour ne pas effacer le calcul de prix saisi dans la fenetre.
+  const nd0 = _bonNoteData(b);
+  const lu = id => { const el = document.getElementById('fb-' + id); return el ? el.value : undefined; };
+  const nv = {
+    statut: lu('noteStatut') !== undefined ? lu('noteStatut') : nd0.statut,
+    nuisible: lu('nuisible') !== undefined ? lu('nuisible') : nd0.nuisible,
+    nuisible2: lu('nuisible2') !== undefined ? lu('nuisible2') : nd0.nuisible2,
+    typeInterv: lu('typeInterv') !== undefined ? lu('typeInterv') : nd0.typeInterv,
+    prixHT: nd0.prixHT, rabais: nd0.rabais, tva: nd0.tva,
+    texte: lu('noteTexte') !== undefined ? String(lu('noteTexte')).trim() : nd0.texte,
+  };
+  b.probleme = _bonAssembleProbleme(
+    _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b),
+    _bonNoteHasData(nv) ? JSON.stringify(nv) : '',
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+
   DB.bons = bons;
   ficheBonRefresh();
   renderBons();
