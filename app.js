@@ -4217,6 +4217,278 @@ async function _uploadBonPdf(bonId, file) {
 }
 
 // ============================================================
+// FICHE COMPLETE D'UN BON
+// Toutes les informations sur un seul ecran : la colonne de gauche est
+// modifiable et enregistrable, la colonne de droite regroupe le suivi
+// (planification, note, documents, documents lies, chronologie).
+// ============================================================
+let _ficheBonId = null;
+
+function editBon(bonId) {
+  const b = (DB.bons || []).find(x => x.id === bonId);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  _ficheBonId = bonId;
+  let bg = document.getElementById('modal-fiche-bon');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'modal-fiche-bon';
+    bg.className = 'modal-bg';
+    bg.innerHTML =
+      '<div class="modal fb-modal">' +
+        '<div class="modal-hd" id="fb-hd"></div>' +
+        '<div class="modal-body fb-body" id="fb-body"></div>' +
+        '<div class="modal-ft">' +
+          '<span id="fb-etat" class="fb-etat"></span>' +
+          '<button class="btn btn-ghost" onclick="closeModal(\'modal-fiche-bon\')">Fermer</button>' +
+          '<button class="btn btn-green" onclick="ficheBonEnregistrer()">💾 Enregistrer les modifications</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) closeModal('modal-fiche-bon'); });
+  }
+  ficheBonRefresh();
+  openModal('modal-fiche-bon');
+}
+
+// Signale qu'une modification n'est pas encore enregistree
+function ficheBonModifie() {
+  const el = document.getElementById('fb-etat');
+  if (el) { el.textContent = '● Modifications non enregistrées'; el.classList.add('sur'); }
+}
+
+function ficheBonRefresh() {
+  const b = (DB.bons || []).find(x => x.id === _ficheBonId);
+  const hd = document.getElementById('fb-hd');
+  const body = document.getElementById('fb-body');
+  if (!b || !hd || !body) return;
+
+  const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+  const coul = _bonColor(b) || colorForGeranceName(g);
+  const faits = _bonDatesInterv(b);
+  const aff = _bonAffecte(b);
+  const nd = _bonNoteData(b);
+  const calc = _bonNoteCalc(nd);
+  const pj = _bonPJ(b);
+  const alerte = _bonAlerteNouveau48h(b);
+  const rapFait = _bonRapFait(b);
+
+  const SB = {
+    '': '— Sans statut —', 'urgent': '🚨 Urgent', 'a-contacter': '📞 À contacter',
+    'a-transmettre': '📕 Rapport à transmettre', 'transmis': '📨 Transmis',
+    'demande-devis': '📝 Demande de devis', 'attente-devis': '⏸️ Attente de devis',
+    'devis-valide': '✅ Devis validé', 'en-cours': '🔧 En cours',
+    'termine': '✔️ Terminé', 'a-facturer': '💰 À facturer',
+  };
+
+  // --- En-tete ---
+  hd.style.background = _hexTint(coul, 0.14);
+  hd.style.borderBottom = '3px solid ' + coul;
+  hd.innerHTML = `
+    <div class="fb-hd-in">
+      <div class="fb-hd-l">
+        <div class="fb-hd-t">Bon ${_escapeHtml(b.numero || '(sans numéro)')}</div>
+        <div class="fb-hd-s">${_escapeHtml(g)} · 📅 ${fmtDate(b.date) || '—'}
+          ${alerte ? '<span class="fb-badge rouge">● non traité depuis plus de 48 h</span>' : ''}
+          ${rapFait ? '<span class="fb-badge vert">✓ rapport fait</span>' : ''}
+          ${pj.length ? `<span class="fb-badge ambre">📎 ${pj.length} pièce${pj.length > 1 ? 's' : ''} jointe${pj.length > 1 ? 's' : ''}</span>` : ''}
+        </div>
+      </div>
+      <select class="fb-statut" onchange="updateBonStatut('${b.id}', this.value); ficheBonRefresh();" title="Statut du bon">
+        ${Object.keys(SB).map(k => `<option value="${k}" ${(b.statut || '') === k ? 'selected' : ''}>${SB[k]}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-fiche-bon')" title="Fermer">✕</button>
+    </div>
+    <div class="fb-actions">
+      ${b.pdfPath
+        ? `<button class="btn btn-ghost btn-sm" onclick="viewBonPdf('${b.id}')">📄 PDF du bon</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="generateBonPDF('${b.id}')">🖨 Générer le PDF</button>`}
+      <button class="btn btn-ghost btn-sm" onclick="openBonNote('${b.id}')">📝 Note interne</button>
+      <button class="btn btn-ghost btn-sm" onclick="openBonPieces('${b.id}')">📎 Pièces jointes${pj.length ? ' (' + pj.length + ')' : ''}</button>
+      <button class="btn btn-ghost btn-sm" onclick="openBonPlanning('${b.id}')">📅 Planifier</button>
+      <button class="btn btn-ghost btn-sm" onclick="createRapportFromBon('${b.id}')">📋 Rapport</button>
+      <button class="btn btn-ghost btn-sm" onclick="createDevisFromBon('${b.id}')">💰 Devis</button>
+      <button class="btn btn-ghost btn-sm" onclick="createFactureFromBon('${b.id}')">🧾 Facture</button>
+      <button class="btn btn-red btn-sm" onclick="closeModal('modal-fiche-bon'); confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')">🗑 Supprimer</button>
+    </div>`;
+
+  // --- Champs modifiables ---
+  const ch = (label, key, val, aide) => `
+    <div class="fb-ch">
+      <label for="fb-${key}">${label}</label>
+      <input id="fb-${key}" class="fb-in" value="${String(val || '').replace(/"/g, '&quot;')}" oninput="ficheBonModifie()"
+        ${aide ? `placeholder="${aide}"` : ''}>
+    </div>`;
+
+  // --- Documents lies ---
+  const numNorm = _factNorm(b.numero);
+  const raps = (DB.rapports || []).filter(r => numNorm && _factNorm(r.bonCommande) === numNorm);
+  const diags = (DB.diagnostics || []).filter(d => d.bonId === b.id);
+  const docs = (DB.documents || []).filter(d => d.bonId === b.id);
+  const devis = docs.filter(d => (d.type || 'devis') === 'devis');
+  const facts = docs.filter(d => d.type === 'facture');
+  const rdvs = (DB.intervs || []).filter(iv => iv.bonId === b.id);
+  const LBLDOC = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté',
+                   refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
+  const lien = (ico, titre, sous, act) =>
+    `<div class="fb-lien" onclick="closeModal('modal-fiche-bon'); ${act}"><div class="i">${ico}</div>
+      <div class="n"><div class="t">${titre}</div><div class="s">${sous}</div></div><div class="c">›</div></div>`;
+
+  // --- Chronologie ---
+  const evts = [];
+  if (b.date) evts.push([b.date, '📄', 'Bon reçu']);
+  if (b.createdAt) evts.push([String(b.createdAt).slice(0, 10), '➕', 'Enregistré dans l\'application']);
+  faits.forEach((d, i) => evts.push([d, '✅', (i + 1) + (i === 0 ? 'er' : 'e') + ' passage effectué']));
+  if (b.dateIntervention) evts.push([b.dateIntervention, '📅', 'Rendez-vous' + (b.heureIntervention ? ' à ' + b.heureIntervention : '')]);
+  raps.forEach(r => evts.push([r.date, '📋', 'Rapport ' + (r.id || '')]));
+  devis.forEach(d => evts.push([d.dateDoc, '💰', 'Devis ' + (d.numero || '')]));
+  facts.forEach(d => evts.push([d.dateDoc, '🧾', 'Facture ' + (d.numero || '')]));
+  evts.sort((a, b2) => String(a[0] || '').localeCompare(String(b2[0] || '')));
+
+  body.innerHTML = `
+    <div class="fb-cols">
+      <div class="fb-col">
+        <div class="fb-card">
+          <div class="fb-t">🏢 Gérance</div>
+          ${ch('Nom de la gérance', 'geranceNom', b.geranceNom)}
+          ${ch('Gérant / interlocuteur', 'gerantNom', b.gerantNom)}
+          <div class="fb-2">
+            ${ch('Téléphone', 'gerantTel', b.gerantTel)}
+            ${ch('E-mail', 'gerantEmail', b.gerantEmail)}
+          </div>
+          ${b.gerantTel || b.gerantEmail ? `<div class="fb-raccourcis">
+            ${b.gerantTel ? `<a class="fb-rac" href="tel:${_escapeHtml(String(b.gerantTel).replace(/\s/g, ''))}">📞 Appeler</a>` : ''}
+            ${b.gerantEmail ? `<a class="fb-rac" href="mailto:${_escapeHtml(b.gerantEmail)}">✉️ Écrire</a>` : ''}
+          </div>` : ''}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">📍 Lieu d'intervention</div>
+          ${ch('Adresse de l\'immeuble', 'immeuble', b.immeuble)}
+          ${ch('Locataire', 'locataireNom', b.locataireNom)}
+          ${ch('Propriétaire', 'proprietaire', b.proprietaire)}
+          <div class="fb-2">
+            ${ch('Contact sur place', 'contactSurPlace', b.contactSurPlace)}
+            ${ch('Concierge', 'concierge', b.concierge)}
+          </div>
+          ${b.immeuble ? `<div class="fb-raccourcis">
+            <a class="fb-rac" href="https://maps.apple.com/?q=${encodeURIComponent(b.immeuble)}" target="_blank">🗺️ Itinéraire</a>
+          </div>` : ''}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">🐛 Demande de la gérance</div>
+          <div class="fb-aide">Le texte du bon. Les informations techniques (dates, technicien, note, pièces jointes) sont conservées automatiquement.</div>
+          <textarea id="fb-probleme" class="fb-ta" rows="6" oninput="ficheBonModifie()">${_escapeHtml(_bonProblemeClean(b))}</textarea>
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">📅 Identification</div>
+          <div class="fb-2">
+            ${ch('Numéro du bon', 'numero', b.numero)}
+            <div class="fb-ch">
+              <label for="fb-date">Date du bon</label>
+              <input id="fb-date" type="date" class="fb-in" value="${b.date || ''}" oninput="ficheBonModifie()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fb-col">
+        <div class="fb-card">
+          <div class="fb-t">📅 Planification
+            <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonPlanning('${b.id}')">Modifier</button></div>
+          <div class="fb-l"><b>Prochain rendez-vous</b>${b.dateIntervention
+            ? fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : '')
+            : '<span class="fb-vide">à planifier</span>'}</div>
+          <div class="fb-l"><b>Passages effectués</b>${faits.length
+            ? faits.map(d => fmtDate(d)).join(' · ') : '<span class="fb-vide">aucun</span>'}</div>
+          <div class="fb-l"><b>Technicien affecté</b>${aff ? _escapeHtml(aff) : '<span class="fb-vide">personne</span>'}</div>
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">📝 Note interne
+            <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonNote('${b.id}')">Modifier</button></div>
+          ${_bonNoteHasData(nd) ? `
+            ${nd.statut ? `<div class="fb-l"><b>Statut</b>${_escapeHtml(nd.statut)}</div>` : ''}
+            ${nd.nuisible || nd.nuisible2 ? `<div class="fb-l"><b>Nuisible</b>${_escapeHtml([nd.nuisible, nd.nuisible2].filter(Boolean).join(', '))}</div>` : ''}
+            ${nd.typeInterv ? `<div class="fb-l"><b>Type d'intervention</b>${_escapeHtml(nd.typeInterv)}</div>` : ''}
+            ${calc.ht ? `<div class="fb-calc">
+              <div><span>Prix HT</span><b>${_displayMontant(calc.ht)} CHF</b></div>
+              ${calc.rab ? `<div><span>Rabais ${calc.rab} %</span><b>− ${_displayMontant(calc.montantRabais)} CHF</b></div>` : ''}
+              ${calc.tva ? `<div><span>TVA ${calc.tva} %</span><b>+ ${_displayMontant(calc.montantTVA)} CHF</b></div>` : ''}
+              <div class="ttc"><span>Total TTC</span><b>${_displayMontant(calc.ttc)} CHF</b></div>
+            </div>` : ''}
+            ${nd.texte ? `<div class="fb-note">${_escapeHtml(nd.texte).replace(/\n/g, '<br>')}</div>` : ''}
+          ` : '<div class="fb-vide">Aucune note interne pour ce bon.</div>'}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">📎 Documents
+            <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonPieces('${b.id}')">Gérer</button></div>
+          ${b.pdfPath
+            ? `<div class="fb-lien" onclick="viewBonPdf('${b.id}')"><div class="i">📄</div>
+                 <div class="n"><div class="t">PDF du bon de travaux</div><div class="s">Ouvrir dans un nouvel onglet</div></div><div class="c">›</div></div>`
+            : '<div class="fb-vide">Aucun PDF de bon enregistré.</div>'}
+          ${pj.map((f, i) => `<div class="fb-lien" onclick="bonPJOuvrir('${b.id}', ${i})">
+              <div class="i">${_pjEstImage(f) ? '🖼' : '📄'}</div>
+              <div class="n"><div class="t">${_escapeHtml(f.n || 'Fichier')}</div><div class="s">${f.d ? fmtDate(f.d) : ''}</div></div>
+              <div class="c">›</div></div>`).join('')}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">🔗 Documents liés</div>
+          ${raps.length || diags.length || devis.length || facts.length || rdvs.length ? `
+            ${raps.map(r => lien('📋', 'Rapport ' + _escapeHtml(r.id || ''), (r.statut || '') + (r.date ? ' · ' + fmtDate(r.date) : ''), `editRapport('${r.id}')`)).join('')}
+            ${diags.map(d => lien('🔬', 'Diagnostic ' + _escapeHtml(d.numero || ''), d.dateDoc ? fmtDate(d.dateDoc) : '', `editDiag('${d.id}')`)).join('')}
+            ${devis.map(d => lien('💰', 'Devis ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`)).join('')}
+            ${facts.map(d => lien('🧾', 'Facture ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`)).join('')}
+            ${rdvs.map(iv => lien('🗓', 'Rendez-vous agenda', (iv.date ? fmtDate(iv.date) : '') + (iv.heure ? ' à ' + iv.heure : ''), `showScreen('agenda')`)).join('')}
+          ` : '<div class="fb-vide">Aucun rapport, devis ni facture rattaché à ce bon.</div>'}
+        </div>
+
+        <div class="fb-card">
+          <div class="fb-t">🕓 Chronologie</div>
+          ${evts.length ? `<div class="fb-chrono">${evts.map(e => `
+            <div class="fb-ev"><div class="d">${fmtDate(e[0]) || '—'}</div><div class="i">${e[1]}</div><div class="t">${e[2]}</div></div>`).join('')}</div>`
+            : '<div class="fb-vide">Rien à afficher pour le moment.</div>'}
+        </div>
+      </div>
+    </div>`;
+
+  const et = document.getElementById('fb-etat');
+  if (et) { et.textContent = ''; et.classList.remove('sur'); }
+}
+
+// Enregistre les champs modifiables en preservant TOUS les marqueurs invisibles
+function ficheBonEnregistrer() {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === _ficheBonId);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  const v = id => { const el = document.getElementById('fb-' + id); return el ? el.value.trim() : undefined; };
+
+  ['geranceNom', 'gerantNom', 'gerantTel', 'gerantEmail', 'immeuble', 'locataireNom',
+   'proprietaire', 'contactSurPlace', 'concierge', 'numero'].forEach(k => {
+    const val = v(k); if (val !== undefined) b[k] = val;
+  });
+  const d = v('date'); if (d !== undefined) b.date = d;
+
+  // Le texte saisi est le texte « propre » : on reconstruit tous les marqueurs
+  // a partir des donnees existantes, rien ne peut etre perdu.
+  const txt = v('probleme');
+  if (txt !== undefined) {
+    b.probleme = _bonAssembleProbleme(
+      txt, _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
+      _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
+  }
+  DB.bons = bons;
+  ficheBonRefresh();
+  renderBons();
+  const et = document.getElementById('fb-etat');
+  if (et) { et.textContent = '✓ Enregistré'; et.classList.remove('sur'); }
+  toast('Bon enregistré', '#2d9e6b');
+}
+
+// ============================================================
 // PIECES JOINTES D'UN BON — PDF et images (liste des locataires,
 // plan d'immeuble, photo prise sur place...)
 // ============================================================
