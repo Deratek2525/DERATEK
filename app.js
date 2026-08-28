@@ -2532,7 +2532,7 @@ function saveRapport(statut) {
       const stPrev = bon.statut || '';
       // On ne rétrograde pas un bon déjà « à facturer » ou déjà terminé.
       if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
-      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon));
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon));
       DB.bons = bons;
     }
   }
@@ -3869,6 +3869,13 @@ function _mobFicheBon() {
       ${bloc('📝 Note interne', note
         ? `<div class="mob-note">${nl(note)}</div><div class="mob-act" onclick="openBonNote('${b.id}')">✏️ Modifier la note</div>`
         : `<div class="mob-act" onclick="openBonNote('${b.id}')">➕ Ajouter une note</div>`)}
+      ${(() => {
+        const pj = _bonPJ(b);
+        return bloc('📎 Pièces jointes' + (pj.length ? ' (' + pj.length + ')' : ''), (pj.length
+          ? pj.map((f, i) => `<div class="mob-l" onclick="bonPJOuvrir('${b.id}', ${i})" style="cursor:pointer;"><b>${_pjEstImage(f) ? '🖼 Image' : '📄 Document'} — toucher pour ouvrir</b>${_escapeHtml(f.n || 'Fichier')}</div>`).join('')
+          : '<div class="mob-l" style="color:#8a93a6;">Aucun document joint à ce bon</div>')
+          + `<div class="mob-act" onclick="openBonPieces('${b.id}')">➕ Ajouter un document ou une photo</div>`);
+      })()}
       ${pb ? bloc('🔎 Demande de la gérance', `<div class="mob-note" style="background:#f7f9fc;border-color:#e4e9f2;color:#54607a;">${nl(pb)}</div>`) : ''}
       ${b.gerantEmail ? bloc('✉️ Gérance', `<div class="mob-l"><b>${_escapeHtml(b.gerantNom || '')}</b><a href="mailto:${_escapeHtml(b.gerantEmail)}">${_escapeHtml(b.gerantEmail)}</a></div>`) : ''}
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
@@ -4207,6 +4214,160 @@ async function _uploadBonPdf(bonId, file) {
     console.warn('Upload PDF exception', e);
     return '';
   }
+}
+
+// ============================================================
+// PIECES JOINTES D'UN BON — PDF et images (liste des locataires,
+// plan d'immeuble, photo prise sur place...)
+// ============================================================
+const BON_PJ_MAX_MO = 15;      // taille maximale d'un fichier
+const BON_PJ_MAX_NB = 20;      // nombre maximal de pieces par bon
+
+// Envoie un fichier dans le bucket prive et renvoie son chemin
+async function _uploadBonPJ(bonId, file) {
+  if (!sb || !file) return '';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { toast('Session expirée, reconnectez-vous', '#e63946'); return ''; }
+    const userId = session.user.id;
+    const safeName = String(file.name || 'fichier').replace(/[^\w.-]+/g, '_');
+    const path = `${userId}/pj/${bonId}-${Date.now()}-${safeName}`;
+    const { error } = await sb.storage.from('bons-pdfs').upload(path, file, {
+      contentType: file.type || 'application/octet-stream', upsert: true
+    });
+    if (error) { toast('Envoi impossible : ' + error.message, '#e63946'); return ''; }
+    return path;
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); return ''; }
+}
+
+// Ajoute un ou plusieurs fichiers a un bon
+async function bonPJAjouter(bonId, fileList) {
+  const b = (DB.bons || []).find(x => x.id === bonId); if (!b) return;
+  const files = Array.prototype.slice.call(fileList || []);
+  if (!files.length) return;
+  const deja = _bonPJ(b);
+  if (deja.length + files.length > BON_PJ_MAX_NB) {
+    toast(`Maximum ${BON_PJ_MAX_NB} pièces par bon`, '#e63946'); return;
+  }
+  const st = document.getElementById('bon-pj-etat');
+  let ok = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const estPdf = /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name || '');
+    const estImg = /^image\//i.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name || '');
+    if (!estPdf && !estImg) { toast(`« ${f.name} » ignoré : seuls les PDF et les images sont acceptés`, '#e63946'); continue; }
+    if (f.size > BON_PJ_MAX_MO * 1024 * 1024) { toast(`« ${f.name} » dépasse ${BON_PJ_MAX_MO} Mo`, '#e63946'); continue; }
+    if (st) st.textContent = `Envoi de « ${f.name} » (${i + 1}/${files.length})…`;
+    const path = await _uploadBonPJ(bonId, f);
+    if (!path) continue;
+    deja.push({ n: f.name || 'fichier', p: path, t: f.type || '', d: _ymd(new Date()), s: f.size || 0 });
+    ok++;
+  }
+  if (st) st.textContent = '';
+  if (!ok) return;
+  const bons = DB.bons;
+  const bb = bons.find(x => x.id === bonId); if (!bb) return;
+  _setBonPJ(bb, deja);
+  DB.bons = bons;
+  bonPJRefresh(); renderBons();
+  toast(ok > 1 ? (ok + ' pièces ajoutées') : 'Pièce jointe ajoutée', '#2d9e6b');
+}
+
+// Ouvre une piece jointe dans un nouvel onglet (lien signe valable 1 h)
+async function bonPJOuvrir(bonId, index) {
+  const b = (DB.bons || []).find(x => x.id === bonId); if (!b) return;
+  const f = _bonPJ(b)[index]; if (!f) return;
+  if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
+  try {
+    const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(f.p, 3600);
+    if (error || !data || !data.signedUrl) { toast('Lien impossible : ' + (error && error.message || '?'), '#e63946'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
+}
+
+// Retire une piece jointe (fichier supprime du stockage)
+async function bonPJSupprimer(bonId, index) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === bonId); if (!b) return;
+  const list = _bonPJ(b);
+  const f = list[index]; if (!f) return;
+  if (!confirm(`Supprimer « ${f.n} » ? Cette action est irréversible.`)) return;
+  if (sb) { try { await sb.storage.from('bons-pdfs').remove([f.p]); } catch (e) {} }
+  list.splice(index, 1);
+  _setBonPJ(b, list);
+  DB.bons = bons;
+  bonPJRefresh(); renderBons();
+  toast('Pièce jointe supprimée', '#e63946');
+}
+
+// --- Fenetre des pieces jointes ---
+let _bonPJId = null;
+function openBonPieces(bonId) {
+  const b = (DB.bons || []).find(x => x.id === bonId);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  _bonPJId = bonId;
+  let bg = document.getElementById('modal-bon-pj');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'modal-bon-pj';
+    bg.className = 'modal-bg';
+    bg.innerHTML =
+      '<div class="modal" style="max-width:600px;width:95%;">' +
+        '<div class="modal-hd">' +
+          '<div class="modal-title" id="bon-pj-titre">Pièces jointes</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="closeModal(\'modal-bon-pj\')">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" id="bon-pj-body"></div>' +
+        '<div class="modal-ft">' +
+          '<span id="bon-pj-etat" style="font-size:12px;color:#6b7280;flex:1;"></span>' +
+          '<button class="btn btn-navy" onclick="closeModal(\'modal-bon-pj\')">Terminé</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) closeModal('modal-bon-pj'); });
+  }
+  bonPJRefresh();
+  openModal('modal-bon-pj');
+}
+
+function bonPJRefresh() {
+  const b = (DB.bons || []).find(x => x.id === _bonPJId);
+  const body = document.getElementById('bon-pj-body');
+  if (!b || !body) return;
+  const t = document.getElementById('bon-pj-titre');
+  if (t) t.textContent = 'Pièces jointes — bon ' + (b.numero || '(sans numéro)');
+  const list = _bonPJ(b);
+  const koMo = o => {
+    const n = parseFloat(o) || 0;
+    return n >= 1048576 ? (n / 1048576).toFixed(1) + ' Mo' : (n ? Math.max(1, Math.round(n / 1024)) + ' Ko' : '');
+  };
+  body.innerHTML = `
+    <div class="pj-aide">Ajoutez ici les documents utiles à ce bon : liste des locataires, plan de l'immeuble,
+    courrier de la gérance, photo prise sur place… <b>PDF et images</b>, ${BON_PJ_MAX_MO} Mo par fichier, ${BON_PJ_MAX_NB} au maximum.</div>
+
+    <div class="pj-zone" id="bon-pj-zone"
+      ondragover="event.preventDefault(); this.classList.add('sur');"
+      ondragleave="this.classList.remove('sur');"
+      ondrop="event.preventDefault(); this.classList.remove('sur'); bonPJAjouter('${b.id}', event.dataTransfer.files);"
+      onclick="document.getElementById('bon-pj-input').click();">
+      <div class="pj-zone-t">📎 Glissez vos fichiers ici</div>
+      <div class="pj-zone-s">ou cliquez pour les choisir sur l'ordinateur</div>
+    </div>
+    <input type="file" id="bon-pj-input" multiple accept="application/pdf,image/*" style="display:none;"
+      onchange="bonPJAjouter('${b.id}', this.files); this.value='';">
+
+    <div class="pj-t">${list.length ? list.length + (list.length > 1 ? ' pièces jointes' : ' pièce jointe') : 'Aucune pièce jointe'}</div>
+    ${list.length ? list.map((f, i) => `
+      <div class="pj-l">
+        <div class="pj-ico">${_pjEstImage(f) ? '🖼' : '📄'}</div>
+        <div class="pj-n">
+          <div class="t">${_escapeHtml(f.n || 'Fichier')}</div>
+          <div class="s">${f.d ? fmtDate(f.d) : ''}${f.s ? ' · ' + koMo(f.s) : ''}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="bonPJOuvrir('${b.id}', ${i})" title="Ouvrir dans un nouvel onglet">👁 Ouvrir</button>
+        <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="bonPJSupprimer('${b.id}', ${i})" title="Supprimer définitivement">✕</button>
+      </div>`).join('')
+      : '<div class="pj-vide">Ce bon n\'a encore aucun document joint.</div>'}`;
 }
 
 // Génère une URL signée (1h) et ouvre le PDF dans un nouvel onglet
@@ -5434,6 +5595,7 @@ function _bonProblemeClean(b) {
     .replace(/\s*\[RAPFAIT:[^\]]*\]/g, '')
     .replace(/\s*\[ALERTE:[^\]]*\]/g, '')
     .replace(/\s*\[COLOR:[^\]]*\]/g, '')
+    .replace(/\s*\[PJ:[^\]]*\]/g, '')
     .trim();
 }
 // Couleur de fond personnalisée du bon (marqueur [COLOR:#hex] dans probleme). Vide = couleur auto (gérance).
@@ -5443,7 +5605,35 @@ function _bonColor(b) {
 }
 // Réassemble la chaîne "probleme" : texte propre + marqueurs (dates, affecté, note, rapport fait, alerte).
 // Source unique de vérité pour ne jamais perdre un marqueur lors d'une modif.
-function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color) {
+// ---- Pieces jointes d'un bon (PDF et images) --------------------------------
+// Stockees dans le champ "probleme" via le marqueur [PJ:<base64 JSON>], comme
+// la note interne : aucun changement de base de donnees, synchro automatique.
+// Chaque piece : { n: nom affiche, p: chemin dans le bucket, t: type MIME, d: date }
+function _bonPJraw(b) {
+  const m = String((b && b.probleme) || '').match(/\[PJ:([^\]]*)\]/);
+  return m ? m[1] : '';
+}
+function _bonPJ(b) {
+  const raw = _bonPJraw(b);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(_decNote(raw));
+    return Array.isArray(arr) ? arr.filter(x => x && x.p) : [];
+  } catch (e) { return []; }
+}
+function _setBonPJ(b, arr) {
+  const list = (arr || []).filter(x => x && x.p).slice(0, 20);
+  const pj = list.length ? _encNote(JSON.stringify(list)) : '';
+  b.probleme = _bonAssembleProbleme(
+    _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b),
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), pj);
+}
+// Vrai si la piece est une image (pour l'apercu et le pictogramme)
+function _pjEstImage(f) {
+  return /^image\//i.test(String((f && f.t) || '')) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(String((f && f.n) || ''));
+}
+
+function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color, pj) {
   let out = String(clean || '').trim();
   const arr = (dates || []).map(s => String(s || '').trim()).filter(Boolean);
   if (arr.length) out += (out ? '\n' : '') + '[INTERV:' + arr.join(',') + ']';
@@ -5452,20 +5642,21 @@ function _bonAssembleProbleme(clean, dates, aff, note, rapFait, alerte, color) {
   if (rapFait) out += (out ? '\n' : '') + '[RAPFAIT:1]';
   if (alerte) out += (out ? '\n' : '') + '[ALERTE:' + alerte + ']';
   if (color) out += (out ? '\n' : '') + '[COLOR:' + color + ']';
+  if (pj) out += (out ? '\n' : '') + '[PJ:' + pj + ']';
   return out;
 }
 // Réécrit probleme propre + tous les marqueurs existants
 function _bonComposeProbleme(b) {
-  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
+  return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
 }
 function _setBonDatesInterv(b, dates) {
   const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
 }
 // Affecte un technicien à un bon
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
@@ -5473,14 +5664,14 @@ function bonSetAffecte(id, value) {
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b));
   const bons = DB.bons; DB.bons = bons;
 }
 // Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
 function bonToggleRapFait(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const nv = !_bonRapFait(b);
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b), _bonColor(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), nv, _bonAlerte(b), _bonColor(b), _bonPJraw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
@@ -5488,7 +5679,7 @@ function bonToggleRapFait(id) {
 // Couleur de fond personnalisée de la carte du bon (vide = couleur auto de la gérance)
 function bonSetColor(id, color) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), color || '');
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), color || '', _bonPJraw(b));
   const bons = DB.bons; DB.bons = bons;
   renderBons();
   toast(color ? '🎨 Couleur du bon modifiée' : '↺ Couleur automatique (gérance) rétablie', '#2d9e6b');
@@ -5688,6 +5879,7 @@ const CK_ICO = {
   agenda:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   croix:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   plus:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  trombone:'<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
   archive: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',
   crayon:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
   telech:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
@@ -5813,6 +6005,7 @@ function renderBonCardCockpit(b) {
   const faits = _bonDatesInterv(b);
   const aff = _bonAffecte(b);
   const note = _bonNote(b);
+  const nbPj = _bonPJ(b).length;
   const pb = _bonProblemeClean(b);
   // En Cockpit les actions sont des pictogrammes : l'intitule complet reste
   // accessible au survol, ce qui permet de tenir toute la ligne sur une rangee.
@@ -5850,6 +6043,7 @@ function renderBonCardCockpit(b) {
         <div class="ck-b-btns">
           ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
           ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
+          ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-amber' : 'btn-ghost')}
           ${bt(`createRapportFromBon('${b.id}')`, CK_ICO.rapport, 'Créer le rapport depuis ce bon')}
           ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}
           ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
@@ -6005,6 +6199,10 @@ function renderBonCard(b, solid) {
                 ${(() => {
                   const hasNote = _bonNoteHasData(_bonNoteData(b));
                   return `<button class="btn btn-sm" onclick="openBonNote('${b.id}')" title="${hasNote ? 'Note interne (statut, prix, traitement…) — cliquer pour modifier' : 'Ajouter une note interne (statut, calcul de prix, remarques…) pour la facturation'}" style="font-weight:700;border:1.5px solid ${hasNote ? '#d97706' : '#d1d5db'};background:${hasNote ? '#fffbeb' : '#fff'};color:${hasNote ? '#b45309' : '#6b7280'};">📝 Note${hasNote ? ' •' : ''}</button>`;
+                })()}
+                ${(() => {
+                  const nbPj = _bonPJ(b).length;
+                  return `<button class="btn btn-sm" onclick="openBonPieces('${b.id}')" title="${nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Joindre un document à ce bon (liste des locataires, plan, photo…)'}" style="font-weight:700;border:1.5px solid ${nbPj ? '#d97706' : '#d1d5db'};background:${nbPj ? '#fffbeb' : '#fff'};color:${nbPj ? '#b45309' : '#6b7280'};">📎 Pièces${nbPj ? ' (' + nbPj + ')' : ''}</button>`;
                 })()}
                 ${(() => {
                   const fait = _bonRapFait(b);
@@ -6279,7 +6477,7 @@ function updateBonStatut(id, value) {
   } else {
     alerte = '';
   }
-  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte, _bonColor(b));
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), alerte, _bonColor(b), _bonPJraw(b));
   DB.bons = bons; // déclenche le sync Supabase
   const labels = {
     '':              'Statut effacé',
@@ -11287,7 +11485,7 @@ function saveDiag(statut, keepOpen) {
     if (bon) {
       const stPrev = bon.statut || '';
       if (stPrev !== 'a-facturer' && stPrev !== 'termine') bon.statut = 'termine';
-      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon));
+      bon.probleme = _bonAssembleProbleme(_bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon), _bonNote(bon), true, '', _bonColor(bon), _bonPJraw(bon));
       DB.bons = bons;
       if (typeof renderBons === 'function') renderBons();
     }

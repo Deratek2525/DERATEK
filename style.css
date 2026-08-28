@@ -1127,3 +1127,32 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 .plan-fait { border-color: #86efac; color: #14532d; }
 .plan-num { font-size: 12px; font-weight: 800; color: var(--g500); min-width: 78px; }
 .plan-vide { font-size: 12px; color: var(--g500); font-style: italic; }
+
+/* ---- Fenetre "Pieces jointes" d'un bon ------------------------------------ */
+.pj-aide { font-size: 12.5px; color: var(--g500); line-height: 1.5; margin-bottom: 14px; }
+.pj-zone {
+  border: 2px dashed #cbd5e1; border-radius: 12px; background: #f8fafc;
+  padding: 22px 16px; text-align: center; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pj-zone:hover, .pj-zone.sur { border-color: var(--navy); background: #eef2f9; }
+.pj-zone-t { font-size: 14px; font-weight: 800; color: var(--navy); }
+.pj-zone-s { font-size: 12px; color: var(--g500); margin-top: 4px; }
+.pj-t {
+  font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--g500); margin: 18px 0 8px;
+}
+.pj-l {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--g200); border-radius: 9px;
+  padding: 8px 10px; margin-bottom: 6px; background: #fff;
+}
+.pj-l:hover { border-color: #94a3b8; }
+.pj-ico { font-size: 19px; flex: 0 0 auto; }
+.pj-n { flex: 1; min-width: 0; }
+.pj-n .t {
+  font-size: 13px; font-weight: 700; color: var(--navy);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pj-n .s { font-size: 11px; color: var(--g500); margin-top: 2px; }
+.pj-vide { font-size: 12.5px; color: var(--g500); font-style: italic; }
