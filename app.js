@@ -4334,11 +4334,22 @@ function ficheBonRefresh(complet) {
   const devis = docs.filter(d => (d.type || 'devis') === 'devis');
   const facts = docs.filter(d => d.type === 'facture');
   const rdvs = (DB.intervs || []).filter(iv => iv.bonId === b.id);
+  // Devis et factures du meme client qui ne sont rattaches a aucun bon :
+  // on les propose ici pour que rien n'echappe a la fiche.
+  const gKey = _couleurKey(b.geranceNom || '');
+  const probables = gKey
+    ? (DB.documents || []).filter(d => !d.bonId && !_docIsArchive(d) && !_isRappelDoc(d)
+        && _couleurKey(d.clientNom || '') === gKey)
+        .sort((x, y) => String(y.dateDoc || '').localeCompare(String(x.dateDoc || '')))
+        .slice(0, 8)
+    : [];
   const LBLDOC = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté',
                    refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
-  const lien = (ico, titre, sous, act) =>
+  const lien = (ico, titre, sous, act, extra) =>
     `<div class="fb-lien" onclick="closeModal('modal-fiche-bon'); ${act}"><div class="i">${ico}</div>
-      <div class="n"><div class="t">${titre}</div><div class="s">${sous}</div></div><div class="c">›</div></div>`;
+      <div class="n"><div class="t">${titre}</div><div class="s">${sous}</div></div>${extra || ''}<div class="c">›</div></div>`;
+  const btLien = (act, txt, titre, cls) =>
+    `<button class="btn ${cls || 'btn-ghost'} btn-sm fb-blien" title="${titre}" onclick="event.stopPropagation();${act}">${txt}</button>`;
 
   // --- Chronologie ---
   const evts = [];
@@ -4447,10 +4458,18 @@ function ficheBonRefresh(complet) {
           ${raps.length || diags.length || devis.length || facts.length || rdvs.length ? `
             ${raps.map(r => lien('📋', 'Rapport ' + _escapeHtml(r.id || ''), (r.statut || '') + (r.date ? ' · ' + fmtDate(r.date) : ''), `editRapport('${r.id}')`)).join('')}
             ${diags.map(d => lien('🔬', 'Diagnostic ' + _escapeHtml(d.numero || ''), d.dateDoc ? fmtDate(d.dateDoc) : '', `editDiag('${d.id}')`)).join('')}
-            ${devis.map(d => lien('💰', 'Devis ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`)).join('')}
-            ${facts.map(d => lien('🧾', 'Facture ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`)).join('')}
+            ${devis.map(d => lien('💰', 'Devis ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`, btLien(`ficheBonDetacher('${d.id}')`, '✕', 'Détacher de ce bon'))).join('')}
+            ${facts.map(d => lien('🧾', 'Facture ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`, btLien(`ficheBonDetacher('${d.id}')`, '✕', 'Détacher de ce bon'))).join('')}
             ${rdvs.map(iv => lien('🗓', 'Rendez-vous agenda', (iv.date ? fmtDate(iv.date) : '') + (iv.heure ? ' à ' + iv.heure : ''), `showScreen('agenda')`)).join('')}
           ` : '<div class="fb-vide">Aucun rapport, devis ni facture rattaché à ce bon.</div>'}
+          ${probables.length ? `
+            <div class="fb-sst">Peut-être liés — même client, rattachés à aucun bon</div>
+            ${probables.map(d => lien((d.type === 'facture' ? '🧾' : '💰'),
+                ((d.type === 'facture' ? 'Facture ' : 'Devis ') + _escapeHtml(d.numero || '')),
+                (fmtDate(d.dateDoc) || '') + ' · ' + _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'),
+                `editDoc('${d.id}')`,
+                btLien(`ficheBonRattacher('${d.id}')`, '🔗 Rattacher', 'Rattacher définitivement ce document à ce bon', 'btn-navy'))).join('')}
+          ` : ''}
         </div>
 
         <div class="fb-card">
@@ -4468,6 +4487,30 @@ function ficheBonRefresh(complet) {
   body.innerHTML = `<div class="fb-cols">${gaucheHtml}${droiteHtml}</div>`;
   const et = document.getElementById('fb-etat');
   if (et) { et.textContent = ''; et.classList.remove('sur'); }
+}
+
+// Rattache un devis ou une facture au bon ouvert dans la fiche
+function ficheBonRattacher(docId) {
+  const docs = DB.documents;
+  const d = docs.find(x => x.id === docId);
+  if (!d || !_ficheBonId) return;
+  d.bonId = _ficheBonId;
+  DB.documents = docs;
+  _ficheBonMaj();
+  if (typeof renderDocuments === 'function') renderDocuments();
+  toast('✓ ' + ((d.type === 'facture' ? 'Facture ' : 'Devis ') + (d.numero || '')) + ' rattaché à ce bon', '#2d9e6b');
+}
+
+// Retire le lien entre un document et le bon (le document n'est pas supprime)
+function ficheBonDetacher(docId) {
+  const docs = DB.documents;
+  const d = docs.find(x => x.id === docId);
+  if (!d) return;
+  d.bonId = '';
+  DB.documents = docs;
+  _ficheBonMaj();
+  if (typeof renderDocuments === 'function') renderDocuments();
+  toast('Document détaché de ce bon', '#e63946');
 }
 
 // Enregistre les champs modifiables en preservant TOUS les marqueurs invisibles
