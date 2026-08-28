@@ -5902,7 +5902,9 @@ function exportData() {
     drt_documents:    DB.documents,     // devis ET factures
     drt_prestations:  DB.prestations,
     drt_diagnostics:  DB.diagnostics,
-    drt_fournisseurs: DB.fournisseurs
+    drt_fournisseurs: DB.fournisseurs,
+    drt_contrats:     DB.contrats,      // contrats annuels (avec le lien vers leur fichier)
+    drt_releves:      DB.releves        // relevés bancaires archivés
   };
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
@@ -6065,6 +6067,8 @@ function importData(event) {
         drt_prestations:  'prestations',
         drt_diagnostics:  'diagnostics',
         drt_fournisseurs: 'fournisseurs',
+        drt_contrats:     'contrats',
+        drt_releves:      'releves',
       };
       let n = 0;
       Object.keys(map).forEach(k => {
@@ -6081,6 +6085,8 @@ function importData(event) {
       if (typeof renderRapports === 'function')    renderRapports();
       if (typeof renderDocuments === 'function')   renderDocuments();
       if (typeof renderFournisseurs === 'function')renderFournisseurs();
+      if (typeof renderContrats === 'function')    renderContrats();
+      if (typeof renderRapprochement === 'function') renderRapprochement();
     } catch (err) {
       toast("Erreur d'import : " + err.message, '#e63946');
     } finally {
