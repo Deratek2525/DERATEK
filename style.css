@@ -938,7 +938,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 @media (min-width: 821px) {
   .ck-bon {
     display: grid;
-    grid-template-columns: 42px 118px minmax(165px, 1fr) minmax(150px, 1fr) 200px 240px;
+    grid-template-columns: 42px 118px minmax(158px, 1fr) minmax(135px, 1fr) 226px 240px;
     grid-template-areas: "ico id qui pb rdv act";
     align-items: center;
     gap: 12px;
@@ -979,48 +979,29 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     font-size: 12px; color: var(--g600); line-height: 1.35; min-width: 0;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
+  /* Encadre Rendez-vous : un resume clair, cliquable pour tout regler */
   .ck-b-rdv {
-    grid-area: rdv;
-    background: #f7f9fc; border: 1px solid var(--g200); border-radius: 9px;
-    padding: 6px 9px; min-width: 0;
+    grid-area: rdv; text-align: left; font-family: inherit; cursor: pointer;
+    background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 9px;
+    padding: 7px 9px; min-width: 0; position: relative;
+    transition: border-color .12s ease, background .12s ease;
   }
-  .ck-b-rdv .l {
-    font-size: 9px; font-weight: 800; letter-spacing: .5px;
-    text-transform: uppercase; color: var(--g500);
+  .ck-b-rdv.on { background: #f6fbf8; border-color: #bbf7d0; }
+  .ck-b-rdv:hover { border-color: var(--navy); background: #fff; }
+  .ck-rdv-t {
+    font-size: 9.5px; font-weight: 800; letter-spacing: .4px;
+    text-transform: uppercase; color: #b45309;
   }
-  .ck-b-rdv.on { background: #f0fdf4; border-color: #bbf7d0; }
-  .ck-b-rdv.on .l { color: #15803d; }
-  .ck-b-rdv:not(.on) .l { color: #b45309; }
-  .ck-b-rdv .f {
-    display: flex; align-items: center; gap: 4px;
-    font-size: 10.5px; color: var(--g500); margin-top: 3px;
-    overflow: hidden; white-space: nowrap;
+  .ck-b-rdv.on .ck-rdv-t { color: #15803d; }
+  .ck-rdv-v {
+    font-size: 12.5px; font-weight: 800; color: var(--navy); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* Champs de planification directement dans la liste */
-  .ck-rdv-l { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
-  .ck-rdv-d, .ck-rdv-h {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 11.5px; font-weight: 700; color: var(--navy);
-    height: 24px; padding: 0 5px; border-radius: 6px;
-    border: 1.5px solid #cbd5e1; background: #fff; cursor: pointer;
+  .ck-b-rdv:not(.on) .ck-rdv-v { color: #b45309; font-weight: 700; }
+  .ck-rdv-p, .ck-rdv-a {
+    font-size: 11px; color: var(--g500); margin-top: 3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .ck-rdv-d { flex: 1 1 auto; min-width: 0; }
-  .ck-rdv-h { width: 74px; flex: 0 0 auto; }
-  .ck-b-rdv:not(.on) .ck-rdv-d, .ck-b-rdv:not(.on) .ck-rdv-h {
-    border-style: dashed; border-color: #f59e0b; color: #b45309; background: #fffbeb;
-  }
-  .ck-rdv-d:hover, .ck-rdv-h:hover, .ck-rdv-d:focus, .ck-rdv-h:focus {
-    border-color: var(--navy); outline: none; box-shadow: 0 0 0 2px rgba(26,39,68,.12);
-  }
-  .ck-rdv-g, .ck-rdv-p {
-    position: relative; flex: 0 0 auto; padding: 0; color: #334155;
-    width: 24px; height: 24px; border-radius: 6px; border: 1.5px solid #e5e7eb; background: #fff;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .ck-rdv-p { width: 20px; height: 20px; }
-  .ck-rdv-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .ck-rdv-p .ck-i { width: 12px; height: 12px; }
-  .ck-rdv-g:hover, .ck-rdv-p:hover { border-color: #94a3b8; }
   .ck-b-act { grid-area: act; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .ck-b-btns { display: flex; gap: 4px; }
   /* Boutons pictogrammes : l'intitule apparait au survol */
@@ -1040,7 +1021,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   .ck-b-btns .ck-b-b:hover { border-color: #94a3b8; }
   .ck-b-btns .btn-navy, .ck-b-btns .btn-red { color: #fff; }
   /* Infobulle maison : elle s'affiche tout de suite, contrairement au title */
-  .ck-b-b::after, .ck-rdv-g::after, .ck-rdv-p::after {
+  .ck-b-b::after, .ck-b-rdv::after {
     content: attr(data-tip);
     position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
     background: #0d1b3e; color: #fff;
@@ -1050,7 +1031,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     opacity: 0; visibility: hidden; transition: opacity .12s ease;
     pointer-events: none; z-index: 90;
   }
-  .ck-b-b::before, .ck-rdv-g::before, .ck-rdv-p::before {
+  .ck-b-b::before, .ck-b-rdv::before {
     content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent; border-bottom-width: 0; border-top-color: #0d1b3e;
@@ -1059,9 +1040,9 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   }
   .ck-b-b:hover::after, .ck-b-b:hover::before,
   .ck-b-b:focus-visible::after, .ck-b-b:focus-visible::before,
-  .ck-rdv-g:hover::after, .ck-rdv-g:hover::before,
-  .ck-rdv-p:hover::after, .ck-rdv-p:hover::before { opacity: 1; visibility: visible; }
-  .ck-rdv-g::after, .ck-rdv-p::after { left: -6px; transform: none; }
+  .ck-b-rdv:hover::after, .ck-b-rdv:hover::before { opacity: 1; visibility: visible; }
+  .ck-b-rdv::after { left: 0; transform: none; }
+  .ck-b-rdv::before { left: 30px; }
   /* Les bulles des boutons de bord se recalent pour ne pas depasser de la carte */
   .ck-b-btns .ck-b-b:nth-child(-n+2)::after { left: -6px; transform: none; }
   .ck-b-btns .ck-b-b:nth-last-child(-n+3)::after { left: auto; right: -6px; transform: none; }
@@ -1078,3 +1059,18 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     .ck-b-pb { align-self: start; -webkit-line-clamp: 1; }
   }
 }
+
+/* ---- Fenetre "Planifier" (rendez-vous et passages d'un bon) --------------- */
+.plan-sec { padding: 0 0 15px; margin-bottom: 15px; border-bottom: 1px solid #eef1f6; }
+.plan-t { font-size: 13.5px; font-weight: 800; color: var(--navy); }
+.plan-aide { font-size: 11.5px; color: var(--g500); margin-top: 3px; line-height: 1.4; }
+.plan-l { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.plan-in {
+  font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; color: var(--navy);
+  height: 34px; padding: 0 9px; border-radius: 8px; border: 1.5px solid #cbd5e1;
+  background: #fff; cursor: pointer;
+}
+.plan-in:hover, .plan-in:focus { border-color: var(--navy); outline: none; box-shadow: 0 0 0 2px rgba(26,39,68,.12); }
+.plan-fait { border-color: #86efac; color: #14532d; }
+.plan-num { font-size: 12px; font-weight: 800; color: var(--g500); min-width: 78px; }
+.plan-vide { font-size: 12px; color: var(--g500); font-style: italic; }

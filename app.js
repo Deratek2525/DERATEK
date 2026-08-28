@@ -5667,20 +5667,96 @@ const CK_ICO = {
   devis:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
   facture: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v18l-2.7-1.8L14.7 21 12 19.2 9.3 21l-2.6-1.8L4 21z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>',
   agenda:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  croix:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   plus:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   ouvrir:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
   suppr:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
 };
 
 // Rafraichit l'encadre rendez-vous (couleur + intitule) sans redessiner la liste
-function _ckRdvMaj(el) {
-  const box = el && el.closest ? el.closest('.ck-b-rdv') : null;
-  if (!box) return;
-  const d = box.querySelector('.ck-rdv-d');
-  const on = !!(d && d.value);
-  box.classList.toggle('on', on);
-  const l = box.querySelector('.l');
-  if (l) l.textContent = on ? 'Rendez-vous' : 'Rendez-vous — à planifier';
+// ============================================================
+// FENETRE "PLANIFIER" — rendez-vous a venir + passages deja faits
+// Ouverte depuis l'encadre Rendez-vous d'une carte de bon (style Cockpit).
+// ============================================================
+let _bonPlanId = null;
+
+function openBonPlanning(id) {
+  const b = (DB.bons || []).find(x => x.id === id);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  _bonPlanId = id;
+  let bg = document.getElementById('modal-bon-plan');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'modal-bon-plan';
+    bg.className = 'modal-bg';
+    bg.innerHTML =
+      '<div class="modal" style="max-width:520px;width:94%;">' +
+        '<div class="modal-hd">' +
+          '<div class="modal-title" id="bon-plan-titre">Planifier</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="closeModal(\'modal-bon-plan\')">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" id="bon-plan-body"></div>' +
+        '<div class="modal-ft">' +
+          '<button class="btn btn-navy" onclick="closeModal(\'modal-bon-plan\')">Terminé</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) closeModal('modal-bon-plan'); });
+  }
+  bonPlanRefresh();
+  openModal('modal-bon-plan');
+}
+
+// Redessine le contenu de la fenetre a partir des donnees du bon
+function bonPlanRefresh() {
+  const b = (DB.bons || []).find(x => x.id === _bonPlanId);
+  const body = document.getElementById('bon-plan-body');
+  if (!b || !body) return;
+  const t = document.getElementById('bon-plan-titre');
+  if (t) t.textContent = 'Planifier — bon ' + (b.numero || '(sans numéro)');
+  const faits = _bonDatesInterv(b);
+  const aff = _bonAffecte(b);
+  body.innerHTML = `
+    <div class="plan-sec">
+      <div class="plan-t">📅 Prochain rendez-vous</div>
+      <div class="plan-aide">La date et l'heure auxquelles vous retournez sur place. Laissez vide tant que ce n'est pas fixé.</div>
+      <div class="plan-l">
+        <input type="date" id="bon-plan-date" class="plan-in" value="${b.dateIntervention || ''}"
+          onchange="updateBonDateInterv('${b.id}', this.value); bonPlanRefresh();">
+        <input type="time" id="bon-plan-heure" class="plan-in" style="width:110px;" value="${b.heureIntervention || ''}"
+          onchange="updateBonHeureInterv('${b.id}', this.value); bonPlanRefresh();">
+      </div>
+      <div class="plan-l">
+        ${b.dateIntervention
+          ? `<button class="btn btn-ghost btn-sm" onclick="addBonToGoogle('${b.id}')">📅 Ajouter à Google Agenda</button>
+             <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="updateBonDateInterv('${b.id}', ''); updateBonHeureInterv('${b.id}', ''); bonPlanRefresh();">✕ Effacer le rendez-vous</button>`
+          : '<span class="plan-vide">Aucun rendez-vous fixé pour l\'instant.</span>'}
+      </div>
+    </div>
+
+    <div class="plan-sec">
+      <div class="plan-t">✅ Interventions déjà faites</div>
+      <div class="plan-aide">Les passages que vous avez réellement effectués sur ce bon (5 au maximum).</div>
+      ${faits.length
+        ? faits.map((d, i) => `<div class="plan-l">
+            <span class="plan-num">${i + 1}<sup>${i === 0 ? 'er' : 'e'}</sup> passage</span>
+            <input type="date" class="plan-in plan-fait" value="${d}"
+              onchange="bonSetDateEffectuee('${b.id}', ${i}, this.value); bonPlanRefresh();">
+            <button class="btn btn-ghost btn-sm" style="color:#b91c1c;"
+              onclick="bonSetDateEffectuee('${b.id}', ${i}, ''); bonPlanRefresh();" title="Retirer ce passage">✕</button>
+          </div>`).join('')
+        : '<div class="plan-vide">Aucun passage enregistré pour le moment.</div>'}
+      <div class="plan-l">
+        ${faits.length < 5
+          ? `<button class="btn btn-green btn-sm" onclick="bonAddDateEffectuee('${b.id}'); bonPlanRefresh();">➕ Ajouter un passage (date du jour)</button>`
+          : '<span class="plan-vide">Maximum de 5 passages atteint.</span>'}
+      </div>
+    </div>
+
+    <div class="plan-sec" style="border-bottom:0;padding-bottom:0;">
+      <div class="plan-t">👷 Technicien affecté</div>
+      <div class="plan-l"><span class="plan-vide">${aff ? _escapeHtml(aff) : 'Personne n\'est affecté à ce bon. L\'affectation se fait dans la fiche complète du bon.'}</span></div>
+    </div>`;
 }
 
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
@@ -5731,21 +5807,18 @@ function renderBonCardCockpit(b) {
         ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
       </div>
       <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
-      <div class="ck-b-rdv${b.dateIntervention ? ' on' : ''}">
-        <div class="l">Rendez-vous${b.dateIntervention ? '' : ' — à planifier'}</div>
-        <div class="ck-rdv-l">
-          <input type="date" class="ck-rdv-d" value="${b.dateIntervention || ''}"
-            onchange="updateBonDateInterv('${b.id}', this.value); _ckRdvMaj(this)" title="Date du rendez-vous">
-          <input type="time" class="ck-rdv-h" value="${b.heureIntervention || ''}"
-            onchange="updateBonHeureInterv('${b.id}', this.value); _ckRdvMaj(this)" title="Heure du rendez-vous">
-        </div>
-        <div class="f">
-          <span>✅ ${faits.length} passage(s)</span>
-          ${faits.length < 5 ? `<button class="btn btn-ghost ck-rdv-p" onclick="bonAddDateEffectuee('${b.id}')" data-tip="Ajouter une intervention effectuée" aria-label="Ajouter une intervention effectuée">${CK_ICO.plus}</button>` : ''}
-          <button class="btn btn-ghost ck-rdv-p" onclick="addBonToGoogle('${b.id}')" data-tip="Ajouter à Google Agenda" aria-label="Ajouter à Google Agenda">${CK_ICO.agenda}</button>
-          ${aff ? `<span class="ck-rdv-a" title="Technicien affecté">👷 ${_escapeHtml(aff)}</span>` : ''}
-        </div>
-      </div>
+      <button type="button" class="ck-b-rdv${b.dateIntervention ? ' on' : ''}"
+        onclick="openBonPlanning('${b.id}')"
+        data-tip="Planifier : rendez-vous et passages effectués"
+        aria-label="Planifier le rendez-vous et les passages de ce bon">
+        <div class="ck-rdv-t">${b.dateIntervention ? 'Rendez-vous' : 'À planifier'}</div>
+        <div class="ck-rdv-v">${rdv || 'Aucune date fixée'}</div>
+        <div class="ck-rdv-p">${faits.length
+          ? 'Faits : ' + faits.slice(0, 3).map(d => String(fmtDate(d)).slice(0, 5)).join(' · ')
+            + (faits.length > 3 ? ' +' + (faits.length - 3) : '')
+          : 'Aucun passage effectué'}</div>
+        ${aff ? `<div class="ck-rdv-a">👷 ${_escapeHtml(aff)}</div>` : ''}
+      </button>
       <div class="ck-b-act">
         <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon"
           style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
