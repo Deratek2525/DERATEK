@@ -930,6 +930,30 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     border-radius: 13px; box-shadow: 0 1px 2px rgba(13,27,62,.05), 0 6px 18px rgba(13,27,62,.05);
   }
   html[data-style="cockpit"] .clients-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 15px; }
+  /* --- Tableaux (Rapports) en style Cockpit --- */
+  html[data-style="cockpit"] .tbl th {
+    position: sticky; top: 0; z-index: 3;
+    background: #f7f9fc; border-bottom: 1.5px solid var(--g200);
+  }
+  html[data-style="cockpit"] .tbl td { padding: 9px 14px; font-size: 12.5px; }
+  html[data-style="cockpit"] .tbl tbody tr:hover td { background: #f3f7ff; }
+  html[data-style="cockpit"] .tbl tbody tr.rapport-groupe td {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .4px;
+    border-top: 8px solid transparent; border-bottom: 0;
+    background-clip: padding-box;
+  }
+  .ck-grp-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+  /* Boutons pictogrammes dans les tableaux, avec la meme infobulle */
+  .ck-t-b {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 28px; padding: 0; margin-right: 4px;
+    border-radius: 7px; border: 1.5px solid #e5e7eb; background: #fff; color: #334155;
+  }
+  .ck-t-b:hover { border-color: #94a3b8; }
+  .ck-t-b.btn-red { background: #ef4444; border-color: #ef4444; color: #fff; }
   /* Le titre de droite devient un simple intitulé de section dans la barre */
   html[data-style="cockpit"] .nav-title { margin-bottom: 2px; }
 }
@@ -1007,7 +1031,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   /* Boutons pictogrammes : l'intitule apparait au survol */
   .ck-b-btns .ck-b-b {
     position: relative;
-    flex: 1 1 0; min-width: 0; padding: 0; height: 28px;
+    flex: 1 1 0; min-width: 0; max-width: 40px; padding: 0; height: 28px;
     font-size: 13px; line-height: 1; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
   }
@@ -1021,7 +1045,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   .ck-b-btns .ck-b-b:hover { border-color: #94a3b8; }
   .ck-b-btns .btn-navy, .ck-b-btns .btn-red { color: #fff; }
   /* Infobulle maison : elle s'affiche tout de suite, contrairement au title */
-  .ck-b-b::after, .ck-b-rdv::after {
+  .ck-b-b::after, .ck-b-rdv::after, .ck-t-b::after {
     content: attr(data-tip);
     position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
     background: #0d1b3e; color: #fff;
@@ -1031,7 +1055,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     opacity: 0; visibility: hidden; transition: opacity .12s ease;
     pointer-events: none; z-index: 90;
   }
-  .ck-b-b::before, .ck-b-rdv::before {
+  .ck-b-b::before, .ck-b-rdv::before, .ck-t-b::before {
     content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent; border-bottom-width: 0; border-top-color: #0d1b3e;
@@ -1040,7 +1064,8 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   }
   .ck-b-b:hover::after, .ck-b-b:hover::before,
   .ck-b-b:focus-visible::after, .ck-b-b:focus-visible::before,
-  .ck-b-rdv:hover::after, .ck-b-rdv:hover::before { opacity: 1; visibility: visible; }
+  .ck-b-rdv:hover::after, .ck-b-rdv:hover::before,
+  .ck-t-b:hover::after, .ck-t-b:hover::before { opacity: 1; visibility: visible; }
   .ck-b-rdv::after { left: 0; transform: none; }
   .ck-b-rdv::before { left: 30px; }
   /* Les bulles des boutons de bord se recalent pour ne pas depasser de la carte */
@@ -1057,6 +1082,34 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     }
     .ck-b-qui { align-self: end; }
     .ck-b-pb { align-self: start; -webkit-line-clamp: 1; }
+  }
+
+  /* --- Devis et factures : meme ligne compacte, colonne Total au lieu du probleme --- */
+  .ck-doc {
+    grid-template-columns: 42px 148px minmax(170px, 1fr) 128px 250px;
+    grid-template-areas: "ico id qui tot act";
+  }
+  .ck-d-tot { grid-area: tot; text-align: right; min-width: 0; }
+  .ck-d-tot .l {
+    font-size: 9px; font-weight: 800; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--g500);
+  }
+  .ck-d-tot .v { font-size: 15px; font-weight: 800; color: var(--navy); margin-top: 2px; white-space: nowrap; }
+  .ck-d-tot .v .c { font-size: 10.5px; font-weight: 700; color: var(--g500); }
+  .ck-d-tot .f { font-size: 10.5px; color: #b45309; margin-top: 3px; white-space: nowrap; }
+  .ck-rappel {
+    font-size: 9px; font-weight: 800; color: #fff; background: #dc2626;
+    border-radius: 8px; padding: 1px 6px; vertical-align: middle;
+  }
+  .ck-d-rap {
+    width: 100%; font-size: 11px; font-weight: 700; cursor: pointer;
+    padding: 5px 7px; border-radius: 7px;
+    border: 1.5px solid #ddd6fe; background: #faf5ff; color: #6d28d9;
+  }
+  .ck-d-rap:hover { border-color: #7c3aed; }
+  .ck-b-btns .btn-amber { border-color: #fcd34d; background: #fffbeb; color: #b45309; }
+  @media (max-width: 1500px) {
+    .ck-doc { grid-template-columns: 42px 132px minmax(150px, 1fr) 112px 244px; }
   }
 }
 

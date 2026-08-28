@@ -1918,6 +1918,11 @@ function renderRapports() {
     return;
   }
 
+  // Style Cockpit : en-tetes de gerance colores et actions en pictogrammes
+  const _ck = (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820);
+  const _ckBt = (act, ico, titre, cls) =>
+    `<button class="btn ${cls || 'btn-ghost'} ck-t-b" onclick="event.stopPropagation();${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
+
   const ligneRapport = r => {
     const loc = _rapLoc(r);
     const _bon = r.bonCommande ? (DB.bons || []).find(b => _factNorm(b.numero) === _factNorm(r.bonCommande)) : null;
@@ -1939,8 +1944,11 @@ function renderRapports() {
       <td>${r.montant ? r.montant+' CHF' : '—'}</td>
       <td><span class="badge ${badgeCls(r.statut)}">${r.statut}</span></td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-ghost btn-xs" title="Envoyer dans « Facturation archivée » (même sans facture)" onclick="event.stopPropagation();archiveRapport('${r.id}')">📦</button>
-        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteRapport('${r.id}')">🗑</button>
+        ${_ck
+          ? _ckBt(`archiveRapport('${r.id}')`, CK_ICO.archive, 'Envoyer dans « Facturation archivée »')
+            + _ckBt(`confirmDeleteRapport('${r.id}')`, CK_ICO.suppr, 'Supprimer ce rapport', 'btn-red')
+          : `<button class="btn btn-ghost btn-xs" title="Envoyer dans « Facturation archivée » (même sans facture)" onclick="event.stopPropagation();archiveRapport('${r.id}')">📦</button>
+             <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteRapport('${r.id}')">🗑</button>`}
       </td>
     </tr>`;
   };
@@ -1965,8 +1973,11 @@ function renderRapports() {
       <td>—</td>
       <td>${stBadge}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();downloadDiagPDF('${d.id}')" title="Télécharger le PDF">📥</button>
-        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+        ${_ck
+          ? _ckBt(`downloadDiagPDF('${d.id}')`, CK_ICO.telech, 'Télécharger le PDF de ce rapport')
+            + _ckBt(`confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')`, CK_ICO.suppr, 'Supprimer ce rapport', 'btn-red')
+          : `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();downloadDiagPDF('${d.id}')" title="Télécharger le PDF">📥</button>
+             <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();confirmDeleteDiag('${d.id}','${(d.numero||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>`}
       </td>
     </tr>`;
   };
@@ -1978,10 +1989,18 @@ function renderRapports() {
     const nb = rapps.length + diags.length;
     const techs = [...new Set(rapps.map(r => r.tech).filter(Boolean))];
     const techTxt = techs.length ? `<span class="rapport-groupe-tech">👷 ${techs.join(', ')}</span>` : '';
-    const entete = `
-      <tr class="rapport-groupe">
-        <td colspan="9">🏢 ${nom} <span class="rapport-groupe-nb">${nb} rapport${nb > 1 ? 's' : ''}</span>${techTxt}</td>
-      </tr>`;
+    const gc = colorForGeranceName(nom);
+    const entete = _ck
+      ? `<tr class="rapport-groupe ck-grp">
+           <td colspan="9" style="background:${_hexTint(gc, 0.15)};color:${gc};border-left:5px solid ${gc};">
+             <span class="ck-grp-dot" style="background:${gc};"></span>${nom}
+             <span class="rapport-groupe-nb" style="background:${_hexTint(gc, 0.3)};color:${gc};">${nb} rapport${nb > 1 ? 's' : ''}</span>
+             ${techs.length ? `<span class="rapport-groupe-tech" style="color:${gc};">👷 ${techs.join(', ')}</span>` : ''}
+           </td>
+         </tr>`
+      : `<tr class="rapport-groupe">
+           <td colspan="9">🏢 ${nom} <span class="rapport-groupe-nb">${nb} rapport${nb > 1 ? 's' : ''}</span>${techTxt}</td>
+         </tr>`;
     return entete + rapps.map(ligneRapport).join('') + diags.map(ligneDiag).join('');
   }).join('');
 }
@@ -5669,6 +5688,12 @@ const CK_ICO = {
   agenda:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   croix:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   plus:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  archive: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',
+  crayon:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  telech:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  copie:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  bonPlus: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
+  fleche:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>',
   ouvrir:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
   suppr:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
 };
@@ -8130,7 +8155,75 @@ function renderDocuments() {
     'payee':     { bg:'#bbf7d0', color:'#166534' },
   };
   const statutLabel = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté', refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
+  // ---- Version Cockpit : un document = une ligne compacte ------------------
+  // Memes actions que la carte classique, en pictogrammes avec infobulle.
+  const cardCockpit = (d) => {
+    const isDevis = d.type === 'devis';
+    const st = statutColors[d.statut] || statutColors.brouillon;
+    const _bon = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+    const _bonNum = (_bon && _bon.numero) || d.bonCommande || '';
+    const _adrInt = (_bon && _bon.immeuble) || d.locataireAdresse || '';
+    let _tech = '';
+    if (_bon) {
+      const _rap = (DB.rapports || []).find(r => _factNorm(r.bonCommande) === _factNorm(_bon.numero));
+      _tech = (_rap && _rap.tech) || _bonAffecte(_bon) || '';
+    }
+    const opts = isDevis ? ['brouillon','envoye','accepte','refuse'] : ['brouillon','pret','envoyee','payee'];
+    const coul = isDevis ? '#8b5cf6' : colorForGeranceName(_geranceCanon(d.clientNom || '') || '(Sans client)');
+    const cd = _devisCountdownChip(d);
+    const nbDates = _docDatesCount(d);
+    const rappel = _isRappelDoc(d) ? ((_rappelMeta(d) || {}).niveau || '') : null;
+    const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
+    return `
+    <div id="docrow-${d.id}" class="ck-bon ck-doc" style="border-left-color:${coul};">
+      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.16)};color:${coul};">${isDevis ? CK_ICO.devis : CK_ICO.facture}</div>
+      <div class="ck-b-id">
+        <div class="n">${isDevis ? 'Devis' : 'Facture'} ${_escapeHtml(d.numero || '—')}${rappel ? ` <span class="ck-rappel">RAPPEL ${rappel}</span>` : ''}</div>
+        <div class="d">📅 ${fmtDate(d.dateDoc) || '—'}</div>
+        ${cd ? `<div style="margin-top:3px;">${cd}</div>` : ''}
+      </div>
+      <div class="ck-b-qui">
+        <div class="t">${_escapeHtml(d.clientNom || '—')}</div>
+        <div class="s">${d.locataireNom ? '🏠 ' + _escapeHtml(d.locataireNom) : ''}${_adrInt ? (d.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(_adrInt) : ''}</div>
+        ${_bonNum || _tech ? `<div class="s">${_bonNum ? '📄 Bon ' + _escapeHtml(_bonNum) : ''}${_tech ? (_bonNum ? ' · ' : '') + '👷 ' + _escapeHtml(_tech) : ''}</div>` : ''}
+      </div>
+      <div class="ck-d-tot">
+        <div class="l">Total TTC</div>
+        <div class="v">${_displayMontant(d.total || 0)}<span class="c"> CHF</span></div>
+        ${nbDates ? `<div class="f">📅 ${nbDates} date(s) d'intervention</div>` : ''}
+      </div>
+      <div class="ck-b-act">
+        <select onchange="updateDocStatut('${d.id}', this.value)" title="Statut du document"
+          style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.color};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">
+          ${opts.map(o => `<option value="${o}" ${d.statut === o ? 'selected' : ''}>${statutLabel[o]}</option>`).join('')}
+        </select>
+        <div class="ck-b-btns">
+          ${bt(`downloadDocPDF('${d.id}')`, CK_ICO.telech, 'Télécharger le PDF de ce document')}
+          ${bt(`openDocDatesModal('${d.id}')`, CK_ICO.agenda, nbDates ? `Dates d'intervention (${nbDates}) — modifier` : `Ajouter les dates d'intervention`, nbDates ? 'btn-amber' : 'btn-ghost')}
+          ${_bon ? (_bon.pdfPath
+            ? bt(`viewBonPdf('${_bon.id}')`, CK_ICO.pdfDoc, `Ouvrir le PDF du bon ${_bonNum}`)
+            : bt(`generateBonPDF('${_bon.id}')`, CK_ICO.pdf, `Générer le PDF du bon ${_bonNum}`)) : ''}
+          ${isDevis ? bt(`duplicateDoc('${d.id}')`, CK_ICO.copie, 'Dupliquer ce devis (nouveau numéro attribué)') : ''}
+          ${isDevis && !_bon ? bt(`createBonFromDevis('${d.id}')`, CK_ICO.bonPlus, 'Créer un bon manuel à partir de ce devis') : ''}
+          ${isDevis ? bt(`convertDevisToFacture('${d.id}')`, CK_ICO.fleche, 'Convertir ce devis en facture', 'btn-green') : ''}
+          ${bt(`editDoc('${d.id}')`, CK_ICO.crayon, 'Ouvrir et modifier ce document', 'btn-navy')}
+          <button class="btn btn-red ck-b-b" onclick="confirmDeleteDoc('${d.id}','${String(d.numero || '').replace(/'/g, "\\'")}')"
+            data-tip="Supprimer ce document" aria-label="Supprimer ce document">${CK_ICO.suppr}</button>
+        </div>
+        ${isDevis ? `<select class="ck-d-rap" onchange="createRapportFromDoc('${d.id}', this.value); this.selectedIndex=0;" title="Créer un rapport à partir de ce devis">
+          <option value="" selected>Créer un rapport…</option>
+          <option value="general">📋 Rapport général</option>
+          <option value="bois">🪵 Insectes du bois</option>
+          <option value="rongeurs">🐀 Rongeurs</option>
+          <option value="blattes">🪳 Blattes</option>
+          <option value="fourmis">🐜 Fourmis</option>
+          <option value="punaises">🛏️ Punaises de lit</option>
+        </select>` : ''}
+      </div>
+    </div>`;
+  };
   const cardOf = (d) => {
+    if (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820) return cardCockpit(d);
     const isDevis = d.type === 'devis';
     const st = statutColors[d.statut] || statutColors.brouillon;
     // Bon lié → n° de bon + adresse d'intervention ; rapport lié → technicien
