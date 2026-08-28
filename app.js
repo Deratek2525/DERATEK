@@ -3855,10 +3855,12 @@ function _mobFicheBon() {
     </div>
     <div class="mob-body">
       ${tel ? `<a class="mob-tel" style="margin-bottom:10px;" href="tel:${tel}">📞 Appeler ${_escapeHtml(b.gerantNom || 'la gérance')}</a>` : ''}
-      ${b.immeuble ? `<a class="mob-tel" style="background:#1d4ed8;margin-bottom:10px;" href="https://maps.apple.com/?q=${encodeURIComponent(b.immeuble)}" target="_blank">🗺️ Itinéraire</a>` : ''}
+      ${(() => { const a = _bonAdresseInterv(b).adresse;
+        return a ? `<a class="mob-tel" style="background:#1d4ed8;margin-bottom:10px;" href="https://maps.apple.com/?q=${encodeURIComponent(a)}" target="_blank">🗺️ Itinéraire</a>` : ''; })()}
       ${bloc('Statut', `<select class="mob-sel" onchange="updateBonStatut('${b.id}', this.value); mobOuvrirBon('${b.id}')">${opts}</select>`)}
       ${bloc('📍 Intervention', `
-        ${b.immeuble ? `<div class="mob-l"><b>Adresse</b>${_escapeHtml(b.immeuble)}</div>` : ''}
+        ${(() => { const a = _bonAdresseInterv(b);
+          return a.adresse ? `<div class="mob-l"><b>Adresse${a.source !== 'bon' ? ' (reprise de la fiche ' + (a.source === 'locataire' ? 'locataire' : 'client') + ')' : ''}</b>${_escapeHtml(a.adresse)}</div>` : ''; })()}
         ${b.locataireNom ? `<div class="mob-l"><b>Locataire</b>${_escapeHtml(b.locataireNom)}</div>` : ''}
         ${b.contactSurPlace ? `<div class="mob-l"><b>Contact sur place</b>${_escapeHtml(b.contactSurPlace)}</div>` : ''}
         ${b.proprietaire ? `<div class="mob-l"><b>Propriétaire</b>${_escapeHtml(b.proprietaire)}</div>` : ''}`)}
@@ -4216,6 +4218,48 @@ async function _uploadBonPdf(bonId, file) {
   }
 }
 
+// Adresse d'intervention d'un bon, avec repli sur les fiches liees.
+// Beaucoup de bons n'ont pas d'adresse saisie : elle se trouve alors sur la
+// fiche du locataire, ou — pour un particulier, une association, une commune —
+// sur la fiche du client lui-meme. Pour une GERANCE on ne reprend jamais son
+// adresse : ce serait l'adresse de l'agence, pas celle de l'intervention.
+function _bonAdresseInterv(b) {
+  if (!b) return { adresse: '', source: '', qui: '' };
+  const propre = String(b.immeuble || '').trim();
+  if (propre) return { adresse: propre, source: 'bon', qui: '' };
+
+  const compose = (a, npa, ville) =>
+    [String(a || '').trim(), [String(npa || '').trim(), String(ville || '').trim()].filter(Boolean).join(' ')]
+      .filter(Boolean).join(', ');
+
+  // 1) la fiche du locataire
+  const loc = b.locataireId ? (DB.locataires || []).find(l => l.id === b.locataireId) : null;
+  if (loc && String(loc.adresse || '').trim()) {
+    return { adresse: compose(loc.adresse, loc.npa, loc.ville), source: 'locataire',
+             qui: [loc.prenom, loc.nom].filter(Boolean).join(' ') || 'le locataire' };
+  }
+
+  // 2) la fiche du client, sauf si c'est une gerance
+  const cli = (b.geranceId ? (DB.clients || []).find(c => c.id === b.geranceId) : null)
+    || (b.geranceNom ? (DB.clients || []).find(c => _couleurKey(c.nom) === _couleurKey(b.geranceNom)) : null);
+  if (cli && String(cli.adresse || '').trim() && String(cli.type || '') !== 'Gérance') {
+    return { adresse: compose(cli.adresse, cli.npa, cli.ville), source: 'client', qui: cli.nom || '' };
+  }
+  return { adresse: '', source: '', qui: '' };
+}
+
+// Reprend l'adresse deduite dans le champ du bon (la fiche doit etre ouverte)
+function ficheBonReprendreAdresse() {
+  const b = (DB.bons || []).find(x => x.id === _ficheBonId); if (!b) return;
+  const a = _bonAdresseInterv(b);
+  const el = document.getElementById('fb-immeuble');
+  if (!el || !a.adresse) return;
+  el.value = a.adresse;
+  ficheBonModifie();
+  el.focus();
+  toast('Adresse reprise — pensez à enregistrer', '#2d9e6b');
+}
+
 // ============================================================
 // FICHE COMPLETE D'UN BON
 // Toutes les informations sur un seul ecran : la colonne de gauche est
@@ -4381,15 +4425,30 @@ function ficheBonRefresh(complet) {
         <div class="fb-card">
           <div class="fb-t">📍 Lieu d'intervention</div>
           ${ch('Adresse de l\'immeuble', 'immeuble', b.immeuble)}
+          ${(() => {
+            const a = _bonAdresseInterv(b);
+            if (b.immeuble || !a.adresse) return '';
+            const org = a.source === 'locataire'
+              ? ('la fiche du locataire' + (a.qui ? ' ' + _escapeHtml(a.qui) : ''))
+              : ('la fiche client' + (a.qui ? ' ' + _escapeHtml(a.qui) : ''));
+            return `<div class="fb-sugg">
+              <div class="s">📍 ${_escapeHtml(a.adresse)}</div>
+              <div class="o">Trouvée dans ${org} — le bon lui-même n'a pas d'adresse.</div>
+              <button class="btn btn-navy btn-sm" onclick="ficheBonReprendreAdresse()">Reprendre cette adresse</button>
+            </div>`;
+          })()}
           ${ch('Locataire', 'locataireNom', b.locataireNom)}
           ${ch('Propriétaire', 'proprietaire', b.proprietaire)}
           <div class="fb-2">
             ${ch('Contact sur place', 'contactSurPlace', b.contactSurPlace)}
             ${ch('Concierge', 'concierge', b.concierge)}
           </div>
-          ${b.immeuble ? `<div class="fb-raccourcis">
-            <a class="fb-rac" href="https://maps.apple.com/?q=${encodeURIComponent(b.immeuble)}" target="_blank">🗺️ Itinéraire</a>
-          </div>` : ''}
+          ${(() => {
+            const a = _bonAdresseInterv(b).adresse;
+            return a ? `<div class="fb-raccourcis">
+              <a class="fb-rac" href="https://maps.apple.com/?q=${encodeURIComponent(a)}" target="_blank">🗺️ Itinéraire</a>
+            </div>` : '';
+          })()}
         </div>
 
         <div class="fb-card">
@@ -6345,7 +6404,7 @@ function renderBonCardCockpit(b) {
   const opts = Object.keys(SB).map(k => `<option value="${k}" ${statut === k ? 'selected' : ''}>${SB[k].lbl}</option>`).join('');
   const alerte = _bonAlerteNouveau48h(b);
   const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId)) || null;
-  const adresse = (loc && loc.adresse) || b.immeuble || '';
+  const adresse = (loc && loc.adresse) || _bonAdresseInterv(b).adresse || '';
   const rdv = b.dateIntervention ? (fmtDate(b.dateIntervention) + (b.heureIntervention ? ' · ' + b.heureIntervention : '')) : '';
   const faits = _bonDatesInterv(b);
   const aff = _bonAffecte(b);
