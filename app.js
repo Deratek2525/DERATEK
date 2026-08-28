@@ -4237,11 +4237,23 @@ async function _uploadBonPJ(bonId, file) {
     });
     if (error) { toast('Envoi impossible : ' + error.message, '#e63946'); return ''; }
     return path;
-  } catch (e) { toast('Erreur : ' + e.message, '#e63946'); return ''; }
+  } catch (e) {
+    console.warn('Pièce jointe — envoi', e);
+    toast('Envoi impossible : ' + (e && e.message || e), '#e63946');
+    return '';
+  }
 }
 
 // Ajoute un ou plusieurs fichiers a un bon
 async function bonPJAjouter(bonId, fileList) {
+  try { await _bonPJAjouterInterne(bonId, fileList); }
+  catch (e) {
+    console.warn('Pièce jointe — ajout', e);
+    const st = document.getElementById('bon-pj-etat'); if (st) st.textContent = '';
+    toast('Erreur : ' + (e && e.message || e), '#e63946');
+  }
+}
+async function _bonPJAjouterInterne(bonId, fileList) {
   const b = (DB.bons || []).find(x => x.id === bonId); if (!b) return;
   const files = Array.prototype.slice.call(fileList || []);
   if (!files.length) return;
@@ -4260,7 +4272,7 @@ async function bonPJAjouter(bonId, fileList) {
     if (st) st.textContent = `Envoi de « ${f.name} » (${i + 1}/${files.length})…`;
     const path = await _uploadBonPJ(bonId, f);
     if (!path) continue;
-    deja.push({ n: f.name || 'fichier', p: path, t: f.type || '', d: _ymd(new Date()), s: f.size || 0 });
+    deja.push({ n: f.name || 'fichier', p: path, t: f.type || '', d: today(), s: f.size || 0 });
     ok++;
   }
   if (st) st.textContent = '';
