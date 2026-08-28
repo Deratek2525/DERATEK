@@ -1005,6 +1005,15 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     font-size: 13px; line-height: 1; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
   }
+  /* Pictogrammes au trait : ils prennent la couleur du bouton */
+  .ck-i {
+    width: 15px; height: 15px; display: block;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .ck-b-btns .ck-b-b { color: #334155; }
+  .ck-b-btns .ck-b-b:hover { border-color: #94a3b8; }
+  .ck-b-btns .btn-navy, .ck-b-btns .btn-red { color: #fff; }
   /* Infobulle maison : elle s'affiche tout de suite, contrairement au title */
   .ck-b-b::after {
     content: attr(data-tip);

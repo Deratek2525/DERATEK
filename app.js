@@ -5655,6 +5655,21 @@ function updateNavCounts() {
 }
 
 
+// ---- Pictogrammes des actions (style Cockpit) -------------------------------
+// Dessins vectoriels au trait : identiques sur Mac, PC, iPhone et Android,
+// nets a toutes les tailles. La couleur suit celle du bouton (currentColor).
+const CK_ICO = {
+  pdf:     '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
+  pdfDoc:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>',
+  note:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  noteOn:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="2.6" fill="#f59e0b" stroke="none"/></svg>',
+  rapport: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><polyline points="9 13 11 15 15 11"/></svg>',
+  devis:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+  facture: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v18l-2.7-1.8L14.7 21 12 19.2 9.3 21l-2.6-1.8L4 21z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>',
+  ouvrir:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+  suppr:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+};
+
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
@@ -5702,7 +5717,7 @@ function renderBonCardCockpit(b) {
         <div class="s">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : ''}${adresse ? (b.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(adresse) : ''}</div>
         ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
       </div>
-      <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Note interne" style="color:#d97706;">📝</span>' : ''}</div>
+      <div class="ck-b-pb">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
       <div class="ck-b-rdv">
         <div class="l">Rendez-vous</div>
         <div class="v">${rdv || '<span style="color:#b6bfd0;font-weight:600;">à planifier</span>'}</div>
@@ -5713,13 +5728,13 @@ function renderBonCardCockpit(b) {
         <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon"
           style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
         <div class="ck-b-btns">
-          ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, '📄', 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, '🖨', 'Générer un PDF de ce bon')}
-          ${bt(`openBonNote('${b.id}')`, note ? '🟠' : '📝', note ? 'Note interne — modifier' : 'Ajouter une note interne')}
-          ${bt(`createRapportFromBon('${b.id}')`, '📋', 'Créer le rapport depuis ce bon')}
-          ${bt(`createDevisFromBon('${b.id}')`, '💰', 'Créer un devis depuis ce bon')}
-          ${bt(`createFactureFromBon('${b.id}')`, '🧾', 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
-          ${bt(`editBon('${b.id}')`, '✏️', 'Ouvrir la fiche complète du bon', 'btn-navy')}
-          <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" data-tip="Supprimer ce bon" aria-label="Supprimer ce bon">🗑</button>
+          ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
+          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
+          ${bt(`createRapportFromBon('${b.id}')`, CK_ICO.rapport, 'Créer le rapport depuis ce bon')}
+          ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}
+          ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
+          ${bt(`editBon('${b.id}')`, CK_ICO.ouvrir, 'Ouvrir la fiche complète du bon', 'btn-navy')}
+          <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" data-tip="Supprimer ce bon" aria-label="Supprimer ce bon">${CK_ICO.suppr}</button>
         </div>
       </div>
     </div>`;
