@@ -3639,25 +3639,7 @@ function renderMobile() {
           </div>`).join('') || '<div class="mob-vide">Rien en attente. 👍</div>'}
       </div>`;
   } else if (_mobOnglet === 'bons') {
-    const bons = _mobBonsPrioritaires();
-    corps = `
-      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Bons</h2><div class="s">${bons.length} en cours</div></div>
-      <div class="mob-body">
-        ${bons.map(b => `
-          <div class="mob-c" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="editBon('${b.id}')">
-            <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}</div>
-            <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
-            ${b.gerantTel ? `<a class="mob-tel" href="tel:${String(b.gerantTel).replace(/\\s/g, '')}" onclick="event.stopPropagation()">📞 Appeler la gérance</a>` : ''}
-          </div>`).join('') || '<div class="mob-vide">Aucun bon en cours.</div>'}
-      </div>`;
-  } else if (_mobOnglet === 'photos') {
-    corps = `
-      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Photos</h2><div class="s">Prends une photo, elle rejoint le rapport en cours</div></div>
-      <div class="mob-body">
-        <div class="mob-big" onclick="document.getElementById('mob-photo-input').click()">📷 Prendre une photo</div>
-        <input type="file" id="mob-photo-input" accept="image/*" capture="environment" style="display:none" onchange="mobPhotoPrise(event)">
-        <div class="mob-vide" style="margin-top:14px;">Les photos s'ajoutent au rapport ouvert.<br>Ouvre d'abord un rapport dans l'onglet 📋.</div>
-      </div>`;
+    corps = _mobFiche ? _mobFicheBon() : _mobListeBons();
   } else {
     const it = (ico, lbl, act) => `<div class="mob-menu" onclick="${act}"><span>${ico}</span>${lbl}<span class="ch">›</span></div>`;
     corps = `
@@ -3679,9 +3661,86 @@ function renderMobile() {
 
   box.innerHTML = `<div id="mob-corps">${corps}</div>
     <div class="mob-tabbar">
-      ${tab('journee', '📅', 'Journée')}${tab('bons', '📄', 'Bons')}${tab('rapport', '📋', 'Rapport')}${tab('photos', '📷', 'Photos')}${tab('plus', '⋯', 'Plus')}
+      ${tab('journee', '📅', 'Journée')}${tab('bons', '📄', 'Bons')}${tab('rapport', '📋', 'Rapport')}${tab('plus', '⋯', 'Plus')}
     </div>`;
 }
+// --- Liste des bons, avec les deux sous-onglets « Bons » et « En cours » -----
+let _mobBonsVue = 'actifs';   // actifs | encours
+let _mobFiche = null;          // id du bon ouvert en fiche
+function mobBonsVue(v) { _mobBonsVue = v; _mobFiche = null; renderMobile(); window.scrollTo(0, 0); }
+function mobOuvrirBon(id) { _mobFiche = id; renderMobile(); window.scrollTo(0, 0); }
+function mobFermerFiche() { _mobFiche = null; renderMobile(); window.scrollTo(0, 0); }
+
+function _mobListeBons() {
+  const tous = (DB.bons || []).filter(b => !_isBonFactArchived(b));
+  const bons = (_mobBonsVue === 'encours')
+    ? tous.filter(b => (b.statut || '') === 'en-cours')
+    : _mobBonsPrioritaires();
+  const nEnCours = tous.filter(b => (b.statut || '') === 'en-cours').length;
+  const seg = (v, lbl, n) => `<div class="mob-seg ${_mobBonsVue === v ? 'on' : ''}" onclick="mobBonsVue('${v}')">${lbl} <span>${n}</span></div>`;
+  return `
+    <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Bons</h2>
+      <div class="s">${bons.length} ${_mobBonsVue === 'encours' ? 'en cours' : 'à traiter'}</div></div>
+    <div class="mob-segs">${seg('actifs', '📄 Bons', _mobBonsPrioritaires().length)}${seg('encours', '🔧 En cours', nEnCours)}</div>
+    <div class="mob-body" style="padding-top:8px;">
+      ${bons.map(b => `
+        <div class="mob-c" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
+          <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}</div>
+          <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
+        </div>`).join('') || '<div class="mob-vide">Aucun bon dans cette liste.</div>'}
+    </div>`;
+}
+
+// --- Fiche complète d'un bon : statut, dates, note, PDF, appel, itinéraire ---
+function _mobFicheBon() {
+  const b = (DB.bons || []).find(x => x.id === _mobFiche);
+  if (!b) { _mobFiche = null; return _mobListeBons(); }
+  const note = _bonNote(b);
+  const dates = _bonDatesInterv(b);
+  const tel = String(b.gerantTel || '').replace(/\s/g, '');
+  const pb = _bonProblemeClean(b);
+  const STL = { '': 'Sans statut', 'urgent': '🔴 Urgent', 'a-contacter': '📞 À contacter', 'a-transmettre': '📕 Rapport à transmettre',
+    'transmis': '📨 Transmis', 'demande-devis': '📝 Demande de devis', 'attente-devis': '⏸️ Attente de devis',
+    'devis-valide': '✅ Devis validé', 'en-cours': '🔧 En cours', 'termine': '✔️ Terminé', 'a-facturer': '💰 À facturer' };
+  const opts = Object.keys(STL).map(k => `<option value="${k}" ${(b.statut || '') === k ? 'selected' : ''}>${STL[k]}</option>`).join('');
+  const bloc = (titre, contenu) => `<div class="mob-bloc"><div class="mob-bt">${titre}</div>${contenu}</div>`;
+  const nl = t => _escapeHtml(t).replace(/\n/g, '<br>');
+  return `
+    <div class="mob-hd">
+      <div class="mob-retour" onclick="mobFermerFiche()">‹ Bons</div>
+      <h2>Bon ${_escapeHtml(b.numero || '(s. n°)')}</h2>
+      <div class="s">${_escapeHtml(b.geranceNom || '')}${b.date ? ' · ' + fmtDate(b.date) : ''}</div>
+    </div>
+    <div class="mob-body">
+      ${tel ? `<a class="mob-tel" style="margin-bottom:10px;" href="tel:${tel}">📞 Appeler ${_escapeHtml(b.gerantNom || 'la gérance')}</a>` : ''}
+      ${b.immeuble ? `<a class="mob-tel" style="background:#1d4ed8;margin-bottom:10px;" href="https://maps.apple.com/?q=${encodeURIComponent(b.immeuble)}" target="_blank">🗺️ Itinéraire</a>` : ''}
+      ${bloc('Statut', `<select class="mob-sel" onchange="updateBonStatut('${b.id}', this.value); mobOuvrirBon('${b.id}')">${opts}</select>`)}
+      ${bloc('📍 Intervention', `
+        ${b.immeuble ? `<div class="mob-l"><b>Adresse</b>${_escapeHtml(b.immeuble)}</div>` : ''}
+        ${b.locataireNom ? `<div class="mob-l"><b>Locataire</b>${_escapeHtml(b.locataireNom)}</div>` : ''}
+        ${b.contactSurPlace ? `<div class="mob-l"><b>Contact sur place</b>${_escapeHtml(b.contactSurPlace)}</div>` : ''}
+        ${b.proprietaire ? `<div class="mob-l"><b>Propriétaire</b>${_escapeHtml(b.proprietaire)}</div>` : ''}`)}
+      ${bloc('📅 Dates', `
+        <div class="mob-l"><b>Rendez-vous</b>${b.dateIntervention ? fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : '') : '—'}</div>
+        <div class="mob-l"><b>Passages effectués</b>${dates.length ? dates.map(d => fmtDate(d)).join(', ') : '—'}</div>
+        ${_bonAffecte(b) ? `<div class="mob-l"><b>Affecté à</b>${_escapeHtml(_bonAffecte(b))}</div>` : ''}`)}
+      ${bloc('📝 Note interne', note
+        ? `<div class="mob-note">${nl(note)}</div><div class="mob-act" onclick="openBonNote('${b.id}')">✏️ Modifier la note</div>`
+        : `<div class="mob-act" onclick="openBonNote('${b.id}')">➕ Ajouter une note</div>`)}
+      ${pb ? bloc('🔎 Demande de la gérance', `<div class="mob-note" style="background:#f7f9fc;border-color:#e4e9f2;color:#54607a;">${nl(pb)}</div>`) : ''}
+      ${b.gerantEmail ? bloc('✉️ Gérance', `<div class="mob-l"><b>${_escapeHtml(b.gerantNom || '')}</b><a href="mailto:${_escapeHtml(b.gerantEmail)}">${_escapeHtml(b.gerantEmail)}</a></div>`) : ''}
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        ${b.pdfPath ? `<div class="mob-act2" onclick="viewBonPdf('${b.id}')">📄 Ouvrir le PDF du bon</div>` : '<div class="mob-act2" style="opacity:.45">📄 Aucun PDF joint</div>'}
+        <div class="mob-act2" onclick="mobRapportDepuisBon('${b.id}')">📋 Faire le rapport</div>
+        <div class="mob-act2" onclick="editBon('${b.id}')">✏️ Fiche complète</div>
+      </div>
+    </div>`;
+}
+function mobRapportDepuisBon(id) {
+  if (typeof createRapportFromBon === 'function') { createRapportFromBon(id); return; }
+  openNewRapport();
+}
+
 function mobPhotoPrise(e) {
   const f = e.target.files && e.target.files[0];
   if (!f) return;
