@@ -4215,6 +4215,9 @@ async function bonProcessFile(file) {
     }
     setStatus('🤖 Analyse intelligente du bon par l\'IA…');
     const infos = _normalizeBonInfos(await bonExtractInfosIA(texte));
+    // Nuisible reconnu dans la demande, sinon dans le texte complet du bon
+    infos._nuisibles = detecteNuisibles(infos.probleme || '');
+    if (!infos._nuisibles.length) infos._nuisibles = detecteNuisibles(texte);
     setStatus('');
     bonShowConfirm(infos, file.name, false, texte);
   } catch (err) {
@@ -4228,6 +4231,82 @@ async function bonProcessFile(file) {
 // est l'ADRESSE D'INTERVENTION (= adresse du client/locataire, rue + NPA + ville).
 // La ligne « Chez : … / Appartement … étage … » est le nom du locataire + une description
 // du logement, qui ne doit JAMAIS servir d'adresse postale.
+// ---- Detection automatique du nuisible dans un bon ---------------------------
+// Le vocabulaire des nuisibles est court et ferme : une reconnaissance par
+// mots-cles est immediate, gratuite et surtout previsible — le meme mot donne
+// toujours le meme resultat, contrairement a une lecture par l'IA.
+// Les regles sont ordonnees du PLUS PRECIS au plus general : « frelon
+// asiatique » doit gagner sur « frelon », « punaise de lit » sur « punaise ».
+const BON_NUISIBLES_MOTS = [
+  ['Frelons asiatiques',      /frelon[sx]?\s+asiatique|vespa\s+velutina/],
+  ['Frelons',                 /frelon/],
+  ['Guêpes',                  /guepe|guêpe|vespa\s+crabro|nid\s+de\s+guep/],
+  ['Abeilles (relocalisation)', /abeille|essaim/],
+  ['Punaises de lit',         /punaise[sx]?\s+de\s+lit|cimex|punaise[sx]?\s+du\s+lit/],
+  ['Blattes germaniques',     /blatte[sx]?\s+germanique|blattella/],
+  ['Blattes orientales',      /blatte[sx]?\s+orientale|blatta\s+orientalis/],
+  ['Cafards',                 /cafard/],
+  ['Blattes',                 /blatte/],
+  ['Fourmis',                 /fourmi/],
+  ['Araignées',               /araign|arachnid/],
+  ['Puces',                   /\bpuce[sx]?\b/],
+  ["Poissons d'argent",       /poisson[sx]?\s+d[' ]?argent|lepisme|lépisme/],
+  ['Mites alimentaires',      /mite[sx]?\s+alimentaire|pyrale\s+de\s+la\s+farine/],
+  ['Mites textiles',          /mite[sx]?\s+(?:textile|de\s+v[eê]tement|des\s+v[eê]tements)/],
+  ['Moustiques',              /moustique|culex|aedes/],
+  ['Mouches',                 /\bmouche[sx]?\b|mouchero/],
+  ['Mulots',                  /mulot|campagnol/],
+  ['Loirs',                   /\bloir[sx]?\b|lerot|lérot/],
+  ['Rats',                    /\brat[sx]?\b|rattus|surmulot/],
+  ['Souris',                  /souri[sx]|mulot\s+gris|mus\s+musculus/],
+  ['Fouines',                 /fouine/],
+  ['Martres',                 /martre|marte\b/],
+  ['Taupes',                  /\btaupe[sx]?\b/],
+  ['Pigeons',                 /pigeon|colomb/],
+  ['Corbeaux',                /corbeau|corneille|corvid/],
+  ['Étourneaux',              /etourneau|étourneau|sturnus/],
+];
+// « rongeurs » et « oiseaux » ne designent pas une espece : on ne remplit le
+// champ que si l'espece precise n'est pas nommee ailleurs dans le texte.
+const BON_NUISIBLES_GENERIQUES = [
+  ['Souris',  /rongeur|nuisible[sx]?\s+rongeur|d[ée]ratisation/],
+  ['Pigeons', /oiseau|volatile|d[ée]pigeonnage/],
+];
+
+function _texteSansAccents(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Renvoie jusqu'a deux nuisibles trouves dans un texte, du plus precis au plus general
+// Un terme general est efface quand un terme plus precis de la meme famille a
+// ete reconnu : « frelons asiatiques » ne doit pas ramener aussi « frelons ».
+const BON_NUISIBLES_FAMILLES = {
+  'Frelons': ['Frelons asiatiques'],
+  'Blattes': ['Blattes germaniques', 'Blattes orientales', 'Cafards'],
+};
+
+function detecteNuisibles(texte) {
+  const brut = String(texte || '');
+  if (!brut.trim()) return [];
+  const t = _texteSansAccents(brut);
+  let trouves = [];
+  const ajoute = nom => { if (nom && trouves.indexOf(nom) === -1) trouves.push(nom); };
+  // Les motifs sont ecrits sans accent : on teste sur le texte normalise
+  BON_NUISIBLES_MOTS.forEach(([nom, re]) => {
+    if (new RegExp(re.source, 'i').test(t)) ajoute(nom);
+  });
+  trouves = trouves.filter(nom => {
+    const enfants = BON_NUISIBLES_FAMILLES[nom];
+    return !enfants || !enfants.some(e => trouves.indexOf(e) !== -1);
+  });
+  if (!trouves.length) {
+    BON_NUISIBLES_GENERIQUES.forEach(([nom, re]) => {
+      if (!trouves.length && new RegExp(re.source, 'i').test(t)) ajoute(nom);
+    });
+  }
+  return trouves.slice(0, 2);
+}
+
 function _normalizeBonInfos(infos) {
   if (!infos) return infos;
   const isLogement = s => {
@@ -5283,6 +5362,20 @@ function bonShowConfirm(infos, fileName, manual, rawText) {
         <textarea class="form-input" id="bonf-probleme" rows="2" style="font-size:13px;">${(infos.probleme||'')}</textarea>
       </div>
 
+      <div style="margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <label style="font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;">🐛 Nuisible reconnu</label>
+          <button type="button" class="btn btn-ghost btn-xs" onclick="bonfDetecteNuisible()"
+            title="Relire le texte ci-dessus et proposer le nuisible">🔍 Détecter</button>
+          <span id="bonf-nuis-info" style="font-size:11px;color:var(--g500);font-style:italic;"></span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select class="form-input" id="bonf-nuisible" style="font-size:13px;flex:1 1 200px;min-width:0;">${_bonNoteNuisibleOptions((infos._nuisibles || [])[0] || '')}</select>
+          <select class="form-input" id="bonf-nuisible2" style="font-size:13px;flex:1 1 200px;min-width:0;">${_bonNoteNuisibleOptions((infos._nuisibles || [])[1] || '')}</select>
+        </div>
+        <div style="font-size:11px;color:var(--g400);margin-top:4px;">Reconnu dans le texte du bon — corrigez si nécessaire, il sera enregistré dans la fiche.</div>
+      </div>
+
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
         <button class="btn btn-ghost" onclick="bonCancel()">Annuler</button>
         <button class="btn btn-navy" onclick="bonConfirmSave()">✓ Valider et enregistrer</button>
@@ -5296,6 +5389,17 @@ function bonShowConfirm(infos, fileName, manual, rawText) {
 }
 
 // Ajoute un champ date vide dans la section « Dates d'intervention » du formulaire de bon
+// Relit le texte du probleme et propose le ou les nuisibles reconnus
+function bonfDetecteNuisible() {
+  const ta = $('bonf-probleme');
+  const trouves = detecteNuisibles(ta ? ta.value : '');
+  const s1 = $('bonf-nuisible'), s2 = $('bonf-nuisible2');
+  if (s1) s1.innerHTML = _bonNoteNuisibleOptions(trouves[0] || '');
+  if (s2) s2.innerHTML = _bonNoteNuisibleOptions(trouves[1] || '');
+  const info = $('bonf-nuis-info');
+  if (info) info.textContent = trouves.length ? '✓ ' + trouves.join(' + ') : 'aucun nuisible reconnu dans ce texte';
+}
+
 function bonfAddDate() {
   const wrap = $('bonf-dates'); if (!wrap) return;
   const inp = document.createElement('input');
@@ -5479,6 +5583,18 @@ async function bonConfirmSave() {
   const _datesToApply = _formDates.length ? _formDates : (_pendingBonDates || []);
   if (_datesToApply.length) { _setBonDatesInterv(bon, _datesToApply); }
   _pendingBonDates = null;
+  // Nuisible reconnu (ou corrige a la main) : enregistre dans la note du bon,
+  // d'ou il alimente la fiche, les rapports et les devis.
+  const _n1 = ($('bonf-nuisible') || {}).value || '';
+  const _n2 = ($('bonf-nuisible2') || {}).value || '';
+  if (_n1 || _n2) {
+    const _nd = { statut: '', nuisible: _n1, nuisible2: _n2, typeInterv: '',
+                  prixHT: '', rabais: '', tva: '', texte: '' };
+    bon.probleme = _bonAssembleProbleme(
+      _bonProblemeClean(bon), _bonDatesInterv(bon), _bonAffecte(bon),
+      JSON.stringify(_nd), _bonRapFait(bon), _bonAlerte(bon), _bonColor(bon),
+      _bonPJraw(bon), _bonNolienRaw(bon));
+  }
   bons.push(bon);
   DB.bons = bons;
 
