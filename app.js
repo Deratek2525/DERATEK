@@ -471,7 +471,7 @@ function toast(msg, color) {
 
 // Chaque fenetre ouverte passe au-dessus de la precedente : une fenetre
 // ouverte depuis la fiche complete ne se retrouve jamais cachee derriere elle.
-let _modalZ = 300;
+let _modalZ = 1000;
 function openModal(id)  {
   const bg = $(id); if (!bg) return;
   // Réinitialise la position : une modale rouverte revient toujours centrée
@@ -485,7 +485,7 @@ function closeModal(id) {
   bg.classList.remove('open');
   bg.style.zIndex = '';
   // Aucune fenetre ouverte : on repart du niveau de base
-  if (!document.querySelector('.modal-bg.open')) _modalZ = 300;
+  if (!document.querySelector('.modal-bg.open')) _modalZ = 1000;
 }
 
 // ============================================================
@@ -3903,6 +3903,8 @@ function _mobFicheBon() {
         ${(() => { const a = _bonAdresseInterv(b);
           return a.adresse ? `<div class="mob-l"><b>Adresse${a.source !== 'bon' ? ' (reprise de la fiche ' + (a.source === 'locataire' ? 'locataire' : 'client') + ')' : ''}</b>${_escapeHtml(a.adresse)}</div>` : ''; })()}
         ${b.locataireNom ? `<div class="mob-l"><b>Locataire</b>${_escapeHtml(b.locataireNom)}</div>` : ''}
+        ${(() => { const t = _bonLocataireTel(b);
+          return t ? `<div class="mob-l"><b>Téléphone du locataire</b><a href="tel:${_escapeHtml(t.replace(/\s/g, ''))}">📞 ${_escapeHtml(t)}</a></div>` : ''; })()}
         ${b.contactSurPlace ? `<div class="mob-l"><b>Contact sur place</b>${_escapeHtml(b.contactSurPlace)}</div>` : ''}
         ${b.proprietaire ? `<div class="mob-l"><b>Propriétaire</b>${_escapeHtml(b.proprietaire)}</div>` : ''}`)}
       ${bloc('📅 Dates', `
@@ -4264,6 +4266,27 @@ async function _uploadBonPdf(bonId, file) {
   }
 }
 
+// Fiche du locataire liee a un bon : par identifiant, sinon par nom
+function _bonLocataire(b) {
+  if (!b) return null;
+  const locs = DB.locataires || [];
+  if (b.locataireId) {
+    const l = locs.find(x => x.id === b.locataireId);
+    if (l) return l;
+  }
+  const nom = String(b.locataireNom || '').trim().toLowerCase();
+  if (!nom) return null;
+  return locs.find(x => {
+    const complet = [x.prenom, x.nom].filter(Boolean).join(' ').trim().toLowerCase();
+    return complet === nom || String(x.nom || '').trim().toLowerCase() === nom;
+  }) || null;
+}
+// Telephone du locataire d'un bon (le bon n'a pas ce champ, il vient de sa fiche)
+function _bonLocataireTel(b) {
+  const l = _bonLocataire(b);
+  return l ? String(l.tel || '').trim() : '';
+}
+
 // Adresse d'intervention d'un bon, avec repli sur les fiches liees.
 // Beaucoup de bons n'ont pas d'adresse saisie : elle se trouve alors sur la
 // fiche du locataire, ou — pour un particulier, une association, une commune —
@@ -4403,6 +4426,7 @@ function ficheBonRefresh(complet) {
   hd.style.borderBottom = '3px solid ' + coul;
   hd.innerHTML = `
     <div class="fb-hd-in">
+      <button type="button" class="fb-retour" onclick="closeModal('modal-fiche-bon')">‹ Retour</button>
       <div class="fb-hd-l">
         <div class="fb-hd-t">Bon ${_escapeHtml(b.numero || '(sans numéro)')}</div>
         <div class="fb-hd-s">${_escapeHtml(g)} · 📅 ${fmtDate(b.date) || '—'}
@@ -4416,7 +4440,7 @@ function ficheBonRefresh(complet) {
       <select class="fb-statut" onchange="updateBonStatut('${b.id}', this.value); ficheBonRefresh(false);" title="Statut du bon">
         ${Object.keys(SB).map(k => `<option value="${k}" ${(b.statut || '') === k ? 'selected' : ''}>${SB[k]}</option>`).join('')}
       </select>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-fiche-bon')" title="Fermer">✕</button>
+      <button class="btn btn-ghost btn-sm fb-x" onclick="closeModal('modal-fiche-bon')" title="Fermer">✕</button>
     </div>
     <div class="fb-actions">
       ${b.pdfPath
@@ -4509,6 +4533,13 @@ function ficheBonRefresh(complet) {
             </div>`;
           })()}
           ${ch('Locataire', 'locataireNom', b.locataireNom)}
+          ${(() => {
+            const t = _bonLocataireTel(b);
+            if (!t) return '';
+            return `<div class="fb-l"><b>Téléphone du locataire</b>
+              <a class="fb-tel" href="tel:${_escapeHtml(t.replace(/\s/g, ''))}">📞 ${_escapeHtml(t)}</a>
+              <span class="fb-src">depuis sa fiche locataire</span></div>`;
+          })()}
           ${ch('Propriétaire', 'proprietaire', b.proprietaire)}
           <div class="fb-2">
             ${ch('Contact sur place', 'contactSurPlace', b.contactSurPlace)}
@@ -4516,9 +4547,12 @@ function ficheBonRefresh(complet) {
           </div>
           ${(() => {
             const a = _bonAdresseInterv(b).adresse;
-            return a ? `<div class="fb-raccourcis">
-              <a class="fb-rac" href="https://maps.apple.com/?q=${encodeURIComponent(a)}" target="_blank">🗺️ Itinéraire</a>
-            </div>` : '';
+            const t = _bonLocataireTel(b);
+            if (!a && !t) return '';
+            return `<div class="fb-raccourcis">
+              ${a ? `<a class="fb-rac" href="https://maps.apple.com/?q=${encodeURIComponent(a)}" target="_blank">🗺️ Itinéraire</a>` : ''}
+              ${t ? `<a class="fb-rac" href="tel:${_escapeHtml(t.replace(/\s/g, ''))}">📞 Appeler le locataire</a>` : ''}
+            </div>`;
           })()}
         </div>
 
