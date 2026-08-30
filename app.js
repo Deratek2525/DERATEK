@@ -2957,6 +2957,34 @@ function showTab(name) {
   const idx = names.indexOf(name);
   const tabs = document.querySelectorAll('.tab');
   if (tabs[idx]) tabs[idx].classList.add('active');
+  _rapStepMaj(idx, names.length);
+}
+
+// Barre d'etapes du rapport sur telephone : liste deroulante + fleches + jauge
+function _rapStepMaj(idx, total) {
+  if (idx < 0) return;
+  const sel = document.getElementById('rs-sel');
+  if (sel) sel.selectedIndex = idx;
+  const prev = document.getElementById('rs-prev');
+  const next = document.getElementById('rs-next');
+  if (prev) prev.disabled = (idx === 0);
+  if (next) next.disabled = (idx === total - 1);
+  const fill = document.getElementById('rs-fill');
+  if (fill) fill.style.width = Math.round(((idx + 1) / total) * 100) + '%';
+}
+
+// Etape precedente / suivante, avec remontee en haut de l'ecran
+function rapStepGo(sens) {
+  const names = ['infos', 'nuisibles', 'observations', 'traitement', 'photos', 'conclusion'];
+  const actif = document.querySelector('.tab-content.active');
+  let idx = actif ? names.indexOf(String(actif.id).replace(/^tab-/, '')) : 0;
+  if (idx < 0) idx = 0;
+  const cible = Math.min(names.length - 1, Math.max(0, idx + (sens > 0 ? 1 : -1)));
+  if (cible === idx) return;
+  showTab(names[cible]);
+  const zone = document.querySelector('.rapport-form') || document.getElementById('screen-rapport-edit');
+  if (zone) zone.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  else window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ============================================================

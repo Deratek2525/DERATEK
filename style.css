@@ -1311,3 +1311,36 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     border-radius: 20px; padding: 2px 10px; font-weight: 800; font-size: 13px;
   }
 }
+
+/* ---- Rapport sur telephone : barre d'etapes au lieu des onglets ----------- */
+.rap-steps { display: none; }
+@media (max-width: 820px) {
+  /* La barre de navigation du haut mange trop d'ecran : la barre d'onglets du
+     bas et l'onglet « Plus » la remplacent entierement sur telephone. */
+  .topnav { display: none !important; }
+
+  .tabs, #rapport-tabs-bar { display: none !important; }
+  .rap-steps {
+    display: block; position: sticky; top: 0; z-index: 40;
+    background: #fff; border-bottom: 1px solid var(--g200);
+    padding: 8px 12px 0;
+  }
+  .rs-l { display: flex; align-items: center; gap: 8px; }
+  .rs-b {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 11px;
+    border: 1.5px solid var(--g200); background: #fff; color: var(--navy);
+    font-size: 24px; font-weight: 800; line-height: 1; cursor: pointer;
+  }
+  .rs-b:disabled { opacity: .32; }
+  .rs-sel {
+    flex: 1 1 auto; min-width: 0; height: 42px; padding: 0 10px;
+    font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 800;
+    color: var(--navy); background: #f4f6fa; border: 1.5px solid var(--g200);
+    border-radius: 11px; text-align: center; text-align-last: center;
+  }
+  .rs-bar { height: 4px; background: var(--g200); border-radius: 3px; margin: 8px 0 0; overflow: hidden; }
+  .rs-bar > div {
+    height: 100%; background: var(--red, #e63946); border-radius: 3px;
+    width: 16.6%; transition: width .25s ease;
+  }
+}

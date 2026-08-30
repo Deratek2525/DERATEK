@@ -3,7 +3,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DERATEK — Professional Pest Control</title>
-<link rel="stylesheet" href="./style.css?v=20260612ds">
+<link rel="stylesheet" href="./style.css?v=20260612dt">
 </head>
 <body>
 
@@ -575,6 +575,22 @@
       <div class="tab" onclick="showTab(&#39;traitement&#39;)">4. Traitement</div>
       <div class="tab" onclick="showTab(&#39;photos&#39;)">5. Photos</div>
       <div class="tab" onclick="showTab(&#39;conclusion&#39;)">6. Conclusion</div>
+    </div>
+    <!-- Navigation par etapes, uniquement sur telephone -->
+    <div class="rap-steps no-print" id="rap-steps-mob">
+      <div class="rs-l">
+        <button type="button" class="rs-b" id="rs-prev" onclick="rapStepGo(-1)" aria-label="Étape précédente">‹</button>
+        <select class="rs-sel" id="rs-sel" onchange="showTab(this.value)" aria-label="Étape du rapport">
+          <option value="infos">1 / 6 · Infos</option>
+          <option value="nuisibles">2 / 6 · Nuisibles</option>
+          <option value="observations">3 / 6 · Observations</option>
+          <option value="traitement">4 / 6 · Traitement</option>
+          <option value="photos">5 / 6 · Photos</option>
+          <option value="conclusion">6 / 6 · Conclusion</option>
+        </select>
+        <button type="button" class="rs-b" id="rs-next" onclick="rapStepGo(1)" aria-label="Étape suivante">›</button>
+      </div>
+      <div class="rs-bar"><div id="rs-fill"></div></div>
     </div>
     <div class="rapport-shell">
       <div class="rapport-form">
@@ -1506,16 +1522,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260612ds"></script>
+  <script src="./fonts_arial.js?v=20260612dt"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260612ds"></script>
-<script src="./footer_prestations.js?v=20260612ds"></script>
-<script src="./config.js?v=20260612ds"></script>
-<script src="./app.js?v=20260612ds"></script>
-<script src="./pdf.js?v=20260612ds"></script>
+<script src="./logo.js?v=20260612dt"></script>
+<script src="./footer_prestations.js?v=20260612dt"></script>
+<script src="./config.js?v=20260612dt"></script>
+<script src="./app.js?v=20260612dt"></script>
+<script src="./pdf.js?v=20260612dt"></script>
 
 </body></html>
