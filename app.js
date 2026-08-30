@@ -3848,7 +3848,9 @@ function _mobListeBons() {
 function _mobFicheBon() {
   const b = (DB.bons || []).find(x => x.id === _mobFiche);
   if (!b) { _mobFiche = null; return _mobListeBons(); }
-  const note = _bonNote(b);
+  const nd = _bonNoteData(b);
+  const note = nd.texte || '';
+  const calc = _bonNoteCalc(nd);
   const dates = _bonDatesInterv(b);
   const tel = String(b.gerantTel || '').replace(/\s/g, '');
   const pb = _bonProblemeClean(b);
@@ -3879,9 +3881,14 @@ function _mobFicheBon() {
         <div class="mob-l"><b>Rendez-vous</b>${b.dateIntervention ? fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : '') : '—'}</div>
         <div class="mob-l"><b>Passages effectués</b>${dates.length ? dates.map(d => fmtDate(d)).join(', ') : '—'}</div>
         ${_bonAffecte(b) ? `<div class="mob-l"><b>Affecté à</b>${_escapeHtml(_bonAffecte(b))}</div>` : ''}`)}
-      ${bloc('📝 Note interne', note
-        ? `<div class="mob-note">${nl(note)}</div><div class="mob-act" onclick="openBonNote('${b.id}')">✏️ Modifier la note</div>`
-        : `<div class="mob-act" onclick="openBonNote('${b.id}')">➕ Ajouter une note</div>`)}
+      ${bloc('🐛 Nuisible', `
+        <div class="mob-l"><b>Nuisible principal</b>${nd.nuisible ? `<span class="mob-nuis">${_escapeHtml(nd.nuisible)}</span>` : '—'}</div>
+        ${nd.nuisible2 ? `<div class="mob-l"><b>Second nuisible</b>${_escapeHtml(nd.nuisible2)}</div>` : ''}
+        ${nd.statut ? `<div class="mob-l"><b>Où en est-on ?</b>${_escapeHtml(nd.statut)}</div>` : ''}
+        ${nd.typeInterv ? `<div class="mob-l"><b>Type d'intervention</b>${_escapeHtml(nd.typeInterv)}</div>` : ''}`)}
+      ${bloc('📝 Note interne', (note ? `<div class="mob-note">${nl(note)}</div>` : '')
+        + (calc.ht ? `<div class="mob-l"><b>Total TTC</b>${_displayMontant(calc.ttc)} CHF</div>` : '')
+        + `<div class="mob-act" onclick="openBonNote('${b.id}')">${note || calc.ht ? '✏️ Modifier la note' : '➕ Ajouter une note'}</div>`)}
       ${(() => {
         const pj = _bonPJ(b);
         return bloc('📎 Pièces jointes' + (pj.length ? ' (' + pj.length + ')' : ''), (pj.length
