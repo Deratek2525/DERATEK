@@ -1417,3 +1417,19 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 /* Sur telephone, un bon avec une note interne se signale en or fonce */
 .mob-c.note { background: #fffdf5; }
 .mob-c.note .t::after { content: ' 📝'; color: #b8860b; }
+
+/* Mode terrain : saisie des dates directement dans la fiche du bon */
+.mob-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.mob-in {
+  font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; color: #0d1b3e;
+  height: 44px; padding: 0 10px; border-radius: 11px; border: 1.5px solid #d8dfea;
+  background: #fff; flex: 1 1 150px; min-width: 0;
+}
+.mob-in.mob-h { flex: 0 0 110px; }
+.mob-in.mob-fait { border-color: #86efac; color: #14532d; }
+.mob-passage { display: flex; align-items: center; gap: 6px; flex: 1 1 100%; }
+.mob-x {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 11px;
+  border: 1.5px solid #fecaca; background: #fff; color: #b91c1c;
+  font-size: 17px; font-weight: 800; cursor: pointer;
+}

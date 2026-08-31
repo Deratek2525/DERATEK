@@ -3908,8 +3908,23 @@ function _mobFicheBon() {
         ${b.contactSurPlace ? `<div class="mob-l"><b>Contact sur place</b>${_escapeHtml(b.contactSurPlace)}</div>` : ''}
         ${b.proprietaire ? `<div class="mob-l"><b>Propriétaire</b>${_escapeHtml(b.proprietaire)}</div>` : ''}`)}
       ${bloc('📅 Dates', `
-        <div class="mob-l"><b>Rendez-vous</b>${b.dateIntervention ? fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : '') : '—'}</div>
-        <div class="mob-l"><b>Passages effectués</b>${dates.length ? dates.map(d => fmtDate(d)).join(', ') : '—'}</div>
+        <div class="mob-l"><b>Prochain rendez-vous</b>
+          <div class="mob-dates">
+            <input type="date" class="mob-in" value="${b.dateIntervention || ''}"
+              onchange="updateBonDateInterv('${b.id}', this.value)">
+            <input type="time" class="mob-in mob-h" value="${b.heureIntervention || ''}"
+              onchange="updateBonHeureInterv('${b.id}', this.value)">
+          </div>
+        </div>
+        <div class="mob-l"><b>Passages effectués</b>
+          ${dates.length ? `<div class="mob-dates">${dates.map((d, i) => `
+            <span class="mob-passage">
+              <input type="date" class="mob-in mob-fait" value="${d}"
+                onchange="bonSetDateEffectuee('${b.id}', ${i}, this.value)">
+              <button type="button" class="mob-x" onclick="bonSetDateEffectuee('${b.id}', ${i}, '')" aria-label="Retirer ce passage">✕</button>
+            </span>`).join('')}</div>` : '<div style="color:#8b97ad;">Aucun passage enregistré</div>'}
+          ${dates.length < 5 ? `<div class="mob-act" style="margin-top:8px;" onclick="bonAddDateEffectuee('${b.id}')">➕ Ajouter un passage (aujourd'hui)</div>` : ''}
+        </div>
         ${_bonAffecte(b) ? `<div class="mob-l"><b>Affecté à</b>${_escapeHtml(_bonAffecte(b))}</div>` : ''}`)}
       ${bloc('🐛 Nuisible', `
         <div class="mob-l"><b>Nuisible principal</b>${nd.nuisible ? `<span class="mob-nuis">${_escapeHtml(nd.nuisible)}</span>` : '—'}</div>
@@ -4450,6 +4465,16 @@ function ficheBonModifie() {
 
 // Rafraichit la fiche si elle est ouverte, sans toucher aux champs en cours
 // de saisie : seuls l'en-tete et la colonne de suivi sont redessines.
+// Redessine la fiche du mode terrain si elle est ouverte
+function _mobMaj() {
+  if (typeof _mobFiche !== 'undefined' && _mobFiche && typeof renderMobile === 'function'
+      && document.body.classList.contains('mob-on')) {
+    const y = window.scrollY;
+    renderMobile();
+    window.scrollTo(0, y);
+  }
+}
+
 function _ficheBonMaj(noteAussi) {
   if (!_ficheBonId || !document.querySelector('#modal-fiche-bon.open')) return;
   ficheBonRefresh(false);
@@ -6364,6 +6389,7 @@ function bonSetAffecte(id, value) {
   renderBons();
   toast(value ? ('Affecté à ' + value) : 'Affectation retirée', '#2d9e6b');
   _ficheBonMaj();
+  _mobMaj();
 }
 // Enregistre/efface la note interne d'un bon
 function bonSetNote(id, text) {
@@ -6371,6 +6397,7 @@ function bonSetNote(id, text) {
   b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), text, _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
   const bons = DB.bons; DB.bons = bons;
   _ficheBonMaj();
+  _mobMaj();
 }
 // Coche/décoche "rapport fait" pour un bon (suivi visuel, sans toucher au statut)
 function bonToggleRapFait(id) {
@@ -6471,6 +6498,7 @@ function saveBonNote() {
   toast(payload ? '✓ Note enregistrée' : 'Note effacée', '#2d9e6b');
   _bonNoteEditingId = null;
   _ficheBonMaj(true);
+  _mobMaj();
 }
 // Corrige et structure la note via Mistral (orthographe + mise en forme prix/traitement)
 async function bonNoteAICorrect() {
@@ -6523,6 +6551,7 @@ function bonAddDateEffectuee(id) {
   const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
   renderBons();
   _ficheBonMaj();
+  _mobMaj();
 }
 function bonSetDateEffectuee(id, index, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
@@ -6531,6 +6560,7 @@ function bonSetDateEffectuee(id, index, value) {
   const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
   renderBons();
   _ficheBonMaj();
+  _mobMaj();
 }
 
 // Met à jour les compteurs de TOUS les boutons de navigation
@@ -6771,8 +6801,8 @@ function renderBonCardCockpit(b) {
           style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
         <div class="ck-b-btns">
           ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
-          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOr : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne', note ? 'btn-or' : 'btn-ghost')}
-          ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-amber' : 'btn-ghost')}
+          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
+          ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-or' : 'btn-ghost')}
           ${bt(`createRapportFromBon('${b.id}')`, CK_ICO.rapport, 'Créer le rapport depuis ce bon')}
           ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}
           ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
@@ -7163,6 +7193,7 @@ function updateBonDateInterv(id, value) {
   _syncBonIntervention(b);
   toast(value ? ('📅 Planifié dans l\'agenda le ' + fmtDate(value)) : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
   _ficheBonMaj();
+  _mobMaj();
 }
 // Enregistre l'heure de prochaine intervention sur un bon + met à jour l'agenda
 function updateBonHeureInterv(id, value) {
@@ -7174,6 +7205,7 @@ function updateBonHeureInterv(id, value) {
   _syncBonIntervention(b);
   toast(value ? ('🕒 Heure : ' + value + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
   _ficheBonMaj();
+  _mobMaj();
 }
 // Ajoute le bon à Google Agenda à la date/heure de prochaine intervention
 function addBonToGoogle(id) {
