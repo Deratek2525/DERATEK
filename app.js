@@ -3850,6 +3850,21 @@ let _mobBonsVue = 'actifs';   // actifs | encours
 let _mobFiche = null;          // id du bon ouvert en fiche
 function mobBonsVue(v) { _mobBonsVue = v; _mobFiche = null; renderMobile(); window.scrollTo(0, 0); }
 function mobOuvrirBon(id) { _mobFiche = id; renderMobile(); window.scrollTo(0, 0); }
+// Confirme la saisie et revient a la liste. Tout est deja enregistre au fil de
+// l'eau : on force une derniere synchronisation puis on referme.
+function mobValiderBon(id) {
+  const bons = DB.bons;
+  DB.bons = bons;
+  const b = bons.find(x => x.id === id);
+  const rdv = b && b.dateIntervention
+    ? ('Rendez-vous le ' + fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : ''))
+    : 'Bon enregistré';
+  toast('✓ ' + rdv, '#2d9e6b');
+  _mobFiche = null;
+  renderMobile();
+  window.scrollTo(0, 0);
+}
+
 function mobFermerFiche() { _mobFiche = null; renderMobile(); window.scrollTo(0, 0); }
 
 function _mobListeBons() {
@@ -3925,6 +3940,7 @@ function _mobFicheBon() {
             </span>`).join('')}</div>` : '<div style="color:#8b97ad;">Aucun passage enregistré</div>'}
           ${dates.length < 5 ? `<div class="mob-act" style="margin-top:8px;" onclick="bonAddDateEffectuee('${b.id}')">➕ Ajouter un passage (aujourd'hui)</div>` : ''}
         </div>
+        ${b.dateIntervention ? `<div class="mob-act" style="margin-top:8px;" onclick="addBonToGoogle('${b.id}')">📅 Ajouter ce rendez-vous à Google Agenda</div>` : ''}
         ${_bonAffecte(b) ? `<div class="mob-l"><b>Affecté à</b>${_escapeHtml(_bonAffecte(b))}</div>` : ''}`)}
       ${bloc('🐛 Nuisible', `
         <div class="mob-l"><b>Nuisible principal</b>${nd.nuisible ? `<span class="mob-nuis">${_escapeHtml(nd.nuisible)}</span>` : '—'}</div>
@@ -3948,6 +3964,8 @@ function _mobFicheBon() {
         <div class="mob-act2" onclick="mobRapportDepuisBon('${b.id}')">📋 Faire le rapport</div>
         <div class="mob-act2" onclick="editBon('${b.id}')">✏️ Fiche complète</div>
       </div>
+      <div class="mob-valider" onclick="mobValiderBon('${b.id}')">✓ Valider et revenir aux bons</div>
+      <div class="mob-valider-s">Vos modifications sont enregistrées au fur et à mesure — ce bouton confirme et referme le bon.</div>
     </div>`;
 }
 function mobRapportDepuisBon(id) {
