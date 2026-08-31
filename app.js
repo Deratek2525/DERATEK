@@ -3865,7 +3865,7 @@ function _mobListeBons() {
     <div class="mob-segs">${seg('actifs', '📄 Bons', _mobBonsPrioritaires().length)}${seg('encours', '🔧 En cours', nEnCours)}</div>
     <div class="mob-body" style="padding-top:8px;">
       ${bons.map(b => `
-        <div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${_bonNote(b) ? BON_OR : colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
+        <div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
           <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}</div>
           <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
         </div>`).join('') || '<div class="mob-vide">Aucun bon dans cette liste.</div>'}
@@ -6580,6 +6580,7 @@ const CK_ICO = {
   pdf:     '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
   pdfDoc:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>',
   note:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  noteOr:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="currentColor"/><line x1="8" y1="9" x2="16" y2="9" stroke="#fff"/><line x1="8" y1="13" x2="13" y2="13" stroke="#fff"/></svg>',
   noteOn:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="2.6" fill="#f59e0b" stroke="none"/></svg>',
   rapport: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><polyline points="9 13 11 15 15 11"/></svg>',
   devis:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
@@ -6735,9 +6736,7 @@ function renderBonCardCockpit(b) {
   const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
   return `
     <div id="bonrow-${b.id}" class="ck-bon" style="border-left-color:${coul};">
-      <div class="ck-b-ico${note ? ' note' : ''}"
-        style="background:${_hexTint(note ? BON_OR : coul, 0.18)};color:${note ? BON_OR : coul};${note ? 'border-color:' + BON_OR + ';' : ''}"
-        title="${note ? 'Une note interne est attachée à ce bon' : ''}">${CK_ICO.pdfDoc}${alerte ? '<span class="bon-blink"></span>' : ''}</div>
+      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.18)};color:${coul};">${CK_ICO.pdfDoc}${alerte ? '<span class="bon-blink"></span>' : ''}</div>
       <div class="ck-b-id">
         <div class="n">Bon ${_escapeHtml(b.numero || '(s. n°)')}${alerte ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
         <div class="d">📅 ${fmtDate(b.date) || '—'}</div>
@@ -6772,7 +6771,7 @@ function renderBonCardCockpit(b) {
           style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
         <div class="ck-b-btns">
           ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
-          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
+          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOr : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne', note ? 'btn-or' : 'btn-ghost')}
           ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-amber' : 'btn-ghost')}
           ${bt(`createRapportFromBon('${b.id}')`, CK_ICO.rapport, 'Créer le rapport depuis ce bon')}
           ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}

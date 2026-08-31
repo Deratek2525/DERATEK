@@ -1403,9 +1403,13 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   .mob-body, .page-body { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
 }
 
-/* Pastille d'un bon portant une note interne : cerclee d'or fonce */
+/* Bouton Note en or fonce : signale d'un coup d'oeil qu'une note existe */
 @media (min-width: 821px) {
-  .ck-b-ico.note { border: 1.5px solid #b8860b; box-shadow: 0 0 0 3px rgba(184, 134, 11, .12); }
+  .ck-b-btns .btn-or {
+    background: #fdf6e3; border-color: #b8860b; color: #b8860b;
+    box-shadow: 0 0 0 2px rgba(184, 134, 11, .13);
+  }
+  .ck-b-btns .btn-or:hover { background: #f8edd0; border-color: #96700a; color: #96700a; }
 }
 @media (min-width: 821px) {
   .ck-b-ico .ck-i { width: 21px; height: 21px; stroke-width: 1.9; }
