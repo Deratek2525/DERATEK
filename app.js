@@ -7207,9 +7207,22 @@ function updateBonDateInterv(id, value) {
   const b = bons.find(x => x.id === id);
   if (!b) return;
   b.dateIntervention = value;
+  // La date du rendez-vous est aussi inscrite dans les interventions faites,
+  // sans doublon et sans depasser les 5 passages.
+  let ajoutee = false;
+  if (value) {
+    const dates = _bonDatesInterv(b);
+    if (dates.indexOf(value) === -1 && dates.length < 5) {
+      dates.push(value);
+      _setBonDatesInterv(b, dates);
+      ajoutee = true;
+    }
+  }
   DB.bons = bons;
   _syncBonIntervention(b);
-  toast(value ? ('📅 Planifié dans l\'agenda le ' + fmtDate(value)) : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
+  toast(value
+    ? ('📅 Planifié le ' + fmtDate(value) + (ajoutee ? ' · ajouté aux passages' : ''))
+    : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
   _ficheBonMaj();
   _mobMaj();
 }
