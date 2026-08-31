@@ -3865,7 +3865,7 @@ function _mobListeBons() {
     <div class="mob-segs">${seg('actifs', '📄 Bons', _mobBonsPrioritaires().length)}${seg('encours', '🔧 En cours', nEnCours)}</div>
     <div class="mob-body" style="padding-top:8px;">
       ${bons.map(b => `
-        <div class="mob-c" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
+        <div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${_bonNote(b) ? BON_OR : colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
           <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}</div>
           <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
         </div>`).join('') || '<div class="mob-vide">Aucun bon dans cette liste.</div>'}
@@ -6693,6 +6693,9 @@ function _ckClasseStatutNote(st) {
   return 'info';
 }
 
+// Or fonce : signale d'un coup d'oeil qu'une note interne est attachee au bon
+const BON_OR = '#b8860b';
+
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
@@ -6732,7 +6735,9 @@ function renderBonCardCockpit(b) {
   const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
   return `
     <div id="bonrow-${b.id}" class="ck-bon" style="border-left-color:${coul};">
-      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.16)};color:${coul};">📄${alerte ? '<span class="bon-blink"></span>' : ''}</div>
+      <div class="ck-b-ico${note ? ' note' : ''}"
+        style="background:${_hexTint(note ? BON_OR : coul, 0.18)};color:${note ? BON_OR : coul};${note ? 'border-color:' + BON_OR + ';' : ''}"
+        title="${note ? 'Une note interne est attachée à ce bon' : ''}">${CK_ICO.pdfDoc}${alerte ? '<span class="bon-blink"></span>' : ''}</div>
       <div class="ck-b-id">
         <div class="n">Bon ${_escapeHtml(b.numero || '(s. n°)')}${alerte ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
         <div class="d">📅 ${fmtDate(b.date) || '—'}</div>
@@ -6748,7 +6753,7 @@ function renderBonCardCockpit(b) {
           ${nd.nuisible2 ? `<span class="ck-chip nuis2" title="Second nuisible">${_escapeHtml(nd.nuisible2)}</span>` : ''}
           ${nd.statut ? `<span class="ck-chip ${_ckClasseStatutNote(nd.statut)}" title="Où en est-on ?">${_escapeHtml(nd.statut)}</span>` : ''}
         </div>` : ''}
-        <div class="ck-pb-txt">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}${note ? ' <span title="Une note interne est attachée à ce bon" style="color:#f59e0b;font-size:9px;vertical-align:2px;">●</span>' : ''}</div>
+        <div class="ck-pb-txt">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}</div>
       </div>
       <button type="button" class="ck-b-rdv${b.dateIntervention ? ' on' : ''}"
         onclick="openBonPlanning('${b.id}')"
