@@ -1610,10 +1610,12 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 
 /* 7 — coin triangulaire dans l'angle haut-gauche de la carte */
 .bon-coin {
-  position: absolute; top: 0; left: 0; width: 30px; height: 30px;
-  border-top-left-radius: 11px; overflow: hidden; pointer-events: auto; z-index: 2;
+  position: absolute; top: 0; left: 0; width: 46px; height: 46px;
+  border-top-left-radius: 11px; overflow: hidden; pointer-events: auto; z-index: 1;
 }
-.bon-coin svg { display: block; width: 30px; height: 30px; }
+.bon-coin svg { display: block; width: 46px; height: 46px; }
+/* le pictogramme du bon passe au-dessus : le triangle file proprement derriere */
+.ck-b-ico { z-index: 2; }
 
 /* 8 — pointe triangulaire collee au bord droit */
 .bon-signet {
@@ -1654,8 +1656,9 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 }
 .af-ico .bon-blink { top: -5px; right: -5px; width: 13px; height: 13px; border-width: 2px; }
 .af-ico .bon-tri   { top: -7px; right: -7px; width: 17px; height: 17px; }
-.af-ruban .bon-coin { width: 22px; height: 22px; border-top-left-radius: 7px; }
-.af-ruban .bon-coin svg { width: 22px; height: 22px; }
+.af-ruban .bon-coin { width: 30px; height: 30px; border-top-left-radius: 7px; }
+.af-ruban .bon-coin svg { width: 30px; height: 30px; }
+.af-ico { z-index: 2; }
 .af-ruban .bon-signet { width: 9px; height: 22px; }
 .af-ruban .bon-signet svg { width: 9px; height: 22px; }
 .af-txt { min-width: 0; }
