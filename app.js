@@ -2812,10 +2812,38 @@ function _escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;
 // Texte hérité (avec **gras**) → HTML pour l'éditeur ; du HTML reste tel quel.
 function _legacyToHtml(v) {
   v = String(v == null ? '' : v);
-  if (/<(b|strong|span|font|br|div|p)\b|<\/(b|strong|span|font|div|p)>/i.test(v)) return v; // déjà HTML
+  if (/<(b|strong|span|font|br|div|p)\b|<\/(b|strong|span|font|div|p)>/i.test(v)) {
+    // Deja du HTML, mais un texte colle peut y avoir laisse des **gras** : on
+    // les convertit aussi, sinon les etoiles restent visibles a l'ecran.
+    return v.replace(/\*\*([^*<>]+)\*\*/g, '<b>$1</b>');
+  }
   let h = _escapeHtml(v).replace(/^[ \t]*#{1,6}[ \t]*/gm, '').replace(/\*\*([\s\S]*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
   return h;
 }
+// Compteur de caracteres sous les champs longs du rapport.
+// La fonction etait appelee par les champs mais n'existait pas : le compteur
+// restait bloque a 0 et une erreur etait levee a chaque frappe.
+function updateCharCount(fieldId, counterId, max) {
+  const el = document.getElementById(fieldId);
+  const c = document.getElementById(counterId);
+  if (!el || !c) return;
+  const n = _richStripToText(el.value == null ? '' : el.value).length;
+  c.textContent = n + '/' + max;
+  c.style.color = (max && n > max * 0.92) ? '#b45309' : '';
+  c.style.fontWeight = (max && n > max * 0.92) ? '800' : '';
+}
+
+// Convertit les **etoiles** deja presentes dans le champ en vrai gras
+function richGras(id) {
+  const ed = document.getElementById(id + '-rich'); if (!ed) return;
+  const avant = ed.innerHTML;
+  const apres = avant.replace(/\*\*([^*<>]+)\*\*/g, '<b>$1</b>');
+  if (apres === avant) { toast('Aucune étoile à convertir dans ce champ', '#6b7280'); return; }
+  ed.innerHTML = apres;
+  _richSync(id);
+  toast('✓ Étoiles converties en gras', '#2d9e6b');
+}
+
 function richExec(id, cmd, val) {
   const ed = document.getElementById(id + '-rich'); if (!ed) return;
   ed.focus();
@@ -2856,6 +2884,7 @@ function _richify(id) {
        <button type="button" class="rich-b" title="Gras (Ctrl/Cmd+B)" onmousedown="event.preventDefault()" onclick="richExec('${id}','bold')"><b>G</b></button>
        <span class="rich-swatches">${swatches}</span>
        <button type="button" class="rich-clr" title="Enlever la mise en forme" onmousedown="event.preventDefault()" onclick="richExec('${id}','removeFormat')">⌫ format</button>
+       <button type="button" class="rich-clr" title="Transformer les **étoiles** collées en vrai gras" onmousedown="event.preventDefault()" onclick="richGras('${id}')">✱ → gras</button>
      </div>
      <div id="${id}-rich" class="rich-ed form-input" contenteditable="true" data-ph="${(ta.getAttribute('placeholder') || '').replace(/"/g, '&quot;')}"></div>`;
   ta.parentNode.insertBefore(wrap, ta);
@@ -2867,15 +2896,28 @@ function _richify(id) {
   ed.addEventListener('paste', e => {
     e.preventDefault();
     let t = (e.clipboardData || window.clipboardData).getData('text/plain');
-    t = t.replace(/^[ \t]*#{1,6}[ \t]*/gm, '');   // retire les dièses de titre Markdown collés
-    try { document.execCommand('insertText', false, t); } catch (err) {}
+    t = t.replace(/^[ \t]*#{1,6}[ \t]*/gm, '')      // dièses de titre Markdown
+         .replace(/^[ \t]*[-–•]\s+/gm, '• ');        // puces Markdown
+    try {
+      if (/\*\*[^*]+\*\*/.test(t)) {
+        // Texte collé depuis une IA ou un traitement de texte : **gras** devient
+        // du vrai gras au lieu d'afficher les étoiles.
+        const html = _escapeHtml(t)
+          .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+          .replace(/\n/g, '<br>');
+        document.execCommand('insertHTML', false, html);
+      } else {
+        document.execCommand('insertText', false, t);
+      }
+    } catch (err) {}
+    _richSync(id);
   });
 }
 // Applique l'éditeur enrichi à une liste de champs (ignore ceux absents).
 function _richifyAll(ids) { (ids || []).forEach(_richify); }
 // Champs enrichis du rapport d'intervention
 function _richifyReportFields() {
-  _richifyAll(['r-description', 'r-contraintes', 'r-precautions', 'r-recommandations']);
+  _richifyAll(['r-description', 'r-origine', 'r-contraintes', 'r-precautions', 'r-recommandations']);
   // Les anciens boutons « B Gras » (mode texte) n'ont plus de sens avec l'éditeur enrichi
   document.querySelectorAll('[onclick^="toggleBold"]').forEach(b => { b.style.display = 'none'; });
 }
@@ -3193,6 +3235,7 @@ EXEMPLES de corrections attendues :
 - "pas de probleme acces facile traitement effectuer" → "Pas de contrainte particulière. L'accès est facile et le traitement a été effectué sans difficulté."
 
 ABSOLUMENT INTERDIT :
+- Utiliser du Markdown : pas d'astérisques **, pas de dièses #, pas de tirets de liste. Réponds en texte brut uniquement.
 - Ajouter une introduction, explication ou commentaire
 - Mettre des guillemets autour du texte
 - Écrire "Voici le texte corrigé :" ou toute phrase similaire
@@ -3268,6 +3311,13 @@ function localCorrect(text) {
   return t;
 }
 
+// Apercu lisible : **gras** devient reellement gras au lieu d'afficher les etoiles
+function _apercuGras(t) {
+  return _escapeHtml(String(t == null ? '' : t))
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\n/g, '<br>');
+}
+
 function showAIModal(fieldId, type, original, corrected) {
   // Créer modal dynamique
   let modal = document.getElementById('modal-ai');
@@ -3297,13 +3347,16 @@ function showAIModal(fieldId, type, original, corrected) {
     </div>
     <div>
       <div style="font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">✨ Texte corrigé par l'IA</div>
-      <div style="background:#e8f7f0;border:1px solid #6ee7b7;border-radius:8px;padding:12px;font-size:13px;color:#065f46;line-height:1.6;">${corrected}</div>
+      <div style="background:#e8f7f0;border:1px solid #6ee7b7;border-radius:8px;padding:12px;font-size:13px;color:#065f46;line-height:1.6;">${_apercuGras(corrected)}</div>
     </div>`;
 
   document.getElementById('ai-apply-btn').onclick = () => {
     const el = document.getElementById(fieldId);
     if (el) {
-      el.value = corrected;
+      // Un champ simple ne sait pas afficher le gras : les ** y seraient
+      // visibles tels quels, on les retire. Un editeur enrichi les convertit.
+      const riche = !!document.getElementById(fieldId + '-rich');
+      el.value = riche ? corrected : String(corrected).replace(/\*\*/g, '');
       // Si le champ est en mode enrichi, on met à jour l'éditeur visible (le texte
       // corrigé remplace le contenu ; la mise en forme précédente est réappliquée à la main).
       const rich = document.getElementById(fieldId + '-rich');
