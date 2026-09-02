@@ -308,6 +308,7 @@ let state = {
   rapportsFilter:   'Tous',
   clientsFilter:    'Tous',
   bonsFilter:       'actifs',   // 'actifs' (non terminés) ou 'termines'
+  bonsStatut:       null,       // tuile de compteur cliquée (null = tous les statuts)
   docsFilter:       'devis',    // 'devis' ou 'facture' (onglet Devis / Factures séparés)
   agendaView:       'google',
   agendaDate:       new Date(),
@@ -5858,6 +5859,7 @@ function confirmDeleteLocataire(id, nom) {
 // Bascule entre les bons actifs / en cours / terminés
 function setBonsFilter(f) {
   state.bonsFilter = (f === 'termines') ? 'termines' : (f === 'en-cours' ? 'en-cours' : 'actifs');
+  state.bonsStatut = null;      // changer d'onglet remet les compteurs a zero
   const ba = $('bons-filter-actifs'), bt = $('bons-filter-termines');
   if (ba) ba.className = 'btn ' + (state.bonsFilter === 'actifs' ? 'btn-navy' : 'btn-ghost') + ' btn-sm';
   if (bt) bt.className = 'btn ' + (state.bonsFilter === 'termines' ? 'btn-green' : 'btn-ghost') + ' btn-sm';
@@ -6930,23 +6932,83 @@ const BON_OR = '#b8860b';
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
+// ============================================================
+// STATUTS D'UN BON — source unique : libelle, couleurs, pictogramme.
+// Sert au ruban (Cockpit) et a la barre de compteurs en haut de page.
+// ============================================================
+const BON_STATUT_META = {
+  '':              { bg: '#f3f4f6', color: '#4b5563', border: '#9aa5b5', lbl: '— Sans statut —',           court: 'Sans statut',  ico: '○'  },
+  'urgent':        { bg: '#fee2e2', color: '#991b1b', border: '#ef4444', lbl: '🚨 Urgent',                  court: 'Urgent',       ico: '🚨' },
+  'a-contacter':   { bg: '#cffafe', color: '#155e75', border: '#06b6d4', lbl: '📞 À contacter',             court: 'À contacter',  ico: '📞' },
+  'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626', lbl: '📕 Rapport à transmettre',   court: 'À transmettre',ico: '📕' },
+  'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6', lbl: '📨 Transmis',                court: 'Transmis',     ico: '📨' },
+  'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1', lbl: '📝 Demande de devis',        court: 'Demande devis',ico: '📝' },
+  'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6', lbl: '⏸️ Attente de devis',        court: 'Attente devis',ico: '⏸️' },
+  'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6', lbl: '✅ Devis validé',            court: 'Devis validé', ico: '✅' },
+  'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316', lbl: '🔧 En cours',                court: 'En cours',     ico: '🔧' },
+  'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e', lbl: '✔️ Terminé',                 court: 'Terminé',      ico: '✔️' },
+  'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444', lbl: '💰 À facturer',              court: 'À facturer',   ico: '💰' },
+};
+
+// Barre de compteurs en haut de l'ecran Bons : combien de bons dans chaque
+// statut, d'un coup d'oeil. Un clic sur une tuile filtre la liste.
+function renderBonsStats() {
+  const el = $('bons-stats');
+  if (!el) return;
+  const tous = (DB.bons || []).filter(b => !_isBonFactArchived(b));
+  const n = {};
+  Object.keys(BON_STATUT_META).forEach(k => { n[k] = 0; });
+  tous.forEach(b => { const k = b.statut || ''; n[k] = (n[k] || 0) + 1; });
+  const sel = (state.bonsStatut === undefined) ? null : state.bonsStatut;
+  const rdv = tous.filter(b => b.dateIntervention).length;
+
+  const tuile = k => {
+    const m = BON_STATUT_META[k];
+    const on = sel === k;
+    const cible = on ? 'null' : JSON.stringify(k);
+    return `<button type="button" class="bst${on ? ' on' : ''}" onclick='setBonsStatut(${cible})'
+      style="--c:${m.border};--bg:${m.bg};--fg:${m.color};"
+      title="${on ? 'Cliquer pour afficher de nouveau tous les bons' : 'Afficher uniquement les bons « ' + m.court + ' »'}">
+      <span class="bst-n">${n[k]}</span>
+      <span class="bst-l">${m.ico} ${m.court}</span>
+    </button>`;
+  };
+
+  const ordre = ['urgent', 'a-contacter', '', 'attente-devis', 'devis-valide', 'en-cours',
+                 'a-transmettre', 'transmis', 'termine', 'a-facturer', 'demande-devis'];
+  const tuiles = ordre.filter(k => n[k] > 0 || k === '').map(tuile).join('');
+  const totOn = sel === null;
+
+  el.innerHTML = `
+    <div class="bstats">
+      <button type="button" class="bst-tot${totOn ? ' on' : ''}" onclick="setBonsStatut(null)"
+        title="Afficher tous les bons">
+        <span class="t">Total</span>
+        <span class="n">${tous.length}</span>
+        <span class="s">bon${tous.length > 1 ? 's' : ''} en cours de vie</span>
+      </button>
+      <div class="bst-grid">${tuiles}</div>
+      <div class="bst-side">
+        <div class="bst-mini"><b>${rdv}</b><span>📅 avec rendez-vous</span></div>
+        <div class="bst-mini"><b>${tous.length - rdv}</b><span>⏳ à planifier</span></div>
+      </div>
+    </div>
+    ${sel !== null ? `<div class="bst-actif">Filtre : <b>${BON_STATUT_META[sel].ico} ${BON_STATUT_META[sel].court}</b>
+      <button type="button" onclick="setBonsStatut(null)">✕ tout afficher</button></div>` : ''}`;
+}
+// Filtre la liste des bons sur un statut (null = tous)
+function setBonsStatut(k) {
+  state.bonsStatut = k;
+  renderBons();
+  const l = $('bons-list');
+  if (l && k !== null) l.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function renderBonCardCockpit(b) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const coul = _bonColor(b) || colorForGeranceName(g);
   const statut = b.statut || '';
-  const SB = {
-    '':              { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db', lbl: '— Sans statut —' },
-    'urgent':        { bg: '#fee2e2', color: '#991b1b', border: '#ef4444', lbl: '🚨 Urgent' },
-    'a-contacter':   { bg: '#cffafe', color: '#155e75', border: '#06b6d4', lbl: '📞 À contacter' },
-    'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626', lbl: '📕 Rapport à transmettre' },
-    'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6', lbl: '📨 Transmis' },
-    'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1', lbl: '📝 Demande de devis' },
-    'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6', lbl: '⏸️ Attente de devis' },
-    'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6', lbl: '✅ Devis validé' },
-    'en-cours':      { bg: '#fed7aa', color: '#9a3412', border: '#f97316', lbl: '🔧 En cours' },
-    'termine':       { bg: '#bbf7d0', color: '#166534', border: '#22c55e', lbl: '✔️ Terminé' },
-    'a-facturer':    { bg: '#fecaca', color: '#991b1b', border: '#ef4444', lbl: '💰 À facturer' },
-  };
+  const SB = BON_STATUT_META;
   const st = SB[statut] || SB[''];
   const opts = Object.keys(SB).map(k => `<option value="${k}" ${statut === k ? 'selected' : ''}>${SB[k].lbl}</option>`).join('');
   const alerte = _bonAlerteNouveau48h(b);
@@ -7209,6 +7271,7 @@ function renderBonCard(b, solid) {
 
 function renderBons() {
   updateBonsCounts();
+  renderBonsStats();
   const list = $('bons-list');
   const count = $('bons-count');
   const q = (($('bon-search') || {}).value || '').toLowerCase();
@@ -7216,7 +7279,11 @@ function renderBons() {
   let bons = (DB.bons || []).filter(b => !_isBonFactArchived(b));
   // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
   const isTermine = b => (b.statut || '') === 'termine';
-  if (state.bonsFilter === 'termines') {
+  // Une tuile de compteur cliquee prend le pas sur les onglets : on montre
+  // alors exactement les bons de ce statut, tous onglets confondus.
+  if (state.bonsStatut !== null && state.bonsStatut !== undefined) {
+    bons = bons.filter(b => (b.statut || '') === state.bonsStatut);
+  } else if (state.bonsFilter === 'termines') {
     bons = bons.filter(isTermine);
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
@@ -7233,7 +7300,9 @@ function renderBons() {
     );
   }
   if (count) {
-    const lbl = state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)';
+    const lbl = state.bonsStatut !== null && state.bonsStatut !== undefined
+      ? 'bon(s) « ' + BON_STATUT_META[state.bonsStatut].court + ' »'
+      : (state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)');
     // Rapports à transmettre : bons dont le statut est « 📕 Rapport à transmettre »
     const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && (b.statut || '') === 'a-transmettre').length;
     const base = bons.length ? bons.length + ' ' + lbl : '';
@@ -7244,7 +7313,9 @@ function renderBons() {
   }
   if (!list) return;
   if (!bons.length) {
-    const msg = state.bonsFilter === 'termines'
+    const msg = (state.bonsStatut !== null && state.bonsStatut !== undefined)
+      ? 'Aucun bon avec le statut « ' + BON_STATUT_META[state.bonsStatut].court + ' ».<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="setBonsStatut(null)">✕ Afficher tous les bons</button>'
+      : state.bonsFilter === 'termines'
       ? 'Aucun bon terminé pour le moment.<br>Un bon apparaît ici quand son statut passe à « ✅ Travail terminé ».'
       : 'Aucun bon actif.<br>Glissez un PDF ci-dessus pour commencer, ou consultez les « ✅ Bons terminés ».';
     list.innerHTML = '<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">' + msg + '</div></div>';
