@@ -3934,7 +3934,10 @@ function _mobListeBons() {
     <div class="mob-body" style="padding-top:8px;">
       ${bons.map(b => `
         <div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
-          <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}</div>
+          <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}${(() => {
+            const e = _bonRapEtat(b);
+            return e.etat === 'transmis' ? ' <span style="color:#2563eb" title="Rapport transmis">📨</span>'
+                 : e.etat === 'fait' ? ' <span style="color:#16a34a" title="Rapport finalisé">✓</span>' : ''; })()}</div>
           <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
         </div>`).join('') || '<div class="mob-vide">Aucun bon dans cette liste.</div>'}
     </div>`;
@@ -4003,6 +4006,17 @@ function _mobFicheBon() {
       ${bloc('📝 Note interne', (note ? `<div class="mob-note">${nl(note)}</div>` : '')
         + (calc.ht ? `<div class="mob-l"><b>Total TTC</b>${_displayMontant(calc.ttc)} CHF</div>` : '')
         + `<div class="mob-act" onclick="openBonNote('${b.id}')">${note || calc.ht ? '✏️ Modifier la note' : '➕ Ajouter une note'}</div>`)}
+      ${(() => {
+        const e = _bonRapEtat(b);
+        const lig = e.etat === 'aucun'
+          ? '<div class="mob-l" style="color:#8a93a6;">Aucun rapport lié à ce bon</div>'
+          : `<div class="mob-l"><b>État</b>${_escapeHtml(_bonRapLabel(b))}</div>`;
+        const act = e.etat === 'aucun' ? ''
+          : e.etat === 'transmis'
+          ? `<div class="mob-act" onclick="bonRapTransmis('${b.id}', false)">↺ Retirer « transmis »</div>`
+          : `<div class="mob-act" onclick="bonRapTransmis('${b.id}', true)">📨 Marquer transmis à la gérance</div>`;
+        return bloc('📋 Rapport', lig + act);
+      })()}
       ${(() => {
         const pj = _bonPJ(b);
         return bloc('📎 Pièces jointes' + (pj.length ? ' (' + pj.length + ')' : ''), (pj.length
@@ -4606,7 +4620,13 @@ function ficheBonRefresh(complet) {
         <div class="fb-hd-t">Bon ${_escapeHtml(b.numero || '(sans numéro)')}</div>
         <div class="fb-hd-s">${_escapeHtml(g)} · 📅 ${fmtDate(b.date) || '—'}
           ${alerte ? '<span class="fb-badge rouge">● non traité depuis plus de 48 h</span>' : ''}
-          ${rapFait ? '<span class="fb-badge vert">✓ rapport fait</span>' : ''}
+          ${(() => {
+            const re = _bonRapEtat(b);
+            if (re.etat === 'aucun') return '';
+            const c = re.etat === 'transmis' ? 'bleu' : re.etat === 'fait' ? 'vert' : 'ambre';
+            const ic = re.etat === 'transmis' ? '📨' : re.etat === 'fait' ? '✓' : '✎';
+            return `<button type="button" class="fb-badge ${c} fb-badge-b" onclick="bonRapTransmis('${b.id}', ${re.etat === 'transmis' ? 'false' : 'true'})" title="${re.etat === 'transmis' ? 'Cliquer pour retirer la marque « transmis »' : 'Cliquer pour marquer le rapport comme transmis à la gérance'}">${ic} ${_escapeHtml(_bonRapLabel(b))}</button>`;
+          })()}
           ${pj.length ? `<span class="fb-badge ambre">📎 ${pj.length} pièce${pj.length > 1 ? 's' : ''} jointe${pj.length > 1 ? 's' : ''}</span>` : ''}
           ${nd.nuisible || nd.nuisible2 ? `<span class="fb-badge nuis">🐛 ${_escapeHtml([nd.nuisible, nd.nuisible2].filter(Boolean).join(' + '))}</span>` : ''}
           ${nd.statut ? `<span class="fb-badge bleu">${_escapeHtml(nd.statut)}</span>` : ''}
@@ -4931,10 +4951,11 @@ function ficheBonEnregistrer() {
     typeInterv: lu('typeInterv') !== undefined ? lu('typeInterv') : nd0.typeInterv,
     prixHT: nd0.prixHT, rabais: nd0.rabais, tva: nd0.tva,
     texte: lu('noteTexte') !== undefined ? String(lu('noteTexte')).trim() : nd0.texte,
+    rapTr: nd0.rapTr || '',
   };
   b.probleme = _bonAssembleProbleme(
     _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b),
-    _bonNoteHasData(nv) ? JSON.stringify(nv) : '',
+    (_bonNoteHasData(nv) || nv.rapTr) ? JSON.stringify(nv) : '',
     _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 
   DB.bons = bons;
@@ -6278,7 +6299,7 @@ function _bonNoteNuisibleOptions(selected) {
 // note en texte brut est lue comme { texte: "..." }.
 function _bonNoteData(b) {
   const raw = (typeof b === 'string') ? b : _bonNote(b);
-  const base = { statut: '', nuisible: '', nuisible2: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '' };
+  const base = { statut: '', nuisible: '', nuisible2: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '', rapTr: '' };
   if (!raw) return base;
   const s = raw.trim();
   if (s.charAt(0) === '{') {
@@ -6288,7 +6309,7 @@ function _bonNoteData(b) {
         statut: o.statut || '', nuisible: o.nuisible || '', nuisible2: o.nuisible2 || '', typeInterv: o.typeInterv || '',
         prixHT: (o.prixHT != null ? o.prixHT : ''),
         rabais: (o.rabais != null ? o.rabais : ''), tva: (o.tva != null ? o.tva : ''),
-        texte: o.texte || ''
+        texte: o.texte || '', rapTr: o.rapTr || ''
       };
     } catch (e) { /* pas du JSON → texte brut */ }
   }
@@ -6479,6 +6500,113 @@ function bonToggleRapFait(id) {
   renderBons();
   toast(nv ? '✓ Rapport marqué comme fait' : 'Coche retirée', '#2d9e6b');
 }
+// ============================================================
+// ETAT DU RAPPORT D'UN BON — visible directement sur le ruban
+//   aucun      : pas de rapport lie          -> pictogramme gris
+//   brouillon  : rapport commence            -> pictogramme orange
+//   fait       : rapport finalise            -> pictogramme vert
+//   transmis   : rapport envoye a la gerance -> pictogramme bleu
+// L'etat "transmis" est memorise dans la note du bon (cle rapTr = date),
+// ou deduit du statut "Envoye" du rapport lui-meme.
+// ============================================================
+function _bonRapLie(b) {
+  const n = _factNorm((b && b.numero) || '');
+  if (!n) return null;
+  const raps = (DB.rapports || []).filter(r => r.bonCommande && _factNorm(r.bonCommande) === n);
+  if (!raps.length) return null;
+  return raps.find(r => (r.statut || '') === 'Envoyé')
+      || raps.find(r => (r.statut || '') === 'Finalisé')
+      || raps[0];
+}
+function _bonRapEtat(b) {
+  const rap = _bonRapLie(b);
+  const st = (rap && rap.statut) || '';
+  const tr = _bonNoteData(b).rapTr || '';
+  if (tr || st === 'Envoyé') return { etat: 'transmis', rap, date: tr || (rap && rap.date) || '' };
+  if (st === 'Finalisé' || _bonRapFait(b)) return { etat: 'fait', rap, date: (rap && rap.date) || '' };
+  if (rap) return { etat: 'brouillon', rap, date: rap.date || '' };
+  return { etat: 'aucun', rap: null, date: '' };
+}
+// Libelle court affiche dans l'infobulle et sur la fiche
+function _bonRapLabel(b) {
+  const e = _bonRapEtat(b);
+  const num = e.rap ? ' ' + e.rap.id : '';
+  if (e.etat === 'transmis') return 'Rapport' + num + ' transmis' + (e.date ? ' le ' + fmtDate(e.date) : '');
+  if (e.etat === 'fait')     return 'Rapport' + num + ' finalisé' + (e.date ? ' du ' + fmtDate(e.date) : '') + ' — pas encore transmis';
+  if (e.etat === 'brouillon')return 'Rapport' + num + ' en brouillon';
+  return 'Aucun rapport pour ce bon';
+}
+// Ecrit une valeur dans la note structuree du bon sans toucher au reste
+function _bonNoteSetCle(b, cle, valeur) {
+  const d = _bonNoteData(b);
+  d[cle] = valeur;
+  const payload = (_bonNoteHasData(d) || d.rapTr) ? JSON.stringify(d) : '';
+  b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), payload,
+    _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
+}
+// Marque / demarque « rapport transmis a la gerance »
+function bonRapTransmis(id, oui) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id); if (!b) return;
+  _bonNoteSetCle(b, 'rapTr', oui ? today() : '');
+  if (oui && (b.statut === '' || b.statut === 'a-transmettre')) b.statut = 'transmis';
+  DB.bons = bons;
+  _ckMenuFermer();
+  renderBons();
+  _ficheBonMaj(true);
+  _mobMaj();
+  toast(oui ? '📨 Rapport marqué comme transmis' : '↺ Marque « transmis » retirée', '#2d9e6b');
+}
+// Ouvre le rapport lie dans l'ecran de saisie
+function bonRapOuvrir(id) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const e = _bonRapEtat(b);
+  _ckMenuFermer();
+  if (!e.rap) { createRapportFromBon(id); return; }
+  editRapport(e.rap.id);
+}
+
+// ---- Petit menu contextuel ancre sur un bouton du ruban -------------------
+let _ckMenuEl = null;
+function _ckMenuFermer() {
+  if (_ckMenuEl && _ckMenuEl.parentNode) _ckMenuEl.parentNode.removeChild(_ckMenuEl);
+  _ckMenuEl = null;
+  document.removeEventListener('mousedown', _ckMenuDehors, true);
+}
+function _ckMenuDehors(ev) {
+  if (_ckMenuEl && !_ckMenuEl.contains(ev.target)) _ckMenuFermer();
+}
+// items : [{ico, txt, act, cls}] — act est une chaine JS exécutée au clic
+function _ckMenuOuvrir(btn, titre, items) {
+  _ckMenuFermer();
+  const d = document.createElement('div');
+  d.className = 'ck-menu';
+  d.innerHTML = `<div class="ck-menu-t">${titre}</div>` + items.map(it =>
+    `<button type="button" class="ck-menu-i ${it.cls || ''}" onclick="${it.act}"><span class="e">${it.ico}</span>${it.txt}</button>`).join('');
+  document.body.appendChild(d);
+  const r = btn.getBoundingClientRect();
+  const larg = Math.max(d.offsetWidth, 230);
+  let left = r.left + window.scrollX + r.width / 2 - larg / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - larg - 12));
+  let top = r.bottom + window.scrollY + 6;
+  if (r.bottom + d.offsetHeight + 16 > window.innerHeight) top = r.top + window.scrollY - d.offsetHeight - 6;
+  d.style.left = left + 'px';
+  d.style.top = top + 'px';
+  _ckMenuEl = d;
+  setTimeout(() => document.addEventListener('mousedown', _ckMenuDehors, true), 0);
+}
+// Menu du pictogramme Rapport sur le ruban d'un bon
+function openBonRapMenu(id, btn) {
+  const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
+  const e = _bonRapEtat(b);
+  if (e.etat === 'aucun') { createRapportFromBon(id); return; }
+  const items = [{ ico: '📄', txt: 'Ouvrir le rapport ' + (e.rap ? e.rap.id : ''), act: `bonRapOuvrir('${id}')` }];
+  if (e.etat === 'transmis') items.push({ ico: '↺', txt: 'Retirer « transmis »', act: `bonRapTransmis('${id}', false)` });
+  else items.push({ ico: '📨', txt: 'Marquer transmis à la gérance', act: `bonRapTransmis('${id}', true)`, cls: 'ok' });
+  items.push({ ico: '➕', txt: 'Créer un nouveau rapport', act: `_ckMenuFermer(); createRapportFromBon('${id}')` });
+  _ckMenuOuvrir(btn, _bonRapLabel(b), items);
+}
+
 // Couleur de fond personnalisée de la carte du bon (vide = couleur auto de la gérance)
 function bonSetColor(id, color) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
@@ -6560,9 +6688,10 @@ function saveBonNote() {
     prixHT: htRaw === '' ? '' : (parseFloat(htRaw) || 0),
     rabais: htRaw === '' ? '' : (parseFloat(val('bon-note-rabais')) || 0),
     tva: htRaw === '' ? '' : (parseFloat(val('bon-note-tva')) || 0),
-    texte: (val('bon-note-text') || '').trim()
+    texte: (val('bon-note-text') || '').trim(),
+    rapTr: _bonNoteData((DB.bons || []).find(x => x.id === _bonNoteEditingId) || {}).rapTr || ''
   };
-  const payload = _bonNoteHasData(data) ? JSON.stringify(data) : '';
+  const payload = (_bonNoteHasData(data) || data.rapTr) ? JSON.stringify(data) : '';
   bonSetNote(_bonNoteEditingId, payload);
   renderBons();
   closeModal('modal-bon-note');
@@ -6874,7 +7003,14 @@ function renderBonCardCockpit(b) {
           ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
           ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
           ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-or' : 'btn-ghost')}
-          ${bt(`createRapportFromBon('${b.id}')`, CK_ICO.rapport, 'Créer le rapport depuis ce bon')}
+          ${(() => {
+            const re = _bonRapEtat(b);
+            const cls = { transmis: 'btn-rap-tr', fait: 'btn-rap-ok', brouillon: 'btn-rap-br', aucun: 'btn-ghost' }[re.etat];
+            const tip = re.etat === 'aucun'
+              ? 'Créer le rapport depuis ce bon'
+              : _bonRapLabel(b) + ' — cliquer pour ouvrir ou marquer transmis';
+            return `<button class="btn ${cls} ck-b-b" onclick="openBonRapMenu('${b.id}', this)" data-tip="${tip}" aria-label="${tip}">${CK_ICO.rapport}${re.etat === 'transmis' ? '<span class="ck-b-pt tr"></span>' : re.etat === 'fait' ? '<span class="ck-b-pt ok"></span>' : ''}</button>`;
+          })()}
           ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}
           ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
           ${bt(`editBon('${b.id}')`, CK_ICO.ouvrir, 'Ouvrir la fiche complète du bon', 'btn-navy')}
@@ -7035,8 +7171,11 @@ function renderBonCard(b, solid) {
                   return `<button class="btn btn-sm" onclick="openBonPieces('${b.id}')" title="${nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Joindre un document à ce bon (liste des locataires, plan, photo…)'}" style="font-weight:700;border:1.5px solid ${nbPj ? '#d97706' : '#d1d5db'};background:${nbPj ? '#fffbeb' : '#fff'};color:${nbPj ? '#b45309' : '#6b7280'};">📎 Pièces${nbPj ? ' (' + nbPj + ')' : ''}</button>`;
                 })()}
                 ${(() => {
-                  const fait = _bonRapFait(b);
-                  const rapStyle = fait
+                  const _re = _bonRapEtat(b);
+                  const fait = _bonRapFait(b) || _re.etat === 'fait' || _re.etat === 'transmis';
+                  const rapStyle = _re.etat === 'transmis'
+                    ? 'border:1.5px solid #1d4ed8;background:#2563eb;color:#fff;'
+                    : fait
                     ? 'border:1.5px solid #16a34a;background:#16a34a;color:#fff;'
                     : 'border:1.5px solid #d1d5db;background:#fff;color:#374151;';
                   return `<select onchange="createRapportTypeFromBon('${b.id}', this.value); this.selectedIndex=0;" title="Créer un rapport depuis ce bon — choisir le type" style="font-weight:700;font-size:12px;${rapStyle}border-radius:6px;padding:5.5px 4px;cursor:pointer;max-width:118px;">

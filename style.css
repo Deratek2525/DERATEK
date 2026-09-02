@@ -1446,3 +1446,59 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
   font-size: 11.5px; color: #8b97ad; text-align: center;
   margin: 8px 4px 0; line-height: 1.45;
 }
+
+/* ---- Etat du rapport sur le ruban d'un bon --------------------------------
+   Le pictogramme « Rapport » change de couleur : gris = aucun rapport,
+   orange = brouillon, vert = finalise, bleu = transmis a la gerance. */
+@media (min-width: 821px) {
+  .ck-b-btns .btn-rap-br {
+    background: #fff7ed; border-color: #ea8c1a; color: #b45309;
+    box-shadow: 0 0 0 2px rgba(234, 140, 26, .12);
+  }
+  .ck-b-btns .btn-rap-br:hover { background: #ffedd5; border-color: #c2710f; color: #92400e; }
+  .ck-b-btns .btn-rap-ok {
+    background: #ecfdf5; border-color: #16a34a; color: #15803d;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, .14);
+  }
+  .ck-b-btns .btn-rap-ok:hover { background: #d5f7e4; border-color: #128040; color: #14532d; }
+  .ck-b-btns .btn-rap-tr {
+    background: #2563eb; border-color: #1d4ed8; color: #fff;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, .18);
+  }
+  .ck-b-btns .btn-rap-tr:hover { background: #1d4ed8; border-color: #1e40af; color: #fff; }
+}
+/* Petite pastille d'angle qui confirme l'etat meme en noir et blanc */
+.ck-b-b { position: relative; }
+.ck-b-pt {
+  position: absolute; top: -3px; right: -3px; width: 8px; height: 8px;
+  border-radius: 50%; border: 1.5px solid #fff;
+}
+.ck-b-pt.ok { background: #16a34a; }
+.ck-b-pt.tr { background: #2563eb; }
+
+/* ---- Petit menu contextuel ancre sur un bouton --------------------------- */
+.ck-menu {
+  position: absolute; z-index: 2600; min-width: 230px;
+  background: #fff; border: 1px solid #d8dee9; border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 27, 62, .18); padding: 6px;
+}
+.ck-menu-t {
+  font-size: 11.5px; font-weight: 800; color: #64748b; text-transform: uppercase;
+  letter-spacing: .3px; padding: 5px 8px 7px; border-bottom: 1px solid #eef1f6; margin-bottom: 4px;
+  white-space: normal; line-height: 1.35;
+}
+.ck-menu-i {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 7px; padding: 8px 9px;
+  font-size: 13px; font-weight: 600; color: #1f2b47; cursor: pointer; font-family: inherit;
+}
+.ck-menu-i:hover { background: #f1f5fb; }
+.ck-menu-i.ok { color: #15803d; }
+.ck-menu-i .e { font-size: 14px; width: 18px; text-align: center; }
+
+/* Badge cliquable dans l'en-tete de la fiche complete */
+.fb-badge-b { cursor: pointer; border: 0; font-family: inherit; }
+.fb-badge-b:hover { filter: brightness(.95); }
+
+/* Sur telephone : un bon dont le rapport est transmis se signale en bleu */
+.mob-c.raptr .t::after { content: ' 📨'; color: #2563eb; }
