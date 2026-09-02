@@ -3447,6 +3447,8 @@ const OPT_DEFAUTS = {
   couleursCat: 'gerances',   // catégorie affichée dans le bloc couleurs
   style: 'classique',        // classique | cockpit
   alerteForme: 'coin',       // forme du signal d'alerte sur le ruban (voir ALERTE_FORMES)
+  gerBandeau: 'plein',       // presentation du nom des gerances (voir GER_BANDEAUX)
+  gerCollant: '1',           // '1' = le bandeau reste colle en haut au defilement
 };
 let OPT = Object.assign({}, OPT_DEFAUTS);
 function optLoad() {
@@ -3628,6 +3630,13 @@ function openOptions() {
              <div style="font-size:11px;font-weight:400;color:var(--g500);">Le repère posé sur le ruban du bon en retard — cliquez pour choisir</div></div>
            <div id="opt-alerte-formes">${_optBlocAlerteFormes()}</div>`,
         ].join(''))}
+        ${bloc('🏢 Nom des gérances dans la liste des bons', [
+          `<div style="font-size:12px;color:var(--g600);margin-bottom:9px;">Comment le nom de la gérance se détache au-dessus de ses bons — cliquez pour choisir</div>
+           <div id="opt-ger-bandeaux">${_optBlocGerBandeaux()}</div>`,
+          `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;margin-top:10px;">
+             <input type="checkbox" ${OPT.gerCollant === '1' ? 'checked' : ''} onchange="optSetGerCollant(this.checked)" style="accent-color:var(--navy);width:16px;height:16px;">
+             Garder le nom de la gérance collé en haut pendant le défilement</label>`,
+        ].join(''))}
         ${bloc('🔐 Mon compte', `
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="flex:1;min-width:180px;font-size:13px;font-weight:600;color:var(--navy);">Mot de passe de connexion
@@ -3643,6 +3652,30 @@ function openOptions() {
       </div>
     </div>`;
   openModal('modal-options');
+}
+// Galerie des presentations du bandeau de gerance
+function _optBlocGerBandeaux() {
+  const cur = (OPT.gerBandeau || 'plein');
+  const sv = OPT.gerBandeau;
+  const html = GER_BANDEAUX.map(([f, lbl]) => {
+    OPT.gerBandeau = f;                       // apercu rendu avec CHAQUE style
+    const ap = _gerGroupeHtml('Charles Berset SA', '#7c3aed', 2,
+      '<div class="gb-card"><span class="i">📄</span><span><b>Bon 079729</b><em>Blattes — Saars 2, Neuchâtel</em></span></div>');
+    return `<button type="button" class="gb-c${cur === f ? ' on' : ''}" onclick="optSetGerBandeau('${f}')" title="${lbl.replace(/"/g, '')}">
+      <div class="gb-ap">${ap}</div><div class="gb-l">${lbl}</div></button>`;
+  }).join('');
+  OPT.gerBandeau = sv;
+  return '<div class="gb-gal">' + html + '</div>';
+}
+function optSetGerCollant(on) {
+  OPT.gerCollant = on ? '1' : ''; optSave();
+  if (typeof renderBons === 'function') renderBons();
+}
+function optSetGerBandeau(f) {
+  OPT.gerBandeau = f; optSave();
+  const el = document.getElementById('opt-ger-bandeaux');
+  if (el) el.innerHTML = _optBlocGerBandeaux();
+  if (typeof renderBons === 'function') renderBons();
 }
 // Galerie des formes de signal d'alerte, avec apercu sur un mini-ruban
 function _optBlocAlerteFormes() {
@@ -6957,6 +6990,50 @@ const BON_OR = '#b8860b';
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
 // ============================================================
+// BANDEAU DES GERANCES DANS LA LISTE DES BONS
+// Presentation au choix dans les Options.
+// ============================================================
+const GER_BANDEAUX = [
+  ['plein',  '🎨 Bandeau plein couleur, texte blanc (recommandé)'],
+  ['bloc',   '🗂️ Bloc entier teinté par gérance'],
+  ['navy',   '🔷 Bandeau bleu marine + pastille de couleur'],
+  ['gros',   '🔠 Nom en gros dans la couleur, sans fond'],
+  ['actuel', '◻️ Fond pâle (ancien style)'],
+];
+// En-tete seul d'un groupe de gerance
+function _gerBandeauHtml(g, c, nb) {
+  const st = (typeof OPT !== 'undefined' && OPT.gerBandeau) || 'plein';
+  const coll = (typeof OPT !== 'undefined' && OPT.gerCollant === '1') ? ' ger-coll' : '';
+  const nom = _escapeHtml(g);
+  if (st === 'gros') {
+    return `<div class="ger-hd ger-gros${coll}" style="border-bottom-color:${c};">
+      <span class="n" style="color:${c};">${nom}</span>
+      <span class="c" style="background:${c};">${nb}</span></div>`;
+  }
+  if (st === 'navy') {
+    return `<div class="ger-hd ger-navy${coll}">
+      <span class="pt" style="background:${c};box-shadow:0 0 0 3px ${c}55;"></span>${nom}
+      <span class="c cw">${nb}</span></div>`;
+  }
+  if (st === 'actuel') {
+    return `<div class="ger-hd ger-actuel${coll}" style="background:${_hexTint(c, 0.20)};border-left-color:${c};">
+      🏢 ${nom} <span class="c" style="background:${c};">${nb}</span></div>`;
+  }
+  // plein (et bloc, qui reprend le meme bandeau colle au conteneur)
+  return `<div class="ger-hd ger-plein${st === 'bloc' ? ' ger-plein-bloc' : coll}" style="background:${c};box-shadow:0 3px 10px -4px ${c};">
+    🏢 ${nom} <span class="c cb" style="color:${c};">${nb}</span></div>`;
+}
+// Groupe complet : bandeau + cartes
+function _gerGroupeHtml(g, c, nb, corps) {
+  const st = (typeof OPT !== 'undefined' && OPT.gerBandeau) || 'plein';
+  if (st === 'bloc') {
+    return `<div class="ger-bloc" style="background:${_hexTint(c, 0.09)};border-color:${_hexTint(c, 0.34)};">
+      ${_gerBandeauHtml(g, c, nb)}<div class="ger-bloc-in">${corps}</div></div>`;
+  }
+  return `<div class="ger-grp">${_gerBandeauHtml(g, c, nb)}<div class="ger-grp-in">${corps}</div></div>`;
+}
+
+// ============================================================
 // SIGNAL D'ALERTE SUR LE RUBAN — forme au choix dans les Options.
 // S'affiche sur un bon recu depuis plus de N heures et toujours sans statut.
 // ============================================================
@@ -7419,14 +7496,8 @@ function renderBons() {
   list.innerHTML = Object.keys(groups).sort().map(g => {
     const items = groups[g].sort((a,b) => (b.date||'').localeCompare(a.date||''));
     const gColor = colorForGeranceName(g);
-    return `
-      <div style="margin-top:14px;">
-        <div style="font-size:16px;font-weight:900;color:#0d1b3e;background:${_hexTint(gColor,0.20)};border-left:6px solid ${gColor};text-transform:uppercase;letter-spacing:.3px;margin-bottom:9px;padding:9px 14px;border-radius:7px;box-shadow:0 1px 2px rgba(0,0,0,.06);">🏢 ${g} <span style="font-weight:800;color:#fff;background:${gColor};border-radius:11px;padding:1px 10px;font-size:13px;margin-left:6px;">${items.length}</span></div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${items.map(b => renderBonCard(b, state.bonsFilter === 'actifs')).join('')}
-        </div>
-      </div>
-    `;
+    return _gerGroupeHtml(g, gColor, items.length,
+      items.map(b => renderBonCard(b, state.bonsFilter === 'actifs')).join(''));
   }).join('');
 }
 

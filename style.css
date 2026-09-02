@@ -269,7 +269,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 }
 .page-title { font-size: 20px; font-weight: 700; color: var(--navy); }
 .page-sub   { font-size: 12px; color: var(--g400); margin-top: 2px; }
-.page-body  { padding: 16px 20px; overflow-y: auto; flex: 1; background: var(--g100); }
+.page-body  { padding: 16px 20px; --pbpad: 16px; overflow-y: auto; flex: 1; background: var(--g100); }
 
 /* STATS */
 .stats-grid {
@@ -650,7 +650,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .nav-title { font-size: 15px; }
   .nav-action-btn { padding: 7px 12px; font-size: 12px; }
   .page-hd { padding: 10px 14px; }
-  .page-body { padding: 12px 14px; }
+  .page-body { padding: 12px 14px; --pbpad: 12px; }
   .page-title { font-size: 16px; }
   .photo-grid { grid-template-columns: repeat(2, 1fr); }
   .clients-grid { grid-template-columns: 1fr; }
@@ -719,10 +719,10 @@ html[data-theme="sombre"] .no-invert {
 /* Densité des listes */
 html[data-densite="compacte"] .card,
 html[data-densite="compacte"] .bon-card { padding-top: 6px; padding-bottom: 6px; }
-html[data-densite="compacte"] .page-body { padding-top: 8px; }
+html[data-densite="compacte"] .page-body { padding-top: 8px; --pbpad: 8px; }
 html[data-densite="aeree"] .card,
 html[data-densite="aeree"] .bon-card { padding-top: 18px; padding-bottom: 18px; }
-html[data-densite="aeree"] .page-body { padding-top: 22px; }
+html[data-densite="aeree"] .page-body { padding-top: 22px; --pbpad: 22px; }
 
 /* Clignotements désactivés */
 html[data-anim="0"] .bon-blink,
@@ -923,7 +923,7 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     padding: 20px 26px 16px;
   }
   html[data-style="cockpit"] .page-title { font-size: 23px; font-weight: 800; }
-  html[data-style="cockpit"] .page-body { padding: 18px 26px 40px; }
+  html[data-style="cockpit"] .page-body { padding: 18px 26px 40px; --pbpad: 18px; }
   /* Cartes : coins plus doux, ombre légère, meilleure lisibilité en pleine largeur */
   html[data-style="cockpit"] .card,
   html[data-style="cockpit"] .client-card {
@@ -1666,3 +1666,82 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 .af-txt span { display: block; font-size: 9.5px; color: #8b95a7; }
 .af-l { font-size: 11.5px; font-weight: 700; color: #374151; line-height: 1.3; }
 .af-c.on .af-l { color: var(--navy); }
+
+/* ============================================================
+   BANDEAU DES GERANCES DANS LA LISTE DES BONS
+   Presentation au choix dans les Options.
+   ============================================================ */
+.ger-grp { margin-top: 14px; }
+.ger-grp-in { display: flex; flex-direction: column; gap: 6px; }
+
+.ger-hd { margin-bottom: 9px; }
+/* collant : le nom reste visible tant qu'on parcourt ses bons */
+.ger-hd.ger-coll { position: sticky; top: calc(-1 * var(--pbpad, 16px)); z-index: 30; }
+
+/* --- plein couleur, texte blanc (par defaut) --- */
+.ger-plein {
+  font-size: 18px; font-weight: 900; color: #fff; text-transform: uppercase;
+  letter-spacing: .6px; padding: 11px 16px; border-radius: 8px;
+}
+.ger-plein .c, .ger-actuel .c, .ger-gros .c, .ger-navy .c {
+  display: inline-block; font-weight: 900; border-radius: 12px;
+  padding: 2px 11px; font-size: 14px; margin-left: 8px; vertical-align: middle;
+}
+.ger-plein .c.cb { background: #fff; }
+.ger-navy .c.cw { background: #fff; color: #0d1b3e; margin-left: auto; }
+
+/* --- bloc entier teinte --- */
+.ger-bloc {
+  margin-top: 14px; border: 1px solid; border-radius: 11px; overflow: hidden;
+}
+.ger-bloc .ger-plein-bloc { border-radius: 0; margin-bottom: 0; box-shadow: none !important; }
+.ger-bloc-in { padding: 9px 10px; display: flex; flex-direction: column; gap: 6px; }
+
+/* --- bleu marine + pastille --- */
+.ger-navy {
+  display: flex; align-items: center; gap: 11px;
+  font-size: 17px; font-weight: 900; color: #fff; text-transform: uppercase;
+  letter-spacing: .5px; padding: 11px 16px; border-radius: 8px;
+  background: linear-gradient(145deg, #16295c, #0d1b3e);
+}
+.ger-navy .pt { width: 13px; height: 13px; border-radius: 50%; flex: 0 0 auto; }
+
+/* --- nom en gros, sans fond --- */
+.ger-gros {
+  padding: 2px 2px 9px; border-bottom: 3px solid; background: #f7f8fb;
+}
+.ger-gros .n { font-size: 21px; font-weight: 900; letter-spacing: -.2px; }
+.ger-gros .c { color: #fff; }
+
+/* --- ancien style : fond pale --- */
+.ger-actuel {
+  font-size: 16px; font-weight: 900; color: #0d1b3e; text-transform: uppercase;
+  letter-spacing: .3px; padding: 9px 14px; border-radius: 7px;
+  border-left: 6px solid; box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+.ger-actuel .c { color: #fff; font-size: 13px; }
+
+/* --- Galerie de choix dans les Options --- */
+.gb-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 9px; }
+.gb-c {
+  text-align: left; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  padding: 8px 9px 9px; cursor: pointer; font-family: inherit;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+.gb-c:hover { border-color: #94a3b8; transform: translateY(-1px); }
+.gb-c.on { border-color: var(--navy); box-shadow: 0 0 0 2.5px rgba(13, 27, 62, .14); }
+.gb-ap { zoom: .62; margin-bottom: 6px; pointer-events: none; }
+.gb-ap .ger-grp, .gb-ap .ger-bloc { margin-top: 0; }
+.gb-ap .ger-hd.ger-coll { position: static; }
+.gb-card {
+  display: flex; align-items: center; gap: 10px; background: #fff;
+  border: 1px solid #e5e9f1; border-radius: 9px; padding: 9px 12px;
+}
+.gb-card .i {
+  width: 30px; height: 30px; border-radius: 9px; background: #f1f5fb;
+  display: flex; align-items: center; justify-content: center; font-size: 15px; flex: 0 0 auto;
+}
+.gb-card b { display: block; font-size: 14px; font-weight: 900; color: var(--navy); }
+.gb-card em { display: block; font-size: 12.5px; color: #6b7280; font-style: normal; }
+.gb-l { font-size: 11.5px; font-weight: 700; color: #374151; line-height: 1.3; }
+.gb-c.on .gb-l { color: var(--navy); }
