@@ -3446,6 +3446,7 @@ const OPT_DEFAUTS = {
   couleursGerances: {},      // { 'nom normalisé' : '#rrggbb' }
   couleursCat: 'gerances',   // catégorie affichée dans le bloc couleurs
   style: 'classique',        // classique | cockpit
+  alerteForme: 'coin',       // forme du signal d'alerte sur le ruban (voir ALERTE_FORMES)
 };
 let OPT = Object.assign({}, OPT_DEFAUTS);
 function optLoad() {
@@ -3622,7 +3623,10 @@ function openOptions() {
         ].join(''))}
         ${bloc('🎨 Couleurs par nom', _optBlocCouleurs())}
         ${bloc('🔔 Alertes', [
-          ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Pastille rouge sur le bon'),
+          ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Délai au-delà duquel un bon jamais classé se signale tout seul'),
+          `<div style="font-size:13px;font-weight:600;color:var(--navy);margin:12px 0 2px;">Forme du signal
+             <div style="font-size:11px;font-weight:400;color:var(--g500);">Le repère posé sur le ruban du bon en retard — cliquez pour choisir</div></div>
+           <div id="opt-alerte-formes">${_optBlocAlerteFormes()}</div>`,
         ].join(''))}
         ${bloc('🔐 Mon compte', `
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -3639,6 +3643,26 @@ function openOptions() {
       </div>
     </div>`;
   openModal('modal-options');
+}
+// Galerie des formes de signal d'alerte, avec apercu sur un mini-ruban
+function _optBlocAlerteFormes() {
+  const cur = (OPT.alerteForme || 'coin');
+  return '<div class="af-gal">' + ALERTE_FORMES.map(([f, lbl]) => {
+    const m = _alerteMarquePourForme(f);
+    return `<button type="button" class="af-c${cur === f ? ' on' : ''}" onclick="optSetAlerteForme('${f}')" title="${lbl.replace(/"/g, '')}">
+      <div class="af-ruban">${m.carte}
+        <div class="af-ico">📄${m.ico}</div>
+        <div class="af-txt"><b>Bon BCM 10-137</b><span>Proimmob SA</span></div>
+      </div>
+      <div class="af-l">${lbl}</div>
+    </button>`;
+  }).join('') + '</div>';
+}
+function optSetAlerteForme(f) {
+  OPT.alerteForme = f; optSave();
+  const el = document.getElementById('opt-alerte-formes');
+  if (el) el.innerHTML = _optBlocAlerteFormes();
+  if (typeof renderBons === 'function') renderBons();
 }
 function optToggleOnglet(id, visible) {
   const masq = Array.isArray(OPT.ongletsMasques) ? OPT.ongletsMasques.slice() : [];
@@ -6933,6 +6957,58 @@ const BON_OR = '#b8860b';
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
 // ============================================================
+// SIGNAL D'ALERTE SUR LE RUBAN — forme au choix dans les Options.
+// S'affiche sur un bon recu depuis plus de N heures et toujours sans statut.
+// ============================================================
+const _TRI = (d, c, sw) => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="${sw || 1.9}" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ALERTE_SVG = {
+  triangle: _TRI('<path d="M12 3.8 2.6 20.2h18.8L12 3.8Z"/><path d="M12 9.4v4.4"/><path d="M12 17.1h.01"/>', '#dc2626'),
+  plein:    '<svg viewBox="0 0 24 24"><path d="M12 3.8 2.6 20.2h18.8L12 3.8Z" fill="#dc2626"/><path d="M12 9.6v4.6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="#fff"/></svg>',
+  fanion:   _TRI('<path d="M6 3v18"/><path d="M6 4.5 19 9.8 6 15.1Z"/>', '#b45309'),
+  pointe:   _TRI('<path d="M12 5.5 4.5 18.5h15L12 5.5Z"/>', '#dc2626'),
+  double:   _TRI('<path d="M12 2.6 4.6 11.2h14.8L12 2.6Z"/><path d="M12 12.8 4.6 21.4h14.8L12 12.8Z"/>', '#dc2626', 1.7),
+  cercle:   _TRI('<circle cx="12" cy="12" r="9.3"/><path d="M12 6.6 6.6 16.2h10.8L12 6.6Z"/>', '#dc2626'),
+};
+const ALERTE_FORMES = [
+  ['coin',     '🔺 Coin triangulaire sur la carte (recommandé)'],
+  ['triangle', '⚠️ Triangle d\'alerte — trait fin'],
+  ['plein',    '🔴 Triangle d\'alerte — plein'],
+  ['fanion',   '🚩 Fanion triangulaire (or)'],
+  ['pointe',   '△ Triangle simple, pointe en haut'],
+  ['double',   '⏫ Double triangle — très urgent'],
+  ['cercle',   '◬ Triangle cerclé — discret'],
+  ['signet',   '◀ Pointe triangulaire au bord droit'],
+  ['pastille', '🔴 Pastille ronde clignotante (ancien style)'],
+  ['aucun',    '— Aucun signal —'],
+];
+// Renvoie les morceaux de HTML a injecter dans la carte d'un bon en alerte.
+//   carte : element pose sur la carte entiere (coin / signet)
+//   ico   : element pose sur le pictogramme du bon
+//   txt   : petit texte a cote du numero
+function _bonAlerteMarque(b) {
+  if (!_bonAlerteNouveau48h(b)) return { carte: '', ico: '', txt: '' };
+  return _alerteMarquePourForme((typeof OPT !== 'undefined' && OPT.alerteForme) || 'coin');
+}
+function _alerteMarquePourForme(f) {
+  const vide = { carte: '', ico: '', txt: '' };
+  if (f === 'aucun') return vide;
+  const h = parseInt((typeof OPT !== 'undefined' && OPT.alerteBonH) || 48, 10) || 48;
+  const t = `Bon reçu il y a plus de ${h} h et toujours sans statut — à traiter !`;
+  if (f === 'coin') {
+    return Object.assign({}, vide, { carte:
+      `<span class="bon-coin" title="${t}"><svg viewBox="0 0 34 34"><path d="M0 0h34L0 34Z" fill="#dc2626"/><path d="M7 7.2v6.6" stroke="#fff" stroke-width="2.1" stroke-linecap="round"/><circle cx="7" cy="17.6" r="1.35" fill="#fff"/></svg></span>` });
+  }
+  if (f === 'signet') {
+    return Object.assign({}, vide, { carte:
+      `<span class="bon-signet" title="${t}"><svg viewBox="0 0 18 46"><path d="M18 0v46L0 23Z" fill="#dc2626"/></svg></span>` });
+  }
+  if (f === 'pastille') {
+    return { carte: '', ico: '<span class="bon-blink"></span>', txt: ` <span class="bon-blink-txt">● +${h}h</span>` };
+  }
+  return Object.assign({}, vide, { ico: `<span class="bon-tri" title="${t}">${ALERTE_SVG[f] || ALERTE_SVG.triangle}</span>` });
+}
+
+// ============================================================
 // STATUTS D'UN BON — source unique : libelle, couleurs, pictogramme.
 // Sert au ruban (Cockpit) et a la barre de compteurs en haut de page.
 // ============================================================
@@ -7012,6 +7088,7 @@ function renderBonCardCockpit(b) {
   const st = SB[statut] || SB[''];
   const opts = Object.keys(SB).map(k => `<option value="${k}" ${statut === k ? 'selected' : ''}>${SB[k].lbl}</option>`).join('');
   const alerte = _bonAlerteNouveau48h(b);
+  const _alM = _bonAlerteMarque(b);
   const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId)) || null;
   const adresse = (loc && loc.adresse) || _bonAdresseInterv(b).adresse || '';
   const rdv = b.dateIntervention ? (fmtDate(b.dateIntervention) + (b.heureIntervention ? ' · ' + b.heureIntervention : '')) : '';
@@ -7028,9 +7105,10 @@ function renderBonCardCockpit(b) {
   const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
   return `
     <div id="bonrow-${b.id}" class="ck-bon" style="border-left-color:${coul};">
-      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.18)};color:${coul};">${CK_ICO.pdfDoc}${alerte ? '<span class="bon-blink"></span>' : ''}</div>
+      ${_alM.carte}
+      <div class="ck-b-ico" style="background:${_hexTint(coul, 0.18)};color:${coul};">${CK_ICO.pdfDoc}${_alM.ico}</div>
       <div class="ck-b-id">
-        <div class="n">Bon ${_escapeHtml(b.numero || '(s. n°)')}${alerte ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
+        <div class="n">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_alM.txt}</div>
         <div class="d">📅 ${fmtDate(b.date) || '—'}</div>
       </div>
       <div class="ck-b-qui">
@@ -7133,12 +7211,13 @@ function renderBonCard(b, solid) {
   const dateCol  = fillSolid ? (_dark ? '#ffdada' : '#b91c1c') : '#e63946';
   const iconBg   = fillSolid ? (_dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.08)') : displayColor;
   const iconCol  = fillSolid ? T : '#ffffff';
+  const _alC = _bonAlerteMarque(b);
   return `
-            <div id="bonrow-${b.id}" style="display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">
+            <div id="bonrow-${b.id}" style="position:relative;display:flex;align-items:stretch;gap:14px;background:${bg};color:${T};border:1px solid ${borderCard};border-left:6px solid ${borderLeft};border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04);flex-wrap:wrap;transition:box-shadow .3s;">${_alC.carte}
               <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
-                <div style="position:relative;width:34px;height:34px;border-radius:50%;background:${iconBg};color:${iconCol};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;"${_bonAlerteNouveau48h(b) ? ' title="Bon reçu il y a plus de 48h et toujours sans statut — à traiter !"' : ''}>📄${_bonAlerteNouveau48h(b) ? '<span class="bon-blink"></span>' : ''}</div>
+                <div style="position:relative;width:34px;height:34px;border-radius:50%;background:${iconBg};color:${iconCol};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;"${_bonAlerteNouveau48h(b) ? ' title="Bon reçu il y a plus de 48h et toujours sans statut — à traiter !"' : ''}>📄${_alC.ico}</div>
                 <div>
-                  <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}${_bonAlerteNouveau48h(b) ? ' <span class="bon-blink-txt">● +48h</span>' : ''}</div>
+                  <div style="font-size:13px;font-weight:800;color:${T};line-height:1.2;">Bon ${b.numero || '(s. n°)'}${_alC.txt}</div>
                   <div style="font-size:12px;color:${dateCol};font-weight:600;">📅 ${fmtDate(b.date) || '—'}</div>
                 </div>
               </div>
