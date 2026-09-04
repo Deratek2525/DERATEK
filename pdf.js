@@ -561,35 +561,37 @@ function generatePDF(rapport, statut) {
       // Pas de saut de page forcé : on enchaîne, et on ne change de page que si besoin
       checkPage(80);
       sTitle('Photos d\'intervention');
-      const labels = ['Avant 1','Avant 2','Pendant','Après 1','Après 2','Autre'];
-      const allPhotos = photos.map((p,i) => ({ src: p, label: labels[i], comment: photoComments[i]||'' })).filter(p => p.src);
+      // Aucun intitule automatique sous les photos : seul le commentaire saisi
+      // par l'utilisateur est imprime, et uniquement s'il en a ecrit un.
+      const allPhotos = photos.map((p, i) => ({ src: p, comment: (photoComments[i] || '').trim() })).filter(p => p.src);
       const imgW = (CW - 6) / 2, imgH = 55;
-      let col = 0;
-      allPhotos.forEach((ph, i) => {
-        const blockH = imgH + (ph.comment ? 18 : 10);
-        checkPage(blockH + 5);
-        const x = M + col * (imgW + 6);
-        try {
-          const fmt = ph.src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-          doc.addImage(ph.src, fmt, x, y, imgW, imgH);
-          doc.setDrawColor(...C.border);
-          doc.rect(x, y, imgW, imgH, 'S');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8);
-          doc.setTextColor(...C.muted);
-          doc.text(ph.label, x + 2, y + imgH + 5);
-          if (ph.comment) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(...C.text);
-            const lines = doc.splitTextToSize(ph.comment, imgW - 4);
-            doc.text(lines[0], x + 2, y + imgH + 11);
-          }
-        } catch(e) { console.warn('Image error:', e); }
-        col++;
-        if (col >= 2) { col = 0; y += imgH + (ph.comment ? 20 : 12); }
-      });
-      if (col > 0) y += imgH + 20;
+      for (let i = 0; i < allPhotos.length; i += 2) {
+        const ligne = allPhotos.slice(i, i + 2);
+        let capH = 0;
+        const caps = ligne.map(ph => {
+          if (!ph.comment) return [];
+          const l = doc.splitTextToSize(String(ph.comment), imgW - 4).slice(0, 2);
+          capH = Math.max(capH, l.length * 3.8 + 1.5);
+          return l;
+        });
+        checkPage(imgH + capH + 9);
+        ligne.forEach((ph, k) => {
+          const x = M + k * (imgW + 6);
+          try {
+            const fmt = String(ph.src).startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(ph.src, fmt, x, y, imgW, imgH);
+            doc.setDrawColor(...C.border);
+            doc.rect(x, y, imgW, imgH, 'S');
+            if (caps[k].length) {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7.5);
+              doc.setTextColor(...C.text);
+              doc.text(caps[k], x + 2, y + imgH + 4.2);
+            }
+          } catch (e) { console.warn('Image error:', e); }
+        });
+        y += imgH + capH + 7;
+      }
     }
 
     // ── RÉSULTAT & RECOMMANDATIONS ────────────────────────────
