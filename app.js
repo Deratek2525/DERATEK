@@ -1903,15 +1903,40 @@ function _clientImageVersDataUrl(file) {
 // plus echouer l'operation, on repatiente et on retente automatiquement.
 const _MISTRAL_ATTENTES = [2500, 6000, 12000];
 let _mistralDernierAppel = 0;
+// Adresse du relais IA hebergé sur Supabase (la cle y reste cachee)
+function _iaRelaisUrl() {
+  const u = (DERATEK_CONFIG && DERATEK_CONFIG.supabase && DERATEK_CONFIG.supabase.url) || '';
+  return u ? u.replace(/\/+$/, '') + '/functions/v1/ia' : '';
+}
+// Prepare la requete : par le relais Supabase si possible, sinon en direct
+// avec la cle de config.js (ancien fonctionnement, conserve en secours).
+async function _iaRequete(body) {
+  const relais = _iaRelaisUrl();
+  if (relais && typeof sb !== 'undefined' && sb) {
+    try {
+      const { data } = await sb.auth.getSession();
+      const jeton = data && data.session && data.session.access_token;
+      if (jeton) {
+        return { url: relais, opts: { method: 'POST', body,
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jeton,
+                     'apikey': (DERATEK_CONFIG.supabase.anonKey || '') } } };
+      }
+    } catch (e) { console.warn('relais IA', e); }
+  }
+  const cle = (DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey) || '';
+  if (!cle) throw new Error("Aucun accès à l'IA : connectez-vous à l'application (le relais sécurisé a besoin de votre session).");
+  return { url: 'https://api.mistral.ai/v1/chat/completions', opts: { method: 'POST', body,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cle } } };
+}
 async function _mistralHttp(opts, onAttente) {
-  const URL = 'https://api.mistral.ai/v1/chat/completions';
   // Espace mini entre deux demandes : evite de declencher la limite soi-meme
   const ecart = Date.now() - _mistralDernierAppel;
   if (ecart < 1200) await new Promise(r => setTimeout(r, 1200 - ecart));
+  const req = await _iaRequete(opts && opts.body);
   let resp = null;
   for (let essai = 0; essai <= _MISTRAL_ATTENTES.length; essai++) {
     _mistralDernierAppel = Date.now();
-    resp = await fetch(URL, opts);
+    resp = await fetch(req.url, req.opts);
     if (resp.status !== 429 || essai === _MISTRAL_ATTENTES.length) return resp;
     const sec = Math.round(_MISTRAL_ATTENTES[essai] / 1000);
     const msg = `⏳ Service IA saturé — nouvelle tentative dans ${sec} s… (${essai + 1}/${_MISTRAL_ATTENTES.length})`;
@@ -1950,16 +1975,12 @@ async function _mistralCorps(resp) {
 async function testerCleIA() {
   const box = document.getElementById('opt-ia-test');
   const dire = (html, coul) => { if (box) box.innerHTML = `<div class="ia-test ${coul}">${html}</div>`; };
-  const cle = (DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey) || '';
-  if (!cle) { dire('❌ Aucune clé n\'est configurée dans config.js.', 'ko'); return; }
   dire('⏳ Test en cours…', 'att');
   const t0 = Date.now();
   try {
-    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cle },
-      body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] })
-    });
+    const req = await _iaRequete(JSON.stringify({ model: DERATEK_CONFIG.mistral.model, max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] }));
+    const parRelais = req.url.indexOf('/functions/v1/ia') > 0;
+    const resp = await fetch(req.url, req.opts);
     const ms = Date.now() - t0;
     const corps = resp.ok ? '' : await _mistralCorps(resp);
     const tete = k => { try { return resp.headers.get(k) || ''; } catch (e) { return ''; } };
@@ -1968,8 +1989,19 @@ async function testerCleIA() {
     const detail = `<div class="d">Réponse HTTP ${resp.status} en ${ms} ms`
       + (corps ? `<br>Message du serveur : « ${_escapeHtml(String(corps).slice(0, 400))} »` : '')
       + (infos ? `<br>${_escapeHtml(infos)}` : '')
-      + `<br>Clé utilisée : ${_escapeHtml(cle.slice(0, 4))}…${_escapeHtml(cle.slice(-4))} (${cle.length} caractères) · modèle ${_escapeHtml(DERATEK_CONFIG.mistral.model)}</div>`;
+      + `<br>Chemin : ${parRelais ? 'relais sécurisé Supabase (clé cachée)' : 'appel direct avec la clé de config.js'}`
+      + `<br>Modèle : ${_escapeHtml(DERATEK_CONFIG.mistral.model)}</div>`;
     if (resp.ok) { dire('✅ <b>La clé fonctionne.</b> Mistral a répondu normalement.' + detail, 'ok'); return; }
+    if (resp.status === 503 && /MISTRAL_API_KEY/.test(String(corps))) {
+      dire("🔑 <b>Le relais fonctionne, mais la clé n'y est pas encore enregistrée.</b> "
+        + "Dans Supabase : <i>Project Settings → Edge Functions → Secrets</i>, ajoutez un secret nommé "
+        + "<b>MISTRAL_API_KEY</b> avec votre nouvelle clé Mistral." + detail, 'att');
+      return;
+    }
+    if (resp.status === 401 && parRelais) {
+      dire("🔒 <b>Le relais a refusé votre session.</b> Déconnectez-vous puis reconnectez-vous à l'application." + detail, 'ko');
+      return;
+    }
     if (resp.status === 429) {
       dire("⚠️ <b>Refusé : 429 « trop de demandes ».</b> Sur un seul appel isolé, ce n'est pas la cadence : "
         + "le plan gratuit « Experiment » n'est probablement pas activé sur le compte (il faut valider un numéro de téléphone par SMS sur console.mistral.ai), "
@@ -1985,6 +2017,10 @@ async function testerCleIA() {
 
 // Message lisible pour les erreurs les plus frequentes
 function _mistralMessage(statut, brut) {
+  if (statut === 503 && /MISTRAL_API_KEY/.test(String(brut || ''))) {
+    return "La clé de l'IA n'est pas encore enregistrée dans les réglages Supabase (secret MISTRAL_API_KEY). "
+      + "Voir ⚙️ Options → 🤖 Intelligence artificielle → « Tester la connexion à l'IA ».";
+  }
   if (statut === 429) {
     // On montre AUSSI le message exact de Mistral : il dit s'il s'agit de la
     // cadence (« rate limit ») ou du compte/quota (« capacity », « quota »).

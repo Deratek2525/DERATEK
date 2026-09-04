@@ -15,7 +15,11 @@ const DERATEK_CONFIG = {
     deratek: 'info@deratek.ch'
   },
   mistral: {
-    apiKey: 'xr9IwkMxT8Pn2aCZhB33svpNo2X55smz',
+    // La cle n'est PLUS ici : elle vit dans les secrets Supabase (MISTRAL_API_KEY)
+    // et l'application passe par la fonction /functions/v1/ia. Ainsi elle n'est
+    // plus lisible depuis le site public ni depuis le depot GitHub.
+    apiKey: '',
+
     model:  'mistral-small-latest'
   },
   app: {
