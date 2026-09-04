@@ -1939,7 +1939,15 @@ async function _mistralFetch(body, onAttente) {
 }
 // Message lisible pour les erreurs les plus frequentes
 function _mistralMessage(statut, brut) {
-  if (statut === 429) return "L'IA a refusé la demande : trop d'appels rapprochés, ou crédit Mistral épuisé. Patientez une minute et réessayez ; si cela se répète, vérifiez le crédit du compte sur console.mistral.ai.";
+  if (statut === 429) {
+    // On montre AUSSI le message exact de Mistral : il dit s'il s'agit de la
+    // cadence (« rate limit ») ou du compte/quota (« capacity », « quota »).
+    const d = String(brut || '').replace(/^API 429\s*/, '').trim();
+    return "L'IA a refusé la demande (429). Le compte gratuit Mistral n'autorise qu'environ 1 appel par seconde. "
+      + "L'application a déjà réessayé 3 fois. Si cela se répète : vérifiez sur console.mistral.ai que le plan gratuit "
+      + "« Experiment » est bien activé (vérification par SMS) et que personne d'autre n'utilise la clé."
+      + (d ? '\n\nMessage de Mistral : « ' + d + ' »' : '');
+  }
   if (statut === 401 || statut === 403) return 'Clé Mistral refusée (' + statut + ') — à renouveler sur console.mistral.ai.';
   if (statut === 402) return 'Crédit Mistral épuisé — rechargez le compte sur console.mistral.ai.';
   return brut || ('API ' + statut);
