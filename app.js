@@ -1948,7 +1948,7 @@ async function _mistralHttp(opts, onAttente) {
 }
 // Variante pratique : envoie un corps de requete et renvoie directement le texte
 async function _mistralFetch(body, onAttente) {
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  // Plus de controle de cle ici : c'est le relais Supabase qui detient la cle.
   const resp = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
@@ -4785,7 +4785,6 @@ async function bonRenderToImages(file) {
 }
 // OCR par l'IA (Mistral vision) : transcrit le texte d'un bon scanné depuis ses images
 async function bonOcrImages(images) {
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
   const content = [{ type: 'text', text: 'Transcris INTÉGRALEMENT et fidèlement tout le texte visible de ce bon de travaux scanné (toutes les pages fournies), en conservant les libellés et leurs valeurs (gérance, n° de bon, immeuble/adresse, locataire, téléphones, problème…). Réponds uniquement par le texte brut, sans commentaire.' }];
   images.forEach(d => content.push({ type: 'image_url', image_url: d }));
   const resp = await _mistralHttp({
@@ -7257,9 +7256,6 @@ async function bonNoteAICorrect() {
   const st = $('bon-note-status');
   const btn = $('bon-note-ai-btn');
   if (!txt) { if (st) st.textContent = '✍️ Écris d\'abord quelques mots à corriger.'; return; }
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) {
-    if (st) st.textContent = '⚠️ Clé Mistral non configurée.'; return;
-  }
   if (btn) btn.disabled = true;
   if (st) st.textContent = '🤖 Correction en cours…';
   try {
@@ -13093,9 +13089,6 @@ async function diagAICorrect(field) {
   const btn = $('diag-ai-' + field);
   const txt = _richStripToText(ta.value || '').trim();   // texte simple (sans balises) pour l'IA
   if (!txt) { toast('✍️ Écris d\'abord quelques mots à corriger.', '#e6aa1e'); return; }
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) {
-    toast('⚠️ Clé Mistral non configurée.', '#e63946'); return;
-  }
   const oldLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '🤖 Correction…'; }
   try {
@@ -18207,7 +18200,6 @@ async function _rappExtractChunk(part) {
 }
 
 async function rappExtractPaiements(texte) {
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
   const chunks = _rappChunk(texte, 9000);
   let all = [];
   for (let k = 0; k < chunks.length; k++) {
