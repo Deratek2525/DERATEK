@@ -1745,3 +1745,29 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 .gb-card em { display: block; font-size: 12.5px; color: #6b7280; font-style: normal; }
 .gb-l { font-size: 11.5px; font-weight: 700; color: #374151; line-height: 1.3; }
 .gb-c.on .gb-l { color: var(--navy); }
+
+/* ============================================================
+   PHOTOS DU RAPPORT — glisser-deposer
+   ============================================================ */
+.photo-slot.drag {
+  border-color: #2d9e6b !important; background: #eafaf2 !important; color: #15803d !important;
+  box-shadow: 0 0 0 3px rgba(45, 158, 107, .22); transform: scale(1.02);
+}
+.photo-slot.drag::after {
+  content: 'Déposer ici'; position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(234, 250, 242, .88); color: #15803d;
+  font-size: 12px; font-weight: 800; letter-spacing: .2px;
+}
+/* Les 6 emplacements tiennent sur un ecran : on voit toutes les cibles pendant
+   qu'on fait glisser les photos, au lieu d'un pave par ecran. */
+#photos-with-comments {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
+  border-radius: 12px; padding: 4px; transition: box-shadow .15s ease, background .15s ease;
+}
+#photos-with-comments .photo-slot { max-height: 230px; }
+@media (max-width: 700px) { #photos-with-comments { grid-template-columns: 1fr; } }
+#photos-with-comments.drag {
+  background: #f2fbf7; box-shadow: 0 0 0 3px rgba(45, 158, 107, .28) inset;
+  outline: 2px dashed #2d9e6b; outline-offset: -8px;
+}

@@ -3071,10 +3071,109 @@ function resetPhotoGrid() {
 function addPhoto(slot)   { state.currentPhotoSlot = slot; $('photo-input').click(); }
 function deletePhoto(el)  { state.photos[parseInt(el.dataset.idx)] = null; resetPhotoGrid(); }
 function onPhotoSelected(e) {
-  const file = e.target.files[0]; if (!file) return;
+  const files = [...(e.target.files || [])];
+  if (files.length) _photosVersEmplacements(files, state.currentPhotoSlot);
+  e.target.value = '';
+}
+
+// --- Lecture + reduction d'une image (photo de telephone = 4 a 8 Mo brute) ----
+// On ramene a 1400 px de cote maxi en JPEG : le rapport reste leger et le PDF
+// se genere sans attendre.
+const PHOTO_MAX_PX = 1400;
+function _photoLire(file, cb) {
+  if (!file || !/^image\//i.test(file.type || '')) { cb(null); return; }
   const reader = new FileReader();
-  reader.onload = ev => { state.photos[state.currentPhotoSlot] = ev.target.result; resetPhotoGrid(); e.target.value = ''; };
+  reader.onerror = () => cb(null);
+  reader.onload = ev => {
+    const img = new Image();
+    img.onerror = () => cb(ev.target.result);      // format exotique : on garde tel quel
+    img.onload = () => {
+      const r = Math.min(1, PHOTO_MAX_PX / Math.max(img.width, img.height));
+      if (r >= 1 && (file.size || 0) < 900000) { cb(ev.target.result); return; }
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+      const cx = cv.getContext('2d');
+      cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+      cx.drawImage(img, 0, 0, cv.width, cv.height);
+      cb(cv.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = ev.target.result;
+  };
   reader.readAsDataURL(file);
+}
+// Place une liste d'images a partir d'un emplacement donne : on remplit celui-ci
+// puis les emplacements LIBRES suivants, sans jamais ecraser une photo existante.
+function _photosVersEmplacements(files, depart) {
+  const images = [...files].filter(f => f && /^image\//i.test(f.type || ''));
+  if (!images.length) { toast('Seules les images peuvent être déposées ici', '#e63946'); return; }
+  const cibles = [];
+  let i = (typeof depart === 'number' && depart >= 0) ? depart : 0;
+  if (typeof depart === 'number' && depart >= 0) { cibles.push(depart); i = 0; }
+  while (cibles.length < images.length && i < 6) {
+    if (cibles.indexOf(i) < 0 && !state.photos[i]) cibles.push(i);
+    i++;
+  }
+  if (!cibles.length) { toast('Les 6 emplacements sont déjà occupés', '#f4a623'); return; }
+  const trop = images.length - cibles.length;
+  let restant = cibles.length;
+  cibles.forEach((slot, k) => {
+    _photoLire(images[k], data => {
+      if (data) state.photos[slot] = data;
+      if (--restant === 0) {
+        resetPhotoGrid();
+        toast(cibles.length > 1 ? `📷 ${cibles.length} photos ajoutées` + (trop > 0 ? ` (${trop} ignorée${trop > 1 ? 's' : ''}, plus de place)` : '') : '📷 Photo ajoutée', '#2d9e6b');
+      }
+    });
+  });
+}
+
+// --- Glisser-deposer et coller (Cmd+V) sur les emplacements photo -------------
+function initPhotoDnD() {
+  const stop = e => { e.preventDefault(); e.stopPropagation(); };
+  const aDesFichiers = e => {
+    const t = e.dataTransfer; if (!t) return false;
+    return [...(t.types || [])].indexOf('Files') >= 0;
+  };
+  for (let i = 0; i < 6; i++) {
+    const slot = $('photo-' + i); if (!slot || slot.dataset.dnd) continue;
+    slot.dataset.dnd = '1';
+    slot.addEventListener('dragenter', e => { if (aDesFichiers(e)) { stop(e); slot.classList.add('drag'); } });
+    slot.addEventListener('dragover',  e => { if (aDesFichiers(e)) { stop(e); e.dataTransfer.dropEffect = 'copy'; slot.classList.add('drag'); } });
+    slot.addEventListener('dragleave', e => { stop(e); slot.classList.remove('drag'); });
+    slot.addEventListener('drop', e => {
+      if (!aDesFichiers(e)) return;
+      stop(e); slot.classList.remove('drag');
+      _photosVersEmplacements(e.dataTransfer.files, i);
+    });
+  }
+  // Zone d'ensemble : deposer plusieurs photos d'un coup remplit les places libres
+  const zone = $('photos-with-comments');
+  if (zone && !zone.dataset.dnd) {
+    zone.dataset.dnd = '1';
+    zone.addEventListener('dragenter', e => { if (aDesFichiers(e)) { stop(e); zone.classList.add('drag'); } });
+    zone.addEventListener('dragover',  e => { if (aDesFichiers(e)) { stop(e); e.dataTransfer.dropEffect = 'copy'; zone.classList.add('drag'); } });
+    zone.addEventListener('dragleave', e => { if (e.target === zone) { stop(e); zone.classList.remove('drag'); } });
+    zone.addEventListener('drop', e => {
+      if (!aDesFichiers(e)) return;
+      stop(e); zone.classList.remove('drag');
+      _photosVersEmplacements(e.dataTransfer.files, -1);
+    });
+  }
+  // Coller une capture d'ecran (Cmd+V) quand l'onglet Photos est ouvert
+  if (!document.body.dataset.photoPaste) {
+    document.body.dataset.photoPaste = '1';
+    document.addEventListener('paste', e => {
+      const tab = $('tab-photos');
+      if (!tab || !tab.classList.contains('active')) return;
+      const el = document.activeElement;
+      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;   // on colle du texte, pas une photo
+      const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+      const fichiers = items.filter(it => it.kind === 'file' && /^image\//i.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+      if (!fichiers.length) return;
+      e.preventDefault();
+      _photosVersEmplacements(fichiers, -1);
+    });
+  }
 }
 
 // ============================================================
@@ -3160,6 +3259,7 @@ function deleteTech(el) {
 document.addEventListener('DOMContentLoaded', async () => {
   optLoad(); optApply();   // ⚙️ préférences d'affichage de ce poste
   initSig();
+  initPhotoDnD();          // 📷 glisser-déposer et coller des photos dans le rapport
 
   // Logo de connexion en version foncée (le PNG blanc d'origine est invisible sur fond blanc)
   if (typeof LOGO_B64 !== 'undefined') {
