@@ -1898,34 +1898,51 @@ function _clientImageVersDataUrl(file) {
 // L'erreur 429 = « trop de demandes » : le service impose un delai entre deux
 // appels (ou le credit du compte est epuise). On repatiente au lieu d'echouer.
 // ------------------------------------------------------------
+// Toutes les demandes a l'IA passent par ici. Le compte Mistral limite le
+// nombre d'appels par seconde : une erreur 429 (« trop de demandes ») ne fait
+// plus echouer l'operation, on repatiente et on retente automatiquement.
+const _MISTRAL_ATTENTES = [2500, 6000, 12000];
+let _mistralDernierAppel = 0;
+async function _mistralHttp(opts, onAttente) {
+  const URL = 'https://api.mistral.ai/v1/chat/completions';
+  // Espace mini entre deux demandes : evite de declencher la limite soi-meme
+  const ecart = Date.now() - _mistralDernierAppel;
+  if (ecart < 1200) await new Promise(r => setTimeout(r, 1200 - ecart));
+  let resp = null;
+  for (let essai = 0; essai <= _MISTRAL_ATTENTES.length; essai++) {
+    _mistralDernierAppel = Date.now();
+    resp = await fetch(URL, opts);
+    if (resp.status !== 429 || essai === _MISTRAL_ATTENTES.length) return resp;
+    const sec = Math.round(_MISTRAL_ATTENTES[essai] / 1000);
+    const msg = `⏳ Service IA saturé — nouvelle tentative dans ${sec} s… (${essai + 1}/${_MISTRAL_ATTENTES.length})`;
+    if (typeof onAttente === 'function') onAttente(msg);
+    else if (typeof toast === 'function') toast(msg, '#d97706');
+    await new Promise(r => setTimeout(r, _MISTRAL_ATTENTES[essai]));
+  }
+  return resp;
+}
+// Variante pratique : envoie un corps de requete et renvoie directement le texte
 async function _mistralFetch(body, onAttente) {
   if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
-  const attentes = [2500, 6000, 12000];
-  for (let essai = 0; essai <= attentes.length; essai++) {
-    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
-      body: JSON.stringify(body)
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    }
-    let msg = 'API ' + resp.status;
-    try { const e = await resp.json(); msg = (e.error && e.error.message) || (e.message) || msg; } catch (er) {}
-    if (resp.status === 429 && essai < attentes.length) {
-      const sec = Math.round(attentes[essai] / 1000);
-      if (typeof onAttente === 'function') onAttente(`⏳ Service IA momentanément saturé — nouvelle tentative dans ${sec} s… (${essai + 1}/${attentes.length})`);
-      await new Promise(r => setTimeout(r, attentes[essai]));
-      continue;
-    }
-    if (resp.status === 429) {
-      throw new Error("L'IA a refusé la demande (trop d'appels rapprochés, ou crédit Mistral épuisé). Patientez une minute et réessayez ; si cela persiste, vérifiez le compte sur console.mistral.ai.");
-    }
-    if (resp.status === 401 || resp.status === 403) throw new Error('Clé Mistral refusée (401/403) — à renouveler sur console.mistral.ai.');
-    throw new Error(msg);
+  const resp = await _mistralHttp({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify(body)
+  }, onAttente);
+  if (resp.ok) {
+    const data = await resp.json();
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   }
-  throw new Error('Service IA indisponible');
+  let msg = 'API ' + resp.status;
+  try { const e = await resp.json(); msg = (e.error && e.error.message) || e.message || msg; } catch (er) {}
+  throw new Error(_mistralMessage(resp.status, msg));
+}
+// Message lisible pour les erreurs les plus frequentes
+function _mistralMessage(statut, brut) {
+  if (statut === 429) return "L'IA a refusé la demande : trop d'appels rapprochés, ou crédit Mistral épuisé. Patientez une minute et réessayez ; si cela se répète, vérifiez le crédit du compte sur console.mistral.ai.";
+  if (statut === 401 || statut === 403) return 'Clé Mistral refusée (' + statut + ') — à renouveler sur console.mistral.ai.';
+  if (statut === 402) return 'Crédit Mistral épuisé — rechargez le compte sur console.mistral.ai.';
+  return brut || ('API ' + statut);
 }
 
 // Demande a l'IA de structurer le texte lu en fiche client
@@ -3615,7 +3632,7 @@ Réponds UNIQUEMENT avec le texte réécrit et corrigé, rien d'autre.`;
   const systemPrompt = prompts[type] || basePrompt;
 
   try {
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    const response = await _mistralHttp({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -4675,12 +4692,12 @@ async function bonOcrImages(images) {
   if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
   const content = [{ type: 'text', text: 'Transcris INTÉGRALEMENT et fidèlement tout le texte visible de ce bon de travaux scanné (toutes les pages fournies), en conservant les libellés et leurs valeurs (gérance, n° de bon, immeuble/adresse, locataire, téléphones, problème…). Réponds uniquement par le texte brut, sans commentaire.' }];
   images.forEach(d => content.push({ type: 'image_url', image_url: d }));
-  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const resp = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 2000, messages: [{ role: 'user', content }] })
   });
-  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error('OCR : ' + m); }
+  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(_mistralMessage(resp.status, 'OCR : ' + m)); }
   const data = await resp.json();
   return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
 }
@@ -4740,9 +4757,10 @@ async function bonProcessFile(file) {
     setStatus('');
     bonShowConfirm(infos, file.name, false, texte);
   } catch (err) {
-    setStatus('');
     console.error('Bon error:', err);
-    toast('Erreur : ' + err.message, '#e63946');
+    setStatus(`<div class="cl-err">⚠️ ${_escapeHtml(String(err.message || err))}</div>`);
+    setTimeout(() => setStatus(''), 15000);
+    toast('Lecture du bon impossible — voir le message ci-dessus', '#e63946');
   }
 }
 
@@ -5720,7 +5738,7 @@ async function bonExtractInfosIA(texte) {
     '"concierge": "nom et téléphone du concierge"\n' +
     '}';
 
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const response = await _mistralHttp({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -5740,7 +5758,7 @@ async function bonExtractInfosIA(texte) {
   if (!response.ok) {
     let m = 'API ' + response.status;
     try { const e = await response.json(); m = (e.error && e.error.message) || m; } catch (e) {}
-    throw new Error(m);
+    throw new Error(_mistralMessage(response.status, m));
   }
   const data = await response.json();
   const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
@@ -7156,7 +7174,7 @@ async function bonNoteAICorrect() {
       "CONSERVE toutes les informations chiffrées telles quelles : prix en CHF, quantités, dates, type de traitement, produits. " +
       "N'invente AUCUN prix ni information absente. N'ajoute pas de TVA ni de total si non fournis. " +
       "Reste concis et factuel. Réponds UNIQUEMENT par la note corrigée (texte simple, sans Markdown, sans préambule ni commentaire).";
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    const response = await _mistralHttp({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
       body: JSON.stringify({
@@ -10190,7 +10208,7 @@ async function docExtractFromAI(texte) {
     '- DATES D\'INTERVENTION : si une ou plusieurs dates d\'intervention/de passage apparaissent (ex "Intervention du 12.03.2026" ou "Passages : 12.03 et 19.03.2026"), crée une LIGNE SÉPARÉE dédiée, de la forme {"desc":"Dates d\'interventions : 30.01.2026","qte":1,"prix":0}. Ne les mets PAS dans le champ "date" du document (qui est la date d\'émission), ni dans l\'objet, ni collées à une autre prestation.\n' +
     '- STRUCTURE DES LIGNES souhaitée (une entrée JSON par ligne, dans cet ordre quand les éléments existent) : 1) la prestation/description principale (prix 0 si pas de montant en face), 2) une ligne "Dates d\'interventions : ..." si des dates figurent, 3) la ligne "Matériel et main d\'œuvre" (ou le forfait) qui porte le montant. N\'ajoute PAS toi-même de ligne pour le n° de bon de travaux (elle est gérée séparément).\n' +
     '- NE FORCE PAS la somme des lignes à égaler le sous_total : reporte les montants tels qu\'ils sont écrits, rien de plus.';
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const response = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({
@@ -13002,7 +13020,7 @@ async function diagAICorrect(field) {
       "CONSERVE toutes les informations telles quelles : mesures, pourcentages, dimensions, noms d'insectes, produits, prix en CHF, délais. " +
       "N'invente AUCUNE information absente. Reste concis. " +
       "Réponds UNIQUEMENT par le texte corrigé (texte simple, sans Markdown, sans préambule ni commentaire).";
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    const response = await _mistralHttp({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
       body: JSON.stringify({
@@ -16622,7 +16640,7 @@ async function fournExtractInfosIA(texte) {
     '"tva":"montant de la TVA, chiffres uniquement",\n' +
     '"montant":"montant total TTC, chiffres uniquement (ex 1234.50)",\n' +
     '"description":"objet ou résumé court des articles/prestations"\n}';
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const response = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({
@@ -16741,7 +16759,7 @@ async function ancExtractIA(texte) {
     '"rabais":"montant du rabais en CHF (ligne \'Rabais\'), chiffres uniquement (ex 94.5)"\n' +
     '}\n' +
     "IMPORTANT : sépare bien le DESTINATAIRE de la facture (facturation) du LIEU d'intervention (locataire). Ne renvoie que des nombres pour prix_ht et rabais (sans 'CHF', point décimal).";
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const response = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({
@@ -18074,7 +18092,7 @@ async function _rappExtractChunk(part) {
     "libelle (texte complet : nom du payeur + communication), reference (numéro de facture ou communication si présent, sinon chaîne vide). " +
     "Réponds STRICTEMENT en JSON sans aucun texte autour : " +
     "{\"paiements\":[{\"date\":\"\",\"montant\":0,\"libelle\":\"\",\"reference\":\"\"}]}\n\nEXTRAIT :\n" + part;
-  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  const resp = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
     body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 5000, messages: [{ role: 'user', content: prompt }] })
