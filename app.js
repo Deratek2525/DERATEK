@@ -1893,9 +1893,43 @@ function _clientImageVersDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
-// Demande a l'IA de structurer le texte lu en fiche client
-async function _clientExtraireIA(texte) {
+// ------------------------------------------------------------
+// Appel a l'IA Mistral avec nouvelle tentative automatique.
+// L'erreur 429 = « trop de demandes » : le service impose un delai entre deux
+// appels (ou le credit du compte est epuise). On repatiente au lieu d'echouer.
+// ------------------------------------------------------------
+async function _mistralFetch(body, onAttente) {
   if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const attentes = [2500, 6000, 12000];
+  for (let essai = 0; essai <= attentes.length; essai++) {
+    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+      body: JSON.stringify(body)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    }
+    let msg = 'API ' + resp.status;
+    try { const e = await resp.json(); msg = (e.error && e.error.message) || (e.message) || msg; } catch (er) {}
+    if (resp.status === 429 && essai < attentes.length) {
+      const sec = Math.round(attentes[essai] / 1000);
+      if (typeof onAttente === 'function') onAttente(`⏳ Service IA momentanément saturé — nouvelle tentative dans ${sec} s… (${essai + 1}/${attentes.length})`);
+      await new Promise(r => setTimeout(r, attentes[essai]));
+      continue;
+    }
+    if (resp.status === 429) {
+      throw new Error("L'IA a refusé la demande (trop d'appels rapprochés, ou crédit Mistral épuisé). Patientez une minute et réessayez ; si cela persiste, vérifiez le compte sur console.mistral.ai.");
+    }
+    if (resp.status === 401 || resp.status === 403) throw new Error('Clé Mistral refusée (401/403) — à renouveler sur console.mistral.ai.');
+    throw new Error(msg);
+  }
+  throw new Error('Service IA indisponible');
+}
+
+// Demande a l'IA de structurer le texte lu en fiche client
+async function _clientExtraireIA(texte, onAttente) {
   const systemPrompt =
     "Tu es l'assistant d'une entreprise suisse d'antinuisibles (DERATEK). On te donne le texte brut d'une carte de visite, " +
     "d'un en-tête de courrier, d'une signature d'e-mail ou d'un document d'entreprise. Tu en extrais les coordonnées du CLIENT.\n" +
@@ -1916,36 +1950,21 @@ async function _clientExtraireIA(texte) {
     "- num = numéro de client ou de référence s'il apparaît, sinon vide.\n" +
     "- notes = tout renseignement utile qui ne rentre pas ailleurs (2e téléphone, n° TVA, IBAN, horaires, autres personnes). Sinon vide.\n" +
     "N'INVENTE RIEN : une information absente reste une chaîne vide. Ne complète pas un NPA ou une ville que tu n'as pas lus.";
-  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
-    body: JSON.stringify({
-      model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 700,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte.slice(0, 12000) }]
-    })
-  });
-  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (er) {} throw new Error(m); }
-  const data = await resp.json();
-  let brut = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '{}';
+  let brut = await _mistralFetch({
+    model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 700,
+    response_format: { type: 'json_object' },
+    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte.slice(0, 12000) }]
+  }, onAttente) || '{}';
   brut = String(brut).replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   const i = brut.indexOf('{'), j = brut.lastIndexOf('}');
   if (i >= 0 && j > i) brut = brut.slice(i, j + 1);
   return JSON.parse(brut);
 }
 // Transcription d'images par l'IA (carte de visite photographiee, capture d'ecran)
-async function _clientOcrImages(images) {
-  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+async function _clientOcrImages(images, onAttente) {
   const content = [{ type: 'text', text: "Transcris INTÉGRALEMENT et fidèlement tout le texte visible sur cette image (carte de visite, en-tête de courrier, signature d'e-mail ou document d'entreprise). Conserve les libellés, les numéros de téléphone, les adresses e-mail et postales exactement tels qu'ils apparaissent. Réponds uniquement par le texte brut, sans commentaire." }];
   images.forEach(d => content.push({ type: 'image_url', image_url: d }));
-  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
-    body: JSON.stringify({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 1500, messages: [{ role: 'user', content }] })
-  });
-  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (er) {} throw new Error('Lecture de l\'image : ' + m); }
-  const data = await resp.json();
-  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  return await _mistralFetch({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 1500, messages: [{ role: 'user', content }] }, onAttente);
 }
 // Traitement complet du fichier depose
 async function clientProcessFile(file) {
@@ -1962,13 +1981,13 @@ async function clientProcessFile(file) {
       if (!texte || texte.trim().length < 15) {
         setStatus('🔍 PDF scanné — lecture par l\'IA…');
         const imgs = await bonRenderToImages(file);
-        texte = await _clientOcrImages(imgs);
+        texte = await _clientOcrImages(imgs, setStatus);
       }
     } else {
       setStatus('🔍 Lecture de l\'image par l\'IA…');
       const data = await _clientImageVersDataUrl(file);
       if (!data) throw new Error('Image illisible');
-      texte = await _clientOcrImages([data]);
+      texte = await _clientOcrImages([data], setStatus);
     }
     if (!texte || texte.trim().length < 10) {
       setStatus('');
@@ -1976,13 +1995,17 @@ async function clientProcessFile(file) {
       return;
     }
     setStatus('🤖 Analyse des coordonnées…');
-    const info = await _clientExtraireIA(texte);
+    // Le compte Mistral limite le nombre d'appels par seconde : on laisse
+    // respirer entre la lecture de l'image et l'analyse du texte.
+    await new Promise(r => setTimeout(r, 1300));
+    const info = await _clientExtraireIA(texte, setStatus);
     setStatus('');
     clientRemplirFormulaire(info, texte);
   } catch (e) {
     console.warn('import client', e);
-    setStatus('');
-    toast('Lecture impossible : ' + (e.message || e), '#e63946');
+    setStatus(`<div class="cl-err">⚠️ ${_escapeHtml(String(e.message || e))}</div>`);
+    setTimeout(() => setStatus(''), 12000);
+    toast('Lecture impossible — voir le message ci-dessus', '#e63946');
   }
 }
 // Ouvre le formulaire « Nouveau client » pre-rempli, en signalant ce qui a ete trouve

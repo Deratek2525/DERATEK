@@ -1808,3 +1808,10 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 }
 .plan-tech:hover, .fb-sel:hover { border-color: #94a3b8; }
 .fb-sel { margin-top: 3px; width: 100%; max-width: 260px; }
+
+/* Message d'erreur de l'import IA (clients) */
+.cl-err {
+  display: inline-block; text-align: left; max-width: 620px;
+  background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 10px;
+  padding: 10px 14px; color: #991b1b; font-size: 13px; font-weight: 600; line-height: 1.5;
+}
