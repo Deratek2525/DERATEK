@@ -5,16 +5,16 @@
 <title>DERATEK — Professional Pest Control</title>
 
 <!-- Application installable sur l'ecran d'accueil (iPhone, Android, ordinateur) -->
-<link rel="manifest" href="./manifest.json?v=20260904tk">
+<link rel="manifest" href="./manifest.json?v=20260904cu">
 <meta name="theme-color" content="#0d1b3e">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260904tk">
-<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260904tk">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260904tk">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260904cu">
+<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260904cu">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260904cu">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DERATEK">
-<link rel="stylesheet" href="./style.css?v=20260904tk">
+<link rel="stylesheet" href="./style.css?v=20260904cu">
 </head>
 <body>
 
@@ -146,7 +146,7 @@
         <div class="form-group"><label class="form-label">Nom / Raison sociale *</label><input class="form-input" id="cl-nom" placeholder="Régie Naef SA"></div>
         <div class="form-group"><label class="form-label">Type *</label>
           <select class="form-input" id="cl-type">
-            <option>Gérance</option><option>Particulier</option><option>PPE</option><option>Commune</option><option>Association</option><option>Entreprise</option>
+            <option>Gérance</option><option>Particulier</option><option>Curateur</option><option>PPE</option><option>Commune</option><option>Association</option><option>Entreprise</option>
           </select>
         </div>
       </div>
@@ -163,6 +163,8 @@
             <option value="Responsable du bâtiment">Responsable du bâtiment</option>
             <option value="Responsable technique">Responsable technique</option>
             <option value="Technicien">Technicien</option>
+            <option value="Curateur">Curateur</option>
+            <option value="Curatrice">Curatrice</option>
             <option value="Propriétaire">Propriétaire</option>
             <option value="Contact">Personne de contact</option>
           </select>
@@ -653,6 +655,8 @@
                   <option value="Responsable du bâtiment">Responsable du bâtiment</option>
                   <option value="Responsable technique">Responsable technique</option>
                   <option value="Technicien">Technicien</option>
+                  <option value="Curateur">Curateur</option>
+                  <option value="Curatrice">Curatrice</option>
                   <option value="Propriétaire">Propriétaire</option>
                   <option value="Contact">Personne de contact</option>
                 </select>
@@ -1170,6 +1174,7 @@
           <div class="pill active" onclick="setFilter(&#39;clients&#39;,&#39;Tous&#39;,this)">Tous</div>
           <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;Gérance&#39;,this)">Gérance</div>
           <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;Particulier&#39;,this)">Particulier</div>
+          <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;Curateur&#39;,this)">Curateur</div>
           <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;PPE&#39;,this)">PPE</div>
           <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;Association&#39;,this)">Association</div>
           <div class="pill" onclick="setFilter(&#39;clients&#39;,&#39;Commune&#39;,this)">Commune</div>
@@ -1549,16 +1554,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260904tk"></script>
+  <script src="./fonts_arial.js?v=20260904cu"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260904tk"></script>
-<script src="./footer_prestations.js?v=20260904tk"></script>
-<script src="./config.js?v=20260904tk"></script>
-<script src="./app.js?v=20260904tk"></script>
-<script src="./pdf.js?v=20260904tk"></script>
+<script src="./logo.js?v=20260904cu"></script>
+<script src="./footer_prestations.js?v=20260904cu"></script>
+<script src="./config.js?v=20260904cu"></script>
+<script src="./app.js?v=20260904cu"></script>
+<script src="./pdf.js?v=20260904cu"></script>
 
 </body></html>

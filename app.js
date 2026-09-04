@@ -336,7 +336,7 @@ const genId = () => {
   (DB.rapports || []).forEach(r => { const m = re.exec(String(r && r.id || '')); if (m) max = Math.max(max, parseInt(m[1], 10)); });
   return `R-${year}-${String(max + 1).padStart(4, '0')}`;
 };
-const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',PPE:'#2d9e6b',Commune:'#2563eb',Association:'#0ea5e9',Entreprise:'#e63946'}[t] || '#6b7280');
+const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',Curateur:'#0d9488',PPE:'#2d9e6b',Commune:'#2563eb',Association:'#0ea5e9',Entreprise:'#e63946'}[t] || '#6b7280');
 // Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
 const GERANCE_PALETTE = [
   '#3b82f6', // bleu
@@ -1866,11 +1866,12 @@ async function _clientExtraireIA(texte) {
     '{"nom":"","type":"","contactNom":"","contactRole":"","tel":"","email":"","web":"","adresse":"","npa":"","ville":"","num":"","notes":""}\n' +
     "Règles :\n" +
     "- nom = raison sociale de l'entreprise ; si c'est un particulier, son nom complet.\n" +
-    "- type = exactement l'une de ces valeurs : Gérance, Particulier, PPE, Commune, Association, Entreprise. " +
-    "Une régie/gérance immobilière → Gérance. Une commune ou un service communal → Commune. Une personne seule → Particulier. Sinon Entreprise.\n" +
+    "- type = exactement l'une de ces valeurs : Gérance, Particulier, Curateur, PPE, Commune, Association, Entreprise. " +
+    "Une régie/gérance immobilière → Gérance. Une commune ou un service communal → Commune. " +
+    "Un curateur, une curatrice, un service de curatelle, une autorité de protection de l'adulte (APEA) ou un mandataire qui gère les affaires d'une personne protégée → Curateur. Une personne seule → Particulier. Sinon Entreprise.\n" +
     "- contactNom = nom de la personne de contact SANS civilité ni titre (pas de M./Mme).\n" +
     "- contactRole = exactement l'une de ces valeurs si elle correspond, sinon vide : Gérant, Gérante, Gérant technique, Gérante technique, " +
-    "Directeur, Directrice, Concierge, Responsable du bâtiment, Responsable technique, Technicien, Propriétaire, Contact.\n" +
+    "Directeur, Directrice, Concierge, Responsable du bâtiment, Responsable technique, Technicien, Curateur, Curatrice, Propriétaire, Contact.\n" +
     "- tel = un seul numéro, format suisse lisible (ex. 032 552 21 72 ou +41 79 000 00 00). Préfère le fixe de l'entreprise ; " +
     "s'il y a aussi un mobile, mets-le dans notes.\n" +
     "- adresse = rue et numéro uniquement. npa = code postal (4 chiffres en Suisse). ville = localité seule.\n" +
@@ -1952,9 +1953,10 @@ function clientRemplirFormulaire(info, texteBrut) {
   const val = k => String((info && info[k]) || '').trim();
   openNewClient();
   const set = (id, v) => { const el = $(id); if (el && v) el.value = v; };
-  const TYPES = ['Gérance', 'Particulier', 'PPE', 'Commune', 'Association', 'Entreprise'];
+  const TYPES = ['Gérance', 'Particulier', 'Curateur', 'PPE', 'Commune', 'Association', 'Entreprise'];
   const ROLES = ['Gérant', 'Gérante', 'Gérant technique', 'Gérante technique', 'Directeur', 'Directrice',
-                 'Concierge', 'Responsable du bâtiment', 'Responsable technique', 'Technicien', 'Propriétaire', 'Contact'];
+                 'Concierge', 'Responsable du bâtiment', 'Responsable technique', 'Technicien',
+                 'Curateur', 'Curatrice', 'Propriétaire', 'Contact'];
   set('cl-nom', val('nom'));
   const t = TYPES.find(x => x.toLowerCase() === val('type').toLowerCase());
   if (t) $('cl-type').value = t;
@@ -4843,10 +4845,12 @@ function _bonAdresseInterv(b) {
              qui: [loc.prenom, loc.nom].filter(Boolean).join(' ') || 'le locataire' };
   }
 
-  // 2) la fiche du client, sauf si c'est une gerance
+  // 2) la fiche du client, sauf si c'est une gerance ou un curateur : leur
+  //    adresse est celle de leur bureau, jamais celle du logement a traiter.
   const cli = (b.geranceId ? (DB.clients || []).find(c => c.id === b.geranceId) : null)
     || (b.geranceNom ? (DB.clients || []).find(c => _couleurKey(c.nom) === _couleurKey(b.geranceNom)) : null);
-  if (cli && String(cli.adresse || '').trim() && String(cli.type || '') !== 'Gérance') {
+  const _typeBureau = ['Gérance', 'Curateur'].indexOf(String((cli && cli.type) || '')) >= 0;
+  if (cli && String(cli.adresse || '').trim() && !_typeBureau) {
     return { adresse: compose(cli.adresse, cli.npa, cli.ville), source: 'client', qui: cli.nom || '' };
   }
   return { adresse: '', source: '', qui: '' };
@@ -8715,7 +8719,7 @@ function _openFactureFromDevis(devis) {
 }
 
 // Types de clients pour lesquels on propose de créer directement un devis/facture
-const CLIENT_TYPES_DOC = ['Particulier', 'PPE', 'Association', 'Commune'];
+const CLIENT_TYPES_DOC = ['Particulier', 'Curateur', 'PPE', 'Association', 'Commune'];
 // Crée un devis OU une facture pré-rempli depuis un client (le client est le destinataire/payeur)
 function createDocFromClient(clientId, type) {
   type = type || 'devis';
@@ -16740,6 +16744,7 @@ function ancShowForm(infos) {
         <select class="form-input" id="anc-client-type" style="font-size:12px;margin-top:6px;max-width:220px;">
           <option value="Gérance">Gérance</option><option value="Particulier">Particulier</option>
           <option value="PPE">PPE</option><option value="Commune">Commune</option>
+          <option value="Curateur">Curateur</option>
           <option value="Association">Association</option><option value="Entreprise">Entreprise</option>
         </select>
       </div>
