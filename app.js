@@ -1827,6 +1827,43 @@ function clientHandleDrop(e) {
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if (f) clientProcessFile(f);
 }
+// Coller directement une capture d'ecran (Cmd+V) quand on est sur l'ecran Clients,
+// et accepter le depot n'importe ou sur la page, pas seulement dans le cadre.
+function initClientImport() {
+  if (document.body.dataset.clImport) return;
+  document.body.dataset.clImport = '1';
+  const surClients = () => {
+    const sc = document.getElementById('screen-clients');
+    return !!(sc && sc.classList.contains('active')) && !document.querySelector('.modal-bg.open');
+  };
+  document.addEventListener('paste', e => {
+    if (!surClients()) return;
+    const el = document.activeElement;
+    if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;   // on colle du texte dans un champ
+    const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+    const f = items.filter(it => it.kind === 'file' && /^image\//i.test(it.type)).map(it => it.getAsFile()).filter(Boolean)[0];
+    if (!f) return;
+    e.preventDefault();
+    clientProcessFile(f);
+  });
+  // Depot sur toute la page Clients
+  const page = document.querySelector('#screen-clients .page-body');
+  if (page && !page.dataset.dnd) {
+    page.dataset.dnd = '1';
+    const dz = () => document.getElementById('client-dropzone');
+    const aDesFichiers = e => { const t = e.dataTransfer; return !!t && [...(t.types || [])].indexOf('Files') >= 0; };
+    const stop = e => { e.preventDefault(); e.stopPropagation(); };
+    page.addEventListener('dragover', e => { if (aDesFichiers(e)) { stop(e); e.dataTransfer.dropEffect = 'copy'; const d = dz(); if (d) d.classList.add('drag'); } });
+    page.addEventListener('dragleave', e => { if (e.target === page) { const d = dz(); if (d) d.classList.remove('drag'); } });
+    page.addEventListener('drop', e => {
+      if (!aDesFichiers(e)) return;
+      stop(e);
+      const d = dz(); if (d) d.classList.remove('drag');
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) clientProcessFile(f);
+    });
+  }
+}
 function clientHandleInput(e) {
   const f = e.target.files && e.target.files[0];
   if (f) clientProcessFile(f);
@@ -3460,6 +3497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   optLoad(); optApply();   // ⚙️ préférences d'affichage de ce poste
   initSig();
   initPhotoDnD();          // 📷 glisser-déposer et coller des photos dans le rapport
+  initClientImport();      // 🪪 glisser-déposer et coller une capture d'écran dans Clients
 
   // Logo de connexion en version foncée (le PNG blanc d'origine est invisible sur fond blanc)
   if (typeof LOGO_B64 !== 'undefined') {
