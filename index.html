@@ -5,16 +5,16 @@
 <title>DERATEK — Professional Pest Control</title>
 
 <!-- Application installable sur l'ecran d'accueil (iPhone, Android, ordinateur) -->
-<link rel="manifest" href="./manifest.json?v=20260904pi">
+<link rel="manifest" href="./manifest.json?v=20260904cl">
 <meta name="theme-color" content="#0d1b3e">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260904pi">
-<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260904pi">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260904pi">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260904cl">
+<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260904cl">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260904cl">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DERATEK">
-<link rel="stylesheet" href="./style.css?v=20260904pi">
+<link rel="stylesheet" href="./style.css?v=20260904cl">
 </head>
 <body>
 
@@ -1178,6 +1178,19 @@
       </div>
     </div>
     <div class="page-body">
+      <!-- Import IA : carte de visite, en-tête de courrier, capture d'écran, PDF -->
+      <div id="client-dropzone" class="bon-dropzone cl-dz"
+           onclick="document.getElementById('client-file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="clientHandleDrop(event)">
+        <div class="bon-dropzone-icon">🪪⬇️</div>
+        <div class="bon-dropzone-title">Glissez une carte de visite, un en-tête de courrier ou un PDF ici</div>
+        <div class="bon-dropzone-sub">Photo, capture d'écran, signature d'e-mail, PDF — l'IA lit le document et remplit la fiche client. Vous complétez ensuite ce qui manque.</div>
+        <input type="file" id="client-file-input" accept="application/pdf,image/*" style="display:none" onchange="clientHandleInput(event)">
+      </div>
+      <div id="client-import-status" style="display:none;margin:12px 0;text-align:center;font-size:13px;color:var(--navy);"></div>
+
       <div class="clients-grid" id="clients-grid"></div>
     </div>
   </div>
@@ -1536,16 +1549,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260904pi"></script>
+  <script src="./fonts_arial.js?v=20260904cl"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260904pi"></script>
-<script src="./footer_prestations.js?v=20260904pi"></script>
-<script src="./config.js?v=20260904pi"></script>
-<script src="./app.js?v=20260904pi"></script>
-<script src="./pdf.js?v=20260904pi"></script>
+<script src="./logo.js?v=20260904cl"></script>
+<script src="./footer_prestations.js?v=20260904cl"></script>
+<script src="./config.js?v=20260904cl"></script>
+<script src="./app.js?v=20260904cl"></script>
+<script src="./pdf.js?v=20260904cl"></script>
 
 </body></html>

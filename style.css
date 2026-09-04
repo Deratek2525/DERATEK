@@ -1771,3 +1771,31 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
   background: #f2fbf7; box-shadow: 0 0 0 3px rgba(45, 158, 107, .28) inset;
   outline: 2px dashed #2d9e6b; outline-offset: -8px;
 }
+
+/* ============================================================
+   IMPORT IA D'UNE FICHE CLIENT
+   ============================================================ */
+.cl-dz { margin-bottom: 16px; padding: 18px 20px; }
+.cl-dz .bon-dropzone-icon { font-size: 26px; }
+
+/* Bandeau de resultat en haut du formulaire client */
+.cl-ia {
+  background: #f0f7ff; border: 1.5px solid #b9d3f5; border-radius: 10px;
+  padding: 11px 13px; margin-bottom: 14px;
+}
+.cl-ia .t { font-size: 13px; font-weight: 800; color: #17418c; margin-bottom: 6px; }
+.cl-ia .l { font-size: 12px; line-height: 1.5; color: #37455f; }
+.cl-ia .l b { font-weight: 800; }
+.cl-ia .l.ok b { color: #15803d; }
+.cl-ia .l.ko b { color: #b45309; }
+.cl-ia .v {
+  margin-top: 8px; background: #fff; border: 1px solid #b9d3f5; border-radius: 7px;
+  padding: 4px 10px; font-size: 11.5px; font-weight: 700; color: #1d4ed8;
+  cursor: pointer; font-family: inherit;
+}
+.cl-ia .v:hover { background: #dfeafd; }
+.cl-ia-txt {
+  margin-top: 9px; background: #fff; border: 1px solid #dbe3ef; border-radius: 8px;
+  padding: 9px 11px; font-size: 11.5px; line-height: 1.5; color: #475569;
+  white-space: pre-wrap; max-height: 200px; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace;
+}

@@ -1758,7 +1758,11 @@ function planifyClient(id) {
   if ($('iv-adresse') && adr) $('iv-adresse').value = adr;
   if ($('iv-nuisible') && meta.nuisible) $('iv-nuisible').value = meta.nuisible;
 }
+function _clientRetireBanniereIA() {
+  ['cl-ia-banner', 'cl-ia-texte'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+}
 function openNewClient() {
+  _clientRetireBanniereIA();
   state.editingClientId = null;
   $('modal-client-title').textContent = 'Nouveau client';
   ['cl-nom','cl-contact','cl-tel','cl-email','cl-web','cl-adresse','cl-npa','cl-ville','cl-num','cl-tarif','cl-notes','cl-nuisible'].forEach(id => { const el = $(id); if (el) el.value = ''; });
@@ -1769,6 +1773,7 @@ function openNewClient() {
   openModal('modal-client');
 }
 function editClient(id) {
+  _clientRetireBanniereIA();
   state.editingClientId = id;
   const c = DB.clients.find(x => x.id === id); if (!c) return;
   $('modal-client-title').textContent = 'Modifier le client';
@@ -1809,6 +1814,199 @@ function saveClient() {
   DB.clients = list;
   closeModal('modal-client'); renderClients(); renderDashboard();
 }
+// ============================================================
+// IMPORT IA D'UNE FICHE CLIENT
+// On depose une carte de visite, un en-tete de courrier, une capture d'ecran
+// ou un PDF : l'IA en extrait les coordonnees et pre-remplit le formulaire.
+// Rien n'est enregistre sans validation — Dany complete puis clique Enregistrer.
+// ============================================================
+function clientHandleDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('client-dropzone');
+  if (dz) dz.classList.remove('drag');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) clientProcessFile(f);
+}
+function clientHandleInput(e) {
+  const f = e.target.files && e.target.files[0];
+  if (f) clientProcessFile(f);
+  e.target.value = '';
+}
+// Reduit une image avant l'envoi a l'IA : 1600 px suffisent pour lire un texte
+// et l'appel reste rapide.
+function _clientImageVersDataUrl(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve('');
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = () => resolve(ev.target.result);
+      img.onload = () => {
+        const MAX = 1600, r = Math.min(1, MAX / Math.max(img.width, img.height));
+        if (r >= 1 && (file.size || 0) < 1500000) { resolve(ev.target.result); return; }
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+        const cx = cv.getContext('2d');
+        cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+        cx.drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/jpeg', 0.88));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+// Demande a l'IA de structurer le texte lu en fiche client
+async function _clientExtraireIA(texte) {
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const systemPrompt =
+    "Tu es l'assistant d'une entreprise suisse d'antinuisibles (DERATEK). On te donne le texte brut d'une carte de visite, " +
+    "d'un en-tête de courrier, d'une signature d'e-mail ou d'un document d'entreprise. Tu en extrais les coordonnées du CLIENT.\n" +
+    "Réponds UNIQUEMENT par un objet JSON valide, sans texte autour, avec exactement ces clés :\n" +
+    '{"nom":"","type":"","contactNom":"","contactRole":"","tel":"","email":"","web":"","adresse":"","npa":"","ville":"","num":"","notes":""}\n' +
+    "Règles :\n" +
+    "- nom = raison sociale de l'entreprise ; si c'est un particulier, son nom complet.\n" +
+    "- type = exactement l'une de ces valeurs : Gérance, Particulier, PPE, Commune, Association, Entreprise. " +
+    "Une régie/gérance immobilière → Gérance. Une commune ou un service communal → Commune. Une personne seule → Particulier. Sinon Entreprise.\n" +
+    "- contactNom = nom de la personne de contact SANS civilité ni titre (pas de M./Mme).\n" +
+    "- contactRole = exactement l'une de ces valeurs si elle correspond, sinon vide : Gérant, Gérante, Gérant technique, Gérante technique, " +
+    "Directeur, Directrice, Concierge, Responsable du bâtiment, Responsable technique, Technicien, Propriétaire, Contact.\n" +
+    "- tel = un seul numéro, format suisse lisible (ex. 032 552 21 72 ou +41 79 000 00 00). Préfère le fixe de l'entreprise ; " +
+    "s'il y a aussi un mobile, mets-le dans notes.\n" +
+    "- adresse = rue et numéro uniquement. npa = code postal (4 chiffres en Suisse). ville = localité seule.\n" +
+    "- web = site internet sans http:// ; vide s'il n'y en a pas.\n" +
+    "- num = numéro de client ou de référence s'il apparaît, sinon vide.\n" +
+    "- notes = tout renseignement utile qui ne rentre pas ailleurs (2e téléphone, n° TVA, IBAN, horaires, autres personnes). Sinon vide.\n" +
+    "N'INVENTE RIEN : une information absente reste une chaîne vide. Ne complète pas un NPA ou une ville que tu n'as pas lus.";
+  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({
+      model: DERATEK_CONFIG.mistral.model, temperature: 0, max_tokens: 700,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: texte.slice(0, 12000) }]
+    })
+  });
+  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (er) {} throw new Error(m); }
+  const data = await resp.json();
+  let brut = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '{}';
+  brut = String(brut).replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const i = brut.indexOf('{'), j = brut.lastIndexOf('}');
+  if (i >= 0 && j > i) brut = brut.slice(i, j + 1);
+  return JSON.parse(brut);
+}
+// Transcription d'images par l'IA (carte de visite photographiee, capture d'ecran)
+async function _clientOcrImages(images) {
+  if (!(DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey)) throw new Error('Clé Mistral non configurée');
+  const content = [{ type: 'text', text: "Transcris INTÉGRALEMENT et fidèlement tout le texte visible sur cette image (carte de visite, en-tête de courrier, signature d'e-mail ou document d'entreprise). Conserve les libellés, les numéros de téléphone, les adresses e-mail et postales exactement tels qu'ils apparaissent. Réponds uniquement par le texte brut, sans commentaire." }];
+  images.forEach(d => content.push({ type: 'image_url', image_url: d }));
+  const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
+    body: JSON.stringify({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 1500, messages: [{ role: 'user', content }] })
+  });
+  if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (er) {} throw new Error('Lecture de l\'image : ' + m); }
+  const data = await resp.json();
+  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+}
+// Traitement complet du fichier depose
+async function clientProcessFile(file) {
+  const st = $('client-import-status');
+  const setStatus = msg => { if (st) { st.style.display = msg ? 'block' : 'none'; st.innerHTML = msg; } };
+  const estPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const estImg = /^image\//i.test(file.type || '');
+  if (!estPdf && !estImg) { toast('Déposez un PDF ou une image (photo, capture d\'écran)', '#e63946'); return; }
+  try {
+    let texte = '';
+    if (estPdf) {
+      setStatus('⏳ Lecture du PDF…');
+      texte = await bonExtractText(file);
+      if (!texte || texte.trim().length < 15) {
+        setStatus('🔍 PDF scanné — lecture par l\'IA…');
+        const imgs = await bonRenderToImages(file);
+        texte = await _clientOcrImages(imgs);
+      }
+    } else {
+      setStatus('🔍 Lecture de l\'image par l\'IA…');
+      const data = await _clientImageVersDataUrl(file);
+      if (!data) throw new Error('Image illisible');
+      texte = await _clientOcrImages([data]);
+    }
+    if (!texte || texte.trim().length < 10) {
+      setStatus('');
+      toast('Aucun texte lisible trouvé. Essayez une photo plus nette ou saisissez la fiche à la main.', '#e63946');
+      return;
+    }
+    setStatus('🤖 Analyse des coordonnées…');
+    const info = await _clientExtraireIA(texte);
+    setStatus('');
+    clientRemplirFormulaire(info, texte);
+  } catch (e) {
+    console.warn('import client', e);
+    setStatus('');
+    toast('Lecture impossible : ' + (e.message || e), '#e63946');
+  }
+}
+// Ouvre le formulaire « Nouveau client » pre-rempli, en signalant ce qui a ete trouve
+function clientRemplirFormulaire(info, texteBrut) {
+  const val = k => String((info && info[k]) || '').trim();
+  openNewClient();
+  const set = (id, v) => { const el = $(id); if (el && v) el.value = v; };
+  const TYPES = ['Gérance', 'Particulier', 'PPE', 'Commune', 'Association', 'Entreprise'];
+  const ROLES = ['Gérant', 'Gérante', 'Gérant technique', 'Gérante technique', 'Directeur', 'Directrice',
+                 'Concierge', 'Responsable du bâtiment', 'Responsable technique', 'Technicien', 'Propriétaire', 'Contact'];
+  set('cl-nom', val('nom'));
+  const t = TYPES.find(x => x.toLowerCase() === val('type').toLowerCase());
+  if (t) $('cl-type').value = t;
+  set('cl-contact', val('contactNom'));
+  const r = ROLES.find(x => x.toLowerCase() === val('contactRole').toLowerCase());
+  if (r && $('cl-contact-role')) $('cl-contact-role').value = r;
+  set('cl-tel', val('tel'));
+  set('cl-email', val('email'));
+  set('cl-web', val('web').replace(/^https?:\/\//i, ''));
+  set('cl-adresse', val('adresse'));
+  set('cl-npa', val('npa'));
+  set('cl-ville', val('ville'));
+  set('cl-num', val('num'));
+  set('cl-notes', val('notes'));
+
+  // Bandeau : ce que l'IA a trouve, ce qui reste a completer
+  const CHAMPS = [
+    ['nom', 'Nom'], ['type', 'Type'], ['contactNom', 'Contact'], ['tel', 'Téléphone'], ['email', 'E-mail'],
+    ['web', 'Site web'], ['adresse', 'Adresse'], ['npa', 'NPA'], ['ville', 'Ville'],
+  ];
+  const trouves = CHAMPS.filter(([k]) => val(k)).map(([, l]) => l);
+  const manquants = CHAMPS.filter(([k]) => !val(k)).map(([, l]) => l);
+  const body = document.querySelector('#modal-client .modal-body');
+  if (body) {
+    const anc = document.getElementById('cl-ia-banner');
+    if (anc) anc.remove();
+    const d = document.createElement('div');
+    d.id = 'cl-ia-banner';
+    d.className = 'cl-ia';
+    d.innerHTML = `
+      <div class="t">🤖 Fiche pré-remplie par l'IA — vérifiez avant d'enregistrer</div>
+      ${trouves.length ? `<div class="l ok"><b>Trouvé :</b> ${trouves.join(' · ')}</div>` : ''}
+      ${manquants.length ? `<div class="l ko"><b>À compléter :</b> ${manquants.join(' · ')}</div>` : ''}
+      <button type="button" class="v" onclick="clientVoirTexteLu()">📄 Voir le texte lu</button>`;
+    body.insertBefore(d, body.firstChild);
+    body.scrollTop = 0;
+  }
+  _clientTexteLu = texteBrut || '';
+  toast('🤖 Fiche pré-remplie — vérifiez puis enregistrez', '#2d9e6b');
+}
+let _clientTexteLu = '';
+function clientVoirTexteLu() {
+  const b = document.getElementById('cl-ia-texte');
+  if (b) { b.remove(); return; }
+  const anc = document.getElementById('cl-ia-banner'); if (!anc) return;
+  const d = document.createElement('div');
+  d.id = 'cl-ia-texte';
+  d.className = 'cl-ia-txt';
+  d.textContent = _clientTexteLu || '(rien)';
+  anc.appendChild(d);
+}
+
 function confirmDeleteClient(id, nom) {
   $('confirm-msg').textContent = `Supprimer "${nom}" ? Cette action est irréversible.`;
   $('confirm-btn').onclick = () => { DB.clients = DB.clients.filter(c => c.id !== id); closeModal('modal-confirm'); renderClients(); toast('Client supprimé', '#e63946'); };
