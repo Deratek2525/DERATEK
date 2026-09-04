@@ -19,8 +19,11 @@ const DERATEK_CONFIG = {
     // et l'application passe par la fonction /functions/v1/ia. Ainsi elle n'est
     // plus lisible depuis le site public ni depuis le depot GitHub.
     apiKey: '',
-
-    model:  'mistral-small-latest'
+    // Modeles disponibles dans l'organisation Mistral de DERATEK (page « Limites »).
+    // pixtral-12b-2409 n'existe plus : la lecture d'images passe par un modele
+    // multimodal encore en service.
+    model:       'mistral-small-2603',   // texte
+    modelVision: 'mistral-medium-latest' // images et PDF scannes
   },
   app: {
     name: 'DERATEK',

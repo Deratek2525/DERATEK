@@ -1990,7 +1990,7 @@ async function testerCleIA() {
       + (corps ? `<br>Message du serveur : « ${_escapeHtml(String(corps).slice(0, 400))} »` : '')
       + (infos ? `<br>${_escapeHtml(infos)}` : '')
       + `<br>Chemin : ${parRelais ? 'relais sécurisé Supabase (clé cachée)' : 'appel direct avec la clé de config.js'}`
-      + `<br>Modèle : ${_escapeHtml(DERATEK_CONFIG.mistral.model)}</div>`;
+      + `<br>Modèles : ${_escapeHtml(DERATEK_CONFIG.mistral.model)} (texte) · ${_escapeHtml(DERATEK_CONFIG.mistral.modelVision || '—')} (images)</div>`;
     if (resp.ok) { dire('✅ <b>La clé fonctionne.</b> Mistral a répondu normalement.' + detail, 'ok'); return; }
     if (resp.status === 503 && /MISTRAL_API_KEY/.test(String(corps))) {
       dire("🔑 <b>Le relais fonctionne, mais la clé n'y est pas encore enregistrée.</b> "
@@ -2071,7 +2071,7 @@ async function _clientExtraireIA(texte, onAttente) {
 async function _clientOcrImages(images, onAttente) {
   const content = [{ type: 'text', text: "Transcris INTÉGRALEMENT et fidèlement tout le texte visible sur cette image (carte de visite, en-tête de courrier, signature d'e-mail ou document d'entreprise). Conserve les libellés, les numéros de téléphone, les adresses e-mail et postales exactement tels qu'ils apparaissent. Réponds uniquement par le texte brut, sans commentaire." }];
   images.forEach(d => content.push({ type: 'image_url', image_url: d }));
-  return await _mistralFetch({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 1500, messages: [{ role: 'user', content }] }, onAttente);
+  return await _mistralFetch({ model: (DERATEK_CONFIG.mistral.modelVision || DERATEK_CONFIG.mistral.model), temperature: 0, max_tokens: 1500, messages: [{ role: 'user', content }] }, onAttente);
 }
 // Traitement complet du fichier depose
 async function clientProcessFile(file) {
@@ -4791,7 +4791,7 @@ async function bonOcrImages(images) {
   const resp = await _mistralHttp({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DERATEK_CONFIG.mistral.apiKey },
-    body: JSON.stringify({ model: 'pixtral-12b-2409', temperature: 0, max_tokens: 2000, messages: [{ role: 'user', content }] })
+    body: JSON.stringify({ model: (DERATEK_CONFIG.mistral.modelVision || DERATEK_CONFIG.mistral.model), temperature: 0, max_tokens: 2000, messages: [{ role: 'user', content }] })
   });
   if (!resp.ok) { let m = 'API ' + resp.status; try { const e = await resp.json(); m = (e.error && e.error.message) || m; } catch (e) {} throw new Error(_mistralMessage(resp.status, 'OCR : ' + m)); }
   const data = await resp.json();
