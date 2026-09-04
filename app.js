@@ -373,7 +373,7 @@ function _geranceCanon(nom) {
 function _couleurKey(nom) {
   return String(_geranceCanon(nom) || '')
     .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/^(gerance|regie|agence|immobiliere?)\s+/i, '')
+    .replace(/^((gerance|regie|agence|immobiliere?|immobilier)\s+)+/i, '')
     .replace(/[^a-z0-9]+/g, ' ').trim();
 }
 function colorForGeranceName(nom) {
@@ -5204,13 +5204,17 @@ function ficheBonRefresh(complet) {
   // on les propose ici pour que rien n'echappe a la fiche.
   const gKey = _couleurKey(b.geranceNom || '');
   const ecartes = _bonNolien(b);
+  const idsCites = _bonDocsCites(b).trouves.map(c => c.doc.id);
   const probables = gKey
     ? (DB.documents || []).filter(d => !d.bonId && !_docIsArchive(d) && !_isRappelDoc(d)
-        && ecartes.indexOf(d.id) === -1
+        && ecartes.indexOf(d.id) === -1 && idsCites.indexOf(d.id) === -1
         && _couleurKey(d.clientNom || '') === gKey)
         .sort((x, y) => String(y.dateDoc || '').localeCompare(String(x.dateDoc || '')))
         .slice(0, 8)
     : [];
+  // Devis / factures dont le NUMERO est ecrit noir sur blanc dans le bon
+  const cites = _bonDocsCites(b);
+  const citesAutres = cites.trouves.filter(c => c.doc.bonId !== b.id);
   const LBLDOC = { brouillon:'Brouillon', pret:'Prêt à être envoyé', envoye:'Envoyé', accepte:'Accepté',
                    refuse:'Refusé', envoyee:'Envoyée', payee:'Payée' };
   const lien = (ico, titre, sous, act, extra) =>
@@ -5376,6 +5380,21 @@ function ficheBonRefresh(complet) {
             ${facts.map(d => lien('🧾', 'Facture ' + _escapeHtml(d.numero || ''), _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—'), `editDoc('${d.id}')`, btLien(`ficheBonDetacher('${d.id}')`, '✕', 'Détacher de ce bon'))).join('')}
             ${rdvs.map(iv => lien('🗓', 'Rendez-vous agenda', (iv.date ? fmtDate(iv.date) : '') + (iv.heure ? ' à ' + iv.heure : ''), `showScreen('agenda')`)).join('')}
           ` : '<div class="fb-vide">Aucun rapport, devis ni facture rattaché à ce bon.</div>'}
+          ${citesAutres.length || cites.manquants.length ? `
+            <div class="fb-sst">📌 Cités dans le texte du bon</div>
+            ${citesAutres.map(c => {
+              const d = c.doc;
+              const autreBon = d.bonId ? ((DB.bons || []).find(x => x.id === d.bonId) || null) : null;
+              return lien((d.type === 'facture' ? '🧾' : '💰'),
+                ((d.type === 'facture' ? 'Facture ' : 'Devis ') + _escapeHtml(d.numero || ''))
+                  + ` <span class="fb-cite">cité : ${_escapeHtml(c.cite)}</span>`,
+                (fmtDate(d.dateDoc) || '') + ' · ' + _displayMontant(d.total || 0) + ' CHF · ' + (LBLDOC[d.statut] || d.statut || '—')
+                  + (autreBon ? ' · ⚠️ déjà rattaché au bon ' + _escapeHtml(autreBon.numero || '') : ''),
+                `editDoc('${d.id}')`,
+                autreBon ? '' : btLien(`ficheBonRattacher('${d.id}')`, '🔗 Oui', 'Oui — rattacher ce document à ce bon', 'btn-navy'));
+            }).join('')}
+            ${cites.manquants.map(t => `<div class="fb-manque">🔎 N° <b>${_escapeHtml(t)}</b> cité dans le bon, mais introuvable dans vos devis et factures</div>`).join('')}
+          ` : ''}
           ${probables.length ? `
             <div class="fb-sst">Peut-être liés — même client, rattachés à aucun bon</div>
             ${probables.map(d => lien((d.type === 'facture' ? '🧾' : '💰'),
@@ -7483,6 +7502,40 @@ const BON_OR = '#b8860b';
 // ---- Carte d'un bon, version Cockpit : une ligne compacte et lisible --------
 // Reprend exactement les mêmes actions que la carte classique ; seule la mise
 // en page change (les réglages fins se font en ouvrant la fiche du bon).
+// ============================================================
+// DOCUMENTS CITES DANS LE TEXTE DU BON
+// Les gerances ecrivent souvent « adjudication de vos offres 2026-218 &
+// 2026-723 » : on retrouve ces devis/factures et on les propose en priorite.
+// ============================================================
+function _bonNumerosCites(b) {
+  const txt = _bonProblemeClean(b) + ' ' + String((b && b.immeuble) || '');
+  const propre = _factNorm((b && b.numero) || '');
+  const vus = [], out = [];
+  const re = /(.{0,16})\b((?:20\d{2})\s*[-–—/]\s*\d{2,4})\b/g;
+  let m;
+  while ((m = re.exec(txt)) !== null) {
+    const avant = String(m[1]).toLowerCase();
+    if (/bcm|bon\s*(n|:|°)/.test(avant)) continue;      // c'est le numero d'un bon
+    const brut = String(m[2]).replace(/\s+/g, '');
+    const tok = _factNorm(brut);
+    if (!tok || tok.length < 6 || tok === propre) continue;
+    if (vus.indexOf(tok) >= 0) continue;
+    vus.push(tok);
+    out.push({ tok, txt: brut });
+  }
+  return out;
+}
+// Retrouve les documents correspondants ; signale ceux qui restent introuvables
+function _bonDocsCites(b) {
+  const trouves = [], manquants = [];
+  _bonNumerosCites(b).forEach(c => {
+    const d = (DB.documents || []).find(x => !_isRappelDoc(x) && !_docIsArchive(x)
+      && _factNorm(x.numero || '').endsWith(c.tok));
+    if (d) trouves.push({ doc: d, cite: c.txt }); else manquants.push(c.txt);
+  });
+  return { trouves, manquants };
+}
+
 // ============================================================
 // BANDEAU DES GERANCES DANS LA LISTE DES BONS
 // Presentation au choix dans les Options.
