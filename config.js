@@ -19,11 +19,11 @@ const DERATEK_CONFIG = {
     // et l'application passe par la fonction /functions/v1/ia. Ainsi elle n'est
     // plus lisible depuis le site public ni depuis le depot GitHub.
     apiKey: '',
-    // Modeles disponibles dans l'organisation Mistral de DERATEK (page « Limites »).
-    // pixtral-12b-2409 n'existe plus : la lecture d'images passe par un modele
-    // multimodal encore en service.
-    model:       'mistral-small-2603',   // texte
-    modelVision: 'mistral-medium-latest' // images et PDF scannes
+    // Le relais Supabase choisit le fournisseur ET le modele (secrets
+    // ANTHROPIC_API_KEY / ANTHROPIC_MODEL). Les noms ci-dessous ne servent
+    // qu'a l'affichage dans « Tester la connexion a l'IA ».
+    model:       'Claude Haiku 4.5',
+    modelVision: 'Claude Haiku 4.5'
   },
   app: {
     name: 'DERATEK',
