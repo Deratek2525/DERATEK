@@ -1815,3 +1815,16 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
   background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 10px;
   padding: 10px 14px; color: #991b1b; font-size: 13px; font-weight: 600; line-height: 1.5;
 }
+
+/* Resultat du test de connexion a l'IA (Options) */
+.ia-test {
+  margin-top: 10px; border-radius: 9px; padding: 10px 13px;
+  font-size: 12.5px; line-height: 1.55; border: 1.5px solid;
+}
+.ia-test.ok  { background: #ecfdf5; border-color: #86efac; color: #14532d; }
+.ia-test.ko  { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; }
+.ia-test.att { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.ia-test .d {
+  margin-top: 7px; font-size: 11px; line-height: 1.5; opacity: .85;
+  font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-word;
+}

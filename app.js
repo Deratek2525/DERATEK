@@ -1933,19 +1933,65 @@ async function _mistralFetch(body, onAttente) {
     const data = await resp.json();
     return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   }
-  let msg = 'API ' + resp.status;
-  try { const e = await resp.json(); msg = (e.error && e.error.message) || e.message || msg; } catch (er) {}
-  throw new Error(_mistralMessage(resp.status, msg));
+  throw new Error(_mistralMessage(resp.status, await _mistralCorps(resp)));
 }
+// Recupere le message d'erreur du serveur, qu'il soit en JSON ou en texte brut
+async function _mistralCorps(resp) {
+  let t = '';
+  try { t = await resp.text(); } catch (e) { return ''; }
+  try { const j = JSON.parse(t); return (j.error && (j.error.message || j.error.type)) || j.message || j.detail || t; }
+  catch (e) { return t; }
+}
+
+// ------------------------------------------------------------
+// DIAGNOSTIC : un seul appel minimal a l'IA, sans nouvelle tentative,
+// pour savoir exactement ce que repond Mistral.
+// ------------------------------------------------------------
+async function testerCleIA() {
+  const box = document.getElementById('opt-ia-test');
+  const dire = (html, coul) => { if (box) box.innerHTML = `<div class="ia-test ${coul}">${html}</div>`; };
+  const cle = (DERATEK_CONFIG && DERATEK_CONFIG.mistral && DERATEK_CONFIG.mistral.apiKey) || '';
+  if (!cle) { dire('❌ Aucune clé n\'est configurée dans config.js.', 'ko'); return; }
+  dire('⏳ Test en cours…', 'att');
+  const t0 = Date.now();
+  try {
+    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cle },
+      body: JSON.stringify({ model: DERATEK_CONFIG.mistral.model, max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] })
+    });
+    const ms = Date.now() - t0;
+    const corps = resp.ok ? '' : await _mistralCorps(resp);
+    const tete = k => { try { return resp.headers.get(k) || ''; } catch (e) { return ''; } };
+    const infos = ['ratelimitbysize-remaining', 'x-ratelimit-remaining', 'retry-after']
+      .map(k => { const v = tete(k); return v ? `${k} : ${v}` : ''; }).filter(Boolean).join(' · ');
+    const detail = `<div class="d">Réponse HTTP ${resp.status} en ${ms} ms`
+      + (corps ? `<br>Message du serveur : « ${_escapeHtml(String(corps).slice(0, 400))} »` : '')
+      + (infos ? `<br>${_escapeHtml(infos)}` : '')
+      + `<br>Clé utilisée : ${_escapeHtml(cle.slice(0, 4))}…${_escapeHtml(cle.slice(-4))} (${cle.length} caractères) · modèle ${_escapeHtml(DERATEK_CONFIG.mistral.model)}</div>`;
+    if (resp.ok) { dire('✅ <b>La clé fonctionne.</b> Mistral a répondu normalement.' + detail, 'ok'); return; }
+    if (resp.status === 429) {
+      dire("⚠️ <b>Refusé : 429 « trop de demandes ».</b> Sur un seul appel isolé, ce n'est pas la cadence : "
+        + "le plan gratuit « Experiment » n'est probablement pas activé sur le compte (il faut valider un numéro de téléphone par SMS sur console.mistral.ai), "
+        + "ou la clé est bloquée / utilisée par quelqu'un d'autre." + detail, 'ko');
+      return;
+    }
+    if (resp.status === 401 || resp.status === 403) { dire('❌ <b>Clé refusée (' + resp.status + ').</b> Elle est invalide, révoquée ou expirée — créez-en une nouvelle sur console.mistral.ai.' + detail, 'ko'); return; }
+    dire('❌ <b>Erreur ' + resp.status + '.</b>' + detail, 'ko');
+  } catch (e) {
+    dire('❌ <b>Impossible de joindre Mistral.</b> Connexion internet, pare-feu ou bloqueur de publicité ?<br><span class="d">' + _escapeHtml(String(e.message || e)) + '</span>', 'ko');
+  }
+}
+
 // Message lisible pour les erreurs les plus frequentes
 function _mistralMessage(statut, brut) {
   if (statut === 429) {
     // On montre AUSSI le message exact de Mistral : il dit s'il s'agit de la
     // cadence (« rate limit ») ou du compte/quota (« capacity », « quota »).
     const d = String(brut || '').replace(/^API 429\s*/, '').trim();
-    return "L'IA a refusé la demande (429). Le compte gratuit Mistral n'autorise qu'environ 1 appel par seconde. "
-      + "L'application a déjà réessayé 3 fois. Si cela se répète : vérifiez sur console.mistral.ai que le plan gratuit "
-      + "« Experiment » est bien activé (vérification par SMS) et que personne d'autre n'utilise la clé."
+    return "L'IA a refusé la demande (429), même après 3 nouvelles tentatives espacées de 3, 6 puis 12 secondes. "
+      + "Ce n'est donc pas une question de rythme : le problème vient du compte Mistral. "
+      + "Ouvrez ⚙️ Options → 🤖 Intelligence artificielle → « Tester la connexion à l'IA » pour savoir exactement lequel."
       + (d ? '\n\nMessage de Mistral : « ' + d + ' »' : '');
   }
   if (statut === 401 || statut === 403) return 'Clé Mistral refusée (' + statut + ') — à renouveler sur console.mistral.ai.';
@@ -4023,6 +4069,12 @@ function openOptions() {
              <input type="checkbox" ${OPT.gerCollant === '1' ? 'checked' : ''} onchange="optSetGerCollant(this.checked)" style="accent-color:var(--navy);width:16px;height:16px;">
              Garder le nom de la gérance collé en haut pendant le défilement</label>`,
         ].join(''))}
+        ${bloc('🤖 Intelligence artificielle', `
+          <div style="font-size:12px;color:var(--g600);margin-bottom:9px;">
+            L'IA lit les bons de travaux, les cartes de visite et corrige les textes. Si elle refuse de répondre,
+            ce test dit en une seconde d'où vient le problème.</div>
+          <button class="btn btn-navy btn-sm" onclick="testerCleIA()">🔎 Tester la connexion à l'IA</button>
+          <div id="opt-ia-test"></div>`)}
         ${bloc('🔐 Mon compte', `
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="flex:1;min-width:180px;font-size:13px;font-weight:600;color:var(--navy);">Mot de passe de connexion
