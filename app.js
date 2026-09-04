@@ -4353,7 +4353,7 @@ function _mobFicheBon() {
           ${dates.length < 5 ? `<div class="mob-act" style="margin-top:8px;" onclick="bonAddDateEffectuee('${b.id}')">➕ Ajouter un passage (aujourd'hui)</div>` : ''}
         </div>
         ${b.dateIntervention ? `<div class="mob-act" style="margin-top:8px;" onclick="addBonToGoogle('${b.id}')">📅 Ajouter ce rendez-vous à Google Agenda</div>` : ''}
-        ${_bonAffecte(b) ? `<div class="mob-l"><b>Affecté à</b>${_escapeHtml(_bonAffecte(b))}</div>` : ''}`)}
+        <div class="mob-l"><b>👷 Technicien affecté</b>${_bonAffecteSelect(b, 'mob-sel')}</div>`)}
       ${bloc('🐛 Nuisible', `
         <div class="mob-l"><b>Nuisible principal</b>${nd.nuisible ? `<span class="mob-nuis">${_escapeHtml(nd.nuisible)}</span>` : '—'}</div>
         ${nd.nuisible2 ? `<div class="mob-l"><b>Second nuisible</b>${_escapeHtml(nd.nuisible2)}</div>` : ''}
@@ -5172,7 +5172,8 @@ function ficheBonRefresh(complet) {
             : '<span class="fb-vide">à planifier</span>'}</div>
           <div class="fb-l"><b>Passages effectués</b>${faits.length
             ? faits.map(d => fmtDate(d)).join(' · ') : '<span class="fb-vide">aucun</span>'}</div>
-          <div class="fb-l"><b>Technicien affecté</b>${aff ? _escapeHtml(aff) : '<span class="fb-vide">personne</span>'}</div>
+          <div class="fb-l"><b>Technicien affecté</b>
+            ${_bonAffecteSelect(b, 'fb-sel')}</div>
         </div>
 
         <div class="fb-card">
@@ -6831,6 +6832,19 @@ function _setBonDatesInterv(b, dates) {
   b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 }
 // Affecte un technicien à un bon
+// Liste deroulante « Technicien affecte » d'un bon, reutilisee dans la fenetre
+// Planifier, la fiche complete et la version telephone.
+function _bonAffecteSelect(b, cls, apres) {
+  const aff = _bonAffecte(b);
+  const noms = [];
+  (DB.techs || []).forEach(t => { const n = _techNom(t); if (n && noms.indexOf(n) < 0) noms.push(n); });
+  if (aff && noms.indexOf(aff) < 0) noms.push(aff);
+  const esc = v => String(v).replace(/"/g, '&quot;');
+  const opts = ['<option value="">— Personne —</option>']
+    .concat(noms.map(n => `<option value="${esc(n)}"${aff === n ? ' selected' : ''}>${_escapeHtml(n)}</option>`));
+  return `<select class="${cls || ''}" onchange="bonSetAffecte('${b.id}', this.value);${apres || ''}"
+    title="Choisir le technicien responsable de ce bon">${opts.join('')}</select>`;
+}
 function bonSetAffecte(id, value) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), value, _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
@@ -7268,7 +7282,14 @@ function bonPlanRefresh() {
 
     <div class="plan-sec" style="border-bottom:0;padding-bottom:0;">
       <div class="plan-t">👷 Technicien affecté</div>
-      <div class="plan-l"><span class="plan-vide">${aff ? _escapeHtml(aff) : 'Personne n\'est affecté à ce bon. L\'affectation se fait dans la fiche complète du bon.'}</span></div>
+      <div class="plan-l">
+        ${_bonAffecteSelect(b, 'plan-in plan-tech', ' bonPlanRefresh();')}
+      </div>
+      <div class="plan-l plan-vide" style="margin-top:6px;">
+        ${(DB.techs || []).length
+          ? 'La liste vient de « 👷 Techniciens » dans la barre du haut.'
+          : 'Aucun technicien enregistré — ajoutez-les via « 👷 Techniciens » dans la barre du haut.'}
+      </div>
     </div>`;
 }
 
