@@ -336,6 +336,8 @@ const genId = () => {
   (DB.rapports || []).forEach(r => { const m = re.exec(String(r && r.id || '')); if (m) max = Math.max(max, parseInt(m[1], 10)); });
   return `R-${year}-${String(max + 1).padStart(4, '0')}`;
 };
+// Nombre maximal de passages enregistrables sur un bon (et de dates sur une fiche client)
+const MAX_PASSAGES = 10;
 const colorType = t => ({Gérance:'#f4a623',Particulier:'#7c3aed',Curateur:'#0d9488',PPE:'#2d9e6b',Commune:'#2563eb',Association:'#0ea5e9',Entreprise:'#e63946'}[t] || '#6b7280');
 // Palette de 12 couleurs distinctes pour différencier visuellement les gérances entre elles
 const GERANCE_PALETTE = [
@@ -1497,7 +1499,7 @@ function renderClients() {
             <input type="date" value="${d}" onchange="clientSetDate('${c.id}',${i},this.value)" style="font-size:11px;font-weight:bold;color:#166534;padding:2px 5px;border-radius:6px;border:1.5px solid #22c55e;">
             <button class="btn btn-ghost btn-xs" style="color:#b00;padding:1px 5px;" onclick="clientSetDate('${c.id}',${i},'')" title="Retirer cette date">✕</button>
           </div>`).join('')}
-          ${m.dates.length < 5 ? `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="clientAddDate('${c.id}')" title="Ajouter une date d'intervention">+ Ajouter (${m.dates.length}/5)</button>` : `<div style="font-size:10px;color:var(--g400);">5/5 (max)</div>`}
+          ${m.dates.length < MAX_PASSAGES ? `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="clientAddDate('${c.id}')" title="Ajouter une date d'intervention">+ Ajouter (${m.dates.length}/${MAX_PASSAGES})</button>` : `<div style="font-size:10px;color:var(--g400);">${MAX_PASSAGES}/${MAX_PASSAGES} (max)</div>`}
         </div>
       </div>`; })()}
       <div style="display:flex;gap:14px;align-items:center;min-width:170px;border-left:1px solid #f0f0f0;padding-left:12px;">
@@ -1577,11 +1579,11 @@ function clReadDates() {
     .map(i => i.value.trim()).filter(Boolean)
     .sort();
 }
-// Dates d'intervention éditables directement sur la carte client (comme sur les bons, max 5)
+// Dates d'intervention éditables directement sur la carte client (comme sur les bons)
 function clientAddDate(id) {
   const c = (DB.clients || []).find(x => x.id === id); if (!c) return;
   const m = _clientMeta(c); const dates = m.dates.slice();
-  if (dates.length >= 5) { toast('Maximum 5 dates d\'intervention', '#e63946'); return; }
+  if (dates.length >= MAX_PASSAGES) { toast('Maximum ' + MAX_PASSAGES + ' dates d\'intervention', '#e63946'); return; }
   dates.push(today());
   const list = DB.clients; const i = list.findIndex(x => x.id === id);
   if (i >= 0) { list[i] = { ...list[i], notes: _composeClientNotes(m.notesClean, m.nuisible, dates) }; DB.clients = list; }
@@ -4526,7 +4528,7 @@ function _mobFicheBon() {
                 onchange="bonSetDateEffectuee('${b.id}', ${i}, this.value)">
               <button type="button" class="mob-x" onclick="bonSetDateEffectuee('${b.id}', ${i}, '')" aria-label="Retirer ce passage">✕</button>
             </span>`).join('')}</div>` : '<div style="color:#8b97ad;">Aucun passage enregistré</div>'}
-          ${dates.length < 5 ? `<div class="mob-act" style="margin-top:8px;" onclick="bonAddDateEffectuee('${b.id}')">➕ Ajouter un passage (aujourd'hui)</div>` : ''}
+          ${dates.length < MAX_PASSAGES ? `<div class="mob-act" style="margin-top:8px;" onclick="bonAddDateEffectuee('${b.id}')">➕ Ajouter un passage (aujourd'hui)</div>` : ''}
         </div>
         ${b.dateIntervention ? `<div class="mob-act" style="margin-top:8px;" onclick="addBonToGoogle('${b.id}')">📅 Ajouter ce rendez-vous à Google Agenda</div>` : ''}
         <div class="mob-l"><b>👷 Technicien affecté</b>${_bonAffecteSelect(b, 'mob-sel')}</div>`)}
@@ -5899,7 +5901,7 @@ function _nextBonManuelNumero() {
 function openManualBon(dates) {
   if (typeof showScreen === 'function') showScreen('bons');
   _pendingBonPdf = null;
-  _pendingBonDates = (dates && dates.length) ? dates.slice(0, 5) : null;
+  _pendingBonDates = (dates && dates.length) ? dates.slice(0, MAX_PASSAGES) : null;
   const fi = $('bon-file-input'); if (fi) fi.value = '';
   bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
 }
@@ -6024,7 +6026,7 @@ function bonShowConfirm(infos, fileName, manual, rawText) {
 
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">📅 Dates d'intervention (→ bon)</div>
       <div id="bonf-dates" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-        ${((_pendingBonDates || []).slice(0, 5)).map(d => `<input type="date" class="form-input" data-bonf-date value="${d}" style="width:auto;font-size:13px;">`).join('')}
+        ${((_pendingBonDates || []).slice(0, MAX_PASSAGES)).map(d => `<input type="date" class="form-input" data-bonf-date value="${d}" style="width:auto;font-size:13px;">`).join('')}
         <button type="button" class="btn btn-ghost btn-sm" onclick="bonfAddDate()" title="Ajouter une date d'intervention">+ Ajouter une date</button>
       </div>
 
@@ -7025,7 +7027,7 @@ function _bonComposeProbleme(b) {
   return _bonAssembleProbleme(_bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 }
 function _setBonDatesInterv(b, dates) {
-  const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, 5).sort();
+  const arr = (dates || []).map(s => String(s||'').trim()).filter(Boolean).slice(0, MAX_PASSAGES).sort();
   b.probleme = _bonAssembleProbleme(_bonProblemeClean(b), arr, _bonAffecte(b), _bonNote(b), _bonRapFait(b), _bonAlerte(b), _bonColor(b), _bonPJraw(b), _bonNolienRaw(b));
 }
 // Affecte un technicien à un bon
@@ -7456,7 +7458,7 @@ function bonPlanRefresh() {
 
     <div class="plan-sec">
       <div class="plan-t">✅ Interventions déjà faites</div>
-      <div class="plan-aide">Les passages que vous avez réellement effectués sur ce bon (5 au maximum).</div>
+      <div class="plan-aide">Les passages que vous avez réellement effectués sur ce bon (${MAX_PASSAGES} au maximum).</div>
       ${faits.length
         ? faits.map((d, i) => `<div class="plan-l">
             <span class="plan-num">${i + 1}<sup>${i === 0 ? 'er' : 'e'}</sup> passage</span>
@@ -7467,9 +7469,9 @@ function bonPlanRefresh() {
           </div>`).join('')
         : '<div class="plan-vide">Aucun passage enregistré pour le moment.</div>'}
       <div class="plan-l">
-        ${faits.length < 5
+        ${faits.length < MAX_PASSAGES
           ? `<button class="btn btn-green btn-sm" onclick="bonAddDateEffectuee('${b.id}'); bonPlanRefresh();">➕ Ajouter un passage (date du jour)</button>`
-          : '<span class="plan-vide">Maximum de 5 passages atteint.</span>'}
+          : `<span class="plan-vide">Maximum de ${MAX_PASSAGES} passages atteint.</span>`}
       </div>
     </div>
 
@@ -7883,7 +7885,7 @@ function renderBonCard(b, solid) {
                       <input type="date" value="${d}" onchange="bonSetDateEffectuee('${b.id}', ${i}, this.value)" style="font-family:Arial;font-size:11px;font-weight:bold;color:#166534;padding:3px 5px;border-radius:6px;border:1.5px solid #22c55e;">
                       <button class="btn btn-ghost btn-xs" style="color:#b00;padding:1px 5px;" onclick="bonSetDateEffectuee('${b.id}', ${i}, '')" title="Retirer">✕</button>
                     </div>`).join('');
-                    if (ds.length < 5) html += `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="bonAddDateEffectuee('${b.id}')" title="Ajouter une date d'intervention effectuée">+ Ajouter (${ds.length}/5)</button>`;
+                    if (ds.length < MAX_PASSAGES) html += `<button class="btn btn-ghost btn-xs" style="color:#166534;" onclick="bonAddDateEffectuee('${b.id}')" title="Ajouter une date d'intervention effectuée">+ Ajouter (${ds.length}/${MAX_PASSAGES})</button>`;
                     else html += `<div style="font-size:10px;color:${TL};">5/5 (max)</div>`;
                     return html;
                   })()}
@@ -8172,7 +8174,7 @@ function updateBonDateInterv(id, value) {
   let ajoutee = false;
   if (value) {
     const dates = _bonDatesInterv(b);
-    if (dates.indexOf(value) === -1 && dates.length < 5) {
+    if (dates.indexOf(value) === -1 && dates.length < MAX_PASSAGES) {
       dates.push(value);
       _setBonDatesInterv(b, dates);
       ajoutee = true;
