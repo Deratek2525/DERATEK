@@ -18472,7 +18472,12 @@ function renderRappResults() {
   }
   const parNum = [], deja = [], nonRat = [];
   _rappMatches.forEach((m, i) => { (!m.facture ? nonRat : m.dejaPayee ? deja : parNum).push(i); });
-  const totDet = _rappPaiements.reduce((s, p) => s + p.montant, 0);
+  // « Total reçu » = ce que la BANQUE a crédité (montant lu sur le relevé),
+  // et non la somme des factures rapprochées : c'est ce chiffre que Dany
+  // compare au total du relevé PostFinance.
+  const totRecu = _rappPaiements.reduce((s, p) => s + ((p.montantLu != null ? p.montantLu : p.montant) || 0), 0);
+  const totDet = _rappPaiements.reduce((s, p) => s + (p.montant || 0), 0);
+  const ecartFac = Math.round((totDet - totRecu) * 100) / 100;
   const nbEncaisse = _rappMatches.filter(m => m.valide || m.dejaPayee).length;
   const nbRat = _rappMatches.filter(m => m.facture).length;
   const restant = _rappMatches.filter(m => m.facture && !m.valide && !m.dejaPayee).length;
@@ -18483,7 +18488,10 @@ function renderRappResults() {
 
   let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
     ${stat('Paiements', _rappPaiements.length, 'var(--navy)')}
-    ${stat('Total reçu', _rappMoney(totDet) + ' CHF', 'var(--navy)')}
+    ${stat('Total reçu', _rappMoney(totRecu) + ' CHF', 'var(--navy)')}
+    ${Math.abs(ecartFac) >= 0.01 ? `<div style="text-align:center;padding:0 14px;" title="Différence entre les montants crédités par la banque et les totaux des factures rapprochées (arrondis suisses aux 5 centimes, paiements partiels ou trop-perçus).">
+        <div style="font-size:20px;font-weight:800;color:${ecartFac > 0 ? '#b45309' : '#0d9488'};">${ecartFac > 0 ? '+' : ''}${_rappMoney(ecartFac)}</div>
+        <div style="font-size:10px;color:var(--g500);text-transform:uppercase;font-weight:700;">Écart factures</div></div>` : ''}
     ${stat('Reconnus', nbRat, '#0d9488')}
     ${stat('Encaissés', nbEncaisse, '#15803d')}
     <div style="flex:1;"></div>
