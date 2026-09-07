@@ -7335,10 +7335,9 @@ function updateNavCounts() {
   (DB.bons || []).forEach(b => {
     if (_isBonFactArchived(b)) return; // parti dans facturation archivée
     const s = b.statut || '';
-    if (s === 'termine') nT++;
-    else if (s === 'en-cours') nE++;
-    else if (s === 'demande-devis') { /* compté côté Devis, pas dans Bons actifs — cohérent avec la liste */ }
-    else nA++;
+    if (s === 'termine') { nT++; return; }
+    if (s === 'en-cours') nE++;          // gardent leur onglet dedie...
+    nA++;                                 // ...et restent comptes dans « Bons »
   });
   const docs = DB.documents || [];
   const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d)).length;
@@ -7991,10 +7990,10 @@ function renderBons() {
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
-    // Actifs = ni terminés, ni en cours, ni en demande de devis
-    // (en cours → onglet dédié ; demande de devis → écran Devis ;
-    //  « attente-devis » RESTE dans les bons actifs — demande de Dany)
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'demande-devis');
+    // Un bon ne DISPARAIT jamais de la rubrique « Bons » a cause de son statut :
+    // seuls les bons termines la quittent (ils ont leur propre onglet).
+    // « En cours » et « Demande de devis » gardent en plus leur onglet/compteur.
+    bons = bons.filter(b => !isTermine(b));
   }
   if (q) {
     bons = bons.filter(b =>
@@ -8005,7 +8004,8 @@ function renderBons() {
   if (count) {
     const lbl = state.bonsStatut !== null && state.bonsStatut !== undefined
       ? 'bon(s) « ' + BON_STATUT_META[state.bonsStatut].court + ' »'
-      : (state.bonsFilter === 'termines' ? 'bon(s) terminé(s)' : 'bon(s) actif(s)');
+      : (state.bonsFilter === 'termines' ? 'bon(s) terminé(s)'
+         : state.bonsFilter === 'en-cours' ? 'bon(s) en cours' : 'bon(s) en cours de vie');
     // Rapports à transmettre : bons dont le statut est « 📕 Rapport à transmettre »
     const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && (b.statut || '') === 'a-transmettre').length;
     const base = bons.length ? bons.length + ' ' + lbl : '';
