@@ -164,6 +164,10 @@ const DB = {
   set releves(v)    { this._cache.releves = v;     this._queue('releves'); },
 
   _queue(table) {
+    // les noms de clients/bons/documents alimentent la fusion des variantes de gérance
+    if (table === 'clients' || table === 'bons' || table === 'documents') {
+      try { _gerLibReset(); } catch (e) {}
+    }
     this._pending.add(table);
     if (this._processing) return;
     this._processing = true;
@@ -355,24 +359,82 @@ const GERANCE_PALETTE = [
   '#d946ef'  // magenta
 ];
 // Couleur déterministe à partir d'un nom (hash FNV-1a 32-bit)
-// Nom canonique d'une gérance : fusionne les variantes (ex "CPCN" et "Gérance CPCN").
-// On retire le préfixe "Gérance/Régie/..." et on unifie la casse/les espaces.
+// Clé de regroupement d'un nom : minuscules, sans accents ni ponctuation,
+// sans les préfixes de métier (Gérance / Régie / Agence / Immobilière...) ni les
+// suffixes juridiques (SA, Sàrl, AG...). Ainsi « Gérance Charles Berset SA » et
+// « Charles Berset SA » donnent la même clé « charles berset ».
+const _GER_PREFIXES = /^(gerances?|regies?|agences?|immobiliere?s?|immobilier|immo)\s+/;
+const _GER_SUFFIXES = /\s+(s\s*a|sa|sarl|s\s*a\s*r\s*l|ag|gmbh|srl|sas|spa|cie|et\s+cie)$/;
+function _gerCle(nom) {
+  let k = String(nom || '')
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  // mots de liaison sans valeur distinctive (« Muller et Christe » = « Muller & Christe »)
+  k = k.split(' ').filter(m => m && m !== 'et' && m !== 'and').join(' ');
+  let av;
+  do { av = k; k = k.replace(_GER_PREFIXES, '').trim(); } while (k !== av);
+  do { av = k; k = k.replace(_GER_SUFFIXES, '').trim(); } while (k !== av);
+  return k || String(nom || '').toLowerCase().trim();
+}
+// Libellé retenu pour chaque clé : la variante la plus utilisée dans les données
+// (clients + bons + documents). Recalculé quand la base change.
+let _GER_LIB = null, _GER_LIB_SIG = '';
+function _gerLibReset() { _GER_LIB = null; _GER_LIB_SIG = ''; }
+function _gerLibelles() {
+  let sig = '0';
+  try {
+    sig = [(DB.clients || []).length, (DB.bons || []).length,
+           (DB.documents || []).length, (DB.locataires || []).length].join('/');
+  } catch (e) {}
+  if (_GER_LIB && _GER_LIB_SIG === sig) return _GER_LIB;
+  const cpt = {};
+  const add = (nom, bonus) => {
+    const n = String(nom || '').trim();
+    if (!n || n.length > 80 || n.indexOf('\n') >= 0) return;
+    const k = _gerCle(n);
+    if (!k) return;
+    if (!cpt[k]) cpt[k] = {};
+    cpt[k][n] = (cpt[k][n] || 0) + 1 + (bonus || 0);
+  };
+  try {
+    (DB.clients   || []).forEach(c => add(c.nom, c.type === 'Gérance' ? 2 : 0));
+    (DB.bons      || []).forEach(b => add(b.geranceNom, 0));
+    (DB.documents || []).forEach(d => add(d.clientNom, 0));
+  } catch (e) {}
+  const out = {};
+  Object.keys(cpt).forEach(k => {
+    let best = '', score = -1;
+    Object.keys(cpt[k]).forEach(n => {
+      const v = cpt[k][n];
+      if (v > score || (v === score && n.length > best.length)) { best = n; score = v; }
+    });
+    out[k] = best;
+  });
+  _GER_LIB = out; _GER_LIB_SIG = sig;
+  return out;
+}
+// Nom canonique d'une gérance : fusionne les variantes d'écriture
+// (ex « CPCN » / « Gérance CPCN », « Charles Berset SA » / « Gérance Charles Berset SA »).
 function _geranceCanon(nom) {
-  let s = String(nom || '').trim();
+  const s = String(nom || '').trim();
   if (!s) return '';
-  const cle = s.toLowerCase()
-    .replace(/^(g[ée]rance|r[ée]gie|immobili[èe]re?|agence)\s+/i, '')
-    .replace(/\s+/g, ' ').trim();
-  // Table d'équivalences connues (clé normalisée → libellé affiché unique)
+  const cle = _gerCle(s);
+  if (!cle) return s;
+  // Table d'équivalences imposées (clé normalisée → libellé affiché unique)
   const ALIAS = {
     'cpcn': 'Gérance CPCN',
   };
   if (ALIAS[cle]) return ALIAS[cle];
-  return s; // sinon on garde le nom tel quel
+  try { const lib = _gerLibelles(); if (lib[cle]) return lib[cle]; } catch (e) {}
+  return s;
 }
-// Clé unique d'un nom pour les couleurs personnalisées : minuscules, sans accents,
-// sans le préfixe « Gérance / Régie / Agence », ponctuation neutralisée.
+// Clé unique d'un nom pour les couleurs personnalisées et les rapprochements.
 function _couleurKey(nom) {
+  return _gerCle(nom);
+}
+// Ancienne clé (préfixes seulement, suffixe juridique conservé) : sert à retrouver
+// les couleurs déjà enregistrées avant la fusion des variantes.
+function _couleurKeyLegacy(nom) {
   return String(_geranceCanon(nom) || '')
     .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/^((gerance|regie|agence|immobiliere?|immobilier)\s+)+/i, '')
@@ -386,6 +448,8 @@ function colorForGeranceName(nom) {
     const perso = (typeof OPT !== 'undefined' && OPT.couleursGerances) || {};
     const k2 = _couleurKey(nom);
     if (perso[k2]) return perso[k2];
+    const k3 = _couleurKeyLegacy(nom);
+    if (perso[k3]) return perso[k3];
     if (perso[key]) return perso[key];
   } catch (e) {}
   let hash = 0x811c9dc5;
@@ -725,7 +789,7 @@ async function saveNote(key){
 // RECHERCHE GLOBALE (barre du haut) — cherche partout dans l'app
 // ============================================================
 let _gsTimer = null;
-function _gsNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function _gsNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 function _gsHide() { const b = $('global-search-results'); if (b) { b.style.display = 'none'; b.innerHTML = ''; } const inp = $('global-search'); if (inp) inp.value = ''; }
 function globalSearch(q) { clearTimeout(_gsTimer); _gsTimer = setTimeout(function () { _globalSearchNow(q); }, 150); }
 function _gsOpenBon(b) {
@@ -2734,7 +2798,7 @@ function _clientOptionLabel(c) {
 function _normPerson(s) {
   return String(s || '')
     .replace(/\[ROLE:[^\]]*\]/g, '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // enlève les accents
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // enlève les accents
     .replace(/\b(m|mme|mr|mlle|monsieur|madame|mademoiselle)\b\.?/gi, ' ')
     .replace(/[.,;]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -4908,7 +4972,7 @@ const BON_NUISIBLES_GENERIQUES = [
 ];
 
 function _texteSansAccents(t) {
-  return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 // Renvoie jusqu'a deux nuisibles trouves dans un texte, du plus precis au plus general
@@ -10659,7 +10723,7 @@ function docImportSave() {
     .trim();
   {
     const norm = s => String(s||'')
-      .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
     const objetN = norm(objet);
     // S'assure qu'il y a au moins une ligne support
@@ -18306,11 +18370,11 @@ function _rappFactureDansCands(f, cands) {
 // Sûr : jamais de rattachement au montant seul — il faut aussi retrouver le nom.
 function _rappNomTokens(nom) {
   const stop = new Set(['sa', 'sarl', 'sagl', 'ag', 'gmbh', 'sas', 'monsieur', 'madame', 'mme', 'mlle', 'et', 'de', 'du', 'des', 'la', 'le', 'les', 'chez', 'gerance', 'regie', 'agence', 'immobiliere', 'immobilier', 'immobiliers', 'services', 'service', 'ppe']);
-  return String(nom || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return String(nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !stop.has(t));
 }
 function _rappFactureParMontantNom(p, factsAll, used) {
-  const lib = String((p.libelle || '') + ' ' + (p.reference || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const lib = String((p.libelle || '') + ' ' + (p.reference || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const cents = Math.round(((p.montantLu != null ? p.montantLu : p.montant) || 0) * 100);
   if (!cents) return null;
   // Tolérance de 2 ct : arrondi suisse aux 5 centimes (ex. facture 431.32 payée 431.30)
