@@ -7401,9 +7401,9 @@ function updateNavCounts() {
   (DB.bons || []).forEach(b => {
     if (_isBonFactArchived(b)) return; // parti dans facturation archivée
     const s = b.statut || '';
-    if (s === 'termine') { nT++; return; }
-    if (s === 'en-cours') nE++;          // gardent leur onglet dedie...
-    nA++;                                 // ...et restent comptes dans « Bons »
+    if (s === 'termine')  { nT++; return; }   // rubrique « Bons termines »
+    if (s === 'en-cours') { nE++; return; }   // rubrique « Bons en cours »
+    nA++;                                     // tout le reste = rubrique « Bons »
   });
   const docs = DB.documents || [];
   const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d)).length;
@@ -8056,10 +8056,12 @@ function renderBons() {
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
   } else {
-    // Un bon ne DISPARAIT jamais de la rubrique « Bons » a cause de son statut :
-    // seuls les bons termines la quittent (ils ont leur propre onglet).
-    // « En cours » et « Demande de devis » gardent en plus leur onglet/compteur.
-    bons = bons.filter(b => !isTermine(b));
+    // Les statuts qui possedent leur PROPRE rubrique quittent la liste « Bons » :
+    //   - « Termine »  -> onglet « Bons termines »
+    //   - « En cours » -> rubrique « Bons en cours »
+    // Tous les autres statuts (urgent, a contacter, a transmettre, devis...)
+    // restent visibles dans « Bons » : un bon n'y disparait jamais a cause d'eux.
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours');
   }
   if (q) {
     bons = bons.filter(b =>
