@@ -2274,7 +2274,7 @@ function renderRapports() {
     const draftsRap = (DB.rapports || []).filter(r => r.statut === 'Brouillon' && !_isRapportFactArchived(r))
       .map(r => ({ _kind: 'rap', r }));
     const _DIAG_LBL = { bois: '🪵 Diagnostic bois', rongeurs: '🐀 Rapport rongeurs', blattes: '🪳 Rapport blattes', fourmis: '🐜 Rapport fourmis', punaises: '🛏️ Rapport punaises' };
-    const draftsDiag = (DB.diagnostics || []).filter(d => (d.statut || 'Brouillon') === 'Brouillon')
+    const draftsDiag = (DB.diagnostics || []).filter(d => _diagStatut(d) === 'Brouillon')
       .map(d => ({ _kind: 'diag', d }));
     const drafts = draftsRap.concat(draftsDiag)
       .sort((a, b) => String((b.r ? b.r.date : b.d.dateDoc) || '').localeCompare(String((a.r ? a.r.date : a.d.dateDoc) || '')));
@@ -2355,10 +2355,12 @@ function renderRapports() {
     (groupes[cle] = groupes[cle] || []).push(r);
   });
   // Rapports spéciaux (diagnostics FM / RG / BL / DG) intégrés SOUS les mêmes rubans gérance.
-  // Affichés en filtre « Tous » (leur statut Brouillon/Finalisé diffère des rapports classiques).
+  // Ils suivent maintenant les onglets « Brouillon » et « Finalisés » comme les autres rapports.
   const diagGroupes = {};
-  if ((state.rapportsFilter || 'Tous') === 'Tous') {
+  const _fRap = state.rapportsFilter || 'Tous';
+  if (_fRap === 'Tous' || _fRap === 'Brouillon' || _fRap === 'Finalisé') {
     (DB.diagnostics || []).forEach(d => {
+      if (_fRap !== 'Tous' && _diagStatut(d) !== _fRap) return;
       const hay = ((d.numero||'') + ' ' + (d.clientNom||'') + ' ' + (d.locataireNom||'') + ' ' + (d.insectes||[]).join(' ') + ' ' + (d.tech||'')).toLowerCase();
       if (q && !hay.includes(q.toLowerCase())) return;
       const cle = (d.clientNom||'').trim() || '— Sans client —';
@@ -2416,7 +2418,7 @@ function renderRapports() {
   const ligneDiag = d => {
     const _dt = _diagType(d); const rg = _dt==='rongeurs', bl = _dt==='blattes', fm = _dt==='fourmis', pl = _dt==='punaises';
     const ico = pl?'🛏️':(fm?'🐜':(bl?'🪳':(rg?'🐀':'🪵')));
-    const stm = String(d.diagnostic||'').match(/\[STATUT:([^\]]*)\]/); const st = stm ? _decNote(stm[1]) : '';
+    const st = _diagStatut(d);
     const stBadge = st==='Brouillon'
       ? '<span class="badge" style="background:#fffbeb;color:#b45309;border:1px solid #fcd34d;">🕒 Brouillon</span>'
       : (st==='Finalisé' ? '<span class="badge" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">✓ Finalisé</span>' : '—');
@@ -4467,7 +4469,7 @@ function renderMobile() {
     const brR = (DB.rapports || []).filter(r => r.statut === 'Brouillon' && !_isRapportFactArchived(r))
       .map(r => ({ id: r.id, titre: '📋 ' + (r.id || ''), sous: (r.clientNom || '— Sans client —'), date: r.date, act: `editRapport('${r.id}')` }));
     const LBL = { bois: '🪵 Diagnostic bois', rongeurs: '🐀 Rapport rongeurs', blattes: '🪳 Rapport blattes', fourmis: '🐜 Rapport fourmis', punaises: '🛏️ Rapport punaises' };
-    const brD = (DB.diagnostics || []).filter(d => (d.statut || 'Brouillon') === 'Brouillon')
+    const brD = (DB.diagnostics || []).filter(d => _diagStatut(d) === 'Brouillon')
       .map(d => ({ id: d.id, titre: (LBL[_diagType(d)] || '🔬 Diagnostic') + ' ' + (d.numero || ''), sous: (d.clientNom || '— Sans client —'), date: d.dateDoc, act: `editDiag('${d.id}')` }));
     const brouillons = brR.concat(brD).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     corps = `
@@ -11600,6 +11602,17 @@ const _DIAG_MARKERS = {
 };
 const _DIAG_JSON_KEYS = new Set(['signes', 'postes', 'materiel', 'rodenticides', 'actions', 'preparation']);   // tableaux/objets → JSON dans le marqueur
 const _DIAG_MARKER_RE = /\s*\[(?:METHODE|ZONES|TRAIT|SUIVREM|SUIVI|SIGNES|POSTES|POSTNB|PREV|MATERIEL|RODENT|RODAUTRE|ACTIONS|BUREAU|DOCTYPE|NOPLAN|NOPHOTOS|NOTECH|CONTRATP|CONTRATM|CONTRATZ|CONTRATR|CONTRAT|DI1|DI2|DI3|DIP|STATUT|NOSIGN|RUBAN|NOHUM|NOACT|NOGRAV|NOETEND|HYGIENE|FICHE|PREPAREM|PREPA):[^\]]*\]/g;
+// Statut d'un diagnostic / rapport nuisible (bois, rongeurs, blattes, fourmis, punaises).
+// ATTENTION : _diagPack() range le statut dans le marqueur [STATUT:] a l'interieur de la
+// colonne « diagnostic » ET SUPPRIME la propriete d.statut de l'objet. Lire d.statut
+// directement renvoie donc toujours « undefined » : c'est ce qui faisait rester TOUS les
+// diagnostics dans « brouillons non finalises », meme apres un clic sur « Finaliser ».
+function _diagStatut(d) {
+  if (!d) return 'Brouillon';
+  const m = String(d.diagnostic || '').match(/\[STATUT:([^\]]*)\]/);
+  const viaMarqueur = m ? _decNote(m[1]) : '';
+  return String(viaMarqueur || d.statut || 'Brouillon').trim() || 'Brouillon';
+}
 function _diagPack(d) {
   let txt = String(d.diagnostic || '').replace(_DIAG_MARKER_RE, '').trim();
   for (const k of Object.keys(_DIAG_MARKERS)) {
@@ -11609,6 +11622,10 @@ function _diagPack(d) {
     delete d[k];
   }
   d.diagnostic = txt;
+  // Le statut est aussi conserve dans la vraie colonne « statut » (doublon de securite,
+  // et rend la donnee lisible cote base).
+  const _mSt = txt.match(/\[STATUT:([^\]]*)\]/);
+  d.statut = _mSt ? _decNote(_mSt[1]) : 'Brouillon';
   return d;
 }
 function _diagUnpack(d) {
