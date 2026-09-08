@@ -38,6 +38,8 @@ const TABLE_FIELDS = {
     pdfPath: 'pdf_path',
     dateIntervention: 'date_intervention',
     heureIntervention: 'heure_intervention',
+    heureFinIntervention: 'heure_fin_intervention',
+    dateFinIntervention: 'date_fin_intervention',
   } },
   rapports:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom', clientEmail: 'client_email',
@@ -62,7 +64,8 @@ const TABLE_FIELDS = {
     clientAdresse: 'client_adresse', entrepriseAdresse: 'entreprise_adresse',
     createdAt: 'created_at',
   } },
-  intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero' } },
+  intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero',
+                        heureFin: 'heure_fin', dateFin: 'date_fin' } },
   documents:  { js2db: {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
@@ -1424,14 +1427,25 @@ function autoFillIntervFromBon(numero) {
   toast('Champs remplis depuis le bon ' + (bon.numero || ''), '#2d9e6b');
 }
 // Construit un lien "Ajouter à Google Agenda" (événement pré-rempli)
-function _googleCalUrl({ titre, date, heure, dureeMin, details, lieu }) {
+function _googleCalUrl({ titre, date, heure, heureFin, dateFin, dureeMin, details, lieu }) {
   // Format des dates Google : YYYYMMDDTHHMMSS (heure locale)
   const pad = n => String(n).padStart(2, '0');
   const [Y, M, D] = (date || today()).split('-').map(x => parseInt(x, 10));
   let [h, mi] = (heure || '08:00').split(':').map(x => parseInt(x, 10));
   if (isNaN(h)) h = 8; if (isNaN(mi)) mi = 0;
   const start = new Date(Y, (M || 1) - 1, D || 1, h, mi);
-  const end = new Date(start.getTime() + (dureeMin || 60) * 60000);
+  // Fin explicite (heure de fin + date de fin) sinon repli sur la durée
+  let end;
+  if (heureFin) {
+    const [Y2, M2, D2] = (dateFin || date || today()).split('-').map(x => parseInt(x, 10));
+    let [h2, mi2] = String(heureFin).split(':').map(x => parseInt(x, 10));
+    if (isNaN(h2)) h2 = h + 1; if (isNaN(mi2)) mi2 = 0;
+    end = new Date(Y2, (M2 || 1) - 1, D2 || 1, h2, mi2);
+    // Une fin avant le début = le rendez-vous se termine le lendemain
+    if (end.getTime() <= start.getTime()) end = new Date(end.getTime() + 86400000);
+  } else {
+    end = new Date(start.getTime() + (dureeMin || 60) * 60000);
+  }
   const fmt = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -4508,7 +4522,7 @@ function mobValiderBon(id) {
   DB.bons = bons;
   const b = bons.find(x => x.id === id);
   const rdv = b && b.dateIntervention
-    ? ('Rendez-vous le ' + fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : ''))
+    ? ('Rendez-vous le ' + _bonRdvTexte(b))
     : 'Bon enregistré';
   toast('✓ ' + rdv, '#2d9e6b');
   _mobFiche = null;
@@ -4578,12 +4592,7 @@ function _mobFicheBon() {
         ${b.proprietaire ? `<div class="mob-l"><b>Propriétaire</b>${_escapeHtml(b.proprietaire)}</div>` : ''}`)}
       ${bloc('📅 Dates', `
         <div class="mob-l"><b>Prochain rendez-vous</b>
-          <div class="mob-dates">
-            <input type="date" class="mob-in" value="${b.dateIntervention || ''}"
-              onchange="updateBonDateInterv('${b.id}', this.value)">
-            <input type="time" class="mob-in mob-h" value="${b.heureIntervention || ''}"
-              onchange="updateBonHeureInterv('${b.id}', this.value)">
-          </div>
+          <div class="mob-dates">${_bonRdvChamps(b, 'mob-in')}</div>
         </div>
         <div class="mob-l"><b>Passages effectués</b>
           ${dates.length ? `<div class="mob-dates">${dates.map((d, i) => `
@@ -5294,7 +5303,7 @@ function ficheBonRefresh(complet) {
   if (b.date) evts.push([b.date, '📄', 'Bon reçu']);
   if (b.createdAt) evts.push([String(b.createdAt).slice(0, 10), '➕', 'Enregistré dans l\'application']);
   faits.forEach((d, i) => evts.push([d, '✅', (i + 1) + (i === 0 ? 'er' : 'e') + ' passage effectué']));
-  if (b.dateIntervention) evts.push([b.dateIntervention, '📅', 'Rendez-vous' + (b.heureIntervention ? ' à ' + b.heureIntervention : '')]);
+  if (b.dateIntervention) evts.push([b.dateIntervention, '📅', 'Rendez-vous' + (_bonRdv(b).heureDebut ? ' de ' + _bonRdv(b).heureDebut + ' à ' + _bonRdv(b).heureFin : '')]);
   raps.forEach(r => evts.push([r.date, '📋', 'Rapport ' + (r.id || '')]));
   devis.forEach(d => evts.push([d.dateDoc, '💰', 'Devis ' + (d.numero || '')]));
   facts.forEach(d => evts.push([d.dateDoc, '🧾', 'Facture ' + (d.numero || '')]));
@@ -5416,7 +5425,7 @@ function ficheBonRefresh(complet) {
           <div class="fb-t">📅 Planification
             <button class="btn btn-ghost btn-sm fb-mod" onclick="openBonPlanning('${b.id}')">Modifier</button></div>
           <div class="fb-l"><b>Prochain rendez-vous</b>${b.dateIntervention
-            ? fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + b.heureIntervention : '')
+            ? _bonRdvTexte(b)
             : '<span class="fb-vide">à planifier</span>'}</div>
           <div class="fb-l"><b>Passages effectués</b>${faits.length
             ? faits.map(d => fmtDate(d)).join(' · ') : '<span class="fb-vide">aucun</span>'}</div>
@@ -7505,17 +7514,25 @@ function bonPlanRefresh() {
   body.innerHTML = `
     <div class="plan-sec">
       <div class="plan-t">📅 Prochain rendez-vous</div>
-      <div class="plan-aide">La date et l'heure auxquelles vous retournez sur place. Laissez vide tant que ce n'est pas fixé.</div>
+      <div class="plan-aide">Date, heure de début et heure de fin, comme dans Google Agenda. La 2<sup>e</sup> date ne sert que si l'intervention se termine un autre jour. Laissez vide tant que ce n'est pas fixé.</div>
       <div class="plan-l">
-        <input type="date" id="bon-plan-date" class="plan-in" value="${b.dateIntervention || ''}"
-          onchange="updateBonDateInterv('${b.id}', this.value); bonPlanRefresh();">
-        <input type="time" id="bon-plan-heure" class="plan-in" style="width:110px;" value="${b.heureIntervention || ''}"
-          onchange="updateBonHeureInterv('${b.id}', this.value); bonPlanRefresh();">
+        <span class="rdv-l">
+          <input type="date" id="bon-plan-date" class="plan-in rdv-d" value="${b.dateIntervention || ''}" title="Date du rendez-vous"
+            onchange="updateBonDateInterv('${b.id}', this.value); bonPlanRefresh();">
+          <input type="time" id="bon-plan-heure" class="plan-in rdv-h" value="${b.heureIntervention || ''}" title="Heure de début"
+            onchange="updateBonHeureInterv('${b.id}', this.value); bonPlanRefresh();">
+          <span class="rdv-tiret">–</span>
+          <input type="time" id="bon-plan-heure-fin" class="plan-in rdv-h" value="${_bonRdv(b).heureFin || ''}" title="Heure de fin"
+            onchange="updateBonHeureFinInterv('${b.id}', this.value); bonPlanRefresh();">
+          <input type="date" id="bon-plan-date-fin" class="plan-in rdv-d" value="${_bonRdv(b).dateFin || ''}" title="Date de fin (si l'intervention déborde sur un autre jour)"
+            onchange="updateBonDateFinInterv('${b.id}', this.value); bonPlanRefresh();">
+        </span>
       </div>
+      ${b.dateIntervention ? `<div class="plan-recap">📅 ${_bonRdvTexte(b)}</div>` : ''}
       <div class="plan-l">
         ${b.dateIntervention
           ? `<button class="btn btn-ghost btn-sm" onclick="addBonToGoogle('${b.id}')">📅 Ajouter à Google Agenda</button>
-             <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="updateBonDateInterv('${b.id}', ''); updateBonHeureInterv('${b.id}', ''); bonPlanRefresh();">✕ Effacer le rendez-vous</button>`
+             <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="updateBonDateInterv('${b.id}', ''); updateBonHeureInterv('${b.id}', ''); updateBonDateFinInterv('${b.id}', ''); bonPlanRefresh();">✕ Effacer le rendez-vous</button>`
           : '<span class="plan-vide">Aucun rendez-vous fixé pour l\'instant.</span>'}
       </div>
     </div>
@@ -7780,7 +7797,7 @@ function renderBonCardCockpit(b) {
   const _alM = _bonAlerteMarque(b);
   const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId)) || null;
   const adresse = (loc && loc.adresse) || _bonAdresseInterv(b).adresse || '';
-  const rdv = b.dateIntervention ? (fmtDate(b.dateIntervention) + (b.heureIntervention ? ' · ' + b.heureIntervention : '')) : '';
+  const rdv = b.dateIntervention ? _bonRdvTexte(b, true) : '';
   const faits = _bonDatesInterv(b);
   const aff = _bonAffecte(b);
   const note = _bonNote(b);
@@ -7935,8 +7952,7 @@ function renderBonCard(b, solid) {
               <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;min-width:170px;">
                 <div style="font-size:10px;color:${TL};text-transform:uppercase;font-weight:700;">📅 Prochaine interv.</div>
                 <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
-                  <input type="date" value="${b.dateIntervention||''}" onchange="updateBonDateInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;">
-                  <input type="time" value="${b.heureIntervention||''}" onchange="updateBonHeureInterv('${b.id}', this.value)" style="font-family:Arial;font-size:12px;font-weight:bold;color:#e63946;padding:4px 6px;border-radius:6px;border:1.5px solid #e63946;width:78px;">
+                  ${_bonRdvChamps(b, 'rdv-in rdv-rouge')}
                   <button class="btn btn-ghost btn-xs" onclick="addBonToGoogle('${b.id}')" title="Ajouter à Google Agenda">📅</button>
                 </div>
               </div>
@@ -8213,6 +8229,8 @@ function _syncBonIntervention(b) {
       id: ivId,
       date: b.dateIntervention,
       heure: b.heureIntervention || '08:00',
+      heureFin: _bonRdv(b).heureFin || '',
+      dateFin: _bonRdv(b).dateFin || '',
       clientId: b.geranceId || '',
       clientNom: b.geranceNom || '',
       adresse: adresse,
@@ -8260,11 +8278,85 @@ function updateBonHeureInterv(id, value) {
   const b = bons.find(x => x.id === id);
   if (!b) return;
   b.heureIntervention = value;
+  // Comme dans Google Agenda : fixer l'heure de début propose une fin 1 h plus tard
+  if (value && !b.heureFinIntervention) b.heureFinIntervention = _heurePlus(value, 60);
+  if (!value) b.heureFinIntervention = '';
   DB.bons = bons;
   _syncBonIntervention(b);
-  toast(value ? ('🕒 Heure : ' + value + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
+  toast(value ? ('🕒 ' + value + ' – ' + (b.heureFinIntervention || '') + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
   _ficheBonMaj();
   _mobMaj();
+}
+// ── Rendez-vous : début ET fin (comme Google Agenda) ──────────────────────────
+// Ajoute des minutes à une heure "HH:MM" et renvoie "HH:MM".
+function _heurePlus(h, minutes) {
+  const p = String(h || '08:00').split(':');
+  const hh = parseInt(p[0], 10), mm = parseInt(p[1], 10);
+  let t = (isNaN(hh) ? 8 : hh) * 60 + (isNaN(mm) ? 0 : mm) + (minutes || 0);
+  t = ((t % 1440) + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+// Les 4 valeurs du rendez-vous : date de début, heure de début, heure de fin, date de fin.
+// La fin est déduite (+1 h, même jour) tant que l'utilisateur ne l'a pas fixée.
+function _bonRdv(b) {
+  const dDeb = (b && b.dateIntervention) || '';
+  const hDeb = (b && b.heureIntervention) || '';
+  let hFin = (b && b.heureFinIntervention) || '';
+  let dFin = (b && b.dateFinIntervention) || '';
+  if (!hFin && hDeb) hFin = _heurePlus(hDeb, 60);
+  if (!dFin) dFin = dDeb;
+  return { dateDebut: dDeb, heureDebut: hDeb, heureFin: hFin, dateFin: dFin };
+}
+// Libellé lisible : « 16.09.2026 de 08:30 à 11:30 ». court = « 16.09.2026 · 08:30–11:30 »
+function _bonRdvTexte(b, court) {
+  if (!b || !b.dateIntervention) return '';
+  const f = _bonRdv(b);
+  let t = fmtDate(f.dateDebut);
+  if (f.heureDebut) {
+    t += court ? ' · ' + f.heureDebut : ' de ' + f.heureDebut;
+    if (f.heureFin) t += (court ? '–' : ' à ') + f.heureFin;
+  }
+  if (f.dateFin && f.dateFin !== f.dateDebut) t += ' (fin le ' + fmtDate(f.dateFin) + ')';
+  return t;
+}
+// Enregistre l'HEURE DE FIN du rendez-vous
+function updateBonHeureFinInterv(id, value) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id);
+  if (!b) return;
+  b.heureFinIntervention = value;
+  DB.bons = bons;
+  _syncBonIntervention(b);
+  toast(value ? ('🕒 Fin : ' + value + ' (agenda mis à jour)') : 'Heure de fin effacée', '#2d9e6b');
+  _ficheBonMaj(); _mobMaj();
+}
+// Enregistre la DATE DE FIN du rendez-vous (utile seulement si ça déborde sur un autre jour)
+function updateBonDateFinInterv(id, value) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id);
+  if (!b) return;
+  b.dateFinIntervention = value;
+  DB.bons = bons;
+  _syncBonIntervention(b);
+  toast(value ? ('📅 Fin le ' + fmtDate(value)) : 'Date de fin effacée', '#2d9e6b');
+  _ficheBonMaj(); _mobMaj();
+}
+// Les 4 champs du rendez-vous, dans l'ordre de Google Agenda :
+//   [ date début ] [ heure début ] – [ heure fin ] [ date fin ]
+function _bonRdvChamps(b, cls) {
+  const f = _bonRdv(b);
+  const c = cls || 'rdv-in';
+  return `<span class="rdv-l">
+    <input type="date" class="${c} rdv-d" value="${b.dateIntervention || ''}" title="Date du rendez-vous"
+      onchange="updateBonDateInterv('${b.id}', this.value)">
+    <input type="time" class="${c} rdv-h" value="${b.heureIntervention || ''}" title="Heure de début"
+      onchange="updateBonHeureInterv('${b.id}', this.value)">
+    <span class="rdv-tiret">–</span>
+    <input type="time" class="${c} rdv-h" value="${f.heureFin || ''}" title="Heure de fin"
+      onchange="updateBonHeureFinInterv('${b.id}', this.value)">
+    <input type="date" class="${c} rdv-d" value="${f.dateFin || ''}" title="Date de fin (si l'intervention déborde sur un autre jour)"
+      onchange="updateBonDateFinInterv('${b.id}', this.value)">
+  </span>`;
 }
 // Ajoute le bon à Google Agenda à la date/heure de prochaine intervention
 function addBonToGoogle(id) {
@@ -8280,7 +8372,9 @@ function addBonToGoogle(id) {
     b.locataireNom ? 'Locataire : ' + b.locataireNom : '',
     _bonProblemeClean(b) ? 'Problème : ' + _bonProblemeClean(b) : ''
   ].filter(Boolean).join('\n');
-  const url = _googleCalUrl({ titre, date: b.dateIntervention, heure: b.heureIntervention || '08:00', dureeMin: 60, details, lieu: b.immeuble || '' });
+  const f = _bonRdv(b);
+  const url = _googleCalUrl({ titre, date: f.dateDebut, heure: f.heureDebut || '08:00',
+    heureFin: f.heureFin, dateFin: f.dateFin, dureeMin: 60, details, lieu: b.immeuble || '' });
   window.open(url, '_blank');
 }
 
