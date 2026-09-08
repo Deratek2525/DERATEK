@@ -1022,6 +1022,10 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .ck-b-rdv:not(.on) .ck-rdv-v { color: #b45309; font-weight: 700; }
+  .ck-rdv-h {
+    font-size: 11.5px; font-weight: 800; color: #15803d; margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .ck-rdv-p, .ck-rdv-a {
     font-size: 11px; color: var(--g500); margin-top: 3px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

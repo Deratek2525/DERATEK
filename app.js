@@ -7797,7 +7797,13 @@ function renderBonCardCockpit(b) {
   const _alM = _bonAlerteMarque(b);
   const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId)) || null;
   const adresse = (loc && loc.adresse) || _bonAdresseInterv(b).adresse || '';
-  const rdv = b.dateIntervention ? _bonRdvTexte(b, true) : '';
+  const _rv = _bonRdv(b);
+  const rdv = b.dateIntervention ? fmtDate(b.dateIntervention) : '';
+  // Plage horaire sur sa propre ligne : « 08:30 – 11:30 » (sinon le texte est coupe)
+  const rdvH = (b.dateIntervention && _rv.heureDebut)
+    ? _rv.heureDebut + (_rv.heureFin ? ' – ' + _rv.heureFin : '')
+      + ((_rv.dateFin && _rv.dateFin !== _rv.dateDebut) ? ' (' + String(fmtDate(_rv.dateFin)).slice(0, 5) + ')' : '')
+    : '';
   const faits = _bonDatesInterv(b);
   const aff = _bonAffecte(b);
   const note = _bonNote(b);
@@ -7836,6 +7842,7 @@ function renderBonCardCockpit(b) {
         aria-label="Planifier le rendez-vous et les passages de ce bon">
         <div class="ck-rdv-t">${b.dateIntervention ? 'Rendez-vous' : 'À planifier'}</div>
         <div class="ck-rdv-v">${rdv || 'Aucune date fixée'}</div>
+        ${rdvH ? `<div class="ck-rdv-h">🕒 ${rdvH}</div>` : ''}
         <div class="ck-rdv-p">${faits.length
           ? 'Faits : ' + faits.slice(0, 3).map(d => String(fmtDate(d)).slice(0, 5)).join(' · ')
             + (faits.length > 3 ? ' +' + (faits.length - 3) : '')
@@ -8269,8 +8276,7 @@ function updateBonDateInterv(id, value) {
   toast(value
     ? ('📅 Planifié le ' + fmtDate(value) + (ajoutee ? ' · ajouté aux passages' : ''))
     : 'Date effacée (retiré de l\'agenda)', '#2d9e6b');
-  _ficheBonMaj();
-  _mobMaj();
+  _bonRdvMaj();
 }
 // Enregistre l'heure de prochaine intervention sur un bon + met à jour l'agenda
 function updateBonHeureInterv(id, value) {
@@ -8284,8 +8290,7 @@ function updateBonHeureInterv(id, value) {
   DB.bons = bons;
   _syncBonIntervention(b);
   toast(value ? ('🕒 ' + value + ' – ' + (b.heureFinIntervention || '') + ' (agenda mis à jour)') : 'Heure effacée', '#2d9e6b');
-  _ficheBonMaj();
-  _mobMaj();
+  _bonRdvMaj();
 }
 // ── Rendez-vous : début ET fin (comme Google Agenda) ──────────────────────────
 // Ajoute des minutes à une heure "HH:MM" et renvoie "HH:MM".
@@ -8319,6 +8324,14 @@ function _bonRdvTexte(b, court) {
   if (f.dateFin && f.dateFin !== f.dateDebut) t += ' (fin le ' + fmtDate(f.dateFin) + ')';
   return t;
 }
+// Rafraichit TOUT ce qui affiche le rendez-vous : la liste des bons (ruban),
+// la fiche ouverte et la feuille iPhone. Sans ca, le ruban garde « A planifier ».
+function _bonRdvMaj() {
+  try { if (typeof renderBons === 'function' && document.getElementById('bons-list')) renderBons(); } catch (e) {}
+  try { if (typeof renderAgenda === 'function') renderAgenda(); } catch (e) {}
+  _ficheBonMaj();
+  _mobMaj();
+}
 // Enregistre l'HEURE DE FIN du rendez-vous
 function updateBonHeureFinInterv(id, value) {
   const bons = DB.bons;
@@ -8328,7 +8341,7 @@ function updateBonHeureFinInterv(id, value) {
   DB.bons = bons;
   _syncBonIntervention(b);
   toast(value ? ('🕒 Fin : ' + value + ' (agenda mis à jour)') : 'Heure de fin effacée', '#2d9e6b');
-  _ficheBonMaj(); _mobMaj();
+  _bonRdvMaj();
 }
 // Enregistre la DATE DE FIN du rendez-vous (utile seulement si ça déborde sur un autre jour)
 function updateBonDateFinInterv(id, value) {
@@ -8339,7 +8352,7 @@ function updateBonDateFinInterv(id, value) {
   DB.bons = bons;
   _syncBonIntervention(b);
   toast(value ? ('📅 Fin le ' + fmtDate(value)) : 'Date de fin effacée', '#2d9e6b');
-  _ficheBonMaj(); _mobMaj();
+  _bonRdvMaj();
 }
 // Les 4 champs du rendez-vous, dans l'ordre de Google Agenda :
 //   [ date début ] [ heure début ] – [ heure fin ] [ date fin ]
