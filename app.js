@@ -7386,7 +7386,7 @@ async function bonNoteAICorrect() {
 function bonAddDateEffectuee(id) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const dates = _bonDatesInterv(b);
-  if (dates.length >= 5) { toast('Maximum 5 dates d\'intervention', '#e63946'); return; }
+  if (dates.length >= MAX_PASSAGES) { toast('Maximum de ' + MAX_PASSAGES + ' passages atteint', '#e63946'); return; }
   dates.push(today());
   const bons = DB.bons; _setBonDatesInterv(b, dates); DB.bons = bons;
   renderBons();
@@ -9773,7 +9773,7 @@ function _renderDocDates() {
 }
 function docAddDate() {
   const arr = _docDatesInit();
-  if (arr.length >= 5) { toast('Maximum 5 dates', '#d97706'); return; }
+  if (arr.length >= MAX_PASSAGES) { toast('Maximum de ' + MAX_PASSAGES + ' dates', '#d97706'); return; }
   arr.push('');
   _renderDocDates();
 }
