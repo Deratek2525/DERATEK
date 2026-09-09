@@ -1252,6 +1252,21 @@ html[data-anim="0"] .devis-cd-flash { animation: none !important; }
 }
 .fb-ev .d { font-size: 11px; font-weight: 800; color: var(--g500); min-width: 74px; }
 .fb-ev .t { font-size: 12.5px; color: var(--navy); }
+/* Petite note libre a droite de chaque etape de la chronologie */
+.fb-ev { flex-wrap: wrap; }
+.fb-ev .ev-n {
+  flex: 1 1 130px; min-width: 0; margin-left: auto;
+  font-family: inherit; font-size: 11.5px; color: #92400e;
+  background: transparent; border: 1px solid transparent; border-radius: 7px;
+  padding: 3px 7px; text-align: right;
+}
+.fb-ev .ev-n::placeholder { color: #c3cad6; font-weight: 600; }
+.fb-ev .ev-n:hover { border-color: var(--g200); background: #fafbfc; }
+.fb-ev .ev-n:focus {
+  outline: none; text-align: left; background: #fffbeb;
+  border-color: #fcd34d; box-shadow: 0 0 0 2px rgba(252, 211, 77, .3);
+}
+.fb-ev.aNote .ev-n { background: #fffbeb; border-color: #fde68a; font-weight: 600; }
 @media (max-width: 900px) {
   .fb-cols { grid-template-columns: 1fr; }
   .fb-2 { grid-template-columns: 1fr; }

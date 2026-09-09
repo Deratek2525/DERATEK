@@ -5301,14 +5301,15 @@ function ficheBonRefresh(complet) {
     `<button class="btn ${cls || 'btn-ghost'} btn-sm fb-blien" title="${titre}" onclick="event.stopPropagation();${act}">${txt}</button>`;
 
   // --- Chronologie ---
+  // 4e valeur = cle stable de l'evenement, utilisee pour y accrocher une petite note
   const evts = [];
-  if (b.date) evts.push([b.date, '📄', 'Bon reçu']);
-  if (b.createdAt) evts.push([String(b.createdAt).slice(0, 10), '➕', 'Enregistré dans l\'application']);
-  faits.forEach((d, i) => evts.push([d, '✅', (i + 1) + (i === 0 ? 'er' : 'e') + ' passage effectué']));
-  if (b.dateIntervention) evts.push([b.dateIntervention, '📅', 'Rendez-vous' + (_bonRdv(b).heureDebut ? ' de ' + _bonRdv(b).heureDebut + ' à ' + _bonRdv(b).heureFin : '')]);
-  raps.forEach(r => evts.push([r.date, '📋', 'Rapport ' + (r.id || '')]));
-  devis.forEach(d => evts.push([d.dateDoc, '💰', 'Devis ' + (d.numero || '')]));
-  facts.forEach(d => evts.push([d.dateDoc, '🧾', 'Facture ' + (d.numero || '')]));
+  if (b.date) evts.push([b.date, '📄', 'Bon reçu', 'recu']);
+  if (b.createdAt) evts.push([String(b.createdAt).slice(0, 10), '➕', 'Enregistré dans l\'application', 'creat']);
+  faits.forEach((d, i) => evts.push([d, '✅', (i + 1) + (i === 0 ? 'er' : 'e') + ' passage effectué', 'p:' + d]));
+  if (b.dateIntervention) evts.push([b.dateIntervention, '📅', 'Rendez-vous' + (_bonRdv(b).heureDebut ? ' de ' + _bonRdv(b).heureDebut + ' à ' + _bonRdv(b).heureFin : ''), 'rdv']);
+  raps.forEach(r => evts.push([r.date, '📋', 'Rapport ' + (r.id || ''), 'rap:' + (r.id || '')]));
+  devis.forEach(d => evts.push([d.dateDoc, '💰', 'Devis ' + (d.numero || ''), 'dev:' + (d.numero || '')]));
+  facts.forEach(d => evts.push([d.dateDoc, '🧾', 'Facture ' + (d.numero || ''), 'fac:' + (d.numero || '')]));
   evts.sort((a, b2) => String(a[0] || '').localeCompare(String(b2[0] || '')));
 
   const gaucheHtml = `
@@ -5489,8 +5490,18 @@ function ficheBonRefresh(complet) {
 
         <div class="fb-card">
           <div class="fb-t">🕓 Chronologie</div>
-          ${evts.length ? `<div class="fb-chrono">${evts.map(e => `
-            <div class="fb-ev"><div class="d">${fmtDate(e[0]) || '—'}</div><div class="i">${e[1]}</div><div class="t">${e[2]}</div></div>`).join('')}</div>`
+          ${evts.length ? `<div class="fb-chrono">${evts.map(e => {
+              const cle = e[3] || '';
+              const note = cle ? _bonChronoNote(b, cle) : '';
+              return `
+            <div class="fb-ev${note ? ' aNote' : ''}">
+              <div class="d">${fmtDate(e[0]) || '—'}</div>
+              <div class="i">${e[1]}</div>
+              <div class="t">${e[2]}</div>
+              <input class="ev-n" type="text" maxlength="120" value="${_escapeHtml(note)}"
+                placeholder="＋ note" title="Petite note libre sur cette étape (elle est enregistrée avec le bon)"
+                onchange="bonChronoNote('${b.id}', '${cle}', this.value)">
+            </div>`; }).join('')}</div>`
             : '<div class="fb-vide">Rien à afficher pour le moment.</div>'}
         </div>
       </div>`;
@@ -6931,7 +6942,7 @@ function _bonNoteNuisibleOptions(selected) {
 // note en texte brut est lue comme { texte: "..." }.
 function _bonNoteData(b) {
   const raw = (typeof b === 'string') ? b : _bonNote(b);
-  const base = { statut: '', nuisible: '', nuisible2: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '', rapTr: '' };
+  const base = { statut: '', nuisible: '', nuisible2: '', typeInterv: '', prixHT: '', rabais: '', tva: '', texte: '', rapTr: '', chrono: {} };
   if (!raw) return base;
   const s = raw.trim();
   if (s.charAt(0) === '{') {
@@ -6941,7 +6952,8 @@ function _bonNoteData(b) {
         statut: o.statut || '', nuisible: o.nuisible || '', nuisible2: o.nuisible2 || '', typeInterv: o.typeInterv || '',
         prixHT: (o.prixHT != null ? o.prixHT : ''),
         rabais: (o.rabais != null ? o.rabais : ''), tva: (o.tva != null ? o.tva : ''),
-        texte: o.texte || '', rapTr: o.rapTr || ''
+        texte: o.texte || '', rapTr: o.rapTr || '',
+        chrono: (o.chrono && typeof o.chrono === 'object' && !Array.isArray(o.chrono)) ? o.chrono : {}
       };
     } catch (e) { /* pas du JSON → texte brut */ }
   }
@@ -6949,7 +6961,28 @@ function _bonNoteData(b) {
   return base;
 }
 function _bonNoteHasData(d) {
-  return !!(d && (d.statut || d.nuisible || d.nuisible2 || d.typeInterv || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim()));
+  const chronoRempli = !!(d && d.chrono && Object.keys(d.chrono).some(k => String(d.chrono[k] || '').trim()));
+  return !!(d && (d.statut || d.nuisible || d.nuisible2 || d.typeInterv || (d.prixHT !== '' && d.prixHT != null) || (d.texte || '').trim() || chronoRempli));
+}
+// ── Petites notes de la chronologie ───────────────────────────────────────────
+// Chaque evenement de la chronologie (bon recu, passage, rapport, rendez-vous...)
+// peut porter une note libre. Elles sont rangees dans la note du bon, sous la
+// cle « chrono », indexees par une cle stable propre a l'evenement.
+function _bonChronoNote(b, cle) {
+  const d = _bonNoteData(b);
+  return String((d.chrono && d.chrono[cle]) || '');
+}
+function bonChronoNote(id, cle, valeur) {
+  const bons = DB.bons;
+  const b = bons.find(x => x.id === id); if (!b) return;
+  const d = _bonNoteData(b);
+  const chrono = Object.assign({}, d.chrono || {});
+  const v = String(valeur || '').trim();
+  if (v) chrono[cle] = v; else delete chrono[cle];
+  _bonNoteSetCle(b, 'chrono', chrono);
+  DB.bons = bons;
+  _ficheBonMaj(true);
+  toast(v ? '📝 Note ajoutée à la chronologie' : 'Note retirée', '#2d9e6b');
 }
 // Calcule les montants dérivés (rabais, HT net, TVA, TTC) à partir des champs saisis
 function _bonNoteCalc(d) {
