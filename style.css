@@ -1890,14 +1890,14 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
   border-width: 1.5px; border-style: solid;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .18);
 }
-.btn.ico-pdf   { background: #1e3a8a; border-color: #1e3a8a; }  /* bleu marine  */
-.btn.ico-note  { background: #92400e; border-color: #92400e; }  /* brun ambré   */
-.btn.ico-pj    { background: #9a3412; border-color: #9a3412; }  /* orange brûlé */
-.btn.ico-rap   { background: #166534; border-color: #166534; }  /* vert forêt   */
-.btn.ico-rap-br{ background: #a16207; border-color: #a16207; }  /* rapport en brouillon */
-.btn.ico-rap-tr{ background: #1e40af; border-color: #1e40af; }  /* rapport transmis     */
-.btn.ico-devis { background: #6b21a8; border-color: #6b21a8; }  /* violet profond   */
-.btn.ico-fact  { background: #115e59; border-color: #115e59; }  /* sarcelle profond */
+.btn.ico-pdf   { background: #1d4ed8; border-color: #1d4ed8; }  /* BLEU roi      */
+.btn.ico-note  { background: #a16207; border-color: #a16207; }  /* OR / ocre     */
+.btn.ico-pj    { background: #be185d; border-color: #be185d; }  /* ROSE framboise*/
+.btn.ico-rap   { background: #15803d; border-color: #15803d; }  /* VERT          */
+.btn.ico-rap-br{ background: #ea580c; border-color: #ea580c; }  /* rapport en brouillon : ORANGE */
+.btn.ico-rap-tr{ background: #0f172a; border-color: #0f172a; }  /* rapport transmis : ARDOISE    */
+.btn.ico-devis { background: #7c3aed; border-color: #7c3aed; }  /* VIOLET        */
+.btn.ico-fact  { background: #0e7490; border-color: #0e7490; }  /* CYAN sarcelle */
 .btn.ico-pdf:hover, .btn.ico-note:hover, .btn.ico-pj:hover,
 .btn.ico-rap:hover, .btn.ico-rap-br:hover, .btn.ico-rap-tr:hover,
 .btn.ico-devis:hover, .btn.ico-fact:hover { filter: brightness(1.18); }
