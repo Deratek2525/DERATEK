@@ -7845,6 +7845,11 @@ function renderBonCardCockpit(b) {
   const nbPj = _bonPJ(b).length;
   const nd = _bonNoteData(b);
   const pb = _bonProblemeClean(b);
+  // Pictogrammes allumes : un pictogramme ne prend sa couleur que s'il y a
+  // vraiment quelque chose derriere (PDF, note, piece jointe, devis, facture).
+  const _docsBon = (DB.documents || []).filter(d => d.bonId === b.id);
+  const aDevis = _docsBon.some(d => (d.type || 'devis') === 'devis');
+  const aFact  = _docsBon.some(d => d.type === 'facture');
   // En Cockpit les actions sont des pictogrammes : l'intitule complet reste
   // accessible au survol, ce qui permet de tenir toute la ligne sur une rangee.
   // data-tip : bulle d'aide immediate au survol (le title natif met 1 a 2 s
@@ -7888,19 +7893,19 @@ function renderBonCardCockpit(b) {
         <select onchange="updateBonStatut('${b.id}', this.value)" title="Statut du bon"
           style="font-size:11.5px;font-weight:700;padding:6px 8px;border-radius:7px;border:1.5px solid ${st.border};background:${st.bg};color:${st.color};cursor:pointer;width:100%;">${opts}</select>
         <div class="ck-b-btns">
-          ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
-          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne')}
-          ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'btn-or' : 'btn-ghost')}
+          ${b.pdfPath ? bt(`viewBonPdf('${b.id}')`, CK_ICO.pdfDoc, 'Ouvrir le PDF du bon', 'ico-pdf') : bt(`generateBonPDF('${b.id}')`, CK_ICO.pdf, 'Générer un PDF de ce bon')}
+          ${bt(`openBonNote('${b.id}')`, note ? CK_ICO.noteOn : CK_ICO.note, note ? 'Note interne — modifier' : 'Ajouter une note interne', note ? 'ico-note' : 'btn-ghost')}
+          ${bt(`openBonPieces('${b.id}')`, CK_ICO.trombone, nbPj ? `Pièces jointes (${nbPj}) — ouvrir, ajouter, supprimer` : 'Ajouter une pièce jointe (liste des locataires, plan, photo…)', nbPj ? 'ico-pj' : 'btn-ghost')}
           ${(() => {
             const re = _bonRapEtat(b);
-            const cls = { transmis: 'btn-rap-tr', fait: 'btn-rap-ok', brouillon: 'btn-rap-br', aucun: 'btn-ghost' }[re.etat];
+            const cls = { transmis: 'ico-rap-tr', fait: 'ico-rap', brouillon: 'ico-rap-br', aucun: 'btn-ghost' }[re.etat];
             const tip = re.etat === 'aucun'
               ? 'Créer le rapport depuis ce bon'
               : _bonRapLabel(b) + ' — cliquer pour ouvrir ou marquer transmis';
             return `<button class="btn ${cls} ck-b-b" onclick="openBonRapMenu('${b.id}', this)" data-tip="${tip}" aria-label="${tip}">${CK_ICO.rapport}${re.etat === 'transmis' ? '<span class="ck-b-pt tr"></span>' : re.etat === 'fait' ? '<span class="ck-b-pt ok"></span>' : ''}</button>`;
           })()}
-          ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, 'Créer un devis depuis ce bon')}
-          ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, 'Créer une facture depuis ce bon', statut === 'a-facturer' ? 'btn-green' : 'btn-ghost')}
+          ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, aDevis ? 'Devis rattaché à ce bon — en créer un autre' : 'Créer un devis depuis ce bon', aDevis ? 'ico-devis' : 'btn-ghost')}
+          ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, aFact ? 'Facture rattachée à ce bon — en créer une autre' : 'Créer une facture depuis ce bon', (aFact || statut === 'a-facturer') ? 'ico-fact' : 'btn-ghost')}
           ${bt(`editBon('${b.id}')`, CK_ICO.ouvrir, 'Ouvrir la fiche complète du bon', 'btn-navy')}
           <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" data-tip="Supprimer ce bon" aria-label="Supprimer ce bon">${CK_ICO.suppr}</button>
         </div>

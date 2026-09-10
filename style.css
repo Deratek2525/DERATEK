@@ -1878,3 +1878,28 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 }
 .mob-dates .rdv-l input.rdv-d { width:auto; flex:1 1 130px; }
 .mob-dates .rdv-l input.rdv-h { width:auto; flex:1 1 84px; }
+
+/* ── Pictogrammes colorés du ruban (version foncée) ────────────────────────────
+   Un pictogramme ne s'allume que s'il y a vraiment quelque chose derrière :
+   PDF joint, note écrite, pièce jointe, rapport, devis, facture.
+   Sinon il reste gris (btn-ghost) et la ligne reste calme.                     */
+.btn.ico-pdf, .btn.ico-note, .btn.ico-pj,
+.btn.ico-rap, .btn.ico-rap-br, .btn.ico-rap-tr,
+.btn.ico-devis, .btn.ico-fact {
+  color: #fff !important;
+  border-width: 1.5px; border-style: solid;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .18);
+}
+.btn.ico-pdf   { background: #1e3a8a; border-color: #1e3a8a; }  /* bleu marine  */
+.btn.ico-note  { background: #92400e; border-color: #92400e; }  /* brun ambré   */
+.btn.ico-pj    { background: #9a3412; border-color: #9a3412; }  /* orange brûlé */
+.btn.ico-rap   { background: #166534; border-color: #166534; }  /* vert forêt   */
+.btn.ico-rap-br{ background: #a16207; border-color: #a16207; }  /* rapport en brouillon */
+.btn.ico-rap-tr{ background: #1e40af; border-color: #1e40af; }  /* rapport transmis     */
+.btn.ico-devis { background: #6b21a8; border-color: #6b21a8; }  /* violet profond   */
+.btn.ico-fact  { background: #115e59; border-color: #115e59; }  /* sarcelle profond */
+.btn.ico-pdf:hover, .btn.ico-note:hover, .btn.ico-pj:hover,
+.btn.ico-rap:hover, .btn.ico-rap-br:hover, .btn.ico-rap-tr:hover,
+.btn.ico-devis:hover, .btn.ico-fact:hover { filter: brightness(1.18); }
+/* Pastille d'etat du rapport : lisible sur fond fonce */
+.btn.ico-rap .ck-b-pt, .btn.ico-rap-tr .ck-b-pt { border-color: #fff; }
