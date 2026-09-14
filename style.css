@@ -1903,3 +1903,37 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 .btn.ico-devis:hover, .btn.ico-fact:hover { filter: brightness(1.18); }
 /* Pastille d'etat du rapport : lisible sur fond fonce */
 .btn.ico-rap .ck-b-pt, .btn.ico-rap-tr .ck-b-pt { border-color: #fff; }
+
+/* ── Dates d'intervention d'un contrat ───────────────────────────────────────── */
+.ct-dl { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
+.ct-d {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #f1f3f9; border: 1.5px solid #d7dce5; border-radius: 9px; padding: 3px 5px 3px 8px;
+}
+.ct-d > b { font-size: 10.5px; font-weight: 800; color: #6b7280; min-width: 13px; text-align: center; }
+.ct-d input[type=date] {
+  font-family: inherit; font-size: 12.5px; font-weight: 700; color: #1f2a44;
+  background: #fff; border: 1px solid #e3e7ee; border-radius: 6px; padding: 3px 6px; cursor: pointer;
+}
+.ct-d button {
+  border: none; background: none; color: #b91c1c; font-size: 12px; font-weight: 800;
+  cursor: pointer; padding: 2px 4px; border-radius: 5px;
+}
+.ct-d button:hover { background: #fee2e2; }
+.ct-d.fait { background: #f0fdf4; border-color: #86efac; }
+.ct-d.fait > b { color: #15803d; }
+.ct-d.suiv { background: #eff6ff; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96, 165, 250, .25); }
+.ct-d.suiv > b { color: #1d4ed8; }
+.ct-dact { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.ct-vide { font-size: 12px; color: #8b97ad; font-style: italic; }
+.ct-res {
+  margin-top: 9px; font-size: 12.5px; font-weight: 600; color: #1f2a44;
+  background: #f8fafc; border: 1px solid #e3e7ee; border-radius: 8px; padding: 7px 10px;
+}
+/* Rappel compact sur la ligne du contrat */
+.ct-liste-d { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.ct-p { font-size: 10.5px; font-weight: 800; border-radius: 7px; padding: 2px 8px; border: 1px solid; }
+.ct-p.fait { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+.ct-p.suiv { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.ct-p.fin  { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+.ct-p.all  { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; font-weight: 600; }

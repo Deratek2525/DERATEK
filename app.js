@@ -62,6 +62,7 @@ const TABLE_FIELDS = {
     dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
     dateDebut: 'date_debut', controlesAn: 'controles_an',
     clientAdresse: 'client_adresse', entrepriseAdresse: 'entreprise_adresse',
+    datesIntervention: 'dates_intervention',
     createdAt: 'created_at',
   } },
   intervs:    { js2db: { clientId: 'client_id', clientNom: 'client_nom', bonId: 'bon_id', bonNumero: 'bon_numero',
@@ -17748,6 +17749,16 @@ function renderContrats() {
                 </div>
                 <div style="font-size:12px;font-weight:600;color:var(--g600);margin-top:2px;">${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
                 <div style="font-size:11px;color:var(--g600);margin-top:1px;">${(c.dateDebut || c.echeance) ? '📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? '📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
+                ${(() => {
+                  const ds = _ctDates(c); if (!ds.length) return '';
+                  const auj = today();
+                  const faits = ds.filter(d => d <= auj);
+                  const proch = ds.filter(d => d > auj);
+                  return `<div class="ct-liste-d">
+                    <span class="ct-p fait" title="Passages déjà effectués">✅ ${faits.length}/${ds.length} passage${ds.length > 1 ? 's' : ''}</span>
+                    ${proch.length ? `<span class="ct-p suiv" title="Prochain passage prévu">📅 prochain ${fmtDate(proch[0])}</span>` : '<span class="ct-p fin" title="Plus aucune date à venir">⚠️ aucune date à venir</span>'}
+                    <span class="ct-p all" title="${ds.map(d => fmtDate(d)).join(' · ')}">${ds.slice(0, 4).map(d => String(fmtDate(d)).slice(0, 5)).join(' · ')}${ds.length > 4 ? ' +' + (ds.length - 4) : ''}</span>
+                  </div>`; })()}
                 ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
               </div>
               <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
@@ -17764,12 +17775,77 @@ function renderContrats() {
   }).join('');
 }
 
+// ── Dates d'intervention d'un contrat ─────────────────────────────────────────
+// Les passages prevus/effectues sous contrat, dans la colonne « dates_intervention »
+// (dates ISO separees par des virgules). Jusqu'a 24 dates (2 ans de passages mensuels).
+const MAX_DATES_CONTRAT = 24;
+function _ctDates(c) {
+  return String((c && c.datesIntervention) || '')
+    .split(',').map(x => x.trim()).filter(Boolean).sort();
+}
+// Dates en cours d'edition dans la fenetre (avant enregistrement)
+let _ctDatesEdit = [];
+function _ctDatesRender() {
+  const box = document.getElementById('ct-dates-box');
+  if (!box) return;
+  const auj = today();
+  const faits = _ctDatesEdit.filter(d => d && d <= auj).length;
+  const prochain = _ctDatesEdit.filter(d => d && d > auj).sort()[0] || '';
+  box.innerHTML = `
+    ${_ctDatesEdit.length ? `<div class="ct-dl">${_ctDatesEdit.map((d, i) => {
+      const passe = d && d <= auj;
+      const suiv = d && d === prochain;
+      return `<span class="ct-d${passe ? ' fait' : ''}${suiv ? ' suiv' : ''}" title="${passe ? 'Passage déjà effectué' : (suiv ? 'Prochain passage prévu' : 'Passage à venir')}">
+        <b>${i + 1}</b>
+        <input type="date" value="${d || ''}" onchange="ctSetDate(${i}, this.value)">
+        <button type="button" onclick="ctRemoveDate(${i})" title="Retirer cette date">✕</button>
+      </span>`; }).join('')}</div>`
+      : '<div class="ct-vide">Aucune date enregistrée pour l\'instant.</div>'}
+    <div class="ct-dact">
+      ${_ctDatesEdit.length < MAX_DATES_CONTRAT
+        ? `<button type="button" class="btn btn-green btn-sm" onclick="ctAddDate()">➕ Ajouter une date</button>`
+        : `<span class="ct-vide">Maximum de ${MAX_DATES_CONTRAT} dates atteint.</span>`}
+      <button type="button" class="btn btn-ghost btn-sm" onclick="ctProposerDates()"
+        title="Répartit automatiquement les contrôles de l'année à partir de la date de début">🗓 Proposer les dates de l'année</button>
+      ${_ctDatesEdit.length ? `<button type="button" class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="ctViderDates()">✕ Tout effacer</button>` : ''}
+    </div>
+    ${_ctDatesEdit.length ? `<div class="ct-res">✅ ${faits} passage${faits > 1 ? 's' : ''} effectué${faits > 1 ? 's' : ''}${prochain ? ` &nbsp;·&nbsp; 📅 prochain le <b>${fmtDate(prochain)}</b>` : ' &nbsp;·&nbsp; aucun passage à venir'}</div>` : ''}`;
+}
+function ctSetDate(i, v) { _ctDatesEdit[i] = v || ''; _ctDatesEdit = _ctDatesEdit.filter(Boolean).sort(); _ctDatesRender(); }
+function ctRemoveDate(i) { _ctDatesEdit.splice(i, 1); _ctDatesRender(); }
+function ctViderDates() { _ctDatesEdit = []; _ctDatesRender(); }
+function ctAddDate() {
+  if (_ctDatesEdit.length >= MAX_DATES_CONTRAT) { toast('Maximum de ' + MAX_DATES_CONTRAT + ' dates', '#e63946'); return; }
+  _ctDatesEdit.push(today());
+  _ctDatesEdit = _ctDatesEdit.filter(Boolean).sort();
+  _ctDatesRender();
+}
+// Repartit les N controles de l'annee a partir de la date de debut (ou d'aujourd'hui)
+function ctProposerDates() {
+  const n = parseInt((($('ct-controles') || {}).value || ''), 10) || 0;
+  if (!n) { toast('Indique d\'abord le nombre de contrôles par an', '#d97706'); return; }
+  const dep = (($('ct-debut') || {}).value || '') || (($('ct-date') || {}).value || '') || today();
+  const d0 = new Date(dep + 'T12:00:00');
+  if (isNaN(d0.getTime())) { toast('Date de début invalide', '#e63946'); return; }
+  const pas = 12 / n;                       // mois entre deux passages
+  const ajout = [];
+  for (let i = 0; i < n && _ctDatesEdit.length + ajout.length < MAX_DATES_CONTRAT; i++) {
+    const d = new Date(d0.getTime());
+    d.setMonth(d.getMonth() + Math.round(pas * i));
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (_ctDatesEdit.indexOf(iso) < 0 && ajout.indexOf(iso) < 0) ajout.push(iso);
+  }
+  _ctDatesEdit = _ctDatesEdit.concat(ajout).filter(Boolean).sort();
+  _ctDatesRender();
+  toast('🗓 ' + ajout.length + ' date(s) proposée(s) — ajuste-les si besoin', '#2d9e6b');
+}
 function openNewContrat() { _openContratModal(null); }
 function editContrat(id) { _openContratModal(id); }
 function _openContratModal(id) {
   _contratEditingId = id;
   _pendingContratFile = null;
   const c = id ? (DB.contrats || []).find(x => x.id === id) : null;
+  _ctDatesEdit = _ctDates(c);
   let modal = document.getElementById('modal-contrat');
   if (!modal) {
     modal = document.createElement('div');
@@ -17818,6 +17894,11 @@ function _openContratModal(id) {
               <input type="checkbox" id="ct-tacite" ${c && c.tacite ? 'checked' : ''} style="accent-color:var(--navy);width:16px;height:16px;"> 🔁 Renouvellement tacite (reconduction annuelle)
             </label></div>
         </div>
+        <div class="form-group">
+          <label class="form-label">📅 Dates d'intervention prévues / effectuées</label>
+          <div style="font-size:11.5px;color:var(--g600);margin:-2px 0 7px;">Les passages de ce contrat. Une date déjà passée compte comme un passage effectué (en vert), la prochaine à venir est mise en avant.</div>
+          <div id="ct-dates-box"></div>
+        </div>
         <div class="form-group"><label class="form-label">Note</label>
           <textarea class="form-input" id="ct-notes" rows="2" placeholder="Nb de passages, zones couvertes, conditions…">${(c && c.notes ? String(c.notes) : '').replace(/</g, '&lt;')}</textarea></div>
         <div class="form-group">
@@ -17832,6 +17913,7 @@ function _openContratModal(id) {
       </div>
     </div>`;
   openModal('modal-contrat');
+  _ctDatesRender();
 }
 function _ctClientPick(id) {
   const c = (DB.clients || []).find(x => x.id === id);
@@ -17890,6 +17972,7 @@ async function saveContrat() {
     montant: val('ct-montant') === '' ? null : (parseFloat(val('ct-montant')) || 0),
     controlesAn: val('ct-controles') === '' ? null : (parseInt(val('ct-controles'), 10) || 0),
     tacite: !!($('ct-tacite') && $('ct-tacite').checked),
+    datesIntervention: _ctDatesEdit.filter(Boolean).sort().join(','),
     notes: val('ct-notes') || '',
     filePath, fileName, fileType,
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
