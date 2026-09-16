@@ -4265,7 +4265,6 @@ function _optBlocNuisibles() {
     const perso = ((typeof OPT !== 'undefined' && OPT.couleursNuisibles) || {})[f.cle];
     return `<div class="nz-c">
       <label class="nz-p" style="background:${c};" title="Choisir la couleur de « ${f.label} »">
-        ${(typeof NUIS_SVG !== 'undefined' && NUIS_SVG[f.ico]) ? NUIS_SVG[f.ico] : ''}
         <input type="color" value="${c}" onchange="optSetNuisCouleur('${f.cle}', this.value)">
       </label>
       <div class="nz-l">${f.label}</div>
@@ -8045,9 +8044,9 @@ function renderBonCardCockpit(b) {
       <div class="ck-b-pb">
         ${nd.nuisible || nd.nuisible2 || nd.statut ? `<div class="ck-chips">
           ${nd.nuisible ? (() => { const c = _nuisibleInfo(nd.nuisible).color;
-              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Nuisible concerné">${_nuisSvgTexte(nd.nuisible)}${_escapeHtml(nd.nuisible)}</span>`; })() : ''}
+              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Nuisible concerné">${_escapeHtml(nd.nuisible)}</span>`; })() : ''}
           ${nd.nuisible2 ? (() => { const c = _nuisibleInfo(nd.nuisible2).color;
-              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Second nuisible">${_nuisSvgTexte(nd.nuisible2)}${_escapeHtml(nd.nuisible2)}</span>`; })() : ''}
+              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Second nuisible">${_escapeHtml(nd.nuisible2)}</span>`; })() : ''}
           ${nd.statut ? `<span class="ck-chip ${_ckClasseStatutNote(nd.statut)}" title="Où en est-on ?">${_escapeHtml(nd.statut)}</span>` : ''}
         </div>` : ''}
         <div class="ck-pb-txt">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}</div>
