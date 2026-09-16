@@ -4516,7 +4516,82 @@ function renderMobile() {
 // --- Liste des bons, avec les deux sous-onglets « Bons » et « En cours » -----
 let _mobBonsVue = 'actifs';   // actifs | encours
 let _mobFiche = null;          // id du bon ouvert en fiche
+let _mobQ = '';                // texte tape dans la barre de recherche
 function mobBonsVue(v) { _mobBonsVue = v; _mobFiche = null; renderMobile(); window.scrollTo(0, 0); }
+// Recherche : on ne redessine QUE la liste, sinon le clavier se referme a chaque lettre
+function mobRecherche(v) {
+  _mobQ = String(v || '');
+  const box = document.getElementById('mob-bons-liste');
+  if (box) box.innerHTML = _mobBonsHtml();
+  const nb = document.getElementById('mob-bons-nb');
+  if (nb) nb.textContent = _mobBonsFiltres().length + (_mobQ.trim() ? ' résultat(s)' : (_mobBonsVue === 'encours' ? ' en cours' : ' à traiter'));
+  const x = document.getElementById('mob-q-x');
+  if (x) x.style.display = _mobQ ? 'flex' : 'none';
+}
+function mobRechercheVider() {
+  _mobQ = '';
+  const inp = document.getElementById('mob-q');
+  if (inp) { inp.value = ''; inp.focus(); }
+  mobRecherche('');
+}
+// Les bons a afficher : onglet courant, ou TOUS les bons des qu'on tape une recherche
+// (sur telephone on cherche un numero sans se soucier de l'onglet ou il se trouve).
+function _mobBonsFiltres() {
+  const tous = (DB.bons || []).filter(b => !_isBonFactArchived(b));
+  const q = _mobQ.trim().toLowerCase();
+  if (q) {
+    const mots = q.split(/\s+/).filter(Boolean);
+    return tous.filter(b => {
+      const foin = [b.numero, b.geranceNom, b.gerantNom, b.locataireNom, b.immeuble,
+                    b.gerantTel, b.proprietaire, _bonProblemeClean(b), _bonAffecte(b)]
+        .filter(Boolean).join(' ').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      // un numero se cherche aussi sans ses espaces : « 2026153322 » trouve « 2026 153 322 »
+      const foinSerre = foin.replace(/[^a-z0-9]/g, '');
+      return mots.every(m => {
+        const ms = m.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return foin.includes(ms) || foinSerre.includes(ms.replace(/[^a-z0-9]/g, ''));
+      });
+    }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  }
+  return (_mobBonsVue === 'encours')
+    ? tous.filter(b => (b.statut || '') === 'en-cours')
+    : _mobBonsPrioritaires();
+}
+// Une carte de bon
+function _mobCarteBon(b) {
+  const e = _bonRapEtat(b);
+  const rapIco = e.etat === 'transmis' ? ' <span style="color:#2563eb" title="Rapport transmis">📨</span>'
+               : e.etat === 'fait' ? ' <span style="color:#16a34a" title="Rapport finalisé">✓</span>' : '';
+  return `<div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
+      <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}${rapIco}</div>
+      <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
+    </div>`;
+}
+// Les bons regroupes par gerance, chaque groupe sous un bandeau de la couleur de la gerance
+function _mobBonsHtml() {
+  const bons = _mobBonsFiltres();
+  if (!bons.length) {
+    return _mobQ.trim()
+      ? `<div class="mob-vide">Aucun bon ne correspond à « ${_escapeHtml(_mobQ.trim())} ».</div>`
+      : '<div class="mob-vide">Aucun bon dans cette liste.</div>';
+  }
+  const groupes = {};
+  bons.forEach(b => {
+    const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+    (groupes[g] = groupes[g] || []).push(b);
+  });
+  const noms = Object.keys(groupes).sort((a, b) => {
+    if (a === '(Sans gérance)') return 1;
+    if (b === '(Sans gérance)') return -1;
+    return a.localeCompare(b, 'fr');
+  });
+  return noms.map(g => {
+    const c = colorForGeranceName(g);
+    return `<div class="mob-ger" style="background:${c};">🏢 ${_escapeHtml(g)}<span>${groupes[g].length}</span></div>
+      ${groupes[g].map(_mobCarteBon).join('')}`;
+  }).join('');
+}
 function mobOuvrirBon(id) { _mobFiche = id; renderMobile(); window.scrollTo(0, 0); }
 // Confirme la saisie et revient a la liste. Tout est deja enregistre au fil de
 // l'eau : on force une derniere synchronisation puis on referme.
@@ -4537,24 +4612,24 @@ function mobFermerFiche() { _mobFiche = null; renderMobile(); window.scrollTo(0,
 
 function _mobListeBons() {
   const tous = (DB.bons || []).filter(b => !_isBonFactArchived(b));
-  const bons = (_mobBonsVue === 'encours')
-    ? tous.filter(b => (b.statut || '') === 'en-cours')
-    : _mobBonsPrioritaires();
+  const bons = _mobBonsFiltres();
   const nEnCours = tous.filter(b => (b.statut || '') === 'en-cours').length;
   const seg = (v, lbl, n) => `<div class="mob-seg ${_mobBonsVue === v ? 'on' : ''}" onclick="mobBonsVue('${v}')">${lbl} <span>${n}</span></div>`;
+  const q = _mobQ.trim();
   return `
     <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Bons</h2>
-      <div class="s">${bons.length} ${_mobBonsVue === 'encours' ? 'en cours' : 'à traiter'}</div></div>
+      <div class="s"><span id="mob-bons-nb">${bons.length}${q ? ' résultat(s)' : (_mobBonsVue === 'encours' ? ' en cours' : ' à traiter')}</span></div></div>
+    <div class="mob-rech">
+      <span class="lp">🔍</span>
+      <input id="mob-q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off"
+        placeholder="N° de bon, gérance, locataire, adresse…"
+        value="${_escapeHtml(_mobQ)}" oninput="mobRecherche(this.value)">
+      <button type="button" id="mob-q-x" onclick="mobRechercheVider()" style="display:${_mobQ ? 'flex' : 'none'};" aria-label="Effacer la recherche">✕</button>
+    </div>
+    ${q ? '<div class="mob-rech-info">🔎 Recherche dans <b>tous</b> les bons, quel que soit l\'onglet.</div>' : ''}
     <div class="mob-segs">${seg('actifs', '📄 Bons', _mobBonsPrioritaires().length)}${seg('encours', '🔧 En cours', nEnCours)}</div>
     <div class="mob-body" style="padding-top:8px;">
-      ${bons.map(b => `
-        <div class="mob-c${_bonNote(b) ? ' note' : ''}" style="border-left-color:${colorForGeranceName(b.geranceNom)}" onclick="mobOuvrirBon('${b.id}')">
-          <div class="t">Bon ${_escapeHtml(b.numero || '(s. n°)')}${_bonNote(b) ? ' <span style="color:#d97706">📝</span>' : ''}${(() => {
-            const e = _bonRapEtat(b);
-            return e.etat === 'transmis' ? ' <span style="color:#2563eb" title="Rapport transmis">📨</span>'
-                 : e.etat === 'fait' ? ' <span style="color:#16a34a" title="Rapport finalisé">✓</span>' : ''; })()}</div>
-          <div class="s">${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? '<br>🏠 ' + _escapeHtml(b.locataireNom) : ''}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
-        </div>`).join('') || '<div class="mob-vide">Aucun bon dans cette liste.</div>'}
+      <div id="mob-bons-liste">${_mobBonsHtml()}</div>
     </div>`;
 }
 
