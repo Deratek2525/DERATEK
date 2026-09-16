@@ -71,6 +71,7 @@ const TABLE_FIELDS = {
     dateDoc: 'date_doc', clientId: 'client_id', clientNom: 'client_nom',
     clientAdresse: 'client_adresse', clientNpa: 'client_npa', clientVille: 'client_ville',
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse', bonId: 'bon_id',
+    contratId: 'contrat_id',
     sousTotal: 'sous_total', tvaTaux: 'tva_taux', tvaMontant: 'tva_montant',
     rabaisMontant: 'rabais_montant',
     devisId: 'devis_id',
@@ -17839,12 +17840,26 @@ function renderContrats() {
                 ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
               </div>
               <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
-              <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-                ${c.filePath ? `<span style="font-size:10px;font-weight:700;color:var(--g600);background:#f3f4f6;border-radius:6px;padding:2px 7px;">${_contratFileKind(c.fileName)}</span>
-                <button class="btn btn-ghost btn-sm" onclick="viewContratFile('${c.id}')" title="Ouvrir le fichier joint">📥 Ouvrir</button>` : ''}
-                <button class="btn ico-pdf btn-sm" onclick="contratGenererPdf('${c.id}')" title="L'app rédige le contrat complet en PDF à partir des infos saisies">📄 Générer PDF</button>
-                <button class="btn btn-navy btn-sm" onclick="editContrat('${c.id}')" title="Modifier">✏️</button>
-                <button class="btn btn-red btn-sm btn-xs" onclick="deleteContrat('${c.id}')" title="Supprimer">🗑</button>
+              <div class="ck-b-btns" style="flex-shrink:0;">
+                ${(() => {
+                  const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
+                  const rp = _ctRapEtat(c);
+                  const rapCls = { fait: 'ico-rap', brouillon: 'ico-rap-br', aucun: 'btn-ghost' }[rp.etat];
+                  const rapTip = rp.etat === 'aucun' ? 'Faire un rapport d\'intervention depuis ce contrat'
+                    : (rp.etat === 'fait' ? 'Rapport finalisé — ouvrir ou en créer un nouveau' : 'Rapport en brouillon — ouvrir ou en créer un nouveau');
+                  const docs = (DB.documents || []).filter(x => x.contratId === c.id);
+                  const aDev = docs.some(x => (x.type || 'devis') === 'devis');
+                  const aFac = docs.some(x => x.type === 'facture');
+                  return [
+                    bt(`contratGenererPdf('${c.id}')`, CK_ICO.pdf, 'Générer le contrat complet en PDF', 'ico-pdf'),
+                    c.filePath ? bt(`viewContratFile('${c.id}')`, CK_ICO.trombone, 'Ouvrir le fichier joint (' + _contratFileKind(c.fileName) + ')', 'ico-pj') : '',
+                    bt(`openContratRapMenu('${c.id}', this)`, CK_ICO.rapport, rapTip, rapCls),
+                    bt(`createDevisFromContrat('${c.id}')`, CK_ICO.devis, aDev ? 'Devis déjà lié — en créer un autre' : 'Créer un devis depuis ce contrat', aDev ? 'ico-devis' : 'btn-ghost'),
+                    bt(`createFactureFromContrat('${c.id}')`, CK_ICO.facture, aFac ? 'Facture déjà liée — en créer une autre' : 'Facturer ce contrat', aFac ? 'ico-fact' : 'btn-ghost'),
+                    bt(`editContrat('${c.id}')`, CK_ICO.ouvrir, 'Modifier le contrat', 'btn-navy'),
+                    `<button class="btn btn-red ck-b-b" onclick="deleteContrat('${c.id}')" data-tip="Supprimer ce contrat" aria-label="Supprimer ce contrat">${CK_ICO.suppr}</button>`
+                  ].join('');
+                })()}
               </div>
             </div>`).join('')}
         </div>`);
@@ -17915,6 +17930,100 @@ function ctProposerDates() {
   _ctDatesRender();
   toast('🗓 ' + ajout.length + ' date(s) proposée(s) — ajuste-les si besoin', '#2d9e6b');
 }
+// ── Actions d'un contrat : rapport, devis, facture ────────────────────────────
+// Le ruban d'un contrat propose les memes actions que celui d'un bon.
+// Le lien rapport <-> contrat se fait par le NUMERO du contrat, inscrit dans le
+// champ « bon de commande » du rapport.
+function _ctRapportsLies(c) {
+  if (!c) return [];
+  const num = _factNorm(c.numero || '');
+  if (!num) return [];
+  return (DB.rapports || []).filter(r => _factNorm(r.bonCommande) === num);
+}
+function _ctRapEtat(c) {
+  const raps = _ctRapportsLies(c);
+  if (!raps.length) return { etat: 'aucun', rap: null };
+  const fin = raps.find(r => r.statut === 'Envoyé') || raps.find(r => r.statut === 'Finalisé');
+  return fin ? { etat: 'fait', rap: fin } : { etat: 'brouillon', rap: raps[0] };
+}
+// Nouveau rapport d'intervention pre-rempli depuis un contrat
+function createRapportFromContrat(id) {
+  const c = (DB.contrats || []).find(x => x.id === id);
+  if (!c) { toast('Contrat introuvable', '#e63946'); return; }
+  state.editingRapportId = null;
+  resetRapportForm();
+  const cli = (c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null)
+           || (c.clientNom ? (DB.clients || []).find(x => _couleurKey(x.nom) === _couleurKey(c.clientNom)) : null);
+  if (cli) { populateClientSelectRapport(cli.id); onClientChange(); }
+  const setVal = (k, v) => { const el = $(k); if (el && v) el.value = v; };
+  setVal('r-date', today());
+  setVal('r-bon-commande', c.numero || '');
+  if ($('r-noint')) $('r-noint').value = c.numero || $('r-noint').value;
+  if (cli) { setVal('r-tel', cli.tel); setVal('r-email', cli.email); setVal('r-contact', cli.contact); }
+  // Adresse du contrat (souvent l'immeuble sous contrat)
+  const adr = String(c.clientAdresse || '').split('\n').map(x => x.trim()).filter(Boolean);
+  if (adr.length) _setAdresseInter(adr.join(', '));
+  // Description : intitule du contrat + categorie + note
+  const desc = [
+    'Passage sous contrat' + (c.numero ? ' n° ' + c.numero : '') + (c.nom ? ' — ' + c.nom : ''),
+    c.categorie ? 'Prestation : ' + c.categorie : '',
+    c.controlesAn ? 'Contrat de ' + c.controlesAn + ' contrôle(s) par an' : '',
+    c.notes || ''
+  ].filter(Boolean).join('\n');
+  setVal('r-description', desc);
+  // Les dates du contrat deja passees deviennent les passages du rapport
+  const auj = today();
+  const faites = _ctDates(c).filter(d => d <= auj);
+  if (faites.length && typeof rSetDates === 'function') rSetDates(faites);
+  if (faites.length && $('r-nb-passages')) $('r-nb-passages').value = String(faites.length);
+  if (typeof updatePDF === 'function') updatePDF();
+  showScreen('rapport-edit');
+  toast('Rapport pré-rempli depuis le contrat ' + (c.numero || c.nom || ''), '#2d9e6b');
+}
+// Menu du pictogramme « Rapport » d'un contrat
+function openContratRapMenu(id, btn) {
+  const c = (DB.contrats || []).find(x => x.id === id); if (!c) return;
+  const e = _ctRapEtat(c);
+  if (e.etat === 'aucun') { createRapportFromContrat(id); return; }
+  const raps = _ctRapportsLies(c);
+  const items = raps.slice(0, 5).map(r => ({
+    ico: r.statut === 'Brouillon' ? '🕒' : '📄',
+    txt: 'Ouvrir ' + (r.id || '') + ' (' + (r.statut || '') + ')',
+    act: `_ckMenuFermer(); editRapport('${r.id}')`
+  }));
+  items.push({ ico: '➕', txt: 'Créer un nouveau rapport', act: `_ckMenuFermer(); createRapportFromContrat('${id}')`, cls: 'ok' });
+  _ckMenuOuvrir(btn, raps.length + ' rapport(s) sur ce contrat', items);
+}
+// Devis / facture pre-remplis depuis un contrat (client + montant annuel)
+function _docFromContrat(id, type) {
+  const c = (DB.contrats || []).find(x => x.id === id);
+  if (!c) { toast('Contrat introuvable', '#e63946'); return; }
+  const cli = (c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null)
+           || (c.clientNom ? (DB.clients || []).find(x => _couleurKey(x.nom) === _couleurKey(c.clientNom)) : null);
+  const adr = String(c.clientAdresse || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const ligne1 = (c.nom || 'Contrat') + (c.numero ? ' — n° ' + c.numero : '')
+    + (c.controlesAn ? ' (' + c.controlesAn + ' contrôle(s) par an)' : '');
+  const ds = _ctDates(c);
+  _editingDoc = {
+    id: newId(), type: type, numero: _nextDocNumero(type), dateDoc: today(),
+    clientId: cli ? cli.id : '', clientNom: c.clientNom || (cli ? cli.nom : ''),
+    clientAdresse: adr[0] || (cli ? cli.adresse : '') || '',
+    clientNpa: cli ? (cli.npa || '') : '', clientVille: cli ? (cli.ville || '') : '',
+    contratId: c.id,
+    lignes: [
+      { desc: ligne1, qte: 1, prix: (parseFloat(c.montant) || 0) },
+      { desc: "Dates d'intervention : " + (ds.length ? ds.map(x => fmtDate(x)).join(' · ') : ''), qte: 1, prix: 0 }
+    ],
+    tvaTaux: ((typeof OPT !== 'undefined' && String(OPT.tvaDefaut).trim()) ? parseFloat(OPT.tvaDefaut) : (DERATEK_CONFIG.company.tvaTaux || 8.1)),
+    rabais: ((typeof OPT !== 'undefined' && OPT.rabaisDefaut !== '') ? (parseFloat(OPT.rabaisDefaut) || 0) : 5),
+    statut: 'brouillon', notes: ''
+  };
+  if (typeof showDocsScreen === 'function') showDocsScreen(type);
+  openDocEditor();
+  toast((type === 'devis' ? 'Devis' : 'Facture') + ' pré-rempli depuis le contrat ' + (c.numero || ''), '#2d9e6b');
+}
+function createDevisFromContrat(id)   { _docFromContrat(id, 'devis'); }
+function createFactureFromContrat(id) { _docFromContrat(id, 'facture'); }
 function openNewContrat() { _openContratModal(null); }
 function editContrat(id) { _openContratModal(id); }
 function _openContratModal(id) {
