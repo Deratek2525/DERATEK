@@ -38,6 +38,7 @@ const TABLE_FIELDS = {
     pdfPath: 'pdf_path',
     dateIntervention: 'date_intervention',
     heureIntervention: 'heure_intervention',
+    contratId: 'contrat_id',
     heureFinIntervention: 'heure_fin_intervention',
     dateFinIntervention: 'date_fin_intervention',
   } },
@@ -17885,6 +17886,13 @@ function renderContrats() {
                   return [
                     bt(`contratGenererPdf('${c.id}')`, CK_ICO.pdf, 'Générer le contrat complet en PDF', 'ico-pdf'),
                     c.filePath ? bt(`viewContratFile('${c.id}')`, CK_ICO.trombone, 'Ouvrir le fichier joint (' + _contratFileKind(c.fileName) + ')', 'ico-pj') : '',
+                    (() => {
+                      const bl = _ctBonsLies(c);
+                      return bt(`openContratBcm('${c.id}', this)`, CK_ICO.bonPlus,
+                        bl.length ? bl.length + ' bon(s) lié(s) à ce contrat — ouvrir ou en créer un nouveau'
+                                  : 'Ouvrir un BCM (bon de travaux) pour ce contrat',
+                        bl.length ? 'ico-bcm' : 'btn-ghost');
+                    })(),
                     bt(`openContratRapMenu('${c.id}', this)`, CK_ICO.rapport, rapTip, rapCls),
                     bt(`createDevisFromContrat('${c.id}')`, CK_ICO.devis, aDev ? 'Devis déjà lié — en créer un autre' : 'Créer un devis depuis ce contrat', aDev ? 'ico-devis' : 'btn-ghost'),
                     bt(`createFactureFromContrat('${c.id}')`, CK_ICO.facture, aFac ? 'Facture déjà liée — en créer une autre' : 'Facturer ce contrat', aFac ? 'ico-fact' : 'btn-ghost'),
@@ -17961,6 +17969,73 @@ function ctProposerDates() {
   _ctDatesEdit = _ctDatesEdit.concat(ajout).filter(Boolean).sort();
   _ctDatesRender();
   toast('🗓 ' + ajout.length + ' date(s) proposée(s) — ajuste-les si besoin', '#2d9e6b');
+}
+// ── BCM (bon de travaux) depuis un contrat ────────────────────────────────────
+// Un passage sous contrat se traite comme n'importe quelle intervention : il lui
+// faut un bon. On cree ici un bon manuel « BCM 10-NNN » deja rempli avec le
+// client, l'adresse, la prestation et la prochaine date prevue au contrat.
+function _ctBonsLies(c) {
+  if (!c) return [];
+  return (DB.bons || []).filter(b => b.contratId === c.id);
+}
+// Ouvre le BCM du contrat : s'il n'y en a aucun on le cree, sinon on propose la liste
+function openContratBcm(id, btn) {
+  const c = (DB.contrats || []).find(x => x.id === id); if (!c) return;
+  const liste = _ctBonsLies(c);
+  if (!liste.length) { creerBcmDepuisContrat(id); return; }
+  const items = liste.slice(0, 6)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .map(b => ({
+      ico: '📄',
+      txt: 'Bon ' + (b.numero || '') + (b.date ? ' · ' + fmtDate(b.date) : '')
+         + (b.statut ? ' · ' + ((BON_STATUT_META[b.statut] || {}).court || b.statut) : ''),
+      act: `_ckMenuFermer(); goToBon('${b.id}')`
+    }));
+  items.push({ ico: '➕', txt: 'Créer un nouveau BCM pour ce contrat', act: `_ckMenuFermer(); creerBcmDepuisContrat('${id}')`, cls: 'ok' });
+  _ckMenuOuvrir(btn, liste.length + ' bon(s) sur ce contrat', items);
+}
+function creerBcmDepuisContrat(id) {
+  const c = (DB.contrats || []).find(x => x.id === id);
+  if (!c) { toast('Contrat introuvable', '#e63946'); return; }
+  const cli = (c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null)
+           || (c.clientNom ? (DB.clients || []).find(x => _couleurKey(x.nom) === _couleurKey(c.clientNom)) : null);
+  const adr = String(c.clientAdresse || '').split('\n').map(x => x.trim()).filter(Boolean).join(', ');
+  const auj = today();
+  const ds = _ctDates(c);
+  const prochaine = ds.filter(d => d >= auj)[0] || '';
+  const faites = ds.filter(d => d < auj);
+  const bon = {
+    id: newId(),
+    numero: _nextBonManuelNumero(),
+    date: auj,
+    contratId: c.id,
+    geranceId: (cli && cli.id) || c.clientId || '',
+    geranceNom: c.clientNom || (cli ? cli.nom : ''),
+    gerantNom: (cli && _rapContactNom(cli.contact)) || '',
+    gerantTel: (cli && cli.tel) || '',
+    gerantEmail: (cli && cli.email) || '',
+    locataireId: '', locataireNom: '',
+    immeuble: adr || (cli ? [cli.adresse, ((cli.npa || '') + ' ' + (cli.ville || '')).trim()].filter(Boolean).join(', ') : ''),
+    proprietaire: '',
+    probleme: [
+      'Passage sous contrat' + (c.numero ? ' n° ' + c.numero : '') + (c.nom ? ' — ' + c.nom : ''),
+      c.categorie ? 'Prestation : ' + c.categorie : '',
+      c.controlesAn ? 'Contrat de ' + c.controlesAn + ' contrôle(s) par an' : '',
+      (c.dateDebut || c.echeance) ? 'Période : ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : '',
+      c.notes || ''
+    ].filter(Boolean).join('\n'),
+    contactSurPlace: '', concierge: '', pdfPath: '',
+    statut: 'en-cours',
+    dateIntervention: prochaine,
+    createdAt: new Date().toISOString()
+  };
+  if (faites.length) _setBonDatesInterv(bon, faites);
+  const bons = DB.bons; bons.push(bon); DB.bons = bons;
+  if (typeof _syncBonIntervention === 'function') _syncBonIntervention(bon);
+  if (typeof renderBons === 'function') renderBons();
+  if (typeof renderContrats === 'function') renderContrats();
+  toast('✓ BCM créé depuis le contrat ' + (c.numero || '') + ' → ' + bon.numero, '#2d9e6b');
+  goToBon(bon.id);
 }
 // ── Actions d'un contrat : rapport, devis, facture ────────────────────────────
 // Le ruban d'un contrat propose les memes actions que celui d'un bon.
