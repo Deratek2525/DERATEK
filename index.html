@@ -5,16 +5,16 @@
 <title>DERATEK — Professional Pest Control</title>
 
 <!-- Application installable sur l'ecran d'accueil (iPhone, Android, ordinateur) -->
-<link rel="manifest" href="./manifest.json?v=20260916bc">
+<link rel="manifest" href="./manifest.json?v=20260916tr">
 <meta name="theme-color" content="#0d1b3e">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260916bc">
-<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260916bc">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260916bc">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20260916tr">
+<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20260916tr">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20260916tr">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DERATEK">
-<link rel="stylesheet" href="./style.css?v=20260916bc">
+<link rel="stylesheet" href="./style.css?v=20260916tr">
 </head>
 <body>
 
@@ -341,6 +341,7 @@
     <button id="nb-dashboard" class="nav-btn active" onclick="showScreen(&#39;dashboard&#39;)">📊 <span>Dashboard</span></button>
     <button id="nb-bons" class="nav-btn" onclick="showBonsActifs()" style="background:#2563eb;color:#fff;">📄 <span>Bons</span> <span id="nb-bons-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-bons-encours" class="nav-btn" onclick="showBonsEnCours()" style="background:#ea580c;color:#fff;">⏳ <span>Bons en cours</span> <span id="nb-bons-encours-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
+    <button id="nb-bons-atransmettre" class="nav-btn" onclick="showBonsATransmettre()" style="background:#dc2626;color:#fff;">📕 <span>Rapports à transmettre</span> <span id="nb-bons-atransmettre-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-bons-termines" class="nav-btn" onclick="showBonsTermines()" style="background:#16a34a;color:#fff;">✅ <span>Bons terminés</span> <span id="nb-bons-termines-count" style="margin-left:4px;background:rgba(255,255,255,.30);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span></button>
     <button id="nb-agenda" class="nav-btn" onclick="showScreen(&#39;agenda&#39;)">📅 <span>Agenda</span></button>
     <button id="nb-rapports" class="nav-btn" onclick="showScreen(&#39;rapports&#39;)">📋 <span>Rapports</span> <span id="nb-rapports-count" style="margin-left:4px;background:rgba(255,255,255,.22);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;">0</span> <span class="nav-badge" id="nb-badge" style="display:none">0</span></button>
@@ -1226,6 +1227,7 @@
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <button id="bons-filter-actifs" class="btn btn-navy btn-sm" onclick="setBonsFilter('actifs')" title="Bons en cours / à traiter">📂 Bons actifs</button>
+        <button id="bons-filter-atransmettre" class="btn btn-ghost btn-sm" onclick="setBonsFilter('a-transmettre')" title="Bons dont le rapport doit encore partir à la gérance">📕 Rapports à transmettre</button>
         <button id="bons-filter-termines" class="btn btn-ghost btn-sm" onclick="setBonsFilter('termines')" title="Bons dont le travail est terminé">✅ Bons terminés</button>
         <button class="btn btn-navy btn-sm" onclick="openManualBon()" title="Créer un bon à la main, sans PDF (gérance qui n'envoie pas de bon)">➕ Bon manuel</button>
         <div class="search-wrap" style="min-width:180px;">
@@ -1554,16 +1556,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20260916bc"></script>
+  <script src="./fonts_arial.js?v=20260916tr"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20260916bc"></script>
-<script src="./footer_prestations.js?v=20260916bc"></script>
-<script src="./config.js?v=20260916bc"></script>
-<script src="./app.js?v=20260916bc"></script>
-<script src="./pdf.js?v=20260916bc"></script>
+<script src="./logo.js?v=20260916tr"></script>
+<script src="./footer_prestations.js?v=20260916tr"></script>
+<script src="./config.js?v=20260916tr"></script>
+<script src="./app.js?v=20260916tr"></script>
+<script src="./pdf.js?v=20260916tr"></script>
 
 </body></html>

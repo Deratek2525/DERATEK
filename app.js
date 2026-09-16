@@ -6582,11 +6582,14 @@ function confirmDeleteLocataire(id, nom) {
 // Liste des bons enregistrés, regroupés par gérance
 // Bascule entre les bons actifs / en cours / terminés
 function setBonsFilter(f) {
-  state.bonsFilter = (f === 'termines') ? 'termines' : (f === 'en-cours' ? 'en-cours' : 'actifs');
+  state.bonsFilter = (f === 'termines') ? 'termines'
+                   : (f === 'en-cours') ? 'en-cours'
+                   : (f === 'a-transmettre') ? 'a-transmettre' : 'actifs';
   state.bonsStatut = null;      // changer d'onglet remet les compteurs a zero
-  const ba = $('bons-filter-actifs'), bt = $('bons-filter-termines');
+  const ba = $('bons-filter-actifs'), bt = $('bons-filter-termines'), br = $('bons-filter-atransmettre');
   if (ba) ba.className = 'btn ' + (state.bonsFilter === 'actifs' ? 'btn-navy' : 'btn-ghost') + ' btn-sm';
   if (bt) bt.className = 'btn ' + (state.bonsFilter === 'termines' ? 'btn-green' : 'btn-ghost') + ' btn-sm';
+  if (br) br.className = 'btn ' + (state.bonsFilter === 'a-transmettre' ? 'btn-red' : 'btn-ghost') + ' btn-sm';
   renderBons();
 }
 // Boutons de navigation du haut : Bons (actifs), Bons en cours, Bons terminés
@@ -6607,6 +6610,12 @@ function showBonsTermines() {
   showScreen('bons');
   setBonsFilter('termines');
   _highlightNav('nb-bons-termines');
+}
+// Rubrique « Rapports a transmettre » : les bons dont le rapport doit partir a la gerance
+function showBonsATransmettre() {
+  showScreen('bons');
+  setBonsFilter('a-transmettre');
+  _highlightNav('nb-bons-atransmettre');
 }
 
 // Dates d'intervention EFFECTUÉES d'un bon (jusqu'à 5), stockées dans "probleme"
@@ -7524,13 +7533,14 @@ function bonSetDateEffectuee(id, index, value) {
 // Met à jour les compteurs de TOUS les boutons de navigation
 function updateBonsCounts() { updateNavCounts(); }
 function updateNavCounts() {
-  let nA = 0, nE = 0, nT = 0;
+  let nA = 0, nE = 0, nT = 0, nTr = 0;
   (DB.bons || []).forEach(b => {
     if (_isBonFactArchived(b)) return; // parti dans facturation archivée
     const s = b.statut || '';
-    if (s === 'termine')  { nT++; return; }   // rubrique « Bons termines »
-    if (s === 'en-cours') { nE++; return; }   // rubrique « Bons en cours »
-    nA++;                                     // tout le reste = rubrique « Bons »
+    if (s === 'termine')       { nT++;  return; }   // rubrique « Bons termines »
+    if (s === 'en-cours')      { nE++;  return; }   // rubrique « Bons en cours »
+    if (s === 'a-transmettre') { nTr++; return; }   // rubrique « Rapports a transmettre »
+    nA++;                                           // tout le reste = rubrique « Bons »
   });
   const docs = DB.documents || [];
   const nDevisDocs = docs.filter(d => (d.type || 'devis') === 'devis' && !_docIsArchive(d)).length;
@@ -7547,6 +7557,7 @@ function updateNavCounts() {
   const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   set('nb-bons-count', nA);
   set('nb-bons-encours-count', nE);
+  set('nb-bons-atransmettre-count', nTr);
   set('nb-bons-termines-count', nT);
   set('nb-devis-count', nDevis);
   set('nb-factures-count', nFact);
@@ -8201,13 +8212,15 @@ function renderBons() {
     bons = bons.filter(isTermine);
   } else if (state.bonsFilter === 'en-cours') {
     bons = bons.filter(b => (b.statut || '') === 'en-cours');
+  } else if (state.bonsFilter === 'a-transmettre') {
+    bons = bons.filter(b => (b.statut || '') === 'a-transmettre');
   } else {
     // Les statuts qui possedent leur PROPRE rubrique quittent la liste « Bons » :
     //   - « Termine »  -> onglet « Bons termines »
     //   - « En cours » -> rubrique « Bons en cours »
     // Tous les autres statuts (urgent, a contacter, a transmettre, devis...)
     // restent visibles dans « Bons » : un bon n'y disparait jamais a cause d'eux.
-    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours');
+    bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'a-transmettre');
   }
   if (q) {
     bons = bons.filter(b =>
@@ -8219,12 +8232,15 @@ function renderBons() {
     const lbl = state.bonsStatut !== null && state.bonsStatut !== undefined
       ? 'bon(s) « ' + BON_STATUT_META[state.bonsStatut].court + ' »'
       : (state.bonsFilter === 'termines' ? 'bon(s) terminé(s)'
-         : state.bonsFilter === 'en-cours' ? 'bon(s) en cours' : 'bon(s) en cours de vie');
+         : state.bonsFilter === 'en-cours' ? 'bon(s) en cours'
+         : state.bonsFilter === 'a-transmettre' ? 'rapport(s) à transmettre à la gérance'
+         : 'bon(s) en cours de vie');
     // Rapports à transmettre : bons dont le statut est « 📕 Rapport à transmettre »
     const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && (b.statut || '') === 'a-transmettre').length;
     const base = bons.length ? bons.length + ' ' + lbl : '';
     const rapHtml = rapAFaire
-      ? `<span style="color:#b91c1c;font-weight:800;">📋 ${rapAFaire} rapport${rapAFaire > 1 ? 's' : ''} à transmettre</span>`
+      ? `<button type="button" onclick="showBonsATransmettre()" title="Ouvrir la rubrique « Rapports à transmettre »"
+            style="border:none;background:none;padding:0;cursor:pointer;color:#b91c1c;font-weight:800;font-size:inherit;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">📕 ${rapAFaire} rapport${rapAFaire > 1 ? 's' : ''} à transmettre</button>`
       : `<span style="color:#15803d;font-weight:700;">✅ Tous les rapports sont faits</span>`;
     count.innerHTML = base + (base ? ' &nbsp;·&nbsp; ' : '') + rapHtml;
   }
@@ -8544,7 +8560,10 @@ function updateBonStatut(id, value) {
     'termine':       '✅ Statut : Travail terminé',
     'a-facturer':    '🧾 Statut : À facturer',
   };
-  toast(labels[value] || 'Statut mis à jour', '#2d9e6b');
+  const _dest = { 'a-transmettre': ' → il part dans « 📕 Rapports à transmettre »',
+                  'en-cours': ' → il part dans « ⏳ Bons en cours »',
+                  'termine': ' → il part dans « ✅ Bons terminés »' }[value] || '';
+  toast((labels[value] || 'Statut mis à jour') + _dest, '#2d9e6b');
   renderBons();
   // Le statut du bon décide de son apparition dans « Bons terminés à facturer »
   // (onglet Factures) et « Bons en demande de devis » (onglet Devis) → on rafraîchit ces vues.
