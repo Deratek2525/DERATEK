@@ -564,9 +564,15 @@ function generatePDF(rapport, statut) {
       // Aucun intitule automatique sous les photos : seul le commentaire saisi
       // par l'utilisateur est imprime, et uniquement s'il en a ecrit un.
       const allPhotos = photos.map((p, i) => ({ src: p, comment: (photoComments[i] || '').trim() })).filter(p => p.src);
-      const imgW = (CW - 6) / 2, imgH = 55;
+      const imgW = (CW - 6) / 2;
       for (let i = 0; i < allPhotos.length; i += 2) {
         const ligne = allPhotos.slice(i, i + 2);
+        // Hauteur de la rangee calee sur le FORMAT REEL des photos : une rangee de
+        // photos portrait est plus haute, une rangee paysage plus basse. Les deux
+        // colonnes gardent la meme hauteur, et aucune image n'est etiree.
+        const imgH = (typeof _pdfRangeeH === 'function')
+          ? _pdfRangeeH(doc, ligne.map(ph => ph.src), imgW, 45, 88)
+          : 55;
         let capH = 0;
         const caps = ligne.map(ph => {
           if (!ph.comment) return [];
@@ -579,9 +585,13 @@ function generatePDF(rapport, statut) {
           const x = M + k * (imgW + 6);
           try {
             const fmt = String(ph.src).startsWith('data:image/png') ? 'PNG' : 'JPEG';
-            doc.addImage(ph.src, fmt, x, y, imgW, imgH);
-            doc.setDrawColor(...C.border);
-            doc.rect(x, y, imgW, imgH, 'S');
+            if (typeof _pdfImgFit === 'function') {
+              _pdfImgFit(doc, ph.src, fmt, x, y, imgW, imgH, { bord: C.border });
+            } else {
+              doc.addImage(ph.src, fmt, x, y, imgW, imgH);
+              doc.setDrawColor(...C.border);
+              doc.rect(x, y, imgW, imgH, 'S');
+            }
             if (caps[k].length) {
               doc.setFont('helvetica', 'normal');
               doc.setFontSize(7.5);

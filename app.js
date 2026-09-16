@@ -11517,8 +11517,7 @@ function downloadDocPDF(id, mode) {
         if (col === 0 && ty + ph + 10 > contentBottom) { ty = startContentPage(); }
         const px = 20 + col * (pw + 6);
         try {
-          doc.addImage(p.data, 'JPEG', px, ty, pw, ph);
-          doc.setDrawColor(225,228,238); doc.rect(px, ty, pw, ph, 'D');
+          _pdfImgFit(doc, p.data, 'JPEG', px, ty, pw, ph, { bord: [225, 228, 238] });
           if (p.caption) { doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(8); doc.setTextColor(70); doc.text(doc.splitTextToSize(String(p.caption), pw).slice(0,2), px, ty+ph+3.6); doc.setTextColor(0); }
         } catch (e) {}
         if (col === 1 || i === dphotos.length - 1) ty += ph + 11;
@@ -13973,8 +13972,7 @@ function _genDiagPDF(d, mode) {
       if (col === 0 && y + ph + 8 > MAX_Y) newPage();
       const px = M + col*(pw+6);
       try {
-        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
-        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        _pdfImgFit(doc, p.data, 'JPEG', px, y, pw, ph, { bord: [225, 228, 238] });
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
@@ -14661,8 +14659,7 @@ function _genRongeursPDF(d, mode) {
       if (col === 0 && y + ph + 8 > MAX_Y) newPage();
       const px = M + col*(pw+6);
       try {
-        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
-        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        _pdfImgFit(doc, p.data, 'JPEG', px, y, pw, ph, { bord: [225, 228, 238] });
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
@@ -15442,8 +15439,7 @@ function _genBlattesPDF(d, mode) {
       if (col === 0 && y + ph + 8 > MAX_Y) newPage();
       const px = M + col*(pw+6);
       try {
-        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
-        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        _pdfImgFit(doc, p.data, 'JPEG', px, y, pw, ph, { bord: [225, 228, 238] });
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
@@ -15768,8 +15764,7 @@ function _genPunaisesPDF(d, mode) {
       if (col === 0 && y + ph + 8 > MAX_Y) newPage();
       const px = M + col*(pw+6);
       try {
-        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
-        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        _pdfImgFit(doc, p.data, 'JPEG', px, y, pw, ph, { bord: [225, 228, 238] });
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
@@ -16716,8 +16711,7 @@ function _genFourmisPDF(d, mode) {
       if (col === 0 && y + ph + 8 > MAX_Y) newPage();
       const px = M + col*(pw+6);
       try {
-        doc.addImage(p.data, 'JPEG', px, y, pw, ph);
-        doc.setDrawColor(225,228,238); doc.rect(px, y, pw, ph, 'D');
+        _pdfImgFit(doc, p.data, 'JPEG', px, y, pw, ph, { bord: [225, 228, 238] });
         const meta = (typeof _diagPhotoMeta === 'function') ? _diagPhotoMeta(p) : '';
         const cap = ['Photo ' + (i+1), p.caption, meta ? '(' + meta + ')' : ''].filter(Boolean).join(' — ');
         doc.setFont(_PDFF('italic'), 'italic'); doc.setFontSize(7.5); doc.setTextColor(70);
@@ -17778,6 +17772,45 @@ const CONTRAT_CAT_SVG = {
 };
 function _contratNuisSvg(cat) {
   return NUIS_SVG[CONTRAT_CAT_SVG[cat] || 'doc'] || NUIS_SVG.doc;
+}
+// ── Photos dans les PDF : cadre fixe, image JAMAIS deformee ───────────────────
+// jsPDF etire l'image sur la largeur ET la hauteur demandees. Une photo de
+// telephone (portrait) forcee dans un cadre paysage devient donc ecrasee.
+// On garde ici le cadre exactement aux dimensions voulues (la mise en page ne
+// bouge pas) et on dessine l'image A SON PROPRE FORMAT, centree dans ce cadre.
+// Renvoie la hauteur ideale du cadre pour une largeur donnee (utile pour adapter
+// la hauteur d'une rangee au format reel des photos).
+function _pdfImgRatio(doc, data) {
+  try {
+    const pr = doc.getImageProperties(data);
+    if (pr && pr.width && pr.height) return pr.height / pr.width;
+  } catch (e) {}
+  return 0.75;   // repli : 4:3 paysage
+}
+// Dessine `data` dans le cadre (x, y, w, h) sans deformation.
+// opts.fond   : couleur de remplissage du cadre (defaut blanc casse)
+// opts.bord   : couleur du liseré (null = aucun)
+function _pdfImgFit(doc, data, fmt, x, y, w, h, opts) {
+  opts = opts || {};
+  const fond = opts.fond || [247, 248, 251];
+  const bord = (opts.bord === null) ? null : (opts.bord || [225, 228, 238]);
+  try { doc.setFillColor(fond[0], fond[1], fond[2]); doc.rect(x, y, w, h, 'F'); } catch (e) {}
+  const r = _pdfImgRatio(doc, data);          // hauteur / largeur de la photo
+  let iw = w, ih = w * r;                      // on part de la largeur du cadre
+  if (ih > h) { ih = h; iw = h / r; }          // trop haute -> on part de la hauteur
+  const ix = x + (w - iw) / 2;                 // centrage horizontal
+  const iy = y + (h - ih) / 2;                 // centrage vertical
+  try { doc.addImage(data, fmt || 'JPEG', ix, iy, iw, ih); }
+  catch (e) { console.warn('Image PDF', e); return false; }
+  if (bord) { try { doc.setDrawColor(bord[0], bord[1], bord[2]); doc.rect(x, y, w, h, 'S'); } catch (e) {} }
+  return true;
+}
+// Hauteur de rangee ideale pour une serie de photos affichees sur une largeur `w`.
+// Bornee entre `min` et `max` pour que la mise en page reste reguliere.
+function _pdfRangeeH(doc, datas, w, min, max) {
+  let h = min;
+  (datas || []).forEach(d => { if (d) h = Math.max(h, w * _pdfImgRatio(doc, d)); });
+  return Math.min(Math.max(h, min), max);
 }
 function _contratFileIcon(t) {
   t = String(t || '').toLowerCase();
