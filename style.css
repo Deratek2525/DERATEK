@@ -1981,7 +1981,7 @@ html[data-anim="0"] .bon-tri { animation: none !important; }
 }
 
 /* ── Contrats : pictogrammes de nuisibles dessinés + boutons espacés ─────────── */
-svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; }
+svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: none; }
 .ct-ico {
   width: 42px; height: 42px; flex: 0 0 42px; border-radius: 11px;
   display: flex; align-items: center; justify-content: center; padding: 7px;
