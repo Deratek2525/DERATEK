@@ -3533,26 +3533,61 @@ function onPhotoSelected(e) {
 // On ramene a 1400 px de cote maxi en JPEG : le rapport reste leger et le PDF
 // se genere sans attendre.
 const PHOTO_MAX_PX = 1400;
+// ── Lecture d'une photo : orientation REDRESSEE une fois pour toutes ──────────
+// Les telephones n'font pas tourner les pixels quand on photographie en portrait :
+// ils ecrivent juste une etiquette « EXIF Orientation » dans le fichier. Le Mac et
+// le navigateur savent la lire, mais PAS le generateur de PDF : la photo sortait
+// donc couchee dans le rapport.
+// On redessine ici chaque photo dans un canvas APRES avoir applique cette
+// etiquette : les pixels sont physiquement remis a l'endroit et l'etiquette
+// disparait. Ce qu'on voit a l'ecran est exactement ce qui part dans le PDF.
+function _imgNormalisee(file, maxPx, qualite) {
+  const MAX = maxPx || 1400;
+  const Q = (qualite == null) ? 0.85 : qualite;
+  const dessine = (src, w, h, resolve) => {
+    const r = Math.min(1, MAX / Math.max(w || 1, h || 1));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round((w || 1) * r));
+    cv.height = Math.max(1, Math.round((h || 1) * r));
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    try { cx.drawImage(src, 0, 0, cv.width, cv.height); } catch (e) { resolve(null); return; }
+    try { resolve(cv.toDataURL('image/jpeg', Q)); } catch (e) { resolve(null); }
+  };
+  return new Promise(resolve => {
+    if (!file || !/^image\//i.test(file.type || '')) { resolve(null); return; }
+    // Voie 1 : createImageBitmap applique explicitement l'orientation EXIF
+    const voie2 = () => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = ev => {
+        const img = new Image();
+        img.onerror = () => resolve(ev.target.result);   // format exotique : tel quel
+        img.onload = () => dessine(img, img.naturalWidth || img.width, img.naturalHeight || img.height, resolve);
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+    if (typeof createImageBitmap === 'function') {
+      let fini = false;
+      try {
+        createImageBitmap(file, { imageOrientation: 'from-image' }).then(bmp => {
+          fini = true;
+          dessine(bmp, bmp.width, bmp.height, resolve);
+          try { bmp.close(); } catch (e) {}
+        }).catch(() => { if (!fini) voie2(); });
+        return;
+      } catch (e) { /* navigateur sans l'option -> voie 2 */ }
+    }
+    voie2();
+  });
+}
 function _photoLire(file, cb) {
   if (!file || !/^image\//i.test(file.type || '')) { cb(null); return; }
-  const reader = new FileReader();
-  reader.onerror = () => cb(null);
-  reader.onload = ev => {
-    const img = new Image();
-    img.onerror = () => cb(ev.target.result);      // format exotique : on garde tel quel
-    img.onload = () => {
-      const r = Math.min(1, PHOTO_MAX_PX / Math.max(img.width, img.height));
-      if (r >= 1 && (file.size || 0) < 900000) { cb(ev.target.result); return; }
-      const cv = document.createElement('canvas');
-      cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
-      const cx = cv.getContext('2d');
-      cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
-      cx.drawImage(img, 0, 0, cv.width, cv.height);
-      cb(cv.toDataURL('image/jpeg', 0.82));
-    };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+  // On passe TOUJOURS par le canvas, meme pour une petite photo : c'est ce passage
+  // qui redresse l'image. L'ancienne version renvoyait les petits fichiers tels
+  // quels, etiquette EXIF comprise -> photo couchee dans le PDF.
+  _imgNormalisee(file, PHOTO_MAX_PX, 0.85).then(d => cb(d));
 }
 // Place une liste d'images a partir d'un emplacement donne : on remplit celui-ci
 // puis les emplacements LIBRES suivants, sans jamais ecraser une photo existante.
@@ -12099,28 +12134,21 @@ function clearDiagSignature() {
 // --- Photos de l'inspection (en mémoire uniquement, incluses dans le PDF) ---
 function addDiagPhotos(ev) {
   const files = [...(ev.target.files || [])]; if (!files.length) return;
+  // Reduction a 1000 px max (poids du PDF) ET redressement de l'orientation EXIF
   files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        // Réduction à 1000 px max pour limiter le poids du PDF
-        const MAX = 1000;
-        const r = Math.min(1, MAX / Math.max(img.width, img.height));
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        if (!_editingDiag) return;
+    _imgNormalisee(file, 1000, 0.82).then(data => {
+      if (!data || !_editingDiag) return;
+      const im = new Image();
+      im.onload = () => {
         if (!Array.isArray(_editingDiag.photos)) _editingDiag.photos = [];
         _editingDiag.photos.push({
-          data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height, caption: '', use: true,
+          data: data, w: im.naturalWidth, h: im.naturalHeight, caption: '', use: true,
           addedAt: today(), by: (_editingDiag.tech || '').trim()
         });
         renderDiagPhotos();
       };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      im.src = data;
+    });
   });
   ev.target.value = '';
 }
@@ -12146,23 +12174,17 @@ function onDiagPhotoReplace(ev) {
   const i = _diagReplaceIdx; _diagReplaceIdx = -1;
   const p = _editingDiag && _editingDiag.photos && _editingDiag.photos[i];
   if (!p) { ev.target.value = ''; return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const MAX = 1000;
-      const r = Math.min(1, MAX / Math.max(img.width, img.height));
-      const cv = document.createElement('canvas');
-      cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      p.data = cv.toDataURL('image/jpeg', 0.82); p.w = cv.width; p.h = cv.height;
+  _imgNormalisee(file, 1000, 0.82).then(data => {
+    if (!data) { toast('Photo illisible', '#e63946'); return; }
+    const im = new Image();
+    im.onload = () => {
+      p.data = data; p.w = im.naturalWidth; p.h = im.naturalHeight;
       p.modifiedAt = today(); p.by = (_editingDiag.tech || p.by || '').trim();
       renderDiagPhotos();
       toast('✓ Photo remplacée', '#2d9e6b');
     };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+    im.src = data;
+  });
   ev.target.value = '';
 }
 // --- Annotation d'une photo : grande vue où l'on peut tracer dessus ---
