@@ -2007,3 +2007,37 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
   box-shadow: 0 1px 2px rgba(15, 23, 42, .18);
 }
 .btn.ico-bcm:hover { filter: brightness(1.18); }
+
+/* ── Étiquettes de nuisible : couleur pleine, lisible de loin ────────────────── */
+.ck-chip.nuis {
+  color: #fff !important; font-weight: 800;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.ck-chip.nuis svg.nz { width: 12px; height: 12px; flex: 0 0 12px; fill: currentColor; }
+/* Galerie des couleurs dans ⚙️ Options */
+.nz-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.nz-c {
+  background: #fff; border: 1px solid var(--g200); border-radius: 11px;
+  padding: 10px; text-align: center;
+}
+.nz-p {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; margin: 0 auto 7px; border-radius: 12px;
+  color: #fff; padding: 10px; cursor: pointer;
+  box-shadow: 0 2px 6px -2px rgba(15, 23, 42, .45);
+}
+.nz-p svg.nz { width: 100%; height: 100%; fill: currentColor; }
+.nz-p input[type=color] {
+  position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: none; padding: 0;
+}
+.nz-l { font-size: 11.5px; font-weight: 700; color: var(--navy); margin-bottom: 6px; line-height: 1.3; }
+.nz-a { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.nz-chip {
+  font-size: 10px; font-weight: 800; color: #fff; border: 1px solid;
+  border-radius: 20px; padding: 2px 9px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 118px;
+}
+.nz-a button {
+  border: 1px solid var(--g200); background: #fff; color: #b45309;
+  border-radius: 6px; font-size: 11px; font-weight: 800; cursor: pointer; padding: 1px 6px;
+}

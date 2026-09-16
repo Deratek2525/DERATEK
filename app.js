@@ -4033,6 +4033,7 @@ const OPT_DEFAUTS = {
   boisAct: '1', boisGrav: '', boisEtend: '', boisHum: '1',   // '1' = imprimé sur le PDF
   alerteBonH: 48,
   couleursGerances: {},      // { 'nom normalisé' : '#rrggbb' }
+  couleursNuisibles: {},     // { 'clé de famille' : '#rrggbb' }
   couleursCat: 'gerances',   // catégorie affichée dans le bloc couleurs
   style: 'classique',        // classique | cockpit
   alerteForme: 'coin',       // forme du signal d'alerte sur le ruban (voir ALERTE_FORMES)
@@ -4226,6 +4227,11 @@ function openOptions() {
              <input type="checkbox" ${OPT.gerCollant === '1' ? 'checked' : ''} onchange="optSetGerCollant(this.checked)" style="accent-color:var(--navy);width:16px;height:16px;">
              Garder le nom de la gérance collé en haut pendant le défilement</label>`,
         ].join(''))}
+        ${bloc('🐛 Couleurs des nuisibles', `
+          <div style="font-size:12px;color:var(--g600);margin-bottom:10px;">
+            La couleur de l'étiquette du nuisible sur les rubans, l'agenda et les cartes.
+            Clique sur un carré pour changer la couleur.</div>
+          <div id="opt-nuis-couleurs">${_optBlocNuisibles()}</div>`)}
         ${bloc('🤖 Intelligence artificielle', `
           <div style="font-size:12px;color:var(--g600);margin-bottom:9px;">
             L'IA lit les bons de travaux, les cartes de visite et corrige les textes. Si elle refuse de répondre,
@@ -4251,6 +4257,45 @@ function openOptions() {
       </div>
     </div>`;
   openModal('modal-options');
+}
+// Galerie des couleurs de nuisibles (⚙️ Options)
+function _optBlocNuisibles() {
+  return `<div class="nz-gal">${NUIS_FAMILLES.map(f => {
+    const c = _nuisCouleurCle(f.cle);
+    const perso = ((typeof OPT !== 'undefined' && OPT.couleursNuisibles) || {})[f.cle];
+    return `<div class="nz-c">
+      <label class="nz-p" style="background:${c};" title="Choisir la couleur de « ${f.label} »">
+        ${(typeof NUIS_SVG !== 'undefined' && NUIS_SVG[f.ico]) ? NUIS_SVG[f.ico] : ''}
+        <input type="color" value="${c}" onchange="optSetNuisCouleur('${f.cle}', this.value)">
+      </label>
+      <div class="nz-l">${f.label}</div>
+      <div class="nz-a">
+        <span class="nz-chip" style="background:${c};border-color:${c};">${f.label}</span>
+        ${perso ? `<button type="button" onclick="optSetNuisCouleur('${f.cle}', '')" title="Revenir à la couleur d'origine">↺</button>` : ''}
+      </div>
+    </div>`; }).join('')}</div>
+    <div style="margin-top:10px;text-align:center;">
+      <button class="btn btn-ghost btn-sm" onclick="optResetNuisCouleurs()">↩️ Remettre toutes les couleurs d'origine</button>
+    </div>`;
+}
+function optSetNuisCouleur(cle, couleur) {
+  const map = Object.assign({}, OPT.couleursNuisibles || {});
+  if (couleur) map[cle] = couleur; else delete map[cle];
+  OPT.couleursNuisibles = map; optSave();
+  _optRefreshNuis();
+  toast(couleur ? '🎨 Couleur modifiée' : '↺ Couleur d\'origine rétablie', '#2d9e6b');
+}
+function optResetNuisCouleurs() {
+  OPT.couleursNuisibles = {}; optSave();
+  _optRefreshNuis();
+  toast('↩️ Couleurs des nuisibles remises d\'origine', '#2d9e6b');
+}
+function _optRefreshNuis() {
+  const el = document.getElementById('opt-nuis-couleurs');
+  if (el) el.innerHTML = _optBlocNuisibles();
+  if (typeof renderBons === 'function') renderBons();
+  if (typeof renderAgenda === 'function') renderAgenda();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
 // Galerie des presentations du bandeau de gerance
 function _optBlocGerBandeaux() {
@@ -7999,8 +8044,10 @@ function renderBonCardCockpit(b) {
       </div>
       <div class="ck-b-pb">
         ${nd.nuisible || nd.nuisible2 || nd.statut ? `<div class="ck-chips">
-          ${nd.nuisible ? `<span class="ck-chip nuis" title="Nuisible concerné">🐛 ${_escapeHtml(nd.nuisible)}</span>` : ''}
-          ${nd.nuisible2 ? `<span class="ck-chip nuis2" title="Second nuisible">${_escapeHtml(nd.nuisible2)}</span>` : ''}
+          ${nd.nuisible ? (() => { const c = _nuisibleInfo(nd.nuisible).color;
+              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Nuisible concerné">${_nuisSvgTexte(nd.nuisible)}${_escapeHtml(nd.nuisible)}</span>`; })() : ''}
+          ${nd.nuisible2 ? (() => { const c = _nuisibleInfo(nd.nuisible2).color;
+              return `<span class="ck-chip nuis" style="background:${c};border-color:${c};" title="Second nuisible">${_nuisSvgTexte(nd.nuisible2)}${_escapeHtml(nd.nuisible2)}</span>`; })() : ''}
           ${nd.statut ? `<span class="ck-chip ${_ckClasseStatutNote(nd.statut)}" title="Où en est-on ?">${_escapeHtml(nd.statut)}</span>` : ''}
         </div>` : ''}
         <div class="ck-pb-txt">${pb ? _escapeHtml(pb) : '<span style="color:#b6bfd0;">—</span>'}</div>
@@ -8382,19 +8429,45 @@ function autoFillFromBonNumero(numero) {
 }
 
 // Détermine le type de nuisible + sa couleur à partir du texte du problème
-function _nuisibleInfo(txt) {
+// ── Familles de nuisibles : libelle, couleur et pictogramme ───────────────────
+// L'ordre compte : la premiere expression qui correspond gagne. Les couleurs sont
+// franches (chips pleines, texte blanc) et chacune est modifiable dans ⚙️ Options.
+const NUIS_FAMILLES = [
+  { cle: 'guepes',   label: 'Guêpes / Frelons',  couleur: '#d97706', ico: 'guepe',    re: /gu[eê]pe|frelon|abeille/ },
+  { cle: 'punaises', label: 'Punaises de lit',   couleur: '#be123c', ico: 'punaise',  re: /punaise/ },
+  { cle: 'rongeurs', label: 'Rats / souris',     couleur: '#1d4ed8', ico: 'rat',      re: /\brat|souris|rongeur|d[ée]ratis|mulot|loir/ },
+  { cle: 'blattes',  label: 'Blattes / cafards', couleur: '#047857', ico: 'blatte',   re: /blatte|cafard|cancrelat/ },
+  { cle: 'pigeons',  label: 'Pigeons / oiseaux', couleur: '#6d28d9', ico: 'pigeon',   re: /pigeon|oiseau|volatile|fiente|corbeau|[ée]tourneau/ },
+  { cle: 'fourmis',  label: 'Fourmis',           couleur: '#9a3412', ico: 'fourmi',   re: /fourmi/ },
+  { cle: 'mouches',  label: 'Mouches / moustiques', couleur: '#4d7c0f', ico: 'mouche', re: /mouche|moucheron|moustique|mite/ },
+  { cle: 'bois',     label: 'Insectes du bois',  couleur: '#78350f', ico: 'doc',      re: /capricorne|vrillette|termite|xylophage|vers? ?à ?bois|insecte.*bois|poutre|charpente/ },
+  { cle: 'puces',    label: 'Puces',             couleur: '#be185d', ico: 'punaise',  re: /puce/ },
+  { cle: 'araignees',label: 'Araignées',         couleur: '#0e7490', ico: 'araignee', re: /araign/ },
+  { cle: 'poissons', label: "Poissons d'argent", couleur: '#475569', ico: 'blatte',   re: /poisson.?d.?argent|l[ée]pisme/ },
+  { cle: 'fouines',  label: 'Fouines / martres', couleur: '#7c2d12', ico: 'rat',      re: /fouine|martre|taupe/ },
+  { cle: 'autre',    label: 'Autre / non classé',couleur: '#475569', ico: 'doc',      re: null },
+];
+function _nuisFamille(txt) {
   const t = (txt || '').toLowerCase();
-  if (/gu[eê]pe|frelon|abeille/.test(t))          return { label: 'Guêpes',         color: '#f4a623' }; // jaune
-  if (/punaise/.test(t))                          return { label: 'Punaises de lit', color: '#e63946' }; // rouge
-  if (/\brat|souris|rongeur|d[ée]ratis|mulot/.test(t)) return { label: 'Rats / souris', color: '#2563eb' }; // bleu
-  if (/blatte|cafard|cancrelat/.test(t))          return { label: 'Blattes',        color: '#2d9e6b' }; // vert
-  if (/pigeon|oiseau|volatile|fiente/.test(t))    return { label: 'Pigeons',        color: '#7c3aed' }; // violet
-  if (/fourmi/.test(t))                           return { label: 'Fourmis',        color: '#b45309' }; // brun
-  if (/mouche|moucheron/.test(t))                 return { label: 'Mouches',        color: '#65a30d' }; // vert olive
-  if (/capricorne|vrillette|termite|xylophage|vers? ?à ?bois|insecte.*bois|poutre/.test(t)) return { label: 'Insectes du bois', color: '#8b4513' };
-  if (/puce/.test(t))                             return { label: 'Puces',          color: '#db2777' };
-  if (/araign/.test(t))                           return { label: 'Araignées',      color: '#0891b2' };
-  return { label: 'Autre', color: '#6b7280' }; // gris (non classé)
+  return NUIS_FAMILLES.find(f => f.re && f.re.test(t)) || NUIS_FAMILLES[NUIS_FAMILLES.length - 1];
+}
+// Couleur d'une famille : celle choisie dans les Options, sinon celle d'origine
+function _nuisCouleurCle(cle) {
+  try {
+    const perso = (typeof OPT !== 'undefined' && OPT.couleursNuisibles) || {};
+    if (perso[cle]) return perso[cle];
+  } catch (e) {}
+  const f = NUIS_FAMILLES.find(x => x.cle === cle);
+  return (f && f.couleur) || '#475569';
+}
+function _nuisibleInfo(txt) {
+  const f = _nuisFamille(txt);
+  return { label: f.label, color: _nuisCouleurCle(f.cle), cle: f.cle, ico: f.ico };
+}
+// Pictogramme dessine d'un nuisible (meme jeu que les contrats)
+function _nuisSvgTexte(txt) {
+  const f = _nuisFamille(txt);
+  return (typeof NUIS_SVG !== 'undefined' && NUIS_SVG[f.ico]) ? NUIS_SVG[f.ico] : '';
 }
 
 // Crée / met à jour / supprime l'intervention liée à un bon dans l'agenda interne
