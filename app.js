@@ -17727,6 +17727,33 @@ const CONTRAT_CAT_ICON = {
   'Blattes / Cafards': '🪳', 'Araignées': '🕷️', 'Punaises de lit': '🛏️', 'Guêpes / Frelons': '🐝', 'Fourmis': '🐜',
   'Pigeons / Volatiles': '🐦', 'Désinfection': '🧴', 'Contrat annuel multi-nuisibles': '📅', 'Autre': '📄',
 };
+// Pictogrammes dessines des nuisibles (remplacent les emojis, qui se ressemblent
+// tous en petit et rendent mal selon les polices du systeme).
+const NUIS_SVG = {
+  rat: '<svg class="nz" viewBox="0 0 32 32"><ellipse cx="14" cy="19" rx="9" ry="6.2"/><circle cx="23" cy="15.5" r="4.6"/><circle cx="21.5" cy="10.8" r="3.1"/><circle cx="26.2" cy="14.4" r="1.1" fill="#fff"/><path d="M27.5 17.2h2.6" stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M27.5 18.8h2.4" stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M5.4 20.5C2 21 1.6 25 4.4 26.5" stroke="currentColor" stroke-width="2.1" fill="none" stroke-linecap="round"/><path d="M10 24.6v2M17 24.6v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>',
+  souris: '<svg class="nz" viewBox="0 0 32 32"><ellipse cx="15" cy="20" rx="8" ry="5.6"/><circle cx="22.4" cy="17.4" r="4"/><circle cx="20.4" cy="12.6" r="3.4"/><circle cx="25" cy="16.4" r="1" fill="#fff"/><path d="M26.4 18.6h2.6M26.4 20h2.4" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/><path d="M7.4 21.4C4 22 3.6 26 6.6 27" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  blatte: '<svg class="nz" viewBox="0 0 32 32"><ellipse cx="16" cy="18" rx="6.6" ry="9"/><circle cx="16" cy="8.4" r="3.2"/><path d="M14 5.6 10.6 2.2M18 5.6 21.4 2.2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M9.4 12 4.6 9M9.2 18H3.8M9.8 23.6 5.4 27M22.6 12l4.8-3M22.8 18h5.4M22.2 23.6 26.6 27" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M16 11v14" stroke="#fff" stroke-width="1.1" fill="none"/></svg>',
+  fourmi: '<svg class="nz" viewBox="0 0 32 32"><circle cx="16" cy="7.6" r="3.4"/><ellipse cx="16" cy="15" rx="2.9" ry="3.4"/><ellipse cx="16" cy="23.4" rx="4.4" ry="5.2"/><path d="M14.2 4.8 11 1.6M17.8 4.8 21 1.6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M12.8 13 7 9.8M12.6 16.4 6.6 18.6M19.2 13l5.8-3.2M19.4 16.4l6 2.2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>',
+  araignee: '<svg class="nz" viewBox="0 0 32 32"><circle cx="16" cy="18" r="6"/><circle cx="16" cy="11" r="3.4"/><path d="M11 13 4 8M10 17H3M10.6 21.4 4.6 25.4M12.4 24.6 9.6 29.6M21 13l7-5M22 17h7M21.4 21.4l6 4M19.6 24.6l2.8 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>',
+  punaise: '<svg class="nz" viewBox="0 0 32 32"><ellipse cx="16" cy="17.6" rx="8.4" ry="7.4"/><circle cx="16" cy="9" r="3.4"/><path d="M14 6.4 11 3.6M18 6.4 21 3.6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M8 13.4 3.6 11M7.8 21.4 3.4 24M24 13.4l4.4-2.4M24.2 21.4l4.4 2.6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M11 14.6h10M11 18.4h10M12.4 22h7.2" stroke="#fff" stroke-width="1.1" fill="none"/></svg>',
+  guepe: '<svg class="nz" viewBox="0 0 32 32"><circle cx="16" cy="7.4" r="3.4"/><ellipse cx="16" cy="13.6" rx="3" ry="3.2"/><ellipse cx="16" cy="22" rx="4.8" ry="6"/><path d="M11.4 18.6h9.2M11.6 22.4h8.8M13 26h6" stroke="#fff" stroke-width="1.5" fill="none"/><ellipse cx="8" cy="13" rx="4.6" ry="2.6" transform="rotate(-28 8 13)" opacity=".55"/><ellipse cx="24" cy="13" rx="4.6" ry="2.6" transform="rotate(28 24 13)" opacity=".55"/><path d="M16 28.4v2.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>',
+  mouche: '<svg class="nz" viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="4.6" ry="7"/><circle cx="16" cy="9.6" r="3.8"/><circle cx="13.8" cy="8.6" r="1.2" fill="#fff"/><circle cx="18.2" cy="8.6" r="1.2" fill="#fff"/><ellipse cx="7.4" cy="16" rx="6" ry="3.2" transform="rotate(-24 7.4 16)" opacity=".5"/><ellipse cx="24.6" cy="16" rx="6" ry="3.2" transform="rotate(24 24.6 16)" opacity=".5"/></svg>',
+  pigeon: '<svg class="nz" viewBox="0 0 32 32"><path d="M23.6 8.4c2.6 0 4.4 1.8 4.4 4.2 0 4.8-4 9-9.4 9H14l-3.6 6-1.4-6H7c-2.8 0-5-2.2-5-5s2.2-5 5-5h6.2c1.2-2 3.4-3.2 5.8-3.2h1.6z"/><circle cx="24" cy="11.4" r="1.2" fill="#fff"/><path d="M28.6 12.4 31.4 11" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>',
+  spray: '<svg class="nz" viewBox="0 0 32 32"><rect x="10" y="10" width="11" height="20" rx="3"/><rect x="12.6" y="5" width="6" height="5" rx="1.4"/><rect x="18.6" y="4" width="5" height="2.6" rx="1.2"/><circle cx="26.4" cy="4" r="1.4" opacity=".6"/><circle cx="29.2" cy="7.6" r="1.1" opacity=".6"/><circle cx="26.8" cy="10.4" r="1" opacity=".6"/><path d="M12.6 15h5.8M12.6 19h5.8" stroke="#fff" stroke-width="1.4" fill="none"/></svg>',
+  calendrier: '<svg class="nz" viewBox="0 0 32 32"><rect x="3.5" y="6" width="25" height="23" rx="3"/><path d="M3.5 13h25" stroke="#fff" stroke-width="2" fill="none"/><path d="M10 3v5M22 3v5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><circle cx="10.5" cy="19" r="1.7" fill="#fff"/><circle cx="16" cy="19" r="1.7" fill="#fff"/><circle cx="21.5" cy="19" r="1.7" fill="#fff"/><circle cx="10.5" cy="24" r="1.7" fill="#fff"/><circle cx="16" cy="24" r="1.7" fill="#fff"/></svg>',
+  doc: '<svg class="nz" viewBox="0 0 32 32"><path d="M18 2H8a3 3 0 0 0-3 3v22a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V11z"/><path d="M18 2v9h9" fill="#fff" opacity=".45"/><path d="M10 17h12M10 21h9" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>',
+};
+// Categorie de contrat -> pictogramme dessine
+const CONTRAT_CAT_SVG = {
+  'Dératisation (rats)': 'rat', 'Dératisation': 'rat', 'Désourisation (souris)': 'souris',
+  'Blattes / Cafards': 'blatte', 'Fourmis': 'fourmi', 'Araignées': 'araignee',
+  'Punaises de lit': 'punaise', 'Guêpes / Frelons': 'guepe', 'Mouches': 'mouche',
+  'Pigeons / Volatiles': 'pigeon', 'Désinfection': 'spray',
+  'Contrat annuel multi-nuisibles': 'calendrier', 'Autre': 'doc',
+};
+function _contratNuisSvg(cat) {
+  return NUIS_SVG[CONTRAT_CAT_SVG[cat] || 'doc'] || NUIS_SVG.doc;
+}
 function _contratFileIcon(t) {
   t = String(t || '').toLowerCase();
   if (t.includes('pdf')) return '📕';
@@ -17776,7 +17803,7 @@ function renderContrats() {
   const chipCats = CONTRAT_CATEGORIES.filter(k => counts[k]).concat(Object.keys(counts).filter(k => !CONTRAT_CATEGORIES.includes(k)));
   const chips = chipCats.map(k => {
     const on = _contratCatFilter === k;
-    return `<button onclick="contratSetCat('${k.replace(/'/g, "\\'")}')" style="border:1.5px solid ${on ? 'var(--navy)' : '#d1d5db'};background:${on ? 'var(--navy)' : '#fff'};color:${on ? '#fff' : 'var(--navy)'};border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">${CONTRAT_CAT_ICON[k] || '📄'} ${k} <span style="opacity:.7;">(${counts[k]})</span></button>`;
+    return `<button class="ct-chip" onclick="contratSetCat('${k.replace(/'/g, "\\'")}')" style="border:1.5px solid ${on ? 'var(--navy)' : '#d1d5db'};background:${on ? 'var(--navy)' : '#fff'};color:${on ? '#fff' : 'var(--navy)'};">${_contratNuisSvg(k)}${k} <span style="opacity:.7;">(${counts[k]})</span></button>`;
   }).join('');
   let head = '';
   if (all.length) {
@@ -17817,14 +17844,14 @@ function renderContrats() {
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${arr.map(c => `
             <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gc};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-              <div style="font-size:26px;flex-shrink:0;">${CONTRAT_CAT_ICON[c.categorie] || _contratFileIcon(c.fileType)}</div>
+              <div class="ct-ico" style="background:${_hexTint(gc, 0.18)};color:${gc};" title="${String(c.categorie || 'Autre').replace(/"/g, '&quot;')}">${_contratNuisSvg(c.categorie)}</div>
               <div style="flex:1.5;min-width:180px;">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   ${c.numero ? '<span style="font-size:13px;font-weight:900;color:#fff;background:var(--navy);border-radius:7px;padding:3px 10px;letter-spacing:.3px;">N° ' + String(c.numero).replace(/</g,'&lt;') + '</span>' : ''}
                   <span style="font-size:16px;font-weight:900;color:var(--navy);letter-spacing:.2px;">🏢 ${(c.clientNom || '— Sans client —').replace(/</g,'&lt;')}</span>
                 </div>
                 <div style="font-size:12px;font-weight:600;color:var(--g600);margin-top:2px;">
-                  <span class="ct-cat">${CONTRAT_CAT_ICON[c.categorie] || '📄'} ${String(c.categorie || 'Autre').replace(/</g,'&lt;')}</span>
+                  <span class="ct-cat">${_contratNuisSvg(c.categorie)}${String(c.categorie || 'Autre').replace(/</g,'&lt;')}</span>
                   ${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
                 <div style="font-size:11px;color:var(--g600);margin-top:1px;">${(c.dateDebut || c.echeance) ? '📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? '📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
                 ${(() => {
