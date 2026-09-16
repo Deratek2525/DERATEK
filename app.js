@@ -169,7 +169,7 @@ const DB = {
 
   _queue(table) {
     // les noms de clients/bons/documents alimentent la fusion des variantes de gérance
-    if (table === 'clients' || table === 'bons' || table === 'documents') {
+    if (table === 'clients' || table === 'bons' || table === 'documents' || table === 'contrats') {
       try { _gerLibReset(); } catch (e) {}
     }
     this._pending.add(table);
@@ -387,8 +387,8 @@ function _gerLibReset() { _GER_LIB = null; _GER_LIB_SIG = ''; }
 function _gerLibelles() {
   let sig = '0';
   try {
-    sig = [(DB.clients || []).length, (DB.bons || []).length,
-           (DB.documents || []).length, (DB.locataires || []).length].join('/');
+    sig = [(DB.clients || []).length, (DB.bons || []).length, (DB.documents || []).length,
+           (DB.locataires || []).length, (DB.contrats || []).length].join('/');
   } catch (e) {}
   if (_GER_LIB && _GER_LIB_SIG === sig) return _GER_LIB;
   const cpt = {};
@@ -404,6 +404,7 @@ function _gerLibelles() {
     (DB.clients   || []).forEach(c => add(c.nom, c.type === 'Gérance' ? 2 : 0));
     (DB.bons      || []).forEach(b => add(b.geranceNom, 0));
     (DB.documents || []).forEach(d => add(d.clientNom, 0));
+    (DB.contrats  || []).forEach(c => add(c.clientNom, 0));
   } catch (e) {}
   const out = {};
   Object.keys(cpt).forEach(k => {
@@ -17791,12 +17792,14 @@ function renderContrats() {
     box.innerHTML = head + '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + ((q || _contratCatFilter) ? 'Aucun contrat pour ce filtre.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour créer un contrat (dératisation, blattes, souris, rats, araignées…) et y joindre le PDF, Word ou Excel.') + '</div></div>';
     return;
   }
-  // Regroupement par catégorie
+  // Regroupement par GERANCE, avec le meme bandeau colore que la rubrique « Bons ».
+  // La categorie (rats / souris / blattes...) reste visible sur chaque ligne.
   const groups = {};
-  list.forEach(c => { const k = c.categorie || 'Autre'; (groups[k] = groups[k] || []).push(c); });
+  list.forEach(c => { const k = _geranceCanon(c.clientNom) || '(Sans client)'; (groups[k] = groups[k] || []).push(c); });
   const cats = Object.keys(groups).sort((a, b) => {
-    const ia = CONTRAT_CATEGORIES.indexOf(a), ib = CONTRAT_CATEGORIES.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'fr');
+    if (a === '(Sans client)') return 1;
+    if (b === '(Sans client)') return -1;
+    return a.localeCompare(b, 'fr');
   });
   const _echeanceChip = c => {
     if (!c.echeance) return '';
@@ -17806,23 +17809,22 @@ function renderContrats() {
     if (days <= 30) return '<span style="font-size:10px;font-weight:800;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:2px 8px;">⏳ échéance ' + fmtDate(c.echeance) + ' (J-' + days + ')</span>';
     return '<span style="font-size:10px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:2px 8px;">✅ jusqu\'au ' + fmtDate(c.echeance) + '</span>';
   };
-  box.innerHTML = cats.map(cat => {
+  box.innerHTML = head + cats.map(cat => {
     const arr = groups[cat].slice().sort((a, b) => (b.dateSignature || '').localeCompare(a.dateSignature || ''));
-    return `
-      <div style="margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--navy);padding-bottom:5px;margin-bottom:8px;">
-          ${CONTRAT_CAT_ICON[cat] || '📄'} ${cat} <span style="font-weight:600;color:var(--g600);">(${arr.length})</span>
-        </div>
+    const gc = (cat === '(Sans client)') ? '#6b7280' : colorForGeranceName(cat);
+    return _gerGroupeHtml(cat, gc, arr.length, `
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${arr.map(c => `
-            <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid var(--navy);border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${gc};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
               <div style="font-size:26px;flex-shrink:0;">${CONTRAT_CAT_ICON[c.categorie] || _contratFileIcon(c.fileType)}</div>
               <div style="flex:1.5;min-width:180px;">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   ${c.numero ? '<span style="font-size:13px;font-weight:900;color:#fff;background:var(--navy);border-radius:7px;padding:3px 10px;letter-spacing:.3px;">N° ' + String(c.numero).replace(/</g,'&lt;') + '</span>' : ''}
                   <span style="font-size:16px;font-weight:900;color:var(--navy);letter-spacing:.2px;">🏢 ${(c.clientNom || '— Sans client —').replace(/</g,'&lt;')}</span>
                 </div>
-                <div style="font-size:12px;font-weight:600;color:var(--g600);margin-top:2px;">${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
+                <div style="font-size:12px;font-weight:600;color:var(--g600);margin-top:2px;">
+                  <span class="ct-cat">${CONTRAT_CAT_ICON[c.categorie] || '📄'} ${String(c.categorie || 'Autre').replace(/</g,'&lt;')}</span>
+                  ${(c.nom || c.fileName || 'Contrat').replace(/</g,'&lt;')}</div>
                 <div style="font-size:11px;color:var(--g600);margin-top:1px;">${(c.dateDebut || c.echeance) ? '📅 ' + (c.dateDebut ? fmtDate(c.dateDebut) : '…') + ' → ' + (c.echeance ? fmtDate(c.echeance) : '…') : (c.dateSignature ? '📅 signé le ' + fmtDate(c.dateSignature) : '')}${c.montant ? ' · <b>' + _displayMontant(c.montant) + ' CHF/an</b>' : ''}${c.controlesAn ? ' · 🔍 ' + c.controlesAn + ' contrôle(s)/an' : ''}${c.tacite ? ' · <span style="color:#0d9488;font-weight:700;">🔁 tacite</span>' : ''}</div>
                 ${(() => {
                   const ds = _ctDates(c); if (!ds.length) return '';
@@ -17840,13 +17842,12 @@ function renderContrats() {
               <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
                 ${c.filePath ? `<span style="font-size:10px;font-weight:700;color:var(--g600);background:#f3f4f6;border-radius:6px;padding:2px 7px;">${_contratFileKind(c.fileName)}</span>
                 <button class="btn btn-ghost btn-sm" onclick="viewContratFile('${c.id}')" title="Ouvrir le fichier joint">📥 Ouvrir</button>` : ''}
-                <button class="btn btn-green btn-sm" onclick="contratGenererPdf('${c.id}')" title="L'app rédige le contrat complet en PDF à partir des infos saisies">📄 Générer PDF</button>
+                <button class="btn ico-pdf btn-sm" onclick="contratGenererPdf('${c.id}')" title="L'app rédige le contrat complet en PDF à partir des infos saisies">📄 Générer PDF</button>
                 <button class="btn btn-navy btn-sm" onclick="editContrat('${c.id}')" title="Modifier">✏️</button>
                 <button class="btn btn-red btn-sm btn-xs" onclick="deleteContrat('${c.id}')" title="Supprimer">🗑</button>
               </div>
             </div>`).join('')}
-        </div>
-      </div>`;
+        </div>`);
   }).join('');
 }
 
