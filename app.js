@@ -1109,7 +1109,7 @@ function renderDashboard() {
   // --- Alerte : factures impayées dont l'échéance (30 jours net) est dépassée ---
   const impCard = $('impayes-card'), impList = $('impayes-list'), impCount = $('impayes-count');
   if (impList) {
-    const ECHEANCE = 30; // jours
+    const ECHEANCE = (typeof _factDelaiJours === 'function') ? _factDelaiJours() : 30; // jours
     const impayes = facturesNonPayees.map(f => {
       const base = f.dateDoc ? new Date(f.dateDoc) : null;
       if (!base) return null;
@@ -4028,6 +4028,8 @@ const OPT_DEFAUTS = {
   apercuAuto: '1',
   devisValidite: 30,
   devisRelance: 7,
+  factDelai: 30,            // delai de paiement des factures (jours nets)
+  factRelance: 7,           // alerte X jours avant l'echeance
   tvaDefaut: '',             // vide = valeur de config.js
   rabaisDefaut: 5,
   boisAct: '1', boisGrav: '', boisEtend: '', boisHum: '1',   // '1' = imprimé sur le PDF
@@ -4203,6 +4205,8 @@ function openOptions() {
         ${bloc('🧾 Devis & factures', [
           ligne('Validité d\'un devis', num('devisValidite', 'jours', 1, 365), 'Base du compte à rebours'),
           ligne('Alerte « à relancer »', num('devisRelance', 'jours avant expiration', 0, 90), 'La pastille passe à l\'orange et clignote'),
+          ligne('Délai de paiement d\'une facture', num('factDelai', 'jours nets', 1, 365), 'Base du compte à rebours et du calcul du retard'),
+          ligne('Alerte avant échéance', num('factRelance', 'jours avant échéance', 0, 90), 'La pastille passe à l\'orange et clignote'),
           ligne('TVA par défaut', `<div style="display:flex;align-items:center;gap:6px;"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1 — vide = valeur d'origine" oninput="optSet('tvaDefaut', this.value)" style="width:180px;"> <span style="font-size:12px;color:var(--g600);">%</span></div>`),
           ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100)),
         ].join(''))}
@@ -10328,6 +10332,39 @@ function _devisCountdownChip(d) {
   return chip('⏳ J-' + j, '#eff6ff', '#1d4ed8', '#60a5fa', false);
 }
 
+// ---- Échéance de paiement d'une FACTURE envoyée (30 jours nets par défaut) ----
+// Réglable dans ⚙️ Options › Devis & factures.
+function _factDelaiJours()    { const n = parseInt((typeof OPT !== 'undefined' && OPT.factDelai) || 30, 10); return (n > 0 ? n : 30); }
+function _factSeuilRelance()  { const n = parseInt((typeof OPT !== 'undefined' && OPT.factRelance) != null ? OPT.factRelance : 7, 10); return (isNaN(n) ? 7 : n); }
+// Date d'envoi : marqueur [ENVDATE:AAAA-MM-JJ] posé au passage au statut « Envoyée »,
+// repli sur la date du document pour les factures déjà envoyées avant cette version.
+function _factDateEnvoi(d) { return (typeof _ancEnvoiDate === 'function' ? _ancEnvoiDate(d) : '') || (d && d.dateDoc) || ''; }
+// { envoi, echeance, jours (négatif = en retard), retard } — null si non applicable
+function _factEcheance(d, force) {
+  if (!d || d.type !== 'facture') return null;
+  if (!force && (d.statut || '') !== 'envoyee') return null;
+  const dep = _factDateEnvoi(d); if (!dep) return null;
+  const t = new Date(String(dep).slice(0, 10) + 'T00:00:00'); if (isNaN(t.getTime())) return null;
+  t.setDate(t.getDate() + _factDelaiJours());
+  const iso = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  const auj = new Date(); auj.setHours(0, 0, 0, 0);
+  const jours = Math.round((t.getTime() - auj.getTime()) / 86400000);
+  return { envoi: dep, echeance: iso, jours: jours, retard: jours < 0 ? -jours : 0 };
+}
+function _factRetardJours(d, force) { const e = _factEcheance(d, force); return e ? e.retard : 0; }
+// Pastille d'échéance / de retard affichée sur la ligne de la facture
+function _factEcheanceChip(d, force) {
+  const e = _factEcheance(d, force); if (!e) return '';
+  const tip = 'Envoyée le ' + fmtDate(e.envoi) + ' — payable à ' + _factDelaiJours() + ' jours nets · échéance ' + fmtDate(e.echeance);
+  const chip = (txt, bg, col, bd, flash) => `<span class="devis-cd${flash ? ' devis-cd-flash' : ''}" title="${tip}" style="color:${col};background:${bg};border:2px solid ${bd};">${txt}</span>`;
+  if (e.jours < 0)   return chip('⛔ RETARD +' + e.retard + ' j', '#fee2e2', '#991b1b', '#dc2626', true);
+  if (e.jours === 0) return chip('⚠️ ÉCHUE CE JOUR', '#fee2e2', '#991b1b', '#dc2626', true);
+  if (e.jours <= _factSeuilRelance()) return chip('⏳ J-' + e.jours + ' à encaisser', '#fef3c7', '#92400e', '#f59e0b', true);
+  return chip('⏳ J-' + e.jours, '#eff6ff', '#1d4ed8', '#60a5fa', false);
+}
+// Pastille commune : compte à rebours de validité pour un devis, échéance de paiement pour une facture
+function _docEcheanceChip(d) { return (d && d.type === 'facture') ? _factEcheanceChip(d) : _devisCountdownChip(d); }
+
 function updateDocStatut(id, value) {
   const docs = DB.documents;
   const d = docs.find(x => x.id === id);
@@ -10338,6 +10375,10 @@ function updateDocStatut(id, value) {
   if (d.type === 'devis' && value === 'envoye' && _avant !== 'envoye') {
     d.notes = String(d.notes || '').replace(/\s*\[ENVOI:[^\]]*\]/g, '').trim();
     d.notes = (d.notes + ' [ENVOI:' + today() + ']').trim();
+  }
+  // Passage à « Envoyée » : on horodate l'envoi → base du délai de paiement
+  if (d.type === 'facture' && value === 'envoyee' && _avant !== 'envoyee' && typeof _setAncEnvoiDate === 'function') {
+    _setAncEnvoiDate(d, today());
   }
   // Facture payée → on archive aussi le devis source (et on le ressort si on dé-paie)
   if (d.type === 'facture' && d.devisId) _syncDevisArchiveWithFacture(d, value === 'payee');
@@ -10398,7 +10439,8 @@ function renderDocuments() {
   const allOfType = docs.slice();   // tous les docs du type (pour les compteurs/totaux), avant filtre statut
   // Filtre par statut (chips récap)
   const sf = state.docStatutFilter || 'tous';
-  if (sf !== 'tous') docs = docs.filter(d => (d.statut || 'brouillon') === sf);
+  if (sf === 'retard') { if (filtre === 'facture') docs = docs.filter(d => _factRetardJours(d) > 0); }
+  else if (sf !== 'tous') docs = docs.filter(d => (d.statut || 'brouillon') === sf);
   if (q) docs = docs.filter(d => {
     const bonNo = d.bonId ? (((DB.bons||[]).find(b => b.id === d.bonId)||{}).numero || '') : '';
     return ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')+' '+(d.proprietaire||'')+' '+(d.clientVille||'')+' '+bonNo+' '+(d.notes||'')).toLowerCase().includes(q);
@@ -10479,6 +10521,10 @@ function renderDocuments() {
     // On les recompte directement depuis toutes les factures pour le total encaissé.
     const paidAll = (DB.documents || []).filter(_isFactureFactArchived);
     const tBrouillon = sumS('brouillon'), tPret = sumS('pret'), tEnvoyee = sumS('envoyee'), tPayee = paidAll.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+    // Factures envoyées dont le délai de paiement est dépassé
+    const enRetard = allOfType.filter(d => _factRetardJours(d) > 0).sort((a, b) => _factRetardJours(b) - _factRetardJours(a));
+    const tRetard = enRetard.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+    const retardMax = enRetard.length ? _factRetardJours(enRetard[0]) : 0;
     const chip = (val, label, n, col) => {
       const on = (sf === val);
       return `<button onclick="docSetStatutFilter('${val}')" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid ${on ? col : '#d1d5db'};background:${on ? col : '#fff'};color:${on ? '#fff' : '#374151'};">${label} (${n})</button>`;
@@ -10491,11 +10537,13 @@ function renderDocuments() {
         ${chip('brouillon', '🕒 Brouillon', byS('brouillon').length, '#f59e0b')}
         ${chip('pret', '📤 Prêt à envoyer', byS('pret').length, '#d97706')}
         ${chip('envoyee', '📨 Envoyées', byS('envoyee').length, '#2563eb')}
+        ${enRetard.length ? chip('retard', '⛔ En retard', enRetard.length, '#dc2626') : ''}
         <button onclick="showScreen('fact-archive')" title="Les factures payées sont dans « Facturation archivée »" style="font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;cursor:pointer;border:1.5px solid #16a34a;background:#fff;color:#166534;">✅ Payées (${paidAll.length}) ↗</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
         ${carte('📤 Prêt à envoyer', tPret, '#fff7ed', '#fed7aa', '#c2410c')}
         ${carte('Total envoyé (à encaisser)', tEnvoyee, '#eff6ff', '#bfdbfe', '#1d4ed8')}
+        ${enRetard.length ? carte('⛔ En retard (> ' + _factDelaiJours() + ' j · jusqu\'à +' + retardMax + ' j)', tRetard, '#fef2f2', '#fecaca', '#b91c1c') : ''}
         ${carte('Brouillons', tBrouillon, '#fffbeb', '#fde68a', '#b45309')}
         ${carte('Encaissé (payées)', tPayee, '#f0fdf4', '#bbf7d0', '#15803d')}
       </div>`;
@@ -10546,7 +10594,7 @@ function renderDocuments() {
     }
     const opts = isDevis ? ['brouillon','envoye','accepte','refuse'] : ['brouillon','pret','envoyee','payee'];
     const coul = isDevis ? '#8b5cf6' : colorForGeranceName(_geranceCanon(d.clientNom || '') || '(Sans client)');
-    const cd = _devisCountdownChip(d);
+    const cd = _docEcheanceChip(d);
     const nbDates = _docDatesCount(d);
     const rappel = _isRappelDoc(d) ? ((_rappelMeta(d) || {}).niveau || '') : null;
     const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
@@ -10623,7 +10671,7 @@ function renderDocuments() {
       <div style="min-width:130px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);">${isDevis?'📝':'🧾'} ${d.numero||''}${_isRappelDoc(d)?` <span style="font-size:9px;font-weight:800;color:#fff;background:#dc2626;border-radius:8px;padding:1px 6px;vertical-align:middle;">RAPPEL ${(_rappelMeta(d)||{}).niveau||''}</span>`:''}</div>
         <div style="font-size:11px;${d.statut==='envoyee'?'color:var(--navy);font-weight:800;':'color:var(--g600);'}">📅 ${fmtDate(d.dateDoc)||'—'}</div>
-        ${(() => { const _cd = _devisCountdownChip(d); return _cd ? `<div style="margin-top:3px;">${_cd}</div>` : ''; })()}
+        ${(() => { const _cd = _docEcheanceChip(d); return _cd ? `<div style="margin-top:3px;">${_cd}</div>` : ''; })()}
       </div>
       <div style="flex:1.4;min-width:160px;">
         <div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:700;">Client</div>
@@ -17513,7 +17561,7 @@ function renderAnciennesList() {
                 <option value="payee" ${stt === 'payee' ? 'selected' : ''}>✅ Payée</option>
                 <option value="envoyee" ${stt === 'envoyee' ? 'selected' : ''}>📨 Facture envoyée</option>
                 <option value="impayee" ${stt === 'impayee' ? 'selected' : ''}>⏳ Pas payée</option>
-              </select>${stt === 'envoyee' ? (() => { const ed = _ancEnvoiDate(d) || d.dateDoc; return ed ? `<span title="Date d'envoi de la facture (mise à jour quand tu re-sélectionnes « Facture envoyée »)" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(ed)}</span>` : ''; })() : ''}`;
+              </select>${stt === 'envoyee' ? (() => { const ed = _ancEnvoiDate(d) || d.dateDoc; return ed ? `<span title="Date d'envoi de la facture (mise à jour quand tu re-sélectionnes « Facture envoyée »)" style="font-size:10px;font-weight:700;color:#ffffff;background:#1a2744;border-radius:10px;padding:2px 8px;">📨 envoyée le ${fmtDate(ed)}</span>` + _factEcheanceChip(d, true) : ''; })() : ''}`;
             })()}
             ${!paye ? (() => {
               const niv = _ancRappelNiveau(d);
