@@ -11215,6 +11215,19 @@ function docImportSave() {
   if (typeof renderDashboard === 'function') renderDashboard();
 }
 
+// Découpe une ligne d'adresse aux séparateurs postaux suisses : la case postale
+// (ou le complément introduit par un tiret) passe sur sa propre ligne, au lieu de
+// déborder et de laisser un bout de numéro orphelin sur la ligne suivante.
+// « Avenue Léopold-Robert 62 - Case postale 676 »
+//   → « Avenue Léopold-Robert 62 » + « Case postale 676 »
+function _adrDecoupe(ligne) {
+  const s = String(ligne || '').trim();
+  if (!s) return [];
+  const m = s.match(/^(.*?)[\s,–—-]+((?:(?:case|boîte)\s*postale\b|postfach\b|c\s*\.?\s*p\s*\.?\s*\d).*)$/i);
+  if (m && m[1].trim()) return [m[1].trim().replace(/[\s,–—-]+$/, ''), m[2].trim()];
+  return [s];
+}
+
 // Rétablit l'espacement autour de "p.a." / "p/a" (ex "PREVHORp.a. Naef" → "PREVHOR p.a. Naef")
 // et nettoie les espaces multiples. Sert pour l'affichage du destinataire et du débiteur QR.
 function _fixPa(txt) {
@@ -11497,8 +11510,19 @@ function downloadDocPDF(id, mode) {
   // Les retours à la ligne saisis dans les champs deviennent de vraies lignes du bloc destinataire
   destLines = destLines.map(l => _fixPa(l))
     .reduce((acc, l) => acc.concat(String(l).split('\n')), [])
+    .reduce((acc, l) => acc.concat(_adrDecoupe(l)), [])
     .map(s => s.trim()).filter(Boolean);
-  destLines.forEach(l => { doc.splitTextToSize(String(l), 80).forEach(ln => { doc.text(ln, 120, dy); dy += 5.2; }); });
+  // Largeur utile du bloc : de x=120 à la marge droite (190 mm). Si une ligne déborde
+  // encore (nom de gérance très long), on réduit la taille plutôt que de la couper.
+  const destW = 70;
+  let destFS = 11;
+  doc.setFontSize(destFS);
+  while (destFS > 8.5 && destLines.some(l => doc.getTextWidth(String(l)) > destW)) {
+    destFS -= 0.5; doc.setFontSize(destFS);
+  }
+  const destLH = Math.max(4.4, destFS * 0.47);
+  destLines.forEach(l => { doc.splitTextToSize(String(l), destW).forEach(ln => { doc.text(ln, 120, dy); dy += destLH; }); });
+  doc.setFontSize(11);
 
   // Titre du document À GAUCHE de l'adresse du destinataire (même hauteur, en haut)
   const titleY = 50;
