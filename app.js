@@ -477,6 +477,18 @@ function _hexTint(hex, alpha) {
   const mix = c => Math.round(c * a + 255 * (1 - a));
   return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
 }
+// Version assombrie d'une couleur de gérance, pour qu'un TEXTE reste lisible sur
+// fond blanc (le lime, l'ambre ou le ciel passent sinon quasi invisibles).
+function _hexTexte(hex) {
+  const m = String(hex || '').replace('#', '').match(/^([0-9a-f]{6})$/i);
+  if (!m) return '#0d1b3e';
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = () => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  let garde = 0;
+  while (lum() > 0.46 && garde++ < 14) { r = Math.round(r * 0.87); g = Math.round(g * 0.87); b = Math.round(b * 0.87); }
+  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+}
 function colorForClient(c) {
   if (!c) return '#6b7280';
   // Les non-gérances gardent la couleur définie par leur type
@@ -7998,9 +8010,12 @@ function setBonsStatut(k) {
   if (l && k !== null) l.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function renderBonCardCockpit(b) {
+function renderBonCardCockpit(b, sansGerance) {
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const coul = _bonColor(b) || colorForGeranceName(g);
+  // Sous un bandeau de gérance, répéter son nom dans chaque ruban ne sert à rien :
+  // on met alors le LOCATAIRE (ou l'adresse) en grande ligne colorée.
+  const gerCoulTxt = _hexTexte(colorForGeranceName(g));
   const statut = b.statut || '';
   const SB = BON_STATUT_META;
   const st = SB[statut] || SB[''];
@@ -8041,8 +8056,11 @@ function renderBonCardCockpit(b) {
         <div class="d">📅 ${fmtDate(b.date) || '—'}</div>
       </div>
       <div class="ck-b-qui">
-        <div class="t">${_escapeHtml(g)}</div>
-        <div class="s">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : ''}${adresse ? (b.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(adresse) : ''}</div>
+        ${sansGerance
+          ? `<div class="t" style="color:${gerCoulTxt};">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : (adresse ? '📍 ' + _escapeHtml(adresse) : _escapeHtml(g))}</div>
+             ${adresse && b.locataireNom ? `<div class="s">📍 ${_escapeHtml(adresse)}</div>` : ''}`
+          : `<div class="t">${_escapeHtml(g)}</div>
+             <div class="s">${b.locataireNom ? '🏠 ' + _escapeHtml(b.locataireNom) : ''}${adresse ? (b.locataireNom ? ' · ' : '') + '📍 ' + _escapeHtml(adresse) : ''}</div>`}
         ${b.gerantNom || b.gerantTel ? `<div class="s">👤 ${_escapeHtml(b.gerantNom || '')}${b.gerantTel ? ' · 📞 ' + _escapeHtml(b.gerantTel) : ''}</div>` : ''}
       </div>
       <div class="ck-b-pb">
@@ -8094,8 +8112,9 @@ function renderBonCardCockpit(b) {
 
 // Carte complète d'un bon (réutilisée dans l'écran Bons ET dans la section
 // "Bons en demande de devis" de l'écran Devis) — source unique de vérité.
-function renderBonCard(b, solid) {
-  if (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820) return renderBonCardCockpit(b);
+function renderBonCard(b, solid, opts) {
+  const _sansGer = !!(opts && opts.sansGerance);
+  if (typeof OPT !== 'undefined' && OPT.style === 'cockpit' && window.innerWidth > 820) return renderBonCardCockpit(b, _sansGer);
   const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
   const customColor = _bonColor(b);                 // couleur choisie manuellement (ou vide)
   const gerColor = colorForGeranceName(g);          // couleur de la gérance
@@ -10424,6 +10443,21 @@ function confirmDeleteDoc(id, label) {
   openModal('modal-confirm');
 }
 
+// Bons regroupés par gérance sous le bandeau coloré (sections « à facturer » /
+// « en demande de devis » de l'écran Devis-Factures). Le bandeau portant déjà le
+// nom de la gérance, chaque ruban met le locataire en avant.
+function _bonsGroupesParGerance(bons) {
+  const grp = {};
+  (bons || []).forEach(b => {
+    const g = _geranceCanon(b.geranceNom) || '(Sans gérance)';
+    (grp[g] = grp[g] || []).push(b);
+  });
+  return Object.keys(grp).sort((a, z) => a.localeCompare(z, 'fr')).map(g =>
+    _gerGroupeHtml(g, colorForGeranceName(g), grp[g].length,
+      grp[g].map(b => renderBonCard(b, false, { sansGerance: true })).join(''))
+  ).join('');
+}
+
 // Liste des devis/factures
 function renderDocuments() {
   updateNavCounts();
@@ -10463,9 +10497,7 @@ function renderDocuments() {
       aFacturerHtml = `
         <div style="margin-bottom:14px;border:1.5px solid #16a34a;border-radius:10px;padding:12px 14px;background:#f0fdf4;">
           <div style="font-size:13px;font-weight:800;color:#166534;margin-bottom:10px;">✅ Bons terminés à facturer (${aFacturer.length})</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            ${aFacturer.map(b => renderBonCard(b)).join('')}
-          </div>
+          <div class="doc-bons-ger">${_bonsGroupesParGerance(aFacturer)}</div>
         </div>`;
     }
   }
@@ -10486,9 +10518,7 @@ function renderDocuments() {
       aDeviserHtml = `
         <div style="margin-bottom:14px;border:1.5px solid #6366f1;border-radius:10px;padding:12px 14px;background:#eef2ff;">
           <div style="font-size:13px;font-weight:800;color:#3730a3;margin-bottom:10px;">📝 Bons en demande / attente de devis (${aDeviser.length})</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            ${aDeviser.map(b => renderBonCard(b)).join('')}
-          </div>
+          <div class="doc-bons-ger">${_bonsGroupesParGerance(aDeviser)}</div>
         </div>`;
     }
   }
