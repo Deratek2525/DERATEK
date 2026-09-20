@@ -489,16 +489,20 @@ function _hexTint(hex, alpha) {
 //   kmin   : compression minimale tolérée ; au-dessous, la facture passe en 2 pages
 // ============================================================
 const FACT_ESPACEMENTS = [
-  ['serre', 'Serré — réglage d\'origine (1 page)'],
-  ['moyen', 'Aéré — un peu d\'air (1 page)'],
-  ['aere',  'Aéré + — tableau remonté, le plus d\'air sur 1 page'],
-  ['max',   'Maximal — passe sur 2 pages si nécessaire'],
+  ['serre', 'Serré — tout tenir sur 1 page (réglage d\'origine)'],
+  ['moyen', 'Confortable — lignes plus espacées, 1 page si possible'],
+  ['aere',  'Aéré — lignes bien espacées, 2e page si nécessaire'],
+  ['max',   'Maximal — interligne garanti, 2e page si nécessaire'],
 ];
+// line = espace entre deux lignes d'une MÊME phrase (c'est ce qu'on aère)
+// pad  = marge au-dessus et en dessous du filet, donc l'écart ENTRE deux
+//        désignations : on le resserre à mesure que l'interligne grandit,
+//        pour que seules les phrases respirent, pas les blocs.
 const _FACT_ESP_VAL = {
-  serre: { line: 4.4, safeY: 103, kmin: 0.55 },
-  moyen: { line: 5.2, safeY: 103, kmin: 0.55 },
-  aere:  { line: 5.2, safeY: 95,  kmin: 0.55 },
-  max:   { line: 5.8, safeY: 95,  kmin: 0.98 },
+  serre: { line: 4.4, pad: 3.0, mini: 2.8, safeY: 103 },
+  moyen: { line: 5.1, pad: 2.7, mini: 4.4, safeY: 103 },
+  aere:  { line: 5.6, pad: 2.4, mini: 4.8, safeY: 95  },
+  max:   { line: 6.2, pad: 2.2, mini: 6.2, safeY: 95  },
 };
 function _factEspacement() {
   const v = (typeof OPT !== 'undefined' && OPT.factEspacement) || 'serre';
@@ -4331,7 +4335,7 @@ function openOptions() {
               ligne('TVA par défaut', `<div class="opt-num"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1" oninput="optSet('tvaDefaut', this.value)"> <span>%</span></div>`, 'Vide = la valeur d\'origine de l\'application') +
               ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100))) +
             carte('Mise en page du PDF',
-              ligne('Espacement des désignations', sel('factEspacement', FACT_ESPACEMENTS), 'Air entre les lignes d\'un texte long dans le tableau')))}
+              ligne('Interligne des textes', sel('factEspacement', FACT_ESPACEMENTS), 'Espace entre les lignes d\'une même phrase — l\'écart entre deux désignations ne bouge pas')))}
 
           ${section('apercu',
             carte('Aperçu en direct',
@@ -11725,32 +11729,35 @@ function downloadDocPDF(id, mode) {
   // Rythme vertical uniforme : hauteur d'une ligne de texte + marge identique
   // au-dessus et en dessous du filet, quelle que soit la longueur de la désignation.
   doc.setFontSize(9.5);
-  let LINE = _ESP.line;   // hauteur d'une ligne de texte (mm) — voir FACT_ESPACEMENTS
-  let PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
+  let LINE = _ESP.line;   // interligne DANS une désignation — voir FACT_ESPACEMENTS
+  let PAD  = _ESP.pad;    // marge texte ↔ filet ↔ désignation suivante
   let ROWGAP = 0;   // écart d'aération entre désignations — calculé selon la place disponible
 
-  // --- Compression adaptative (factures) : on resserre UNIQUEMENT le tableau (jamais les
-  // totaux, qui gardent un espacement normal), juste ce qu'il faut pour tenir sur UNE page. ---
-  let _K = 1;
+  // --- Manque de place (factures) : l'ordre du sacrifice est volontaire. ---
+  // 1) on rabote d'abord la marge autour des filets, donc l'écart ENTRE deux désignations ;
+  // 2) seulement si ça ne suffit pas, on touche à l'interligne D'UNE MÊME phrase, et jamais
+  //    en dessous du plancher du réglage choisi ;
+  // 3) au-delà, la facture prend une 2e page plutôt que de devenir illisible.
   if (isFacture) {
-    // Hauteur cumulée des RANGÉES seules, SANS l'aération (l'en-tête du tableau, 8.5 mm, n'est pas comprimé).
-    let rowsRaw = 0;
-    lignes.forEach(l => { rowsRaw += doc.splitTextToSize(l.desc || '', 100).length * LINE + 2 * PAD; });
+    const nbL = lignes.map(l => Math.max(1, doc.splitTextToSize(l.desc || '', 100).length));
+    const nTot = nbL.reduce((a, b) => a + b, 0), nRows = Math.max(1, lignes.length);
     const headerH = 8.5;
-    // Place réellement disponible pour les rangées avant le bulletin QR (totaux réservés).
-    const availForRows = QR_NEED_TOP - startY - headerH - totalsH - 1;
-    if (rowsRaw > availForRows) {
-      // Trop dense : on comprime juste ce qu'il faut (pas d'aération), pour garder le QR en page 1.
-      const k = availForRows / rowsRaw;
-      if (k >= _ESP.kmin) _K = k;
-    } else {
-      // Il reste de la place : on ajoute un peu d'air entre les désignations, SANS jamais dépasser
-      // (donc une facture qui tenait sur une page continue de tenir sur une page).
-      const slack = availForRows - rowsRaw;
-      ROWGAP = Math.min(3, slack / Math.max(1, lignes.length));
+    const avail = QR_NEED_TOP - startY - headerH - totalsH - 1;
+    const besoin = (li, pa) => nTot * li + 2 * pa * nRows;
+    if (besoin(LINE, PAD) > avail) {
+      let pa = PAD;
+      while (pa > 1.6 && besoin(LINE, pa) > avail) pa -= 0.1;
+      PAD = Math.max(1.6, pa);
+      if (besoin(LINE, PAD) > avail) {
+        let li = LINE;
+        while (li > _ESP.mini && besoin(li, PAD) > avail) li -= 0.05;
+        LINE = Math.max(_ESP.mini, li);
+      }
+      // Même au plancher ça ne rentre pas : la 2e page est de toute façon inévitable,
+      // alors on rend le réglage choisi intégralement au lieu d'un texte tassé pour rien.
+      if (besoin(LINE, PAD) > avail) { LINE = _ESP.line; PAD = _ESP.pad; }
     }
   }
-  LINE *= _K; PAD *= _K;   // ROWGAP est déjà calibré sur la place libre : on ne le comprime pas
 
   // Les lignes suivent le flux normal et continuent en page suivante si nécessaire.
   let ty = startY;
