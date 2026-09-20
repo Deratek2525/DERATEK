@@ -477,6 +477,34 @@ function _hexTint(hex, alpha) {
   const mix = c => Math.round(c * a + 255 * (1 - a));
   return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
 }
+// ============================================================
+// AÉRATION DES DÉSIGNATIONS (devis & factures) — réglable dans ⚙️ Options.
+// L'espace entre le tableau et le bulletin QR est compté au millimètre : augmenter
+// seulement l'interligne ne sert à rien, le PDF se recomprime aussitôt pour tenir
+// sur une page. Chaque réglage agit donc sur TROIS leviers à la fois :
+//   line   : hauteur d'une ligne de texte (mm)
+//   safeY  : hauteur à laquelle démarre le tableau (plus bas = plus de place)
+//            103 mm = réglage d'origine ; 95 mm récupère 8 mm dans la zone blanche,
+//            tout en restant sous la fenêtre d'une enveloppe C5 (qui finit vers 90 mm)
+//   kmin   : compression minimale tolérée ; au-dessous, la facture passe en 2 pages
+// ============================================================
+const FACT_ESPACEMENTS = [
+  ['serre', 'Serré — réglage d\'origine (1 page)'],
+  ['moyen', 'Aéré — un peu d\'air (1 page)'],
+  ['aere',  'Aéré + — tableau remonté, le plus d\'air sur 1 page'],
+  ['max',   'Maximal — passe sur 2 pages si nécessaire'],
+];
+const _FACT_ESP_VAL = {
+  serre: { line: 4.4, safeY: 103, kmin: 0.55 },
+  moyen: { line: 5.2, safeY: 103, kmin: 0.55 },
+  aere:  { line: 5.2, safeY: 95,  kmin: 0.55 },
+  max:   { line: 5.8, safeY: 95,  kmin: 0.98 },
+};
+function _factEspacement() {
+  const v = (typeof OPT !== 'undefined' && OPT.factEspacement) || 'serre';
+  return _FACT_ESP_VAL[v] || _FACT_ESP_VAL.serre;
+}
+
 // Version assombrie d'une couleur de gérance, pour qu'un TEXTE reste lisible sur
 // fond blanc (le lime, l'ambre ou le ciel passent sinon quasi invisibles).
 function _hexTexte(hex) {
@@ -4040,6 +4068,7 @@ const OPT_DEFAUTS = {
   apercuAuto: '1',
   devisValidite: 30,
   devisRelance: 7,
+  factEspacement: 'serre',  // aeration des designations dans les devis/factures
   factDelai: 30,            // delai de paiement des factures (jours nets)
   factRelance: 7,           // alerte X jours avant l'echeance
   tvaDefaut: '',             // vide = valeur de config.js
@@ -4217,6 +4246,7 @@ function openOptions() {
         ${bloc('🧾 Devis & factures', [
           ligne('Validité d\'un devis', num('devisValidite', 'jours', 1, 365), 'Base du compte à rebours'),
           ligne('Alerte « à relancer »', num('devisRelance', 'jours avant expiration', 0, 90), 'La pastille passe à l\'orange et clignote'),
+          ligne('Espacement des désignations', sel('factEspacement', FACT_ESPACEMENTS), 'Air entre les lignes d\'un texte long dans le tableau du PDF'),
           ligne('Délai de paiement d\'une facture', num('factDelai', 'jours nets', 1, 365), 'Base du compte à rebours et du calcul du retard'),
           ligne('Alerte avant échéance', num('factRelance', 'jours avant échéance', 0, 90), 'La pastille passe à l\'orange et clignote'),
           ligne('TVA par défaut', `<div style="display:flex;align-items:center;gap:6px;"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1 — vide = valeur d'origine" oninput="optSet('tvaDefaut', this.value)" style="width:180px;"> <span style="font-size:12px;color:var(--g600);">%</span></div>`),
@@ -11592,7 +11622,8 @@ function downloadDocPDF(id, mode) {
   // La table démarre sous le bloc infos (qui est déjà sous l'adresse) ET, surtout,
   // SOUS la fenêtre de l'enveloppe C5 : sinon le ruban bleu « Désignation » apparaît
   // dans la fenêtre à côté de l'adresse du destinataire. On impose donc un plancher.
-  const ENV_WINDOW_SAFE_Y = 103;   // mm — remonté de 1 cm à la demande
+  const _ESP = _factEspacement();  // ⚙️ Options › Devis & factures › Espacement des désignations
+  const ENV_WINDOW_SAFE_Y = _ESP.safeY;   // mm — plancher sous la fenêtre de l'enveloppe C5
   const startY = Math.max(infoY + 3, dy + 5, ENV_WINDOW_SAFE_Y);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse.
   // Rappel : un seul total. Facture : ~23 mm (sans rabais) / ~28 mm (avec rabais).
@@ -11609,7 +11640,7 @@ function downloadDocPDF(id, mode) {
   // Rythme vertical uniforme : hauteur d'une ligne de texte + marge identique
   // au-dessus et en dessous du filet, quelle que soit la longueur de la désignation.
   doc.setFontSize(9.5);
-  let LINE = 4.4;   // hauteur d'une ligne de texte (mm)
+  let LINE = _ESP.line;   // hauteur d'une ligne de texte (mm) — voir FACT_ESPACEMENTS
   let PAD  = 3;     // marge uniforme texte ↔ filet ↔ ligne suivante
   let ROWGAP = 0;   // écart d'aération entre désignations — calculé selon la place disponible
 
@@ -11626,7 +11657,7 @@ function downloadDocPDF(id, mode) {
     if (rowsRaw > availForRows) {
       // Trop dense : on comprime juste ce qu'il faut (pas d'aération), pour garder le QR en page 1.
       const k = availForRows / rowsRaw;
-      if (k >= 0.55) _K = k;
+      if (k >= _ESP.kmin) _K = k;
     } else {
       // Il reste de la place : on ajoute un peu d'air entre les désignations, SANS jamais dépasser
       // (donc une facture qui tenait sur une page continue de tenir sur une page).
