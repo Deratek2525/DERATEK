@@ -1,3 +1,11 @@
+// POLICE DU RAPPORT : Arial (Liberation Sans embarquee via fonts_arial.js),
+// comme les devis, factures et bons. Repli automatique sur Helvetica si le
+// fichier de police n'est pas charge — les largeurs sont identiques, la mise
+// en page ne bouge pas.
+function _rapFont() {
+  try { return (typeof _PDFF === 'function') ? _PDFF('normal') : 'helvetica'; }
+  catch (e) { return 'helvetica'; }
+}
 /* ============================================================
    DERATEK — Génération PDF v2.0
    Utilise jsPDF (inclus via CDN dans index.html)
@@ -57,7 +65,7 @@ function generatePDF(rapport, statut) {
     // Découpe un texte (marqueurs **gras** et ⟦c:hex⟧couleur⟦/c⟧) en lignes qui tiennent
     // dans maxW. Chaque ligne est un tableau de segments {t, b, c} (c = [r,g,b] ou null).
     function _wrapBold(text, maxW) {
-      const measure = (t, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); return doc.getTextWidth(t); };
+      const measure = (t, b) => { doc.setFont(_rapFont(), b ? 'bold' : 'normal'); return doc.getTextWidth(t); };
       const spaceW = measure(' ', false);
       const lines = [];
       _htmlToMarked(text).split('\n').forEach(para => {
@@ -122,7 +130,7 @@ function generatePDF(rapport, statut) {
       let cx = x;
       segs.forEach(sg => {
         if (!sg.t) return;
-        doc.setFont('helvetica', sg.b ? 'bold' : 'normal');
+        doc.setFont(_rapFont(), sg.b ? 'bold' : 'normal');
         if (sg.c) doc.setTextColor(sg.c[0], sg.c[1], sg.c[2]); else doc.setTextColor(0);
         doc.text(sg.t, cx, y2);
         cx += doc.getTextWidth(sg.t);
@@ -153,30 +161,30 @@ function generatePDF(rapport, statut) {
       try { doc.addImage(LOGO_B64, 'PNG', M, logoY, logoW, logoH); logoOk = true; } catch (e) { logoOk = false; }
     }
     if (!logoOk) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...C.navy);
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(20); doc.setTextColor(...C.navy);
       doc.text('DERATEK', M, 23);
     }
     const cy0 = logoY + 4;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    doc.setFont(_rapFont(), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
     [_co.rue, ((_co.npa || '') + ' ' + (_co.ville || '')).trim(), 'Tél. ' + (_co.tel || '')].forEach((l, i) => { if (l) doc.text(String(l), 90, cy0 + i * 4.4); });
     [_co.email, _co.tva].forEach((l, i) => { if (l) doc.text(String(l), 150, cy0 + i * 4.4); });
     doc.setTextColor(...C.navy);
     try { doc.textWithLink('www.deratek.ch', 150, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); } catch (e) { doc.text('www.deratek.ch', 150, cy0 + 2 * 4.4); }
     doc.setTextColor(0);
     doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(M, headerFiletY, R, headerFiletY);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.navy);
+    doc.setFont(_rapFont(), 'bold'); doc.setFontSize(10); doc.setTextColor(...C.navy);
     doc.text((_co.ville || 'Neuchâtel') + ', le ' + (fmtDate(rapport.date) || ''), R, headerFiletY + 5, { align: 'right' });
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
+    doc.setFont(_rapFont(), 'normal'); doc.setTextColor(0);
 
     // ── BANDEAU TITRE (navy) ─────────────────────────────────
     y = headerFiletY + 9;
     doc.setFillColor(...C.navy);
     doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
+    doc.setFont(_rapFont(), 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
     doc.text("RAPPORT D'INTERVENTION", M + 6, y + 6.8);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(225, 228, 238);
+    doc.setFont(_rapFont(), 'normal'); doc.setFontSize(9.5); doc.setTextColor(225, 228, 238);
     doc.text('N° ' + (rapport.id || '') + (rapport.noint ? '   -   Bon ' + rapport.noint : ''), M + 6, y + 12.4);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(255, 255, 255);
+    doc.setFont(_rapFont(), 'bold'); doc.setFontSize(10.5); doc.setTextColor(255, 255, 255);
     doc.text(fmtDate(rapport.date) || '', R - 6, y + 6.8, { align: 'right' });
     doc.setTextColor(0);
     y += 21;
@@ -202,7 +210,7 @@ function generatePDF(rapport, statut) {
         doc.rect(M + (CW * i / steps), y, CW / steps + 0.5, h, 'F');
       }
       doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(7.5);
       doc.text(title.toUpperCase(), M + 3, y + 4.8);
       y += 10;
@@ -210,7 +218,7 @@ function generatePDF(rapport, statut) {
 
     function row(key, val, shade) {
       if (!val) return;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(_rapFont(), 'normal');
       doc.setFontSize(8.5);
       const valLines = doc.splitTextToSize(_sanPdf(val), CW - 6);
       const rowH = Math.max(8, valLines.length * 5 + 5);
@@ -221,7 +229,7 @@ function generatePDF(rapport, statut) {
       doc.setFontSize(7.5);
       doc.text(String(key).toUpperCase(), M + 2, y + 4);
       // Valeur en dessous alignée à gauche
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...C.text);
       doc.text(valLines, M + 2, y + 9);
@@ -248,9 +256,9 @@ function generatePDF(rapport, statut) {
         // Fond grisé sur toute la largeur (évite le décrochage entre colonnes)
         if (shade) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, cellH, 'F'); }
         const drawCell = (it, lines, x) => {
-          doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+          doc.setTextColor(...C.muted); doc.setFont(_rapFont(),'normal'); doc.setFontSize(7.5);
           doc.text(String(it.key).toUpperCase(), x + 2, y + 4);
-          doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...C.text);
+          doc.setFont(_rapFont(),'bold'); doc.setFontSize(8.5); doc.setTextColor(...C.text);
           doc.text(lines, x + 2, y + 9);
         };
         drawCell(left, lLines, M);
@@ -263,7 +271,7 @@ function generatePDF(rapport, statut) {
 
     function textBox(text, bgColor) {
       if (!text) return;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(_rapFont(), 'normal');
       doc.setFontSize(9);
       const maxW = CW - 10;
       const clean = _sanPdf(text);
@@ -309,7 +317,7 @@ function generatePDF(rapport, statut) {
       doc.setFillColor(...bg);
       doc.roundedRect(x, y, w, 18, 3, 3, 'F');
       doc.setTextColor(...textColor);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(7);
       doc.text(label.toUpperCase(), x + 4, y + 5.5);
       doc.setFontSize(12);
@@ -321,7 +329,7 @@ function generatePDF(rapport, statut) {
       doc.setFillColor(...bg);
       doc.roundedRect(x, tagY, tw, 6, 1, 1, 'F');
       doc.setTextColor(...tc);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(7.5);
       doc.text(text, x + 3, tagY + 4.2);
       return tw + 3;
@@ -389,7 +397,7 @@ function generatePDF(rapport, statut) {
         doc.setFillColor(Math.round(c1[0]+(c2[0]-c1[0])*t), Math.round(c1[1]+(c2[1]-c1[1])*t), Math.round(c1[2]+(c2[2]-c1[2])*t));
         doc.rect(M + (CW*i/steps), y, CW/steps + 0.5, h, 'F');
       }
-      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      doc.setTextColor(255,255,255); doc.setFont(_rapFont(),'bold'); doc.setFontSize(7.5);
       doc.text("NUISIBLES & NIVEAU", xL + 3, y + 4.8);
       doc.text("TRAITEMENT APPLIQUÉ", xR + 3, y + 4.8);
       y += 10;
@@ -404,7 +412,7 @@ function generatePDF(rapport, statut) {
         if (tagX + doc.getTextWidth(n) + 12 > xL + colW) { yL += 9; tagX = xL; }
         const tw = doc.getTextWidth(n) + 6;
         doc.setFillColor(...C.red); doc.roundedRect(tagX, yL, tw, 6, 1, 1, 'F');
-        doc.setTextColor(...C.white); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+        doc.setTextColor(...C.white); doc.setFont(_rapFont(),'bold'); doc.setFontSize(7.5);
         doc.text(n, tagX + 3, yL + 4.2);
         tagX += tw + 3;
       });
@@ -412,15 +420,15 @@ function generatePDF(rapport, statut) {
     }
     if (rapport.niveau) {
       doc.setFillColor(255,240,240); doc.roundedRect(xL, yL, colW, 11, 2, 2, 'F');
-      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text("NIVEAU D'INFESTATION", xL+3, yL+4);
-      doc.setTextColor(...C.red); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(String(rapport.niveau), xL+3, yL+9);
+      doc.setTextColor(...C.muted); doc.setFont(_rapFont(),'normal'); doc.setFontSize(7); doc.text("NIVEAU D'INFESTATION", xL+3, yL+4);
+      doc.setTextColor(...C.red); doc.setFont(_rapFont(),'bold'); doc.setFontSize(9); doc.text(String(rapport.niveau), xL+3, yL+9);
       yL += 13;
     }
     if (rapport.superficie || rapport.pieces) {
       const supText = (rapport.superficie ? rapport.superficie + ' m²' : '—') + (rapport.pieces ? ' / ' + rapport.pieces + ' pièce(s)' : '');
       doc.setFillColor(255,248,230); doc.roundedRect(xL, yL, colW, 11, 2, 2, 'F');
-      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text('SUPERFICIE / PIÈCES', xL+3, yL+4);
-      doc.setTextColor(176,120,0); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(supText, xL+3, yL+9);
+      doc.setTextColor(...C.muted); doc.setFont(_rapFont(),'normal'); doc.setFontSize(7); doc.text('SUPERFICIE / PIÈCES', xL+3, yL+4);
+      doc.setTextColor(176,120,0); doc.setFont(_rapFont(),'bold'); doc.setFontSize(9); doc.text(supText, xL+3, yL+9);
       yL += 13;
     }
     // ----- Colonne DROITE : méthodes de traitement -----
@@ -428,12 +436,12 @@ function generatePDF(rapport, statut) {
     if (methodes.length) {
       methodes.forEach(m => {
         const lines = doc.splitTextToSize('• ' + m, colW - 4);
-        doc.setTextColor(30,64,175); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+        doc.setTextColor(30,64,175); doc.setFont(_rapFont(),'bold'); doc.setFontSize(8.5);
         doc.text(lines, xR + 2, yR + 4);
         yR += lines.length * 4.5 + 1.5;
       });
     } else {
-      doc.setTextColor(...C.muted); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+      doc.setTextColor(...C.muted); doc.setFont(_rapFont(),'normal'); doc.setFontSize(8.5);
       doc.text('—', xR + 2, yR + 4); yR += 6;
     }
     // On reprend sous la plus longue des deux colonnes
@@ -454,14 +462,14 @@ function generatePDF(rapport, statut) {
     textBox(String(rapport.description || '').replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').replace(/\s*\[LOC:[^\]]*\]/g, '').replace(/\s*\[ARCHIVE\]/g, '').trim());
     if (rapport.origine) {
       checkPage(15);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
       doc.text('ORIGINE PROBABLE', M, y + 4);
       y += 7;
       textBox(rapport.origine);
     }
     if (rapport.contraintes) {
       checkPage(15);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
       doc.text('CONTRAINTES', M, y + 4);
       y += 7;
       textBox(rapport.contraintes);
@@ -473,7 +481,7 @@ function generatePDF(rapport, statut) {
     const produits = rapport.produits || [];
     if (produits.length) {
       checkPage(10 + produits.length * 8);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...C.navy);
       doc.text('Produits utilisés :', M, y);
@@ -482,7 +490,7 @@ function generatePDF(rapport, statut) {
       doc.setFillColor(...C.navy);
       doc.rect(M, y, CW, 7, 'F');
       doc.setTextColor(...C.white);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(8);
       doc.text('Produit', M + 3, y + 4.8);
       doc.text('Dosage', M + 80, y + 4.8);
@@ -492,10 +500,10 @@ function generatePDF(rapport, statut) {
         checkPage(8);
         if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, 7, 'F'); }
         doc.setTextColor(...C.text);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(_rapFont(), 'bold');
         doc.setFontSize(8.5);
         doc.text(p.nom || '—', M + 3, y + 4.8);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont(_rapFont(), 'normal');
         doc.text(p.dosage || '—', M + 80, y + 4.8);
         doc.text(p.zone || '—', M + 130, y + 4.8);
         doc.setDrawColor(...C.border);
@@ -509,7 +517,7 @@ function generatePDF(rapport, statut) {
     const materiels = rapport.materiels || [];
     if (materiels.length) {
       checkPage(10 + materiels.length * 8);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...C.navy);
       doc.text('Matériel posé :', M, y);
@@ -517,7 +525,7 @@ function generatePDF(rapport, statut) {
       doc.setFillColor(...C.navy);
       doc.rect(M, y, CW, 7, 'F');
       doc.setTextColor(...C.white);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(8);
       doc.text('Matériel', M + 3, y + 4.8);
       doc.text('Qté', M + 110, y + 4.8);
@@ -527,9 +535,9 @@ function generatePDF(rapport, statut) {
         checkPage(8);
         if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(M, y, CW, 7, 'F'); }
         doc.setTextColor(...C.text);
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+        doc.setFont(_rapFont(), 'bold'); doc.setFontSize(8.5);
         doc.text(m.nom || '—', M + 3, y + 4.8);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont(_rapFont(), 'normal');
         doc.text(String(m.qte || '—'), M + 110, y + 4.8);
         doc.text(m.zone || '—', M + 130, y + 4.8);
         doc.setDrawColor(...C.border);
@@ -544,7 +552,7 @@ function generatePDF(rapport, statut) {
       checkPage(20);
       doc.setFillColor(255, 248, 230);
       doc.roundedRect(M, y, CW, 6, 2, 2, 'F');
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(7.5);
       doc.setTextColor(146, 64, 0);
       doc.text('⚠ PRÉCAUTIONS TRANSMISES AU CLIENT', M + 3, y + 4);
@@ -593,7 +601,7 @@ function generatePDF(rapport, statut) {
               doc.rect(x, y, imgW, imgH, 'S');
             }
             if (caps[k].length) {
-              doc.setFont('helvetica', 'normal');
+              doc.setFont(_rapFont(), 'normal');
               doc.setFontSize(7.5);
               doc.setTextColor(...C.text);
               doc.text(caps[k], x + 2, y + imgH + 4.2);
@@ -612,18 +620,18 @@ function generatePDF(rapport, statut) {
       doc.roundedRect(M, y, CW, 10, 2, 2, 'F');
       doc.setDrawColor(110, 231, 183);
       doc.roundedRect(M, y, CW, 10, 2, 2, 'S');
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(_rapFont(), 'bold');
       doc.setFontSize(9);
       doc.setTextColor(6, 95, 70);
       doc.text('Résultat :', M + 3, y + 6.5);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(_rapFont(), 'normal');
       doc.text(rapport.resultat, M + 30, y + 6.5);
       y += 14;
     }
     if (rapport.recommandations) {
       checkPage(22);
       // Libellé + bandeau de couleur distincte pour la conclusion
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(67, 56, 202);
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(9); doc.setTextColor(67, 56, 202);
       doc.text('RECOMMANDATION / CONCLUSION', M + 1, y + 4);
       y += 7;
       textBox(rapport.recommandations, [237, 240, 253]);   // fond bleu-lavande
@@ -653,7 +661,7 @@ function generatePDF(rapport, statut) {
         doc.setFillColor(...bg);
         doc.roundedRect(bx, y, boxW, 16, 2, 2, 'F');
         doc.setTextColor(...tc);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(_rapFont(), 'bold');
         doc.setFontSize(7);
         doc.text(lbl.toUpperCase(), bx + 3, y + 5.5);
         doc.setFontSize(11);
@@ -675,9 +683,9 @@ function generatePDF(rapport, statut) {
       doc.roundedRect(bx, y, sigW, 38, 2, 2, 'F');
       doc.setDrawColor(...C.border);
       doc.roundedRect(bx, y, sigW, 38, 2, 2, 'S');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.navy);
       doc.text('LOCATAIRE', bx + 3, y + 6);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.text);
+      doc.setFont(_rapFont(), 'normal'); doc.setFontSize(8); doc.setTextColor(...C.text);
       doc.text(rapport.locataire || '—', bx + 3, y + 13);
       doc.setFillColor(255,255,255);
       doc.rect(bx + 3, y + 16, sigW - 6, 14, 'F');
