@@ -4197,112 +4197,197 @@ function _optOnglets() {
   })).filter(x => x.id);
 }
 
+// ============================================================
+// ⚙️ RÉGLAGES — fenêtre structurée : rail de rubriques à gauche,
+// réglages de la rubrique choisie à droite, recherche en haut.
+// ============================================================
+const OPT_RUBRIQUES = [
+  ['apparence',  '🎨', 'Apparence',        'Style, thème, taille du texte et densité des listes'],
+  ['navigation', '🧭', 'Navigation',       'Écran d\'ouverture et onglets visibles dans le menu'],
+  ['docs',       '🧾', 'Devis & factures', 'Délais, montants par défaut et mise en page des PDF'],
+  ['apercu',     '👁️', 'Aperçu PDF',       'Comportement de l\'aperçu en direct pendant la saisie'],
+  ['rapports',   '📋', 'Rapports',         'Cases cochées d\'office sur les nouveaux rapports'],
+  ['couleurs',   '🌈', 'Couleurs',         'Couleurs des gérances, des nuisibles et des bandeaux'],
+  ['alertes',    '🔔', 'Alertes',          'Quand et comment un bon oublié se signale'],
+  ['compte',     '🔐', 'Compte & outils',  'Mot de passe, test de l\'IA et remise à zéro'],
+];
+
+function optSection(id) {
+  const m = document.getElementById('modal-options'); if (!m) return;
+  m.querySelectorAll('.opt-nav-b').forEach(b => b.classList.toggle('on', b.dataset.sec === id));
+  m.querySelectorAll('.opt-sec').forEach(s => { s.style.display = (s.dataset.sec === id ? '' : 'none'); });
+  const q = m.querySelector('#opt-q'); if (q && q.value) { q.value = ''; }
+  const p = m.querySelector('#opt-pane'); if (p) p.scrollTop = 0;
+  try { sessionStorage.setItem('deratek_opt_sec', id); } catch (e) {}
+}
+
+// Recherche : on affiche toutes les rubriques et on ne garde que les réglages qui
+// contiennent le texte tapé. Vide → on revient à la rubrique sélectionnée.
+function optRecherche(v) {
+  const m = document.getElementById('modal-options'); if (!m) return;
+  const q = String(v || '').trim().toLowerCase();
+  const vide = m.querySelector('#opt-vide');
+  if (!q) {
+    m.querySelectorAll('.opt-row, .opt-card').forEach(e => { e.style.display = ''; });
+    if (vide) vide.style.display = 'none';
+    const on = m.querySelector('.opt-nav-b.on');
+    optSection(on ? on.dataset.sec : 'apparence');
+    return;
+  }
+  let total = 0;
+  m.querySelectorAll('.opt-sec').forEach(sec => {
+    let nSec = 0;
+    sec.querySelectorAll('.opt-card').forEach(card => {
+      let nCard = 0;
+      const rows = card.querySelectorAll('.opt-row');
+      if (!rows.length) {
+        const ok = (card.textContent || '').toLowerCase().indexOf(q) >= 0;
+        card.style.display = ok ? '' : 'none'; if (ok) nCard++;
+      } else {
+        rows.forEach(r => {
+          const ok = (r.textContent || '').toLowerCase().indexOf(q) >= 0;
+          r.style.display = ok ? '' : 'none'; if (ok) nCard++;
+        });
+        card.style.display = nCard ? '' : 'none';
+      }
+      nSec += nCard;
+    });
+    sec.style.display = nSec ? '' : 'none';
+    total += nSec;
+  });
+  if (vide) vide.style.display = total ? 'none' : '';
+}
+
 function openOptions() {
   optLoad();
   let m = document.getElementById('modal-options');
   if (!m) { m = document.createElement('div'); m.id = 'modal-options'; m.className = 'modal-bg'; document.body.appendChild(m); }
   const sel = (cle, opts) => `<select class="form-input" onchange="optSet('${cle}', this.value)">${
     opts.map(o => `<option value="${o[0]}" ${String(OPT[cle]) === String(o[0]) ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>`;
-  const chk = (cle, label) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;padding:4px 0;">
-      <input type="checkbox" ${OPT[cle] === '1' ? 'checked' : ''} onchange="optSet('${cle}', this.checked?'1':'')" style="accent-color:var(--navy);width:16px;height:16px;"> ${label}</label>`;
-  const num = (cle, suffixe, min, max) => `<div style="display:flex;align-items:center;gap:6px;">
-      <input class="form-input" type="number" min="${min}" max="${max}" value="${OPT[cle]}" oninput="optSet('${cle}', this.value)" style="width:90px;"> <span style="font-size:12px;color:var(--g600);">${suffixe}</span></div>`;
-  const bloc = (titre, corps) => `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff;">
-      <div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;">${titre}</div>${corps}</div>`;
-  const ligne = (label, champ, aide) => `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
-      <div style="min-width:210px;font-size:13px;font-weight:600;color:var(--navy);">${label}${aide ? `<div style="font-size:11px;font-weight:400;color:var(--g500);">${aide}</div>` : ''}</div>
-      <div style="flex:1;min-width:160px;">${champ}</div></div>`;
+  const chk = (cle, label) => `<label class="opt-chk">
+      <input type="checkbox" ${OPT[cle] === '1' ? 'checked' : ''} onchange="optSet('${cle}', this.checked?'1':'')"> ${label}</label>`;
+  const num = (cle, suffixe, min, max) => `<div class="opt-num">
+      <input class="form-input" type="number" min="${min}" max="${max}" value="${OPT[cle]}" oninput="optSet('${cle}', this.value)"> <span>${suffixe}</span></div>`;
+  // Une rangée : intitulé (+ aide) à gauche, commande à droite
+  const ligne = (label, champ, aide) => `<div class="opt-row">
+      <div class="opt-lb">${label}${aide ? `<span class="opt-h">${aide}</span>` : ''}</div>
+      <div class="opt-fd">${champ}</div></div>`;
+  // Une rangée pleine largeur : intitulé au-dessus, contenu large en dessous
+  const pleine = (label, corps, aide) => `<div class="opt-row opt-full">
+      <div class="opt-lb">${label}${aide ? `<span class="opt-h">${aide}</span>` : ''}</div>
+      <div class="opt-fd2">${corps}</div></div>`;
+  const carte = (titre, corps) => `<div class="opt-card"><div class="opt-card-t">${titre}</div><div class="opt-card-in">${corps}</div></div>`;
+  const libre = (titre, corps) => `<div class="opt-card"><div class="opt-card-t">${titre}</div><div class="opt-card-in opt-libre">${corps}</div></div>`;
+  const rub = OPT_RUBRIQUES.reduce((a, r) => { a[r[0]] = r; return a; }, {});
+  const section = (id, corps) => `<div class="opt-sec" data-sec="${id}" style="display:none;">
+      <div class="opt-sec-h"><h3>${rub[id][1]} ${rub[id][2]}</h3><p>${rub[id][3]}</p></div>${corps}</div>`;
+
   const masq = Array.isArray(OPT.ongletsMasques) ? OPT.ongletsMasques : [];
-  const onglets = _optOnglets().map(o => `<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--navy);background:#f9fafb;border:1px solid #e5e7eb;border-radius:20px;padding:4px 10px;margin:0 6px 6px 0;cursor:pointer;">
-      <input type="checkbox" ${masq.indexOf(o.id) < 0 ? 'checked' : ''} onchange="optToggleOnglet('${o.id}', this.checked)" style="accent-color:var(--navy);"> ${o.label}</label>`).join('');
+  const onglets = _optOnglets().map(o => `<label class="opt-tag">
+      <input type="checkbox" ${masq.indexOf(o.id) < 0 ? 'checked' : ''} onchange="optToggleOnglet('${o.id}', this.checked)"> ${o.label}</label>`).join('');
 
   m.innerHTML = `
-    <div class="modal" style="max-width:820px;width:96vw;">
+    <div class="modal opt-modal">
       <div class="modal-hd">
-        <span class="modal-title">⚙️ Options d'affichage</span>
+        <span class="modal-title">⚙️ Réglages</span>
         <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-options')">✕</button>
       </div>
-      <div class="modal-body" style="background:#f7f8fb;max-height:76vh;overflow:auto;">
-        <div style="font-size:12px;color:var(--g600);margin-bottom:12px;">Ces réglages sont enregistrés sur <b>cet ordinateur</b> uniquement. Ils prennent effet immédiatement.</div>
-        ${bloc('🖥️ Style d\'interface', [
-          ligne('Présentation', sel('style', [['classique', '🏠 Classique — barre du haut'], ['cockpit', '🎛️ Cockpit — barre latérale']]),
-            'Le Cockpit range la navigation sur le côté et ajoute l\'écran « Mon poste ». Sur téléphone, le mode terrain reste prioritaire.'),
-        ].join(''))}
-        ${bloc('🎨 Apparence', [
-          ligne('Thème', sel('theme', [['clair', '☀️ Clair'], ['sombre', '🌙 Sombre (bêta)']])),
-          ligne('Taille du texte', sel('taille', [[90, 'Compact (90 %)'], [100, 'Normal (100 %)'], [110, 'Grand (110 %)'], [125, 'Très grand (125 %)']])),
-          ligne('Densité des listes', sel('densite', [['compacte', 'Compacte'], ['normale', 'Normale'], ['aeree', 'Aérée']])),
-          ligne('Clignotements', chk('animations', 'Faire clignoter les alertes (bons +48 h, devis expirés)')),
-        ].join(''))}
-        ${bloc('🧭 Navigation', [
-          ligne('Écran d\'ouverture', sel('ecranDepart', [['dashboard', '📊 Dashboard (ou Mon poste en Cockpit)'], ['monposte', '🎛️ Mon poste'], ['bons', '📄 Bons'], ['rapports', '📋 Rapports'], ['devis', '📝 Devis'], ['factures', '🧾 Factures'], ['agenda', '📅 Agenda'], ['rapprochement', '🏦 Relevés'], ['contrats', '📜 Contrats']])),
-          `<div style="font-size:13px;font-weight:600;color:var(--navy);margin:10px 0 6px;">Onglets affichés <span style="font-weight:400;font-size:11px;color:var(--g500);">— décoche ceux dont tu ne te sers pas</span></div><div>${onglets}</div>`,
-        ].join(''))}
-        ${bloc('👁️ Aperçu PDF en direct', [
-          ligne('Largeur du formulaire', sel('apercuPart', [[50, '50 % — aperçu aussi grand'], [60, '60 % — formulaire plus large'], [70, '70 % — aperçu réduit'], [100, 'Aperçu masqué']]), 'L\'aperçu occupe le reste'),
-          ligne('Zoom par défaut', sel('apercuZoom', [[0, 'Ajusté à la largeur'], [75, '75 %'], [100, '100 %'], [125, '125 %'], [150, '150 %']])),
-          ligne('Mise à jour', chk('apercuAuto', 'Rafraîchir l\'aperçu pendant la saisie')),
-        ].join(''))}
-        ${bloc('🧾 Devis & factures', [
-          ligne('Validité d\'un devis', num('devisValidite', 'jours', 1, 365), 'Base du compte à rebours'),
-          ligne('Alerte « à relancer »', num('devisRelance', 'jours avant expiration', 0, 90), 'La pastille passe à l\'orange et clignote'),
-          ligne('Espacement des désignations', sel('factEspacement', FACT_ESPACEMENTS), 'Air entre les lignes d\'un texte long dans le tableau du PDF'),
-          ligne('Délai de paiement d\'une facture', num('factDelai', 'jours nets', 1, 365), 'Base du compte à rebours et du calcul du retard'),
-          ligne('Alerte avant échéance', num('factRelance', 'jours avant échéance', 0, 90), 'La pastille passe à l\'orange et clignote'),
-          ligne('TVA par défaut', `<div style="display:flex;align-items:center;gap:6px;"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1 — vide = valeur d'origine" oninput="optSet('tvaDefaut', this.value)" style="width:180px;"> <span style="font-size:12px;color:var(--g600);">%</span></div>`),
-          ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100)),
-        ].join(''))}
-        ${bloc('📋 Rapport insectes du bois — bandeau imprimé', [
-          `<div style="font-size:12px;color:var(--g600);margin-bottom:8px;">Cases cochées d\'office sur les <b>nouveaux</b> rapports :</div>`,
-          chk('boisAct', 'Activité de l\'infestation'),
-          chk('boisGrav', 'Gravité'),
-          chk('boisEtend', 'Étendue / surface'),
-          chk('boisHum', 'Taux d\'humidité du bois'),
-        ].join(''))}
-        ${bloc('🎨 Couleurs par nom', _optBlocCouleurs())}
-        ${bloc('🔔 Alertes', [
-          ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Délai au-delà duquel un bon jamais classé se signale tout seul'),
-          `<div style="font-size:13px;font-weight:600;color:var(--navy);margin:12px 0 2px;">Forme du signal
-             <div style="font-size:11px;font-weight:400;color:var(--g500);">Le repère posé sur le ruban du bon en retard — cliquez pour choisir</div></div>
-           <div id="opt-alerte-formes">${_optBlocAlerteFormes()}</div>`,
-        ].join(''))}
-        ${bloc('🏢 Nom des gérances dans la liste des bons', [
-          `<div style="font-size:12px;color:var(--g600);margin-bottom:9px;">Comment le nom de la gérance se détache au-dessus de ses bons — cliquez pour choisir</div>
-           <div id="opt-ger-bandeaux">${_optBlocGerBandeaux()}</div>`,
-          `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;margin-top:10px;">
-             <input type="checkbox" ${OPT.gerCollant === '1' ? 'checked' : ''} onchange="optSetGerCollant(this.checked)" style="accent-color:var(--navy);width:16px;height:16px;">
-             Garder le nom de la gérance collé en haut pendant le défilement</label>`,
-        ].join(''))}
-        ${bloc('🐛 Couleurs des nuisibles', `
-          <div style="font-size:12px;color:var(--g600);margin-bottom:10px;">
-            La couleur de l'étiquette du nuisible sur les rubans, l'agenda et les cartes.
-            Clique sur un carré pour changer la couleur.</div>
-          <div id="opt-nuis-couleurs">${_optBlocNuisibles()}</div>`)}
-        ${bloc('🤖 Intelligence artificielle', `
-          <div style="font-size:12px;color:var(--g600);margin-bottom:9px;">
-            L'IA lit les bons de travaux, les cartes de visite et corrige les textes. Si elle refuse de répondre,
-            ce test dit en une seconde d'où vient le problème.</div>
-          <button class="btn btn-navy btn-sm" onclick="testerCleIA()">🔎 Tester la connexion à l'IA</button>
-          <div id="opt-ia-test"></div>`)}
-        ${bloc('🔐 Mon compte', `
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:180px;font-size:13px;font-weight:600;color:var(--navy);">Mot de passe de connexion
-              <div style="font-size:11px;font-weight:400;color:var(--g500);">Il sert sur l'ordinateur et sur le téléphone</div></div>
-            <button class="btn btn-navy btn-sm" onclick="changerMotDePasse()">Changer mon mot de passe</button>
-          </div>`)}
-        <div style="text-align:center;margin-top:6px;">
-          <button class="btn btn-ghost btn-sm" onclick="optReset()">↩️ Tout remettre par défaut</button>
-        </div>
-        <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--g200);font-size:10.5px;color:var(--g400);line-height:1.5;text-align:center;">
-          Pictogrammes de nuisibles : <b>game-icons.net</b> (CC BY 3.0) ·
-          <b>Material Design Icons</b> (Apache 2.0) · <b>Font Awesome Free</b> (CC BY 4.0)
-        </div>
+      <div class="opt-wrap">
+        <aside class="opt-rail">
+          <div class="opt-search"><input id="opt-q" type="search" placeholder="🔎 Rechercher un réglage…" oninput="optRecherche(this.value)" autocomplete="off"></div>
+          <nav class="opt-nav">
+            ${OPT_RUBRIQUES.map(r => `<button class="opt-nav-b" data-sec="${r[0]}" onclick="optSection('${r[0]}')"><span class="i">${r[1]}</span> ${r[2]}</button>`).join('')}
+          </nav>
+          <div class="opt-rail-ft">Ces réglages sont enregistrés sur <b>cet ordinateur</b> uniquement et prennent effet immédiatement.</div>
+        </aside>
+        <section class="opt-pane" id="opt-pane">
+          <div id="opt-vide" style="display:none;padding:26px 4px;font-size:13px;color:var(--g500);">Aucun réglage ne correspond à cette recherche.</div>
+
+          ${section('apparence',
+            carte('Style d\'interface',
+              ligne('Présentation', sel('style', [['classique', '🏠 Classique — barre du haut'], ['cockpit', '🎛️ Cockpit — barre latérale']]),
+                'Le Cockpit range la navigation sur le côté et ajoute l\'écran « Mon poste ». Sur téléphone, le mode terrain reste prioritaire.')) +
+            carte('Affichage',
+              ligne('Thème', sel('theme', [['clair', '☀️ Clair'], ['sombre', '🌙 Sombre (bêta)']])) +
+              ligne('Taille du texte', sel('taille', [[90, 'Compact (90 %)'], [100, 'Normal (100 %)'], [110, 'Grand (110 %)'], [125, 'Très grand (125 %)']])) +
+              ligne('Densité des listes', sel('densite', [['compacte', 'Compacte'], ['normale', 'Normale'], ['aeree', 'Aérée']])) +
+              ligne('Clignotements', chk('animations', 'Faire clignoter les alertes'), 'Bons de plus de 48 h, devis expirés, factures en retard')))}
+
+          ${section('navigation',
+            carte('Démarrage',
+              ligne('Écran d\'ouverture', sel('ecranDepart', [['dashboard', '📊 Dashboard (ou Mon poste en Cockpit)'], ['monposte', '🎛️ Mon poste'], ['bons', '📄 Bons'], ['rapports', '📋 Rapports'], ['devis', '📝 Devis'], ['factures', '🧾 Factures'], ['agenda', '📅 Agenda'], ['rapprochement', '🏦 Relevés'], ['contrats', '📜 Contrats']]),
+                'L\'écran affiché à chaque ouverture de l\'application')) +
+            carte('Onglets du menu',
+              pleine('Onglets affichés', `<div class="opt-tags">${onglets}</div>`, 'Décoche ceux dont tu ne te sers pas — ils disparaissent du menu')))}
+
+          ${section('docs',
+            carte('Devis',
+              ligne('Validité d\'un devis', num('devisValidite', 'jours', 1, 365), 'Base du compte à rebours affiché sur le ruban') +
+              ligne('Alerte « à relancer »', num('devisRelance', 'jours avant expiration', 0, 90), 'La pastille passe à l\'orange et clignote')) +
+            carte('Factures',
+              ligne('Délai de paiement', num('factDelai', 'jours nets', 1, 365), 'Base du compte à rebours et du calcul du retard') +
+              ligne('Alerte avant échéance', num('factRelance', 'jours avant échéance', 0, 90), 'La pastille passe à l\'orange et clignote')) +
+            carte('Montants par défaut',
+              ligne('TVA par défaut', `<div class="opt-num"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1" oninput="optSet('tvaDefaut', this.value)"> <span>%</span></div>`, 'Vide = la valeur d\'origine de l\'application') +
+              ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100))) +
+            carte('Mise en page du PDF',
+              ligne('Espacement des désignations', sel('factEspacement', FACT_ESPACEMENTS), 'Air entre les lignes d\'un texte long dans le tableau')))}
+
+          ${section('apercu',
+            carte('Aperçu en direct',
+              ligne('Largeur du formulaire', sel('apercuPart', [[50, '50 % — aperçu aussi grand'], [60, '60 % — formulaire plus large'], [70, '70 % — aperçu réduit'], [100, 'Aperçu masqué']]), 'L\'aperçu occupe le reste de l\'écran') +
+              ligne('Zoom par défaut', sel('apercuZoom', [[0, 'Ajusté à la largeur'], [75, '75 %'], [100, '100 %'], [125, '125 %'], [150, '150 %']])) +
+              ligne('Mise à jour', chk('apercuAuto', 'Rafraîchir pendant la saisie'))))}
+
+          ${section('rapports',
+            carte('Rapport insectes du bois — bandeau imprimé',
+              pleine('Cases cochées d\'office', `<div class="opt-chks">${
+                chk('boisAct', 'Activité de l\'infestation') + chk('boisGrav', 'Gravité') +
+                chk('boisEtend', 'Étendue / surface') + chk('boisHum', 'Taux d\'humidité du bois')}</div>`,
+                'S\'applique aux nouveaux rapports uniquement')))}
+
+          ${section('couleurs',
+            libre('Couleurs par nom', _optBlocCouleurs()) +
+            libre('Couleurs des nuisibles', `
+              <div class="opt-note">La couleur de l'étiquette du nuisible sur les rubans, l'agenda et les cartes. Clique sur un carré pour la changer.</div>
+              <div id="opt-nuis-couleurs">${_optBlocNuisibles()}</div>`) +
+            libre('Nom des gérances dans les listes', `
+              <div class="opt-note">Comment le nom de la gérance se détache au-dessus de ses bons — clique pour choisir.</div>
+              <div id="opt-ger-bandeaux">${_optBlocGerBandeaux()}</div>
+              <label class="opt-chk" style="margin-top:10px;">
+                <input type="checkbox" ${OPT.gerCollant === '1' ? 'checked' : ''} onchange="optSetGerCollant(this.checked)">
+                Garder le nom de la gérance collé en haut pendant le défilement</label>`))}
+
+          ${section('alertes',
+            carte('Bon oublié',
+              ligne('Bon sans statut', num('alerteBonH', 'heures avant alerte', 1, 720), 'Délai au-delà duquel un bon jamais classé se signale tout seul')) +
+            libre('Forme du signal',
+              `<div class="opt-note">Le repère posé sur le ruban du bon en retard — clique pour choisir.</div>
+               <div id="opt-alerte-formes">${_optBlocAlerteFormes()}</div>`))}
+
+          ${section('compte',
+            carte('Mon compte',
+              ligne('Mot de passe de connexion', `<button class="btn btn-navy btn-sm" onclick="changerMotDePasse()">Changer mon mot de passe</button>`, 'Il sert sur l\'ordinateur et sur le téléphone')) +
+            libre('Intelligence artificielle', `
+              <div class="opt-note">L'IA lit les bons de travaux, les cartes de visite et corrige les textes. Si elle refuse de répondre, ce test dit en une seconde d'où vient le problème.</div>
+              <button class="btn btn-navy btn-sm" onclick="testerCleIA()">🔎 Tester la connexion à l'IA</button>
+              <div id="opt-ia-test"></div>`) +
+            libre('Remise à zéro', `
+              <div class="opt-note">Remet tous les réglages de cette fenêtre à leur valeur d'origine. Ne touche à aucune donnée : bons, rapports, devis et factures restent intacts.</div>
+              <button class="btn btn-ghost btn-sm" onclick="optReset()">↩️ Tout remettre par défaut</button>`) +
+            `<div class="opt-credits">Pictogrammes de nuisibles : <b>game-icons.net</b> (CC BY 3.0) · <b>Material Design Icons</b> (Apache 2.0) · <b>Font Awesome Free</b> (CC BY 4.0)</div>`)}
+        </section>
       </div>
-      <div class="modal-ft">
+      <div class="modal-ft opt-ft">
+        <span class="opt-ft-i">Enregistrement automatique</span>
         <button class="btn btn-navy" onclick="closeModal('modal-options')">✓ Terminé</button>
       </div>
     </div>`;
   openModal('modal-options');
+  let dep = 'apparence';
+  try { dep = sessionStorage.getItem('deratek_opt_sec') || 'apparence'; } catch (e) {}
+  if (!OPT_RUBRIQUES.some(r => r[0] === dep)) dep = 'apparence';
+  optSection(dep);
 }
 // Galerie des couleurs de nuisibles (⚙️ Options)
 function _optBlocNuisibles() {
