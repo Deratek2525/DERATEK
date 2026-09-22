@@ -498,6 +498,9 @@ const FACT_ESPACEMENTS = [
 // pad  = marge au-dessus et en dessous du filet, donc l'écart ENTRE deux
 //        désignations : on le resserre à mesure que l'interligne grandit,
 //        pour que seules les phrases respirent, pas les blocs.
+// Plancher de lisibilité absolu de l'interligne : on y descend seulement quand c'est
+// ce qui permet de garder le bulletin QR sur la page 1.
+const ESP_LINE_ABS = 3.4;
 const _FACT_ESP_VAL = {
   serre: { line: 4.4, pad: 3.0, mini: 2.8, safeY: 103 },
   moyen: { line: 5.1, pad: 2.7, mini: 4.4, safeY: 103 },
@@ -11745,16 +11748,25 @@ function downloadDocPDF(id, mode) {
     const avail = QR_NEED_TOP - startY - headerH - totalsH - 1;
     const besoin = (li, pa) => nTot * li + 2 * pa * nRows;
     if (besoin(LINE, PAD) > avail) {
+      // 1) l'écart ENTRE deux désignations (marge autour du filet)
       let pa = PAD;
-      while (pa > 1.6 && besoin(LINE, pa) > avail) pa -= 0.1;
-      PAD = Math.max(1.6, pa);
+      while (pa > 1.2 && besoin(LINE, pa) > avail) pa -= 0.1;
+      PAD = Math.max(1.2, pa);
+      // 2) puis l'interligne, jusqu'au plancher confortable du réglage choisi
       if (besoin(LINE, PAD) > avail) {
         let li = LINE;
         while (li > _ESP.mini && besoin(li, PAD) > avail) li -= 0.05;
         LINE = Math.max(_ESP.mini, li);
       }
-      // Même au plancher ça ne rentre pas : la 2e page est de toute façon inévitable,
-      // alors on rend le réglage choisi intégralement au lieu d'un texte tassé pour rien.
+      // 3) il s'en faut de peu : plutôt que de renvoyer le bulletin QR en page 2,
+      //    on descend encore l'interligne jusqu'à un plancher de lisibilité absolu.
+      if (besoin(LINE, PAD) > avail) {
+        let li = LINE;
+        while (li > ESP_LINE_ABS && besoin(li, PAD) > avail) li -= 0.05;
+        if (besoin(li, PAD) <= avail) LINE = li;
+      }
+      // 4) vraiment impossible : la 2e page est inévitable, alors on rend le réglage
+      //    choisi en entier au lieu d'un texte tassé pour rien.
       if (besoin(LINE, PAD) > avail) { LINE = _ESP.line; PAD = _ESP.pad; }
     }
   }
