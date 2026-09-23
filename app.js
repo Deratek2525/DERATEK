@@ -4616,6 +4616,29 @@ function _mobInterventionsJour(dateStr) {
   return (DB.intervs || []).filter(iv => iv.date === d)
     .slice().sort((a, b) => String(a.heure || '').localeCompare(String(b.heure || '')));
 }
+// Retrouve le bon lié à un rendez-vous : par son identifiant, sinon par son numéro
+// (les rendez-vous anciens n'ont parfois que le numéro saisi à la main).
+function _mobBonDeIv(iv) {
+  if (!iv) return null;
+  const bons = DB.bons || [];
+  let b = iv.bonId ? bons.find(x => x.id === iv.bonId) : null;
+  if (!b && iv.bonNumero) {
+    const n = _factNorm(iv.bonNumero);
+    b = bons.find(x => _factNorm(x.numero) === n);
+  }
+  return b || null;
+}
+// Depuis « Ma journée » : un appui sur le rendez-vous ouvre LE BON, pas l'agenda.
+function mobBonDepuisJour(bonId) {
+  if (!bonId) { toast('Aucun bon lié à ce rendez-vous', '#d97706'); return; }
+  _mobOnglet = 'bons';
+  _mobFiche = bonId;
+  _mobEcranOuvert = false;
+  document.body.classList.add('mob-on');
+  renderMobile();
+  window.scrollTo(0, 0);
+}
+
 // Bons à traiter en priorité : sans statut, urgents, à contacter, en cours
 function _mobBonsPrioritaires() {
   const ordre = { '': 0, 'urgent': 1, 'a-contacter': 2, 'en-cours': 3, 'a-transmettre': 4 };
@@ -4674,11 +4697,15 @@ function renderMobile() {
       </div>
       <div class="mob-body">
         ${prochaine ? `<div class="mob-big" onclick="mobGo('rapport')">▶️ Démarrer l'intervention de ${prochaine.heure || ''}</div>` : ''}
-        ${ivs.length ? ivs.map(iv => `
-          <div class="mob-c" style="border-left-color:${iv.couleur || '#e63946'}" onclick="showScreen('agenda')">
+        ${ivs.length ? ivs.map(iv => { const _b = _mobBonDeIv(iv); return `
+          <div class="mob-c" style="border-left-color:${iv.couleur || '#e63946'}" onclick="mobBonDepuisJour('${_b ? _b.id : ''}')">
             <div class="t">${_escapeHtml(iv.heure || '--:--')} · ${_escapeHtml(iv.adresse || iv.clientNom || '')}</div>
             <div class="s">${iv.nuisible ? _escapeHtml(iv.nuisible) + ' · ' : ''}${_escapeHtml(iv.clientNom || '')}${iv.bonNumero ? '<br>📄 Bon ' + _escapeHtml(iv.bonNumero) : ''}</div>
-          </div>`).join('')
+            <div class="mob-c-go">
+              <span class="ouvr">${_b ? '📄 Ouvrir le bon' : '⚠️ Aucun bon lié'}</span>
+              <button type="button" class="plan" onclick="event.stopPropagation();showScreen('agenda');">📅 Planning</button>
+            </div>
+          </div>`; }).join('')
         : '<div class="mob-vide">🎉 Aucune intervention planifiée aujourd\'hui.</div>'}
         <div class="mob-sec">À traiter</div>
         ${_mobBonsPrioritaires().slice(0, 4).map(b => `
