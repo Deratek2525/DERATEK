@@ -3791,7 +3791,33 @@ function deleteTech(el) {
 // ============================================================
 // INIT
 // ============================================================
+// ============================================================
+// VERSION EN CACHE — Safari (surtout sur iPhone) garde longtemps l'ancien
+// index.html, si bien qu'une mise à jour publiée n'arrive jamais au téléphone.
+// Au démarrage, on compare la version chargée à celle publiée et, si elles
+// diffèrent, on recharge la page sous une adresse neuve (le navigateur est
+// alors obligé d'aller chercher la nouvelle). Aucun risque de boucle : la page
+// rechargée porte la bonne version.
+// ============================================================
+async function _majVerifVersion() {
+  try {
+    if (location.search.indexOf('maj=') >= 0) return;          // déjà rechargé une fois
+    const meta = document.querySelector('meta[name="app-version"]');
+    const ici = meta ? String(meta.content || '').trim() : '';
+    if (!ici) return;
+    const r = await fetch('index.html?nocache=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const t = await r.text();
+    const m = t.match(/name="app-version"[^>]*content="([^"]+)"/);
+    const enligne = m ? m[1].trim() : '';
+    if (enligne && enligne !== ici) {
+      location.replace(location.pathname + '?maj=' + encodeURIComponent(enligne));
+    }
+  } catch (e) {}
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  _majVerifVersion();      // 🔄 évite de tourner sur une version mise en cache
   optLoad(); optApply();   // ⚙️ préférences d'affichage de ce poste
   initSig();
   initPhotoDnD();          // 📷 glisser-déposer et coller des photos dans le rapport
