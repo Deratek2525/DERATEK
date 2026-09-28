@@ -7647,6 +7647,33 @@ function openBonRapMenu(id, btn) {
   _ckMenuOuvrir(btn, _bonRapLabel(b), items);
 }
 
+// Prépare un e-mail à la gérance à partir d'un bon : destinataire, objet et
+// début du message déjà écrits. Rien n'est envoyé — le brouillon s'ouvre dans
+// la messagerie et c'est toi qui décides.
+function _bonMailtoUrl(b) {
+  const cli = (b.geranceId && (DB.clients || []).find(c => c.id === b.geranceId))
+           || (b.geranceNom && (DB.clients || []).find(c => (c.nom || '').toLowerCase() === (b.geranceNom || '').toLowerCase()))
+           || null;
+  const dest = (b.gerantEmail || (cli && cli.email) || '').trim();
+  const adr = _bonAdresseInterv(b).adresse || b.immeuble || '';
+  const objet = 'Bon n° ' + (b.numero || '') + (adr ? ' — ' + adr : '');
+  const corps = [
+    'Bonjour,', '',
+    'Concernant le bon n° ' + (b.numero || '') + (adr ? ' (' + adr + ')' : '') + ' :', '',
+    '', '',
+    'Avec nos meilleures salutations,',
+    (DERATEK_CONFIG.company && DERATEK_CONFIG.company.nom) || 'DERATEK'
+  ].join('\n');
+  return { url: 'mailto:' + encodeURIComponent(dest) + '?subject=' + encodeURIComponent(objet) + '&body=' + encodeURIComponent(corps), dest: dest };
+}
+function bonEcrireEmail(id) {
+  const b = (DB.bons || []).find(x => x.id === id);
+  if (!b) { toast('Bon introuvable', '#e63946'); return; }
+  const m = _bonMailtoUrl(b);
+  window.location.href = m.url;
+  if (!m.dest) toast('Aucune adresse e-mail enregistrée pour cette gérance — à compléter dans le brouillon', '#d97706');
+}
+
 // Couleur de fond personnalisée de la carte du bon (vide = couleur auto de la gérance)
 function bonSetColor(id, color) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
@@ -7847,6 +7874,7 @@ function updateNavCounts() {
 const CK_ICO = {
   pdf:     '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
   pdfDoc:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>',
+  mail:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2.5 6 12 13 21.5 6"/></svg>',
   note:    '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   noteOr:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="currentColor"/><line x1="8" y1="9" x2="16" y2="9" stroke="#fff"/><line x1="8" y1="13" x2="13" y2="13" stroke="#fff"/></svg>',
   noteOn:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="2.6" fill="#f59e0b" stroke="none"/></svg>',
@@ -8123,6 +8151,7 @@ const BON_STATUT_META = {
   'a-contacter':   { bg: '#cffafe', color: '#155e75', border: '#06b6d4', lbl: '📞 À contacter',             court: 'À contacter',  ico: '📞' },
   'a-transmettre': { bg: '#fca5a5', color: '#7f1d1d', border: '#dc2626', lbl: '📕 Rapport à transmettre',   court: 'À transmettre',ico: '📕' },
   'transmis':      { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6', lbl: '📨 Transmis',                court: 'Transmis',     ico: '📨' },
+  'email-envoye':  { bg: '#e0f2fe', color: '#075985', border: '#0ea5e9', lbl: '✉️ E-mail envoyé',            court: 'E-mail',       ico: '✉️' },
   'demande-devis': { bg: '#e0e7ff', color: '#3730a3', border: '#6366f1', lbl: '📝 Demande de devis',        court: 'Demande devis',ico: '📝' },
   'attente-devis': { bg: '#ede9fe', color: '#6d28d9', border: '#8b5cf6', lbl: '⏸️ Attente de devis',        court: 'Attente devis',ico: '⏸️' },
   'devis-valide':  { bg: '#ccfbf1', color: '#0f766e', border: '#14b8a6', lbl: '✅ Devis validé',            court: 'Devis validé', ico: '✅' },
@@ -8278,6 +8307,7 @@ function renderBonCardCockpit(b, sansGerance) {
           })()}
           ${bt(`createDevisFromBon('${b.id}')`, CK_ICO.devis, aDevis ? 'Devis rattaché à ce bon — en créer un autre' : 'Créer un devis depuis ce bon', aDevis ? 'ico-devis' : 'btn-ghost')}
           ${bt(`createFactureFromBon('${b.id}')`, CK_ICO.facture, aFact ? 'Facture rattachée à ce bon — en créer une autre' : 'Créer une facture depuis ce bon', (aFact || statut === 'a-facturer') ? 'ico-fact' : 'btn-ghost')}
+          ${bt(`bonEcrireEmail('${b.id}')`, CK_ICO.mail, (b.gerantEmail ? 'Écrire à ' + _escapeHtml(b.gerantEmail) : 'Écrire un e-mail à la gérance'), b.gerantEmail ? 'ico-mail' : 'btn-ghost')}
           ${bt(`editBon('${b.id}')`, CK_ICO.ouvrir, 'Ouvrir la fiche complète du bon', 'btn-navy')}
           <button class="btn btn-red ck-b-b" onclick="confirmDeleteBon('${b.id}','${String(b.numero || b.id).replace(/'/g, "\\'")}')" data-tip="Supprimer ce bon" aria-label="Supprimer ce bon">${CK_ICO.suppr}</button>
         </div>
