@@ -502,10 +502,10 @@ const FACT_ESPACEMENTS = [
 // ce qui permet de garder le bulletin QR sur la page 1.
 const ESP_LINE_ABS = 3.4;
 const _FACT_ESP_VAL = {
-  serre: { line: 4.4, pad: 3.0, mini: 2.8, safeY: 103 },
-  moyen: { line: 5.1, pad: 2.7, mini: 4.4, safeY: 103 },
-  aere:  { line: 5.6, pad: 2.4, mini: 4.8, safeY: 95  },
-  max:   { line: 6.2, pad: 2.2, mini: 6.2, safeY: 95  },
+  serre: { line: 4.4, pad: 3.0, mini: 3.8, fs: 8.5, safeY: 103 },
+  moyen: { line: 5.1, pad: 2.7, mini: 4.4, fs: 8.5, safeY: 103 },
+  aere:  { line: 5.6, pad: 2.4, mini: 4.8, fs: 8.5, safeY: 95  },
+  max:   { line: 6.2, pad: 2.2, mini: 6.2, fs: 8.5, safeY: 95  },
 };
 function _factEspacement() {
   const v = (typeof OPT !== 'undefined' && OPT.factEspacement) || 'serre';
@@ -11659,6 +11659,7 @@ function downloadDocPDF(id, mode) {
   // strictement identiques à Arial). Repli sur Helvetica si le fichier n'est pas chargé.
   const FONT = (function () { try { return doc.getFontList().Arial ? 'Arial' : 'helvetica'; } catch (e) { return 'helvetica'; } })();
   const isFacture = d.type === 'facture';
+  const _ESP = _factEspacement();  // ⚙️ Réglages › Devis & factures › Interligne des textes
   const t = _calcTotaux(d.lignes, d.tvaTaux, d.rabais, _docExpertise(d));
 
   // --- En-tête horizontal (LOGO + coordonnées) — dessiné sur CHAQUE page ---
@@ -11786,18 +11787,21 @@ function downloadDocPDF(id, mode) {
   }
 
   // En-tête du tableau — ruban BLEU (navy) avec texte blanc
+  // Taille du texte des désignations. L'en-tête du tableau écrit en 8.5 : on la
+  // rétablit en sortant, sinon les lignes étaient mesurées à une taille et
+  // dessinées à une autre — d'où une compression calculée en trop.
+  const BODY_FS = _ESP.fs;
   const drawLignesHeader = (y) => {
     doc.setFillColor(13, 27, 62); doc.rect(20, y - 5, 170, 7.5, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont(FONT, 'bold');
     doc.text('Désignation', 22, y); doc.text('Qté', 130, y, {align:'right'}); doc.text('Prix HT', 156, y, {align:'right'}); doc.text('Montant', 188, y, {align:'right'});
-    doc.setTextColor(0); doc.setFont(FONT, 'normal');
+    doc.setTextColor(0); doc.setFont(FONT, 'normal'); doc.setFontSize(BODY_FS);
     return y + 8.5;
   };
 
   // La table démarre sous le bloc infos (qui est déjà sous l'adresse) ET, surtout,
   // SOUS la fenêtre de l'enveloppe C5 : sinon le ruban bleu « Désignation » apparaît
   // dans la fenêtre à côté de l'adresse du destinataire. On impose donc un plancher.
-  const _ESP = _factEspacement();  // ⚙️ Options › Devis & factures › Espacement des désignations
   const ENV_WINDOW_SAFE_Y = _ESP.safeY;   // mm — plancher sous la fenêtre de l'enveloppe C5
   const startY = Math.max(infoY + 3, dy + 5, ENV_WINDOW_SAFE_Y);
   // Hauteur réelle du bloc totaux (sous-total + [rabais] + tva + total), marge incluse.
@@ -11814,10 +11818,17 @@ function downloadDocPDF(id, mode) {
 
   // Rythme vertical uniforme : hauteur d'une ligne de texte + marge identique
   // au-dessus et en dessous du filet, quelle que soit la longueur de la désignation.
-  doc.setFontSize(9.5);
+  doc.setFontSize(BODY_FS);
   let LINE = _ESP.line;   // interligne DANS une désignation — voir FACT_ESPACEMENTS
   let PAD  = _ESP.pad;    // marge texte ↔ filet ↔ désignation suivante
   let ROWGAP = 0;   // écart d'aération entre désignations — calculé selon la place disponible
+
+  // Une désignation purement explicative (aucune quantité, aucun prix) n'a rien dans les
+  // colonnes Qté / Prix / Montant : elle occupe donc toute la largeur du tableau au lieu
+  // d'être coupée en colonne étroite. Moins de lignes = plus de place pour les aérer.
+  const _ligneSansPrix = l => (parseFloat(l.prix) || 0) === 0
+    && ((parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0) * (1 - (parseFloat(l.rabais) || 0) / 100)) === 0;
+  const _largeurDesc = l => _ligneSansPrix(l) ? 166 : 100;
 
   // --- Manque de place (factures) : l'ordre du sacrifice est volontaire. ---
   // 1) on rabote d'abord la marge autour des filets, donc l'écart ENTRE deux désignations ;
@@ -11825,7 +11836,7 @@ function downloadDocPDF(id, mode) {
   //    en dessous du plancher du réglage choisi ;
   // 3) au-delà, la facture prend une 2e page plutôt que de devenir illisible.
   if (isFacture) {
-    const nbL = lignes.map(l => Math.max(1, doc.splitTextToSize(l.desc || '', 100).length));
+    const nbL = lignes.map(l => Math.max(1, doc.splitTextToSize(l.desc || '', _largeurDesc(l)).length));
     const nTot = nbL.reduce((a, b) => a + b, 0), nRows = Math.max(1, lignes.length);
     const headerH = 8.5;
     const avail = QR_NEED_TOP - startY - headerH - totalsH - 1;
@@ -11860,7 +11871,7 @@ function downloadDocPDF(id, mode) {
   lignes.forEach((l) => {
     const _lr = parseFloat(l.rabais) || 0;
     const lt = (parseFloat(l.qte)||0) * (parseFloat(l.prix)||0) * (1 - _lr/100);
-    const descLines = doc.splitTextToSize(String(l.desc || '').replace(/\*\*/g, '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), 100);
+    const descLines = doc.splitTextToSize(String(l.desc || '').replace(/\*\*/g, '') + (_lr > 0 ? '   (rabais ' + _lr + '%)' : ''), _largeurDesc(l));
     if (!descLines.length) descLines.push('');
     // Rendu ligne par ligne : une désignation longue se PARTAGE sur deux pages
     // (au lieu de basculer en entier sur la page suivante et de laisser un grand vide).
