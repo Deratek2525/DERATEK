@@ -11848,7 +11848,16 @@ function downloadDocPDF(id, mode) {
     const nbL = lignes.map(l => Math.max(1, doc.splitTextToSize(l.desc || '', _largeurDesc(l)).length));
     const nTot = nbL.reduce((a, b) => a + b, 0), nRows = Math.max(1, lignes.length);
     const headerH = 8.5;
-    const avail = QR_NEED_TOP - startY - headerH - totalsH - 1;
+    // Les notes / conditions sont imprimées APRÈS les totaux : si on les oublie ici,
+    // elles débordent sur la zone du bulletin QR, qui part alors en page 2 alors que
+    // la page 1 semble à moitié vide. On réserve donc leur hauteur dès le départ.
+    let notesH = 0;
+    if (_docNotesClean(d)) {
+      doc.setFontSize(9);
+      notesH = doc.splitTextToSize(_docNotesClean(d), 170).length * 4.5 + 8;
+      doc.setFontSize(BODY_FS);
+    }
+    const avail = QR_NEED_TOP - startY - headerH - totalsH - notesH - 1;
     const besoin = (li, pa) => nTot * li + 2 * pa * nRows;
     if (besoin(LINE, PAD) > avail) {
       // 1) l'écart ENTRE deux désignations (marge autour du filet)
@@ -11992,7 +12001,10 @@ function downloadDocPDF(id, mode) {
   // suivante (jamais coupé, jamais superposé au texte).
   let qrPageNum = doc.internal.getNumberOfPages();
   if (isFacture) {
-    if (ty > QR_NEED_TOP) {            // pas assez de place sous le contenu → page suivante
+    // Le bulletin occupe les 105 derniers millimètres : tant que le contenu finit
+    // au-dessus de sa perforation, il reste en page 1. Ce sont les deux lignes de
+    // condition de paiement qui cèdent la place, pas le bulletin.
+    if (ty > QR_TOP - 2) {             // vraiment plus la place → page suivante
       doc.addPage(); drawHeader();     // en-tête répété sur la page du bulletin
       qrPageNum = doc.internal.getNumberOfPages();
     }
@@ -12016,10 +12028,17 @@ function downloadDocPDF(id, mode) {
 
     // Conditions de paiement, juste au-dessus de la ligne pointillée
     doc.setFont(FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
-    doc.text('Condition de paiement : 30 jours net.', 20, billTop - 11);
-    doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
-    doc.text('Veuillez utiliser le bulletin de versement ci-dessous pour le paiement.', 20, billTop - 6);
-    doc.setTextColor(0);
+    // Le délai figure déjà en haut de la facture : ces deux lignes sont un rappel
+    // de confort. On les imprime seulement si elles ne mordent pas sur le contenu.
+    const _condTxt = 'Condition de paiement : ' + _factDelaiJours() + ' jours net.';
+    if (ty <= billTop - 13) {
+      doc.text(_condTxt, 20, billTop - 11);
+      doc.setFont(FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+      doc.text('Veuillez utiliser le bulletin de versement ci-dessous pour le paiement.', 20, billTop - 6);
+      doc.setTextColor(0);
+    } else if (ty <= billTop - 7) {
+      doc.text(_condTxt, 20, billTop - 5);
+    }
 
     // Lignes de découpe
     doc.setLineWidth(0.2); doc.setDrawColor(120); doc.setLineDashPattern([1.4, 1], 0);
