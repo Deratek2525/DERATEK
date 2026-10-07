@@ -11727,7 +11727,8 @@ function downloadDocPDF(id, mode) {
   const _hasStruct = (d.clientAdresse || '').trim() || (d.clientNpa || '').trim() || (d.clientVille || '').trim();
   let destLines;
   if ((d.proprietaire || '').trim()) {
-    destLines = [d.proprietaire, 'p.a. ' + (d.clientNom || ''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
+    // Sans nom de gérance, un « p.a. » tout seul n'a aucun sens : on ne l'imprime pas.
+    destLines = [d.proprietaire, ((d.clientNom || '').trim() ? 'p.a. ' + d.clientNom : ''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean);
   } else if (!_hasStruct && (d.clientNom || '').includes(',')) {
     // Destinataire combiné dans un seul champ → on le découpe sur les virgules (1 élément par ligne)
     destLines = (d.clientNom || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -12031,7 +12032,7 @@ function downloadDocPDF(id, mode) {
     const payload = _buildSpcPayload(t.total, message, debtor, bureau);
     const qrUrl = _makeQrDataUrl(payload);
     const debtLines = ((d.proprietaire || '').trim()
-      ? [d.proprietaire, 'p.a. ' + (d.clientNom||''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
+      ? [d.proprietaire, ((d.clientNom||'').trim() ? 'p.a. ' + d.clientNom : ''), d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean)
       : ((d.clientNom || '').trim() ? [d.clientNom, d.clientAdresse, `${d.clientNpa||''} ${d.clientVille||''}`.trim()].filter(Boolean) : null));
     const debtLinesClean = debtLines
       ? debtLines.map(l => _fixPa(l))
