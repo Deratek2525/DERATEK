@@ -501,6 +501,16 @@ const FACT_ESPACEMENTS = [
 // Plancher de lisibilité absolu de l'interligne : on y descend seulement quand c'est
 // ce qui permet de garder le bulletin QR sur la page 1.
 const ESP_LINE_ABS = 3.4;
+// Largeur d'une désignation SANS prix : soit elle reste dans la colonne Désignation
+// (alignée avec les lignes chiffrées), soit elle occupe toute la largeur du tableau,
+// ce qui lui fait prendre bien moins de lignes quand le texte est long.
+const FACT_LARGEURS = [
+  ['colonne', 'Dans la colonne — jamais sous « Qté »'],
+  ['pleine',  'Toute la largeur — gagne des lignes sur les textes longs'],
+];
+function _factLargeurSansPrix() {
+  return ((typeof OPT !== 'undefined' && OPT.factLargeurDesc) === 'pleine') ? 166 : 104;
+}
 const _FACT_ESP_VAL = {
   serre: { line: 4.4, pad: 3.0, mini: 3.8, fs: 8.5, safeY: 103 },
   moyen: { line: 5.1, pad: 2.7, mini: 4.4, fs: 8.5, safeY: 103 },
@@ -4102,6 +4112,7 @@ const OPT_DEFAUTS = {
   devisValidite: 30,
   devisRelance: 7,
   factEspacement: 'serre',  // aeration des designations dans les devis/factures
+  factLargeurDesc: 'colonne', // largeur des textes sans prix : colonne | pleine
   factDelai: 30,            // delai de paiement des factures (jours nets)
   factRelance: 7,           // alerte X jours avant l'echeance
   tvaDefaut: '',             // vide = valeur de config.js
@@ -4364,7 +4375,8 @@ function openOptions() {
               ligne('TVA par défaut', `<div class="opt-num"><input class="form-input" type="text" value="${OPT.tvaDefaut}" placeholder="ex. 8.1" oninput="optSet('tvaDefaut', this.value)"> <span>%</span></div>`, 'Vide = la valeur d\'origine de l\'application') +
               ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100))) +
             carte('Mise en page du PDF',
-              ligne('Interligne des textes', sel('factEspacement', FACT_ESPACEMENTS), 'Espace entre les lignes d\'une même phrase — l\'écart entre deux désignations ne bouge pas')))}
+              ligne('Interligne des textes', sel('factEspacement', FACT_ESPACEMENTS), 'Espace entre les lignes d\'une même phrase — l\'écart entre deux désignations ne bouge pas') +
+              ligne('Largeur des textes sans prix', sel('factLargeurDesc', FACT_LARGEURS), 'Une désignation sans quantité ni prix : alignée dans la colonne, ou étalée sur toute la largeur')))}
 
           ${section('apercu',
             carte('Aperçu en direct',
@@ -11837,7 +11849,8 @@ function downloadDocPDF(id, mode) {
   // d'être coupée en colonne étroite. Moins de lignes = plus de place pour les aérer.
   const _ligneSansPrix = l => (parseFloat(l.prix) || 0) === 0
     && ((parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0) * (1 - (parseFloat(l.rabais) || 0) / 100)) === 0;
-  const _largeurDesc = l => _ligneSansPrix(l) ? 166 : 100;
+  const _LARG_SP = _factLargeurSansPrix();   // ⚙️ Réglages › Devis & factures
+  const _largeurDesc = l => _ligneSansPrix(l) ? _LARG_SP : 100;
 
   // --- Manque de place (factures) : l'ordre du sacrifice est volontaire. ---
   // 1) on rabote d'abord la marge autour des filets, donc l'écart ENTRE deux désignations ;
