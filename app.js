@@ -8511,6 +8511,7 @@ function renderBons() {
   const q = (($('bon-search') || {}).value || '').toLowerCase();
   // Les bons dont la facture est payée partent dans « Facturation archivée »
   let bons = (DB.bons || []).filter(b => !_isBonFactArchived(b));
+  const tousLesBons = bons.slice();   // avant tout filtre d'onglet : base de la recherche
   // Filtre actifs / en cours / terminés (un bon "terminé" = statut 'termine')
   const isTermine = b => (b.statut || '') === 'termine';
   // Une tuile de compteur cliquee prend le pas sur les onglets : on montre
@@ -8531,11 +8532,15 @@ function renderBons() {
     // restent visibles dans « Bons » : un bon n'y disparait jamais a cause d'eux.
     bons = bons.filter(b => !isTermine(b) && (b.statut || '') !== 'en-cours' && (b.statut || '') !== 'a-transmettre');
   }
+  // Une recherche porte sur TOUS les bons, pas seulement l'onglet ouvert : sinon un bon
+  // terminé ou en cours semble introuvable alors qu'il existe. Le numéro est comparé
+  // avec ET sans espaces (« 2026 252 109 » se trouve en tapant « 2026252109 »).
   if (q) {
-    bons = bons.filter(b =>
-      ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.gerantNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.gerantTel||'') + ' ' + _bonProblemeClean(b))
-        .toLowerCase().includes(q)
-    );
+    const qn = _factNorm(q);
+    bons = tousLesBons.filter(b => {
+      const texte = ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.gerantNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.gerantTel||'') + ' ' + _bonProblemeClean(b)).toLowerCase();
+      return texte.includes(q) || (qn && _factNorm(b.numero).indexOf(qn) >= 0);
+    });
   }
   if (count) {
     const lbl = state.bonsStatut !== null && state.bonsStatut !== undefined
@@ -8546,7 +8551,9 @@ function renderBons() {
          : 'bon(s) en cours de vie');
     // Rapports à transmettre : bons dont le statut est « 📕 Rapport à transmettre »
     const rapAFaire = (DB.bons || []).filter(b => !_isBonFactArchived(b) && (b.statut || '') === 'a-transmettre').length;
-    const base = bons.length ? bons.length + ' ' + lbl : '';
+    const base = q
+      ? (bons.length + ' résultat' + (bons.length > 1 ? 's' : '') + ' pour « ' + _escapeHtml(q) + ' » — recherche dans TOUS les bons')
+      : (bons.length ? bons.length + ' ' + lbl : '');
     const rapHtml = rapAFaire
       ? `<button type="button" onclick="showBonsATransmettre()" title="Ouvrir la rubrique « Rapports à transmettre »"
             style="border:none;background:none;padding:0;cursor:pointer;color:#b91c1c;font-weight:800;font-size:inherit;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">📕 ${rapAFaire} rapport${rapAFaire > 1 ? 's' : ''} à transmettre</button>`
@@ -8555,7 +8562,9 @@ function renderBons() {
   }
   if (!list) return;
   if (!bons.length) {
-    const msg = (state.bonsStatut !== null && state.bonsStatut !== undefined)
+    const msg = q
+      ? 'Aucun bon ne correspond à « ' + _escapeHtml(q) + ' ».<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="(function(){const e=document.getElementById(\'bon-search\'); if(e){e.value=\'\';} renderBons();})()">✕ Effacer la recherche</button>'
+      : (state.bonsStatut !== null && state.bonsStatut !== undefined)
       ? 'Aucun bon avec le statut « ' + BON_STATUT_META[state.bonsStatut].court + ' ».<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="setBonsStatut(null)">✕ Afficher tous les bons</button>'
       : state.bonsFilter === 'termines'
       ? 'Aucun bon terminé pour le moment.<br>Un bon apparaît ici quand son statut passe à « ✅ Travail terminé ».'
