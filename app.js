@@ -7648,15 +7648,32 @@ function _ckMenuOuvrir(btn, titre, items) {
   setTimeout(() => document.addEventListener('mousedown', _ckMenuDehors, true), 0);
 }
 // Menu du pictogramme Rapport sur le ruban d'un bon
+// Les types de rapport proposés depuis le ruban d'un bon
+const BON_RAP_TYPES = [
+  ['general',  '📋', 'Rapport d\'intervention'],
+  ['rongeurs', '🐀', 'Rapport rongeurs'],
+  ['blattes',  '🪳', 'Rapport blattes'],
+  ['punaises', '🛏️', 'Rapport punaises de lit'],
+  ['fourmis',  '🐜', 'Rapport fourmis'],
+  ['bois',     '🪵', 'Diagnostic insectes du bois'],
+];
+// Crée le rapport du type choisi, pré-rempli depuis le bon
+function creerRapportBonType(id, type) {
+  if (!type || type === 'general') { createRapportFromBon(id); return; }
+  createRapportTypeFromBon(id, type);
+}
 function openBonRapMenu(id, btn) {
   const b = (DB.bons || []).find(x => x.id === id); if (!b) return;
   const e = _bonRapEtat(b);
-  if (e.etat === 'aucun') { createRapportFromBon(id); return; }
+  const typeItems = (prefixe) => BON_RAP_TYPES.map(t => ({
+    ico: t[1], txt: (prefixe || '') + t[2], act: `_ckMenuFermer(); creerRapportBonType('${id}', '${t[0]}')`
+  }));
+  // Aucun rapport encore fait : on demande d'abord QUEL type de rapport.
+  if (e.etat === 'aucun') { _ckMenuOuvrir(btn, 'Quel type de rapport ?', typeItems()); return; }
   const items = [{ ico: '📄', txt: 'Ouvrir le rapport ' + (e.rap ? e.rap.id : ''), act: `bonRapOuvrir('${id}')` }];
   if (e.etat === 'transmis') items.push({ ico: '↺', txt: 'Retirer « transmis »', act: `bonRapTransmis('${id}', false)` });
   else items.push({ ico: '📨', txt: 'Marquer transmis à la gérance', act: `bonRapTransmis('${id}', true)`, cls: 'ok' });
-  items.push({ ico: '➕', txt: 'Créer un nouveau rapport', act: `_ckMenuFermer(); createRapportFromBon('${id}')` });
-  _ckMenuOuvrir(btn, _bonRapLabel(b), items);
+  _ckMenuOuvrir(btn, _bonRapLabel(b), items.concat(typeItems('Nouveau — ')));
 }
 
 // Prépare un e-mail à la gérance à partir d'un bon : destinataire, objet et
