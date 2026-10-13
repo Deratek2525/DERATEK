@@ -505,11 +505,13 @@ const ESP_LINE_ABS = 3.4;
 // (alignée avec les lignes chiffrées), soit elle occupe toute la largeur du tableau,
 // ce qui lui fait prendre bien moins de lignes quand le texte est long.
 const FACT_LARGEURS = [
-  ['colonne', 'Dans la colonne — jamais sous « Qté »'],
-  ['pleine',  'Toute la largeur — gagne des lignes sur les textes longs'],
+  ['auto',    'Automatique — colonne, sauf pour éviter une 2e page'],
+  ['colonne', 'Toujours dans la colonne — jamais sous « Qté »'],
+  ['pleine',  'Toujours toute la largeur'],
 ];
-function _factLargeurSansPrix() {
-  return ((typeof OPT !== 'undefined' && OPT.factLargeurDesc) === 'pleine') ? 166 : 104;
+function _factModeLargeur() {
+  const v = (typeof OPT !== 'undefined' && OPT.factLargeurDesc) || 'auto';
+  return (v === 'colonne' || v === 'pleine') ? v : 'auto';
 }
 const _FACT_ESP_VAL = {
   serre: { line: 4.4, pad: 3.0, mini: 3.8, fs: 8.5, safeY: 103 },
@@ -4133,7 +4135,7 @@ const OPT_DEFAUTS = {
   devisValidite: 30,
   devisRelance: 7,
   factEspacement: 'serre',  // aeration des designations dans les devis/factures
-  factLargeurDesc: 'colonne', // largeur des textes sans prix : colonne | pleine
+  factLargeurDesc: 'auto',  // largeur des textes sans prix : auto | colonne | pleine
   factDelai: 30,            // delai de paiement des factures (jours nets)
   factRelance: 7,           // alerte X jours avant l'echeance
   tvaDefaut: '',             // vide = valeur de config.js
@@ -4397,7 +4399,7 @@ function openOptions() {
               ligne('Rabais par défaut', num('rabaisDefaut', '%', 0, 100))) +
             carte('Mise en page du PDF',
               ligne('Interligne des textes', sel('factEspacement', FACT_ESPACEMENTS), 'Espace entre les lignes d\'une même phrase — l\'écart entre deux désignations ne bouge pas') +
-              ligne('Largeur des textes sans prix', sel('factLargeurDesc', FACT_LARGEURS), 'Une désignation sans quantité ni prix : alignée dans la colonne, ou étalée sur toute la largeur')))}
+              ligne('Largeur des textes sans prix', sel('factLargeurDesc', FACT_LARGEURS), 'Une désignation sans quantité ni prix reste dans la colonne ; en automatique, elle s\'étale sur toute la largeur uniquement si c\'est ce qui évite une 2e page')))}
 
           ${section('apercu',
             carte('Aperçu en direct',
@@ -11892,7 +11894,8 @@ function downloadDocPDF(id, mode) {
   // d'être coupée en colonne étroite. Moins de lignes = plus de place pour les aérer.
   const _ligneSansPrix = l => (parseFloat(l.prix) || 0) === 0
     && ((parseFloat(l.qte) || 0) * (parseFloat(l.prix) || 0) * (1 - (parseFloat(l.rabais) || 0) / 100)) === 0;
-  const _LARG_SP = _factLargeurSansPrix();   // ⚙️ Réglages › Devis & factures
+  const _MODE_LARG = _factModeLargeur();     // ⚙️ Réglages › Devis & factures
+  let _LARG_SP = (_MODE_LARG === 'pleine') ? 166 : 104;
   const _largeurDesc = l => _ligneSansPrix(l) ? _LARG_SP : 100;
 
   // --- Manque de place (factures) : l'ordre du sacrifice est volontaire. ---
@@ -11901,8 +11904,7 @@ function downloadDocPDF(id, mode) {
   //    en dessous du plancher du réglage choisi ;
   // 3) au-delà, la facture prend une 2e page plutôt que de devenir illisible.
   if (isFacture) {
-    const nbL = lignes.map(l => Math.max(1, doc.splitTextToSize(l.desc || '', _largeurDesc(l)).length));
-    const nTot = nbL.reduce((a, b) => a + b, 0), nRows = Math.max(1, lignes.length);
+    const nRows = Math.max(1, lignes.length);
     const headerH = 8.5;
     // Les notes / conditions sont imprimées APRÈS les totaux : si on les oublie ici,
     // elles débordent sur la zone du bulletin QR, qui part alors en page 2 alors que
@@ -11914,6 +11916,16 @@ function downloadDocPDF(id, mode) {
       doc.setFontSize(BODY_FS);
     }
     const avail = QR_NEED_TOP - startY - headerH - totalsH - notesH - 1;
+    // Nombre total de lignes de texte selon la largeur donnée aux désignations sans prix
+    const nbLignes = larg => lignes.reduce((n, l) =>
+      n + Math.max(1, doc.splitTextToSize(String(l.desc || ''), _ligneSansPrix(l) ? larg : 100).length), 0);
+    // Mode « Automatique » : on reste dans la colonne étroite, SAUF si l'élargir est
+    // ce qui permet de garder le bulletin QR sur la page 1.
+    if (_MODE_LARG === 'auto') {
+      const mini = larg => nbLignes(larg) * ESP_LINE_ABS + 2 * 1.2 * nRows;
+      if (mini(104) > avail && mini(166) <= avail) _LARG_SP = 166;
+    }
+    const nTot = nbLignes(_LARG_SP);
     const besoin = (li, pa) => nTot * li + 2 * pa * nRows;
     if (besoin(LINE, PAD) > avail) {
       // 1) l'écart ENTRE deux désignations (marge autour du filet)
