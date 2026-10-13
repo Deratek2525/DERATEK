@@ -854,6 +854,24 @@ async function saveNote(key){
 // ============================================================
 let _gsTimer = null;
 function _gsNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+// ============================================================
+// COMPARAISON DE NUMÉROS — « FA 2026270 », « F-2026-270 », « f2026270 » et
+// « 2026270 » doivent tous retrouver la facture F-2026-270. On réduit chaque
+// numéro à ses seuls chiffres et lettres, puis on retire le préfixe de lettres
+// (FA, F, FACT, BON, BCM…) pour ne garder que la partie qui identifie vraiment
+// le document. La recherche porte sur les deux formes, avec et sans préfixe.
+// ============================================================
+function _numNu(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+}
+function _numSansPrefixe(s) { const n = _numNu(s); const sp = n.replace(/^[a-z]+/, ''); return sp || n; }
+// Le numéro `numero` correspond-il à ce que l'utilisateur a tapé ?
+function _numCorrespond(numero, q) {
+  const cible = _numNu(numero); if (!cible) return false;
+  const a = _numNu(q), b = _numSansPrefixe(q);
+  if (a.length >= 3 && cible.indexOf(a) >= 0) return true;
+  return b.length >= 3 && (cible.indexOf(b) >= 0 || _numSansPrefixe(numero).indexOf(b) >= 0);
+}
 function _gsHide() { const b = $('global-search-results'); if (b) { b.style.display = 'none'; b.innerHTML = ''; } const inp = $('global-search'); if (inp) inp.value = ''; }
 function globalSearch(q) { clearTimeout(_gsTimer); _gsTimer = setTimeout(function () { _globalSearchNow(q); }, 150); }
 function _gsOpenBon(b) {
@@ -951,8 +969,11 @@ function _globalSearchNow(q) {
   if (raw.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
   const nq = _gsNorm(raw), nqns = nq.replace(/\s/g, '');
   const match = function () {
-    const hay = _gsNorm(Array.prototype.filter.call(arguments, Boolean).join(' '));
-    return hay.includes(nq) || hay.replace(/\s/g, '').includes(nqns);
+    const args = Array.prototype.filter.call(arguments, Boolean);
+    const hay = _gsNorm(args.join(' '));
+    if (hay.includes(nq) || hay.replace(/\s/g, '').includes(nqns)) return true;
+    // …et une comparaison spéciale pour les NUMÉROS (voir _numCorrespond)
+    return args.some(function (a) { return _numCorrespond(a, raw); });
   };
   const res = [];
   (DB.bons || []).forEach(function (b) {
@@ -8568,7 +8589,7 @@ function renderBons() {
     const qn = _factNorm(q);
     bons = tousLesBons.filter(b => {
       const texte = ((b.numero||'') + ' ' + (b.geranceNom||'') + ' ' + (b.gerantNom||'') + ' ' + (b.locataireNom||'') + ' ' + (b.immeuble||'') + ' ' + (b.gerantTel||'') + ' ' + _bonProblemeClean(b)).toLowerCase();
-      return texte.includes(q) || (qn && _factNorm(b.numero).indexOf(qn) >= 0);
+      return texte.includes(q) || (qn && _factNorm(b.numero).indexOf(qn) >= 0) || _numCorrespond(b.numero, q);
     });
   }
   if (count) {
@@ -10720,17 +10741,21 @@ function renderDocuments() {
   else if (sf !== 'tous') docs = docs.filter(d => (d.statut || 'brouillon') === sf);
   if (q) docs = docs.filter(d => {
     const bonNo = d.bonId ? (((DB.bons||[]).find(b => b.id === d.bonId)||{}).numero || '') : '';
-    return ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')+' '+(d.proprietaire||'')+' '+(d.clientVille||'')+' '+bonNo+' '+(d.notes||'')).toLowerCase().includes(q);
+    const texte = ((d.numero||'')+' '+(d.clientNom||'')+' '+(d.locataireNom||'')+' '+(d.proprietaire||'')+' '+(d.clientVille||'')+' '+bonNo+' '+(d.notes||'')).toLowerCase();
+    return texte.includes(q) || _numCorrespond(d.numero, q) || _numCorrespond(bonNo, q);
   });
   docs.sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
   if (count) count.textContent = allOfType.length ? allOfType.length + ' ' + (filtre === 'facture' ? 'facture(s)' : 'devis') : '';
   if (!list) return;
   // Section "Bons terminés à facturer" (uniquement dans l'onglet Factures) :
   // les bons au statut "Terminé" qui n'ont pas encore de facture liée.
+  // Pendant une recherche, les blocs de bons du haut se filtrent aussi : sinon ils
+  // restent affichés en entier et noient le résultat cherché.
+  const _bonMatch = b => !q || ((b.numero||'')+' '+(b.geranceNom||'')+' '+(b.locataireNom||'')+' '+(b.immeuble||'')).toLowerCase().includes(q) || _numCorrespond(b.numero, q);
   let aFacturerHtml = '';
   if (filtre === 'facture') {
     const dejaFacture = id => (DB.documents || []).some(x => (x.type === 'facture') && x.bonId === id);
-    const aFacturer = (DB.bons || []).filter(b => (b.statut || '') === 'termine' && !dejaFacture(b.id))
+    const aFacturer = (DB.bons || []).filter(b => (b.statut || '') === 'termine' && !dejaFacture(b.id) && _bonMatch(b))
       .sort((a, b) => {
         const ga = _geranceCanon(a.geranceNom || '').toLowerCase(), gbn = _geranceCanon(b.geranceNom || '').toLowerCase();
         if (ga !== gbn) return ga.localeCompare(gbn, 'fr');
@@ -10751,7 +10776,7 @@ function renderDocuments() {
     const dejaDevis = id => (DB.documents || []).some(x => ((x.type || 'devis') === 'devis') && x.bonId === id);
     // Bons en demande de devis OU en attente de devis (sans devis déjà créé) : ils vivent
     // dans la rubrique Devis, plus dans la liste des Bons actifs.
-    const aDeviser = (DB.bons || []).filter(b => ((b.statut || '') === 'demande-devis' || (b.statut || '') === 'attente-devis') && !dejaDevis(b.id))
+    const aDeviser = (DB.bons || []).filter(b => ((b.statut || '') === 'demande-devis' || (b.statut || '') === 'attente-devis') && !dejaDevis(b.id) && _bonMatch(b))
       .sort((a, b) => {
         const ga = _geranceCanon(a.geranceNom || '').toLowerCase(), gbn = _geranceCanon(b.geranceNom || '').toLowerCase();
         if (ga !== gbn) return ga.localeCompare(gbn, 'fr');
