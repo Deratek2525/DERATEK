@@ -5773,8 +5773,7 @@ function ficheBonRefresh(complet) {
             <label for="fb-noteStatut">Où en est-on ?</label>
             <select id="fb-noteStatut" class="fb-in" onchange="ficheBonModifie()">
               <option value="">— Aucun —</option>
-              ${BON_NOTE_STATUTS.map(t => `<option value="${t}" ${nd.statut === t ? 'selected' : ''}>${t}</option>`).join('')}
-              ${nd.statut && BON_NOTE_STATUTS.indexOf(nd.statut) === -1 ? `<option value="${_escapeHtml(nd.statut)}" selected>${_escapeHtml(nd.statut)}</option>` : ''}
+              ${_bonNoteStatutOptions(nd.statut)}
             </select>
           </div>
         </div>
@@ -6950,11 +6949,43 @@ function _bonNote(b) {
   return m ? _decNote(m[1]) : '';
 }
 // Statuts de rendez-vous proposés dans la note
-const BON_NOTE_STATUTS = [
-  'Rendez-vous confirmé', 'Rendez-vous reporté', 'Rendez-vous annulé',
-  'Locataire absent', 'Propriétaire absent', 'En attente de confirmation',
-  'Intervention réalisée', 'Intervention à reprogrammer'
+// « Où en est-on ? » — regroupé par famille pour s'y retrouver dans une liste longue.
+// Les intitulés déjà enregistrés sur d'anciens bons restent valables : s'ils ne sont
+// plus dans la liste, ils sont rajoutés en fin de menu (voir _bonNoteStatutOptions).
+const BON_NOTE_STATUTS_GROUPES = [
+  ['📅 Rendez-vous', [
+    'Rendez-vous à fixer', 'Rendez-vous confirmé', 'Rendez-vous reporté', 'Rendez-vous annulé',
+  ]],
+  ['🚪 Sur place', [
+    'Locataire absent', 'Propriétaire absent', 'Accès impossible', 'Clés non disponibles',
+  ]],
+  ['⏳ En attente', [
+    'En attente de confirmation', 'En attente d\'une réponse de la gérance',
+    'En attente du locataire', 'En attente de matériel',
+  ]],
+  ['📝 Devis', [
+    'Devis en cours d\'acceptation', 'Devis accepté — à planifier', 'Devis refusé',
+  ]],
+  ['🧪 Traitement', [
+    'Intervention réalisée', 'Intervention à reprogrammer', 'Second passage à prévoir',
+    'Traitement complet de l\'immeuble à programmer', 'Contrôle à effectuer',
+    'Traitement terminé — sous surveillance',
+  ]],
 ];
+const BON_NOTE_STATUTS = BON_NOTE_STATUTS_GROUPES.reduce(function (a, g) { return a.concat(g[1]); }, []);
+// Construit les <optgroup> du menu, en conservant un éventuel ancien intitulé.
+function _bonNoteStatutOptions(choisi) {
+  const sel = String(choisi || '');
+  let html = BON_NOTE_STATUTS_GROUPES.map(function (g) {
+    return '<optgroup label="' + g[0] + '">' + g[1].map(function (t) {
+      return '<option value="' + _escapeHtml(t) + '"' + (sel === t ? ' selected' : '') + '>' + _escapeHtml(t) + '</option>';
+    }).join('') + '</optgroup>';
+  }).join('');
+  if (sel && BON_NOTE_STATUTS.indexOf(sel) === -1) {
+    html += '<optgroup label="Ancien intitulé"><option value="' + _escapeHtml(sel) + '" selected>' + _escapeHtml(sel) + '</option></optgroup>';
+  }
+  return html;
+}
 // Nuisibles concernés, regroupés par catégorie (pour les <optgroup>)
 const BON_NOTE_NUISIBLES = [
   { groupe: 'Nuisibles rampants', items: ['Blattes', 'Cafards', 'Blattes germaniques', 'Blattes orientales', 'Fourmis', 'Punaises de lit', 'Puces', 'Poissons d\'argent', 'Araignées'] },
@@ -7745,9 +7776,7 @@ function openBonNote(id) {
   const sel = $('bon-note-statut');
   if (sel) {
     sel.innerHTML = '<option value="">— Aucun —</option>' +
-      BON_NOTE_STATUTS.map(s => `<option value="${s}" ${d.statut === s ? 'selected' : ''}>${s}</option>`).join('') +
-      // Conserve un ancien statut qui ne serait plus dans la liste
-      ((d.statut && BON_NOTE_STATUTS.indexOf(d.statut) === -1) ? `<option value="${(d.statut||'').replace(/"/g,'&quot;')}" selected>${d.statut}</option>` : '');
+      _bonNoteStatutOptions(d.statut);
   }
   // Nuisible (avec optgroups par catégorie) — deux sélecteurs possibles
   const selN = $('bon-note-nuisible');
@@ -8052,8 +8081,9 @@ function bonPlanRefresh() {
 // ressort en orange, ce qui est fait en vert, le reste en bleu.
 function _ckClasseStatutNote(st) {
   const t = String(st || '').toLowerCase();
-  if (/reprogrammer|report|annul|absent|attente/.test(t)) return 'agir';
-  if (/réalis|realis|confirm/.test(t)) return 'fait';
+  // à faire / bloqué → pastille « agir » ; fait → pastille « fait » ; le reste info.
+  if (/reprogrammer|report|annul|absent|attente|impossible|non disponible|à (pr[ée]voir|programmer|effectuer|fixer|planifier)|a (prevoir|programmer|effectuer|fixer|planifier)|en cours d.acceptation/.test(t)) return 'agir';
+  if (/r[ée]alis|confirm|termin|accept/.test(t)) return 'fait';
   return 'info';
 }
 
