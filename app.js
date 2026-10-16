@@ -6381,6 +6381,45 @@ function openManualBon(dates) {
   bonShowConfirm({ numero_bon: _nextBonManuelNumero(), date_bon: (typeof today === 'function' ? today() : '') }, '', true);
 }
 // Remplit les champs du bon manuel depuis un client (gérance) existant
+// ── Recherche dans « Reprendre une gérance / un client existant » ────────────
+// La liste déroulante du bon manuel contient parfois plus de cent clients.
+// Le champ de recherche au-dessus filtre la liste au fur et à mesure de la frappe
+// (nom de la gérance, nom du gérant, ville, NPA, adresse — accents ignorés).
+let _bonfClients = [];
+function _rechNu(x) {
+  return String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function _bonfOptionsHtml(q) {
+  const mots = _rechNu(q).split(/\s+/).filter(Boolean);
+  const liste = mots.length ? _bonfClients.filter(c => mots.every(m => c.cle.indexOf(m) >= 0)) : _bonfClients;
+  const tete = mots.length
+    ? (liste.length ? '— ' + liste.length + ' client(s) trouvé(s) — choisis dans la liste —' : '— Aucun client ne correspond —')
+    : '— Choisir dans mes clients (remplit les champs ci-dessous) —';
+  return '<option value="">' + tete + '</option>'
+       + liste.map(c => '<option value="' + c.id + '">' + c.label.replace(/</g, '&lt;') + '</option>').join('');
+}
+function bonfFiltreClients(q) {
+  const sel = document.getElementById('bonf-cli-select');
+  if (!sel) return;
+  sel.innerHTML = _bonfOptionsHtml(q);
+  const n = Math.max(0, sel.options.length - 1);
+  const cpt = document.getElementById('bonf-cli-n');
+  if (cpt) {
+    cpt.textContent = String(q || '').trim() ? n + ' trouvé(s)' : _bonfClients.length + ' client(s)';
+    cpt.style.color = (String(q || '').trim() && !n) ? '#b91c1c' : '';
+  }
+  // Un seul client correspond : on le présélectionne, il suffit de valider.
+  sel.size = 1;
+  if (n === 1) sel.selectedIndex = 1; else sel.selectedIndex = 0;
+}
+// Entrée dans le champ de recherche : reprend le client s'il n'y en a qu'un
+function bonfRechTouche(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const sel = document.getElementById('bonf-cli-select');
+  if (sel && sel.value) onManualBonClientSelect(sel.value);
+  else if (sel) sel.focus();
+}
 function onManualBonClientSelect(id) {
   if (!id) return;
   const c = (DB.clients || []).find(x => x.id === id);
@@ -6394,6 +6433,7 @@ function onManualBonClientSelect(id) {
   setv('gerance_adresse', c.adresse);
   setv('gerance_npa', c.npa);
   setv('gerance_ville', c.ville);
+  try { toast('✓ ' + (c.nom || 'Client') + ' repris', '#2d9e6b'); } catch (e) {}
 }
 // Les bons de la Gérance CPCN portent TOUJOURS un numéro à 7 chiffres commençant par 1
 // (ex. « 1 768 235 »). L'OCR/IA perd régulièrement le « 1 » de tête et renvoie « 768 235 ».
@@ -6451,12 +6491,13 @@ function bonShowConfirm(infos, fileName, manual, rawText) {
        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">${label}</label>
        <input class="form-input" id="bonf-${key}" value="${(val||'').replace(/"/g,'&quot;')}" style="font-size:13px;">
      </div>`;
-  const _clientOpts = (DB.clients || []).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||''))
+  _bonfClients = (DB.clients || []).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||''))
     .map(c => {
       const gerant = String(c.contact || '').replace(/^\[ROLE:[^\]]*\]/, '').trim();
       const label = (c.nom || '') + (gerant ? ' — ' + gerant : '') + (c.type ? ' (' + c.type + ')' : '');
-      return `<option value="${c.id}">${label.replace(/</g,'&lt;')}</option>`;
-    }).join('');
+      return { id: c.id, label, cle: _rechNu(label + ' ' + (c.adresse || '') + ' ' + (c.ville || '') + ' ' + (c.npa || '')) };
+    });
+  const _clientOpts = _bonfOptionsHtml('');
 
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
@@ -6466,8 +6507,13 @@ function bonShowConfirm(infos, fileName, manual, rawText) {
       <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 8px;">🏢 Gérance &amp; gérant (→ Clients)</div>
       <div style="margin-bottom:10px;">
         <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">📇 Reprendre une gérance / un client existant</label>
-        <select class="form-input" style="font-size:13px;" onchange="onManualBonClientSelect(this.value)">
-          <option value="">— Choisir dans mes clients (remplit les champs ci-dessous) —</option>
+        <div class="bonf-rech-box">
+          <input class="form-input bonf-rech" id="bonf-cli-rech" type="search" autocomplete="off"
+                 placeholder="🔍 Taper le nom de la gérance, du gérant, la ville…"
+                 oninput="bonfFiltreClients(this.value)" onkeydown="bonfRechTouche(event)">
+          <span class="bonf-rech-n" id="bonf-cli-n">${_bonfClients.length} client(s)</span>
+        </div>
+        <select class="form-input" id="bonf-cli-select" size="1" style="font-size:13px;margin-top:6px;" onchange="onManualBonClientSelect(this.value)">
           ${_clientOpts}
         </select>
       </div>

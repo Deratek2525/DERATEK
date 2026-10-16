@@ -2184,3 +2184,9 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .ct-valid-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
 .btn.ct-valid-ok{background:#16a34a;border-color:#16a34a;color:#fff;font-weight:800;}
 .btn.ct-valid-ok:hover{background:#15803d;}
+
+/* ── Recherche dans « Reprendre une gérance / un client existant » ─────────── */
+.bonf-rech-box{position:relative;}
+.bonf-rech{font-size:13px;padding-right:92px;}
+.bonf-rech:focus{border-color:var(--navy);}
+.bonf-rech-n{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:var(--g500);pointer-events:none;background:#fff;padding:0 2px;}
