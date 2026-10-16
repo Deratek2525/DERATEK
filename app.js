@@ -5983,6 +5983,9 @@ function ficheBonEnregistrer() {
     prixHT: nd0.prixHT, rabais: nd0.rabais, tva: nd0.tva,
     texte: lu('noteTexte') !== undefined ? String(lu('noteTexte')).trim() : nd0.texte,
     rapTr: nd0.rapTr || '',
+    // Les petites notes de la chronologie ne sont pas dans ce formulaire :
+    // on les reprend telles quelles, sinon « Enregistrer » les effacerait.
+    chrono: nd0.chrono || {},
   };
   b.probleme = _bonAssembleProbleme(
     _bonProblemeClean(b), _bonDatesInterv(b), _bonAffecte(b),
@@ -7876,6 +7879,7 @@ function saveBonNote() {
   if (!_bonNoteEditingId) { closeModal('modal-bon-note'); return; }
   const val = eid => { const el = $(eid); return el ? el.value : ''; };
   const htRaw = (val('bon-note-ht') || '').trim();
+  const _ndAvant = _bonNoteData((DB.bons || []).find(x => x.id === _bonNoteEditingId) || {});
   const data = {
     statut: val('bon-note-statut') || '',
     nuisible: val('bon-note-nuisible') || '',
@@ -7885,7 +7889,8 @@ function saveBonNote() {
     rabais: htRaw === '' ? '' : (parseFloat(val('bon-note-rabais')) || 0),
     tva: htRaw === '' ? '' : (parseFloat(val('bon-note-tva')) || 0),
     texte: (val('bon-note-text') || '').trim(),
-    rapTr: _bonNoteData((DB.bons || []).find(x => x.id === _bonNoteEditingId) || {}).rapTr || ''
+    rapTr: _ndAvant.rapTr || '',
+    chrono: _ndAvant.chrono || {},
   };
   const payload = (_bonNoteHasData(data) || data.rapTr) ? JSON.stringify(data) : '';
   bonSetNote(_bonNoteEditingId, payload);
