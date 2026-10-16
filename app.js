@@ -3834,9 +3834,29 @@ function deleteTech(el) {
 // alors obligé d'aller chercher la nouvelle). Aucun risque de boucle : la page
 // rechargée porte la bonne version.
 // ============================================================
+// Le navigateur refuse de lâcher sa version en cache : on le dit clairement,
+// avec la marche à suivre (recharge forcée).
+function _majAvertirCache(v) {
+  if (document.getElementById('maj-cache-bar')) return;
+  const d = document.createElement('div');
+  d.id = 'maj-cache-bar';
+  d.innerHTML = '<b>⚠️ Une nouvelle version est disponible (' + String(v).replace(/</g, '&lt;') + ')</b>'
+    + '<span>mais ton navigateur affiche encore l\'ancienne. Recharge en forçant : '
+    + '<b>Cmd + Maj + R</b> sur Mac, <b>Ctrl + F5</b> sur PC.</span>'
+    + '<button onclick="this.parentNode.remove()">✕</button>';
+  document.body.appendChild(d);
+}
+function _appVersion() {
+  const m = document.querySelector('meta[name="app-version"]');
+  return m ? String(m.content || '').trim() : '—';
+}
+// Bouton « Vérifier et recharger » des réglages : recharge en contournant le cache
+function majForcerRecharge() {
+  try { toast('🔄 Recherche d\'une nouvelle version…', '#1a2744'); } catch (e) {}
+  location.replace(location.pathname + '?maj=' + Date.now());
+}
 async function _majVerifVersion() {
   try {
-    if (location.search.indexOf('maj=') >= 0) return;          // déjà rechargé une fois
     const meta = document.querySelector('meta[name="app-version"]');
     const ici = meta ? String(meta.content || '').trim() : '';
     if (!ici) return;
@@ -3845,9 +3865,13 @@ async function _majVerifVersion() {
     const t = await r.text();
     const m = t.match(/name="app-version"[^>]*content="([^"]+)"/);
     const enligne = m ? m[1].trim() : '';
-    if (enligne && enligne !== ici) {
-      location.replace(location.pathname + '?maj=' + encodeURIComponent(enligne));
-    }
+    if (!enligne || enligne === ici) return;                   // déjà à jour
+    // Le n° de version déjà demandé est dans l'adresse : s'il correspond à la
+    // version en ligne, le navigateur sert encore son cache → on ne boucle pas,
+    // on prévient. Sinon on recharge sur la nouvelle version.
+    const deja = (location.search.match(/[?&]maj=([^&]*)/) || [])[1];
+    if (deja && decodeURIComponent(deja) === enligne) { _majAvertirCache(enligne); return; }
+    location.replace(location.pathname + '?maj=' + encodeURIComponent(enligne));
   } catch (e) {}
 }
 
@@ -4442,6 +4466,10 @@ function openOptions() {
               <div class="opt-note">L'IA lit les bons de travaux, les cartes de visite et corrige les textes. Si elle refuse de répondre, ce test dit en une seconde d'où vient le problème.</div>
               <button class="btn btn-navy btn-sm" onclick="testerCleIA()">🔎 Tester la connexion à l'IA</button>
               <div id="opt-ia-test"></div>`) +
+            libre('Version de l\'application', `
+              <div class="opt-note">Le numéro de la version installée sur ce poste. Si l'application ne montre pas une nouveauté dont on vient de parler, force la recharge : <b>Cmd + Maj + R</b> sur Mac, <b>Ctrl + F5</b> sur PC.</div>
+              <div class="opt-ver">📦 Version <b>${_appVersion()}</b></div>
+              <button class="btn btn-navy btn-sm" onclick="majForcerRecharge()">🔄 Vérifier et recharger</button>`) +
             libre('Remise à zéro', `
               <div class="opt-note">Remet tous les réglages de cette fenêtre à leur valeur d'origine. Ne touche à aucune donnée : bons, rapports, devis et factures restent intacts.</div>
               <button class="btn btn-ghost btn-sm" onclick="optReset()">↩️ Tout remettre par défaut</button>`) +
