@@ -64,6 +64,7 @@ const TABLE_FIELDS = {
     dateDebut: 'date_debut', controlesAn: 'controles_an',
     clientAdresse: 'client_adresse', entrepriseAdresse: 'entreprise_adresse',
     lieuAdresse: 'lieu_adresse', zones: 'zones',
+    dateAcceptation: 'date_acceptation', motifRefus: 'motif_refus', dateEnvoi: 'date_envoi',
     datesIntervention: 'dates_intervention',
     createdAt: 'created_at',
   } },
@@ -90,7 +91,7 @@ const DATE_COLS = {
   bons:         new Set(['date', 'date_intervention']),
   diagnostics:  new Set(['date_doc']),
   releves:      new Set(['date_import']),
-  contrats:     new Set(['date_signature', 'echeance', 'date_debut']),
+  contrats:     new Set(['date_signature', 'echeance', 'date_debut', 'date_acceptation', 'date_envoi']),
 };
 
 // Colonnes de type UUID côté Supabase (liens entre tables) : une chaîne vide y est invalide → null
@@ -7974,6 +7975,7 @@ const CK_ICO = {
   bonPlus: '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
   fleche:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>',
   ouvrir:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+  valide:  '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="8 12.4 11 15.4 16.2 9"/></svg>',
   suppr:   '<svg class="ck-i" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
 };
 
@@ -18386,8 +18388,149 @@ function updateContratsCount() {
   const el = $('nb-contrats-count'); if (el) el.textContent = (DB.contrats || []).length;
 }
 
+// ============================================================
+// VALIDATION DES CONTRATS — brouillon / envoyé / accepté / refusé
+// Un contrat envoyé à la gérance reste « en attente » tant qu'il n'a pas été
+// accepté. Le bouton ✔ du ruban ouvre le petit menu de décision.
+// Colonnes Supabase : statut, date_envoi, date_acceptation, motif_refus.
+// ============================================================
+const CT_STATUTS = {
+  brouillon: { ico: '📝', court: 'Brouillon',  lbl: 'Brouillon — pas encore envoyé', bg: '#f3f4f6', fg: '#4b5563', bd: '#d1d5db' },
+  envoye:    { ico: '📤', court: 'Envoyé',     lbl: 'Envoyé — en attente de réponse', bg: '#e0f2fe', fg: '#075985', bd: '#0ea5e9' },
+  accepte:   { ico: '✅', court: 'Accepté',    lbl: 'Accepté / signé',                bg: '#dcfce7', fg: '#166534', bd: '#86efac' },
+  refuse:    { ico: '❌', court: 'Refusé',     lbl: 'Refusé par le client',           bg: '#fee2e2', fg: '#991b1b', bd: '#fca5a5' },
+};
+// Au-delà de ce délai sans réponse, le contrat envoyé passe en « à relancer »
+const CT_RELANCE_J = 14;
+
+// Etat d'un contrat. Les contrats créés avant cette fonction n'ont pas de
+// statut : s'ils ont déjà une période ou une date de signature, ce sont des
+// contrats réellement en vigueur, donc acceptés.
+function _ctStatut(c) {
+  const v = String((c && c.statut) || '').trim().toLowerCase();
+  if (CT_STATUTS[v]) return v;
+  if (c && (c.dateSignature || c.dateDebut || c.echeance)) return 'accepte';
+  return 'brouillon';
+}
+function _ctDateAcc(c) { return (c && (c.dateAcceptation || c.dateSignature || c.dateDebut)) || ''; }
+function _ctJoursDepuis(d) {
+  if (!d) return null;
+  const t = new Date(d); if (isNaN(t.getTime())) return null;
+  return Math.max(0, Math.round((Date.now() - t.getTime()) / 86400000));
+}
+function _ctARelancer(c) {
+  if (_ctStatut(c) !== 'envoye') return false;
+  const j = _ctJoursDepuis(c && c.dateEnvoi);
+  return j != null && j >= CT_RELANCE_J;
+}
+// Pastille d'état affichée sur la ligne du contrat
+function _ctStatutChip(c) {
+  const st = _ctStatut(c), m = CT_STATUTS[st];
+  let txt = m.ico + ' ' + m.court, bg = m.bg, fg = m.fg, bd = m.bd;
+  if (st === 'envoye') {
+    const j = _ctJoursDepuis(c.dateEnvoi);
+    txt = '📤 Envoyé' + (c.dateEnvoi ? ' le ' + fmtDate(c.dateEnvoi) : '');
+    if (j != null) txt += ' · ' + j + ' j sans réponse';
+    if (_ctARelancer(c)) { bg = '#fef3c7'; fg = '#92400e'; bd = '#fcd34d'; txt += ' · à relancer'; }
+  } else if (st === 'accepte') {
+    const d = _ctDateAcc(c);
+    txt = '✅ Accepté' + (d ? ' le ' + fmtDate(d) : '');
+  } else if (st === 'refuse') {
+    const d = c.dateAcceptation ? ' le ' + fmtDate(c.dateAcceptation) : '';
+    txt = '❌ Refusé' + d + (c.motifRefus ? ' — ' + String(c.motifRefus).slice(0, 40) : '');
+  } else {
+    txt = '📝 Brouillon — pas encore envoyé';
+  }
+  return '<span class="ct-st" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">'
+       + String(txt).replace(/</g, '&lt;') + '</span>';
+}
+
+// Enregistre le nouvel état du contrat
+function contratSetStatut(id, st, date, motif) {
+  const list = DB.contrats || [];
+  const c = list.find(x => x.id === id);
+  if (!c || !CT_STATUTS[st]) { toast('Contrat introuvable', '#e63946'); return; }
+  c.statut = st;
+  if (st === 'envoye')   { c.dateEnvoi = date || today(); c.dateAcceptation = ''; c.motifRefus = ''; }
+  if (st === 'accepte')  { c.dateAcceptation = date || today(); c.motifRefus = '';
+                           if (!c.dateEnvoi) c.dateEnvoi = c.dateAcceptation;
+                           if (!c.dateDebut) c.dateDebut = c.dateAcceptation;
+                           if (!c.dateSignature) c.dateSignature = c.dateAcceptation; }
+  if (st === 'refuse')   { c.dateAcceptation = date || today(); c.motifRefus = motif || ''; }
+  if (st === 'brouillon'){ c.dateEnvoi = ''; c.dateAcceptation = ''; c.motifRefus = ''; }
+  DB.contrats = list;
+  renderContrats();
+  const m = CT_STATUTS[st];
+  toast(m.ico + ' Contrat ' + m.court.toLowerCase(), st === 'refuse' ? '#b45309' : '#2d9e6b');
+}
+
+// Petite fenêtre « à quelle date ? » (+ motif pour un refus)
+let _ctValidId = null, _ctValidSt = '';
+function contratDemandeDate(id, st) {
+  _ctValidFermer();
+  _ctValidId = id; _ctValidSt = st;
+  const c = (DB.contrats || []).find(x => x.id === id) || {};
+  const m = CT_STATUTS[st] || {};
+  const d = document.createElement('div');
+  d.id = 'ct-valid-bg'; d.className = 'modal-bg';
+  d.style.display = 'flex';
+  d.innerHTML = '<div class="modal ct-valid-box" onclick="event.stopPropagation()">'
+    + '<h3>' + m.ico + ' ' + m.lbl + '</h3>'
+    + '<div class="ct-valid-cli">' + String(c.clientNom || c.nom || 'Contrat').replace(/</g, '&lt;')
+      + (c.numero ? ' · n° ' + String(c.numero).replace(/</g, '&lt;') : '') + '</div>'
+    + '<label>Date</label><input type="date" id="ct-valid-date" value="' + (today()) + '">'
+    + (st === 'refuse' ? '<label>Motif du refus (facultatif)</label><input type="text" id="ct-valid-motif" placeholder="budget, autre prestataire…">' : '')
+    + (st === 'accepte' ? '<div class="ct-valid-info">Si la date de début du contrat est vide, elle sera remplie avec cette date.</div>' : '')
+    + '<div class="ct-valid-btns">'
+      + '<button class="btn btn-ghost" onclick="_ctValidFermer()">Annuler</button>'
+      + '<button class="btn ct-valid-ok" onclick="_ctValidConfirmer()">' + m.ico + ' ' + m.court + '</button>'
+    + '</div></div>';
+  d.onclick = _ctValidFermer;
+  document.body.appendChild(d);
+  setTimeout(() => { const i = document.getElementById('ct-valid-date'); if (i) i.focus(); }, 30);
+}
+function _ctValidFermer() { const d = document.getElementById('ct-valid-bg'); if (d) d.remove(); }
+function _ctValidConfirmer() {
+  const dt = (document.getElementById('ct-valid-date') || {}).value || today();
+  const mo = (document.getElementById('ct-valid-motif') || {}).value || '';
+  const id = _ctValidId, st = _ctValidSt;
+  _ctValidFermer();
+  contratSetStatut(id, st, dt, mo);
+}
+
+// Menu du bouton ✔ du ruban
+function openContratValidMenu(id, btn) {
+  const c = (DB.contrats || []).find(x => x.id === id); if (!c) return;
+  const st = _ctStatut(c);
+  const A = (ico, txt, act, cls) => ({ ico, txt, act: '_ckMenuFermer(); ' + act, cls });
+  const items = [];
+  if (st !== 'accepte') {
+    items.push(A('✅', 'Accepté / signé — aujourd\'hui', 'contratSetStatut(\'' + id + '\', \'accepte\')', 'ok'));
+    items.push(A('📅', 'Accepté à une autre date…', 'contratDemandeDate(\'' + id + '\', \'accepte\')', 'ok'));
+  }
+  if (st === 'brouillon' || st === 'refuse') {
+    items.push(A('📤', 'Marquer comme envoyé au client', 'contratDemandeDate(\'' + id + '\', \'envoye\')'));
+  }
+  if (st !== 'refuse') {
+    items.push(A('❌', 'Refusé par le client', 'contratDemandeDate(\'' + id + '\', \'refuse\')', 'danger'));
+  }
+  if (st === 'accepte' || st === 'refuse') {
+    items.push(A('↩️', 'Remettre en « envoyé »', 'contratDemandeDate(\'' + id + '\', \'envoye\')'));
+  }
+  if (st !== 'brouillon') {
+    items.push(A('📝', 'Remettre en brouillon', 'contratSetStatut(\'' + id + '\', \'brouillon\')'));
+  }
+  const m = CT_STATUTS[st];
+  let titre = m.ico + ' ' + m.lbl;
+  if (st === 'envoye' && c.dateEnvoi) titre = '📤 Envoyé le ' + fmtDate(c.dateEnvoi);
+  if (st === 'accepte' && _ctDateAcc(c)) titre = '✅ Accepté le ' + fmtDate(_ctDateAcc(c));
+  _ckMenuOuvrir(btn, titre, items);
+}
+
 let _contratCatFilter = '';
 function contratSetCat(cat) { _contratCatFilter = (_contratCatFilter === cat) ? '' : cat; renderContrats(); }
+let _contratStatutFilter = '';
+function contratSetStatutFiltre(st) { _contratStatutFilter = (_contratStatutFilter === st) ? '' : st; renderContrats(); }
 function renderContrats() {
   updateContratsCount();
   const box = $('contrats-list'); if (!box) return;
@@ -18396,15 +18539,20 @@ function renderContrats() {
   let list = all;
   if (q) list = list.filter(c => [c.numero, c.nom, c.clientNom, c.categorie, c.notes, c.fileName].filter(Boolean).join(' ').toLowerCase().includes(q));
   if (_contratCatFilter) list = list.filter(c => (c.categorie || 'Autre') === _contratCatFilter);
+  if (_contratStatutFilter) list = list.filter(c => _ctStatut(c) === _contratStatutFilter);
   const sub = $('contrats-sub');
-  if (sub) sub.textContent = all.length + ' contrat(s)' + ((q || _contratCatFilter) ? ' · ' + list.length + ' affiché(s)' : '');
+  if (sub) sub.textContent = all.length + ' contrat(s)' + ((q || _contratCatFilter || _contratStatutFilter) ? ' · ' + list.length + ' affiché(s)' : '');
 
   // Barre de statistiques + filtres par nuisible
   const _days = c => { if (!c.echeance) return null; const d = new Date(c.echeance); return isNaN(d.getTime()) ? null : Math.round((d.getTime() - Date.now()) / 86400000); };
   const nEchu = all.filter(c => { const d = _days(c); return d != null && d < 0; }).length;
   const nBientot = all.filter(c => { const d = _days(c); return d != null && d >= 0 && d <= 30; }).length;
-  const nActif = all.length - nEchu;
-  const totMontant = all.reduce((s, c) => s + (parseFloat(String(c.montant || '').replace(/[^0-9.]/g, '')) || 0), 0);
+  const nAttente = all.filter(c => _ctStatut(c) === 'envoye').length;
+  const nRelance = all.filter(c => _ctARelancer(c)).length;
+  const accepte = all.filter(c => _ctStatut(c) === 'accepte');
+  const nAccepte = accepte.length;
+  const nActif = accepte.filter(c => { const d = _days(c); return d == null || d >= 0; }).length;
+  const totMontant = accepte.reduce((s, c) => s + (parseFloat(String(c.montant || '').replace(/[^0-9.]/g, '')) || 0), 0);
   const stat = (lbl, val, col) => `<div style="text-align:center;padding:0 14px;">
       <div style="font-size:20px;font-weight:800;color:${col};">${val}</div>
       <div style="font-size:10px;color:var(--g500);text-transform:uppercase;font-weight:700;">${lbl}</div></div>`;
@@ -18415,19 +18563,29 @@ function renderContrats() {
     const on = _contratCatFilter === k;
     return `<button class="ct-chip" onclick="contratSetCat('${k.replace(/'/g, "\\'")}')" style="border:1.5px solid ${on ? 'var(--navy)' : '#d1d5db'};background:${on ? 'var(--navy)' : '#fff'};color:${on ? '#fff' : 'var(--navy)'};">${_contratNuisSvg(k)}${k} <span style="opacity:.7;">(${counts[k]})</span></button>`;
   }).join('');
+  const nSt = {};
+  all.forEach(c => { const k = _ctStatut(c); nSt[k] = (nSt[k] || 0) + 1; });
+  const stChips = ['envoye', 'accepte', 'refuse', 'brouillon'].filter(k => nSt[k]).map(k => {
+    const m = CT_STATUTS[k], on = _contratStatutFilter === k;
+    return `<button class="ct-chip" onclick="contratSetStatutFiltre('${k}')" style="border:1.5px solid ${on ? m.fg : m.bd};background:${on ? m.fg : m.bg};color:${on ? '#fff' : m.fg};">${m.ico} ${m.court} <span style="opacity:.7;">(${nSt[k]})</span></button>`;
+  }).join('') + (nRelance ? `<span class="ct-chip" style="border:1.5px solid #fcd34d;background:#fef3c7;color:#92400e;cursor:default;">⏰ ${nRelance} à relancer</span>` : '')
+    + (_contratStatutFilter ? `<button onclick="contratSetStatutFiltre('')" style="border:none;background:none;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">✕ tous les états</button>` : '');
   let head = '';
   if (all.length) {
     head = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
         ${stat('Contrats', all.length, 'var(--navy)')}
+        ${stat('📤 En attente', nAttente, nAttente ? '#0369a1' : 'var(--g400)')}
+        ${stat('✅ Acceptés', nAccepte, '#15803d')}
         ${stat('Actifs', nActif, '#15803d')}
         ${stat('À renouveler ≤ 30 j', nBientot, nBientot ? '#b45309' : 'var(--g400)')}
         ${stat('Échus', nEchu, nEchu ? '#dc2626' : 'var(--g400)')}
-        ${totMontant ? stat('Montant total', _rappMoney(totMontant) + ' CHF', 'var(--navy)') : ''}
+        ${totMontant ? stat('Montant accepté', _rappMoney(totMontant) + ' CHF', 'var(--navy)') : ''}
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${stChips}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${chips}${_contratCatFilter ? `<button onclick="contratSetCat('')" style="border:none;background:none;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">✕ tout afficher</button>` : ''}</div>`;
   }
   if (!list.length) {
-    box.innerHTML = head + '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + ((q || _contratCatFilter) ? 'Aucun contrat pour ce filtre.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour créer un contrat (dératisation, blattes, souris, rats, araignées…) et y joindre le PDF, Word ou Excel.') + '</div></div>';
+    box.innerHTML = head + '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">' + ((q || _contratCatFilter || _contratStatutFilter) ? 'Aucun contrat pour ce filtre.' : 'Aucun contrat pour le moment.<br>Clique sur « + Nouveau contrat » pour créer un contrat (dératisation, blattes, souris, rats, araignées…) et y joindre le PDF, Word ou Excel.') + '</div></div>';
     return;
   }
   // Regroupement par GERANCE, avec le meme bandeau colore que la rubrique « Bons ».
@@ -18476,7 +18634,7 @@ function renderContrats() {
                   </div>`; })()}
                 ${c.notes ? `<div style="font-size:11px;color:var(--g400);margin-top:2px;">${String(c.notes).replace(/</g,'&lt;').slice(0,120)}</div>` : ''}
               </div>
-              <div style="flex-shrink:0;">${_echeanceChip(c)}</div>
+              <div style="flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${_ctStatutChip(c)}${_ctStatut(c) === 'accepte' ? _echeanceChip(c) : ''}</div>
               <div class="ck-b-btns" style="flex-shrink:0;">
                 ${(() => {
                   const bt = (act, ico, titre, cls) => `<button class="btn ${cls || 'btn-ghost'} ck-b-b" onclick="${act}" data-tip="${titre}" aria-label="${titre}">${ico}</button>`;
@@ -18487,7 +18645,14 @@ function renderContrats() {
                   const docs = (DB.documents || []).filter(x => x.contratId === c.id);
                   const aDev = docs.some(x => (x.type || 'devis') === 'devis');
                   const aFac = docs.some(x => x.type === 'facture');
+                  const _st = _ctStatut(c);
+                  const _stM = CT_STATUTS[_st];
+                  const _stCls = { accepte: 'ico-valid-ok', refuse: 'ico-valid-no', envoye: 'ico-valid-att', brouillon: 'ico-valid-att' }[_st];
+                  const _stTip = _st === 'accepte'
+                    ? 'Contrat accepté' + (_ctDateAcc(c) ? ' le ' + fmtDate(_ctDateAcc(c)) : '') + ' — changer'
+                    : (_st === 'refuse' ? 'Contrat refusé — changer' : 'Valider le contrat : accepté, envoyé ou refusé');
                   return [
+                    bt(`openContratValidMenu('${c.id}', this)`, CK_ICO.valide, _stTip, _stCls),
                     bt(`contratGenererPdf('${c.id}')`, CK_ICO.pdf, 'Générer le contrat complet en PDF', 'ico-pdf'),
                     c.filePath ? bt(`viewContratFile('${c.id}')`, CK_ICO.trombone, 'Ouvrir le fichier joint (' + _contratFileKind(c.fileName) + ')', 'ico-pj') : '',
                     (() => {
@@ -18709,6 +18874,10 @@ function openContratRapMenu(id, btn) {
 function _docFromContrat(id, type) {
   const c = (DB.contrats || []).find(x => x.id === id);
   if (!c) { toast('Contrat introuvable', '#e63946'); return; }
+  if (type === 'facture' && _ctStatut(c) !== 'accepte') {
+    const m = CT_STATUTS[_ctStatut(c)];
+    if (!confirm('Ce contrat n\'est pas encore accepté (' + m.court.toLowerCase() + ').\n\nVeux-tu quand même créer la facture ?')) return;
+  }
   const cli = (c.clientId ? (DB.clients || []).find(x => x.id === c.clientId) : null)
            || (c.clientNom ? (DB.clients || []).find(x => _couleurKey(x.nom) === _couleurKey(c.clientNom)) : null);
   const adr = String(c.clientAdresse || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -18881,6 +19050,10 @@ async function saveContrat() {
     tacite: !!($('ct-tacite') && $('ct-tacite').checked),
     datesIntervention: _ctDatesEdit.filter(Boolean).sort().join(','),
     notes: val('ct-notes') || '',
+    statut: existing ? (existing.statut || _ctStatut(existing)) : 'brouillon',
+    dateEnvoi: existing ? (existing.dateEnvoi || '') : '',
+    dateAcceptation: existing ? (existing.dateAcceptation || '') : '',
+    motifRefus: existing ? (existing.motifRefus || '') : '',
     filePath, fileName, fileType,
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
   };
@@ -19062,7 +19235,8 @@ function contratGenererPdf(id, mode) {
   // Signatures
   _pageBreak(42);
   y += 6;
-  para('Fait à ' + (co.ville || 'Neuchâtel') + (c.dateSignature ? ' le ' + fmtDate(c.dateSignature) : ', le ____________'), { after: 10 });
+  para('Fait à ' + (co.ville || 'Neuchâtel') + (c.dateSignature ? ' le ' + fmtDate(c.dateSignature) : ', le ____________'), { after: _ctStatut(c) === 'accepte' && _ctDateAcc(c) ? 4 : 10 });
+  if (_ctStatut(c) === 'accepte' && _ctDateAcc(c)) para('Contrat accepté par le Client le ' + fmtDate(_ctDateAcc(c)) + '.', { after: 10 });
   doc.setFont(FONT, 'bold'); doc.setFontSize(10);
   doc.text('Pour Deratek Anti-Nuisibles', M, y);
   doc.text('Pour ' + (clientLines[0] || 'le Client'), 118, y);
