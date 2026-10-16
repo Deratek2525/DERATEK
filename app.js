@@ -63,6 +63,7 @@ const TABLE_FIELDS = {
     dateSignature: 'date_signature', filePath: 'file_path', fileName: 'file_name', fileType: 'file_type',
     dateDebut: 'date_debut', controlesAn: 'controles_an',
     clientAdresse: 'client_adresse', entrepriseAdresse: 'entreprise_adresse',
+    lieuAdresse: 'lieu_adresse', zones: 'zones',
     datesIntervention: 'dates_intervention',
     createdAt: 'created_at',
   } },
@@ -18772,6 +18773,8 @@ function _openContratModal(id) {
             <input class="form-input" id="ct-client-nom" style="margin-top:5px;font-size:12px;" value="${v(c && c.clientNom)}" placeholder="ou nom du client (texte libre)"></div>
           <div class="form-group"><label class="form-label">Adresse du client (sur le contrat)</label>
             <textarea class="form-input" id="ct-client-adresse" rows="2" style="font-size:12px;" placeholder="Rue, NPA Ville — pré-remplie en choisissant un client, modifiable (ex. adresse du site sous contrat)">${(c && c.clientAdresse ? String(c.clientAdresse) : '').replace(/</g, '&lt;')}</textarea></div>
+          <div class="form-group"><label class="form-label">📍 Adresse du lieu d'intervention</label>
+            <textarea class="form-input" id="ct-lieu-adresse" rows="2" style="font-size:12px;" placeholder="Immeuble, rue, NPA Ville — si différente de l'adresse du client">${(c && c.lieuAdresse ? String(c.lieuAdresse) : '').replace(/</g, '&lt;')}</textarea></div>
           <div class="form-group"><label class="form-label">Adresse de l'entreprise (Deratek, sur le contrat)</label>
             <textarea class="form-input" id="ct-entreprise-adresse" rows="2" style="font-size:12px;" placeholder="Par défaut : adresse configurée de Deratek">${(c && c.entrepriseAdresse ? String(c.entrepriseAdresse) : (() => { const co = (DERATEK_CONFIG || {}).company || {}; return [co.rue, ((co.npa || '') + ' ' + (co.ville || '')).trim()].filter(Boolean).join('\n'); })()).replace(/</g, '&lt;')}</textarea></div>
           <div class="form-group"><label class="form-label">Date de signature</label>
@@ -18794,8 +18797,14 @@ function _openContratModal(id) {
           <div style="font-size:11.5px;color:var(--g600);margin:-2px 0 7px;">Les passages de ce contrat. Une date déjà passée compte comme un passage effectué (en vert), la prochaine à venir est mise en avant.</div>
           <div id="ct-dates-box"></div>
         </div>
+        <div class="form-group">
+          <label class="form-label">🎯 Endroits à traiter (figurent sur le contrat)</label>
+          <div style="font-size:11.5px;color:var(--g600);margin:-2px 0 7px;">Clique sur les endroits concernés, ou écris-les toi-même — un par ligne.</div>
+          <div id="ct-zones-chips" class="ct-zones-chips">${CONTRAT_ZONES.map(z => `<button type="button" data-z="${_escapeHtml(z)}" onclick="ctAjoutZone('${String(z).replace(/'/g, "\\'")}')">${_escapeHtml(z)}</button>`).join('')}</div>
+          <textarea class="form-input" id="ct-zones" rows="4" style="font-size:12px;margin-top:7px;" oninput="_ctZonesMaj()" placeholder="Un endroit par ligne — ex. Caves&#10;Combles / galetas&#10;Local poubelles">${(c && c.zones ? String(c.zones) : '').replace(/</g, '&lt;')}</textarea>
+        </div>
         <div class="form-group"><label class="form-label">Note</label>
-          <textarea class="form-input" id="ct-notes" rows="2" placeholder="Nb de passages, zones couvertes, conditions…">${(c && c.notes ? String(c.notes) : '').replace(/</g, '&lt;')}</textarea></div>
+          <textarea class="form-input" id="ct-notes" rows="2" placeholder="Nb de passages, conditions particulières…">${(c && c.notes ? String(c.notes) : '').replace(/</g, '&lt;')}</textarea></div>
         <div class="form-group">
           <label class="form-label">Fichier du contrat (PDF, Word ou Excel)</label>
           <input type="file" id="ct-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="_ctFilePick(event)" style="font-size:13px;">
@@ -18808,6 +18817,7 @@ function _openContratModal(id) {
       </div>
     </div>`;
   openModal('modal-contrat');
+  if (typeof _ctZonesMaj === 'function') _ctZonesMaj();   // allume les pastilles déjà choisies
   _ctDatesRender();
 }
 function _ctClientPick(id) {
@@ -18860,6 +18870,8 @@ async function saveContrat() {
     clientId: clientId || '',
     clientNom: val('ct-client-nom') || '',
     clientAdresse: (($('ct-client-adresse') || {}).value || '').trim(),
+    lieuAdresse: (($('ct-lieu-adresse') || {}).value || '').trim(),
+    zones: (($('ct-zones') || {}).value || '').trim(),
     entrepriseAdresse: (($('ct-entreprise-adresse') || {}).value || '').trim(),
     dateSignature: val('ct-date') || '',
     dateDebut: val('ct-debut') || '',
@@ -18922,7 +18934,31 @@ const CONTRAT_OBJETS = {
   'Contrat annuel multi-nuisibles': ['LUTTE ANTINUISIBLE MULTI-NUISIBLES', 'le monitoring, la prévention et la lutte contre l’ensemble des nuisibles'],
   'Autre':                          ['LUTTE ANTINUISIBLE', 'la prévention et la lutte antinuisible'],
 };
-function contratGenererPdf(id) {
+// Les endroits le plus souvent couverts par un contrat — un clic les ajoute.
+const CONTRAT_ZONES = [
+  'Caves', 'Combles / galetas', 'Buanderie', 'Local poubelles', 'Local vélos',
+  'Chaufferie', 'Cage d\'escalier', 'Garage / parking', 'Locaux communs',
+  'Canalisations / sous-sol', 'Vide sanitaire', 'Toiture et chéneaux',
+  'Pourtour du bâtiment', 'Cuisine / local alimentaire',
+];
+function ctAjoutZone(z) {
+  const el = $('ct-zones'); if (!el) return;
+  const deja = el.value.split('\n').map(x => x.trim()).filter(Boolean);
+  if (deja.indexOf(z) >= 0) { el.value = deja.filter(x => x !== z).join('\n'); }
+  else { deja.push(z); el.value = deja.join('\n'); }
+  _ctZonesMaj();
+  el.focus();
+}
+// Allume les pastilles déjà présentes dans le texte
+function _ctZonesMaj() {
+  const el = $('ct-zones'); const box = $('ct-zones-chips'); if (!el || !box) return;
+  const deja = el.value.split('\n').map(x => x.trim());
+  box.querySelectorAll('button[data-z]').forEach(b => {
+    b.classList.toggle('on', deja.indexOf(b.dataset.z) >= 0);
+  });
+}
+
+function contratGenererPdf(id, mode) {
   const c = (DB.contrats || []).find(x => x.id === id);
   if (!c) return;
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
@@ -18984,8 +19020,12 @@ function contratGenererPdf(id) {
   para(clientLines.join('\n') + '\n(le « Client »)', { after: 4 });
   para('Il est convenu ce qui suit :', { bold: true, after: 5 });
   // Articles
-  article('Article 1 – Objet du contrat',
-    'Deratek Anti-Nuisibles s’engage à assurer ' + objet + ' dans les locaux du Client, conformément aux conditions définies ci-après.');
+  let _objetTxt = 'Deratek Anti-Nuisibles s’engage à assurer ' + objet + ' dans les locaux du Client, conformément aux conditions définies ci-après.';
+  const _lieu = String(c.lieuAdresse || '').split('\n').map(x => x.trim()).filter(Boolean);
+  if (_lieu.length) _objetTxt += '\n\nLieu d’intervention : ' + _lieu.join(', ') + '.';
+  const _zones = String(c.zones || '').split(/[\n;]+/).map(x => x.trim()).filter(Boolean);
+  if (_zones.length) _objetTxt += '\n\nLes prestations portent sur les endroits suivants :';
+  article('Article 1 – Objet du contrat', _objetTxt, _zones);
   let duree = 'Le présent contrat est conclu pour une durée déterminée d’un an.';
   if (c.dateDebut && c.echeance) duree += '\nIl prend effet le ' + fmtDate(c.dateDebut) + ' et se termine le ' + fmtDate(c.echeance) + '.';
   else if (c.echeance) duree += '\nIl se termine le ' + fmtDate(c.echeance) + '.';
@@ -19031,6 +19071,7 @@ function contratGenererPdf(id) {
   doc.text('Signature : ____________________', M, y);
   doc.text('Signature : ____________________', 118, y);
   const fname = 'contrat-' + (c.numero || c.nom || 'deratek').toString().replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.pdf';
+  if (mode === 'blob') return doc.output('bloburl');
   doc.save(fname);
   toast('📄 Contrat généré : ' + fname, '#2d9e6b');
 }
