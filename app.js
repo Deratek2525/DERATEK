@@ -83,16 +83,26 @@ const TABLE_FIELDS = {
 const META_COLS = new Set(['user_id', 'created_at']);
 
 // Colonnes de type DATE côté Supabase (par table) : une chaîne vide y est invalide → null
+// Colonnes de type « date » cote Supabase : une chaine vide y est refusee
+// (« invalid input syntax for type date: "" ») -> elle doit partir en null.
+// Ce sont les NOMS DE COLONNES de la base, pas les noms de champs JS.
 const DATE_COLS = {
   rapports:     new Set(['date', 'rdv']),
-  intervs:      new Set(['date']),
-  documents:    new Set(['date_doc']),
+  intervs:      new Set(['date', 'date_fin']),
+  documents:    new Set(['date_doc', 'echeance']),
   fournisseurs: new Set(['date_doc']),
-  bons:         new Set(['date', 'date_intervention']),
+  bons:         new Set(['date_bon', 'date_intervention', 'date_fin_intervention']),
   diagnostics:  new Set(['date_doc']),
   releves:      new Set(['date_import']),
   contrats:     new Set(['date_signature', 'echeance', 'date_debut', 'date_acceptation', 'date_envoi']),
 };
+// Filet de securite : toute colonne qui s'appelle « date », « date_xxx » ou
+// « xxx_date » est traitee comme une date, meme si elle a ete oubliee ci-dessus.
+// (« dates_intervention », qui contient plusieurs dates en texte, n'en est pas.)
+function _colEstDate(col) {
+  const c = String(col || '');
+  return c === 'date' || c === 'rdv' || c.indexOf('date_') === 0 || /_date$/.test(c);
+}
 
 // Colonnes de type UUID côté Supabase (liens entre tables) : une chaîne vide y est invalide → null
 const UUID_COLS = {
@@ -115,7 +125,7 @@ function toDb(table, obj) {
     const vide = (val === '' || val === undefined || val === null);
     // Valeur vide → null pour : colonnes date, ET toute colonne UUID/FK
     // (nom finissant par "_id" ou égal à "id"), que Postgres refuse en "".
-    if (vide && ((dateCols && dateCols.has(col)) || /(^|_)id$/.test(col))) {
+    if (vide && ((dateCols && dateCols.has(col)) || _colEstDate(col) || /(^|_)id$/.test(col))) {
       val = null;
     }
     out[col] = val;
@@ -8093,6 +8103,14 @@ function openBonPlanning(id) {
 }
 
 // Redessine le contenu de la fenetre a partir des donnees du bon
+// Efface completement le rendez-vous d'un bon : date, heures et date de fin.
+function bonEffacerRdv(id) {
+  updateBonDateInterv(id, '');
+  updateBonHeureInterv(id, '');
+  if (typeof updateBonHeureFinInterv === 'function') updateBonHeureFinInterv(id, '');
+  updateBonDateFinInterv(id, '');
+  try { toast('✕ Rendez-vous effacé', '#b45309'); } catch (e) {}
+}
 function bonPlanRefresh() {
   const b = (DB.bons || []).find(x => x.id === _bonPlanId);
   const body = document.getElementById('bon-plan-body');
@@ -8122,7 +8140,7 @@ function bonPlanRefresh() {
       <div class="plan-l">
         ${b.dateIntervention
           ? `<button class="btn btn-ghost btn-sm" onclick="addBonToGoogle('${b.id}')">📅 Ajouter à Google Agenda</button>
-             <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="updateBonDateInterv('${b.id}', ''); updateBonHeureInterv('${b.id}', ''); updateBonDateFinInterv('${b.id}', ''); bonPlanRefresh();">✕ Effacer le rendez-vous</button>`
+             <button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="bonEffacerRdv('${b.id}'); bonPlanRefresh();">✕ Effacer le rendez-vous</button>`
           : '<span class="plan-vide">Aucun rendez-vous fixé pour l\'instant.</span>'}
       </div>
     </div>
