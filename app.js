@@ -872,9 +872,18 @@ async function saveNote(key){
 const POSTIT_KEY = 'postits';
 const POSTIT_MAX = 24;
 const POSTIT_COULEURS = [
-  ['#fff3b0', 'Jaune'], ['#ffd9b0', 'Orange'], ['#ffd0dc', 'Rose'],
-  ['#c8f0cf', 'Vert'],  ['#cfe4ff', 'Bleu'],   ['#e3d7ff', 'Violet'],
+  ['#fff3b0', 'Jaune pâle'], ['#ffd60a', 'Jaune vif (guêpes)'], ['#ffd9b0', 'Orange'],
+  ['#ff3b30', 'Rouge vif'],  ['#ffd0dc', 'Rose'],               ['#c8f0cf', 'Vert'],
+  ['#cfe4ff', 'Bleu pâle'],  ['#2f86ff', 'Bleu vif'],           ['#e3d7ff', 'Violet'],
 ];
+// Couleur d'écriture lisible sur le papier choisi : texte foncé sur un papier
+// clair, texte blanc sur un papier vif (rouge, bleu franc).
+function _postitTexte(hex) {
+  const h = String(hex || '').replace('#', '');
+  if (h.length !== 6) return '#3a3326';
+  const r = parseInt(h.slice(0, 2), 16), v = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return ((0.299 * r + 0.587 * v + 0.114 * b) / 255) < 0.6 ? '#ffffff' : '#3a3326';
+}
 let _postits = [];
 let _postitTimer = null;
 let _postitCharge = false;
@@ -939,7 +948,7 @@ function renderPostits() {
   const ROT = [-1.6, 1.2, -0.7, 1.8, -1.1, 0.9, -1.9, 1.4];
   board.innerHTML = _postits.map((p, i) => {
     const coul = p.couleur || '#fff3b0';
-    return `<div class="pit" data-id="${p.id}" style="background:${coul};transform:rotate(${ROT[i % ROT.length]}deg);">
+    return `<div class="pit" data-id="${p.id}" style="background:${coul};color:${_postitTexte(coul)};transform:rotate(${ROT[i % ROT.length]}deg);">
       <span class="pit-pin"></span>
       <div class="pit-ed pit-ti" contenteditable="true" data-ph="Titre…"
         oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>

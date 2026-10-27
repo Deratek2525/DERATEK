@@ -2215,11 +2215,14 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
   padding:14px 16px;line-height:1.55;width:100%;}
 .pit{position:relative;width:196px;min-height:158px;padding:16px 13px 30px;border-radius:2px;
   box-shadow:3px 4px 10px rgba(0,0,0,.15);color:#3a3326;transition:transform .12s,box-shadow .12s;}
+.pit .pit-ed:empty:before{color:currentColor;opacity:.42;}
 .pit:hover{box-shadow:4px 6px 16px rgba(0,0,0,.2);transform:rotate(0deg) scale(1.02)!important;z-index:2;}
 .pit-pin{position:absolute;top:-7px;left:50%;margin-left:-7px;width:15px;height:15px;border-radius:50%;
-  background:radial-gradient(circle at 35% 32%,#ff8a8a,#c62828);box-shadow:0 2px 3px rgba(0,0,0,.32);}
+  background:radial-gradient(circle at 35% 32%,#ff8a8a,#c62828);
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.75),0 2px 3px rgba(0,0,0,.32);}
 .pit-ed{outline:none;white-space:pre-wrap;word-break:break-word;}
 .pit-ed:empty:before{content:attr(data-ph);color:rgba(58,51,38,.38);}
+.pit-b{color:inherit;}
 .pit-ti{font-size:12.5px;font-weight:900;letter-spacing:.2px;margin-bottom:6px;}
 .pit-tx{font-size:12px;line-height:1.5;min-height:62px;}
 .pit-ft{position:absolute;left:11px;right:9px;bottom:7px;display:flex;align-items:center;gap:3px;}
@@ -2230,7 +2233,7 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .pit-b:hover{opacity:1!important;background:rgba(0,0,0,.08);}
 .pit-pal{display:none;position:absolute;left:9px;right:9px;bottom:28px;background:#fff;border:1px solid #e5e7eb;
   border-radius:8px;padding:5px;gap:4px;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:3;}
-.pit.pal-on .pit-pal{display:flex;justify-content:space-between;}
-.pit-pal button{width:20px;height:20px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0;}
+.pit.pal-on .pit-pal{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;}
+.pit-pal button{width:20px;height:20px;border-radius:50%;border:1px solid rgba(0,0,0,.18);cursor:pointer;padding:0;}
 .pit-pal button:hover{transform:scale(1.15);}
 @media(max-width:700px){.pit{width:calc(50% - 8px);}}
