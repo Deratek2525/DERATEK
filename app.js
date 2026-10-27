@@ -864,6 +864,138 @@ async function saveNote(key){
 }
 
 // ============================================================
+// POST-IT DU TABLEAU DE BORD — le mur de pense-bêtes au-dessus des blocs-notes
+// Un post-it = un titre, un texte libre, une couleur et sa date.
+// Tout est rangé dans la table « notes_tableau », ligne « postits », au format
+// JSON — même table que les blocs-notes, donc rien de nouveau côté base.
+// ============================================================
+const POSTIT_KEY = 'postits';
+const POSTIT_MAX = 24;
+const POSTIT_COULEURS = [
+  ['#fff3b0', 'Jaune'], ['#ffd9b0', 'Orange'], ['#ffd0dc', 'Rose'],
+  ['#c8f0cf', 'Vert'],  ['#cfe4ff', 'Bleu'],   ['#e3d7ff', 'Violet'],
+];
+let _postits = [];
+let _postitTimer = null;
+let _postitCharge = false;
+let _postitSale = false;      // modifications pas encore enregistrées
+
+function _postitId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function _postitEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+async function loadPostits() {
+  if (!sb) return;
+  // Ne jamais écraser ce qui est en train d'être tapé, ni une modification
+  // pas encore partie sur le serveur : on redessinerait par-dessus et le
+  // curseur sauterait. On ne touche à rien du tout dans ces deux cas.
+  if (_postitSale) return;
+  const a = document.activeElement;
+  if (a && a.classList && a.classList.contains('pit-ed')) return;
+  try {
+    const { data, error } = await sb.from('notes_tableau').select('contenu,updated_at').eq('id', POSTIT_KEY).limit(1);
+    if (error) { renderPostits(); return; }
+    const row = data && data[0];
+    let arr = [];
+    if (row && row.contenu) { try { arr = JSON.parse(row.contenu); } catch (e) { arr = []; } }
+    _postits = Array.isArray(arr) ? arr : [];
+    _postitCharge = true;
+  } catch (e) {}
+  renderPostits();
+}
+
+async function savePostits() {
+  const st = document.getElementById('postit-status');
+  if (!sb) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } return; }
+  try {
+    const { error } = await sb.from('notes_tableau')
+      .upsert({ id: POSTIT_KEY, contenu: JSON.stringify(_postits), updated_at: new Date().toISOString() });
+    if (st) {
+      if (error) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; }
+      else { const h = new Date();
+        st.textContent = '✓ Enregistré ' + String(h.getHours()).padStart(2, '0') + ':' + String(h.getMinutes()).padStart(2, '0');
+        st.style.color = '#2d9e6b'; }
+    }
+    if (!error) _postitSale = false;
+  } catch (e) { if (st) { st.textContent = '⚠️ non enregistré'; st.style.color = '#e63946'; } }
+}
+function _postitDiffere() {
+  _postitSale = true;
+  const st = document.getElementById('postit-status');
+  if (st) { st.textContent = 'Modification…'; st.style.color = 'var(--g400)'; }
+  clearTimeout(_postitTimer);
+  _postitTimer = setTimeout(savePostits, 700);
+}
+
+function renderPostits() {
+  const board = document.getElementById('postit-board');
+  if (!board) return;
+  const n = document.getElementById('postit-nb');
+  if (n) n.textContent = _postits.length ? _postits.length : '';
+  if (!_postits.length) {
+    board.innerHTML = '<div class="pit-vide">Aucun post-it pour l\'instant. Clique sur « ＋ Nouveau post-it » pour en coller un : un nid à traiter, un BCM à ne pas oublier, un locataire à rappeler…</div>';
+    return;
+  }
+  // Inclinaisons légères et stables (pas de tremblement à chaque rendu)
+  const ROT = [-1.6, 1.2, -0.7, 1.8, -1.1, 0.9, -1.9, 1.4];
+  board.innerHTML = _postits.map((p, i) => {
+    const coul = p.couleur || '#fff3b0';
+    return `<div class="pit" data-id="${p.id}" style="background:${coul};transform:rotate(${ROT[i % ROT.length]}deg);">
+      <span class="pit-pin"></span>
+      <div class="pit-ed pit-ti" contenteditable="true" data-ph="Titre…"
+        oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>
+      <div class="pit-ed pit-tx" contenteditable="true" data-ph="Écris ici…"
+        oninput="postitEdit('${p.id}','texte',this.innerText)">${_postitEsc(p.texte || '')}</div>
+      <div class="pit-ft">
+        <span class="pit-dt">${p.date ? fmtDate(p.date) : ''}</span>
+        <button type="button" class="pit-b" title="Changer la couleur" onclick="postitPalette('${p.id}')">🎨</button>
+        <button type="button" class="pit-b" title="Retirer ce post-it" onclick="postitSuppr('${p.id}')">✕</button>
+      </div>
+      <div class="pit-pal">${POSTIT_COULEURS.map(c =>
+        `<button type="button" title="${c[1]}" style="background:${c[0]};" onclick="postitCouleur('${p.id}','${c[0]}')"></button>`).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function postitEdit(id, champ, valeur) {
+  const p = _postits.find(x => x.id === id); if (!p) return;
+  p[champ] = String(valeur == null ? '' : valeur);
+  _postitDiffere();
+}
+function postitCouleur(id, hex) {
+  const p = _postits.find(x => x.id === id); if (!p) return;
+  p.couleur = hex;
+  _postitSale = true;
+  renderPostits(); savePostits();
+}
+function postitPalette(id) {
+  const el = document.querySelector('.pit[data-id="' + id + '"]');
+  if (!el) return;
+  const ouvert = el.classList.contains('pal-on');
+  document.querySelectorAll('.pit.pal-on').forEach(x => x.classList.remove('pal-on'));
+  if (!ouvert) el.classList.add('pal-on');
+}
+function postitSuppr(id) {
+  const p = _postits.find(x => x.id === id); if (!p) return;
+  const quoi = (p.titre || p.texte || '').trim();
+  if (quoi && !confirm('Retirer ce post-it ?\n\n' + quoi.slice(0, 120))) return;
+  _postits = _postits.filter(x => x.id !== id);
+  _postitSale = true;
+  renderPostits(); savePostits();
+  toast('Post-it retiré', '#b45309');
+}
+function postitAdd() {
+  if (_postits.length >= POSTIT_MAX) { toast('Maximum de ' + POSTIT_MAX + ' post-it', '#d97706'); return; }
+  const p = { id: _postitId(), titre: '', texte: '', couleur: POSTIT_COULEURS[_postits.length % POSTIT_COULEURS.length][0], date: today() };
+  _postits.unshift(p);
+  _postitSale = true;
+  renderPostits(); savePostits();
+  setTimeout(() => {
+    const el = document.querySelector('.pit[data-id="' + p.id + '"] .pit-ti');
+    if (el) el.focus();
+  }, 40);
+}
+
+// ============================================================
 // RECHERCHE GLOBALE (barre du haut) — cherche partout dans l'app
 // ============================================================
 let _gsTimer = null;
@@ -1088,6 +1220,7 @@ function renderDashboard() {
   const dd = $('dash-date');
   if (dd) dd.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   if (typeof loadDashNotes === 'function') loadDashNotes();
+  if (typeof loadPostits === 'function') loadPostits();
 
   const rapports = DB.rapports, clients = DB.clients;
   const brouillon = rapports.filter(r => r.statut === 'Brouillon').length;

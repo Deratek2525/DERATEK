@@ -5,17 +5,17 @@
 <title>DERATEK — Professional Pest Control</title>
 
 <!-- Application installable sur l'ecran d'accueil (iPhone, Android, ordinateur) -->
-<link rel="manifest" href="./manifest.json?v=20261019rdv">
+<link rel="manifest" href="./manifest.json?v=20261027pit">
 <meta name="theme-color" content="#0d1b3e">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20261019rdv">
-<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20261019rdv">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20261019rdv">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20261027pit">
+<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20261027pit">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20261027pit">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DERATEK">
-<meta name="app-version" content="20261019rdv">
-<link rel="stylesheet" href="./style.css?v=20261019rdv">
+<meta name="app-version" content="20261027pit">
+<link rel="stylesheet" href="./style.css?v=20261027pit">
 </head>
 <body>
 
@@ -412,6 +412,14 @@
         #notes-grid .note-cb:checked{border-color:#f5a623;background:#f5a623 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 6.5'/></svg>") center/12px 12px no-repeat;}
         #notes-grid .note-cb:checked + .note-txt{text-decoration:line-through;color:#9aa1ad;}
       </style>
+      <div id="postit-wrap">
+        <div class="pit-head">
+          <span class="pit-h-t">📌 Post-it <span id="postit-nb" class="pit-h-n"></span></span>
+          <span id="postit-status" class="pit-h-s"></span>
+          <button type="button" class="pit-h-add" onclick="postitAdd()">＋ Nouveau post-it</button>
+        </div>
+        <div class="pit-board" id="postit-board"></div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" id="notes-grid">
         <div class="note-card">
           <div class="note-top">
@@ -1557,16 +1565,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20261019rdv"></script>
+  <script src="./fonts_arial.js?v=20261027pit"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20261019rdv"></script>
-<script src="./footer_prestations.js?v=20261019rdv"></script>
-<script src="./config.js?v=20261019rdv"></script>
-<script src="./app.js?v=20261019rdv"></script>
-<script src="./pdf.js?v=20261019rdv"></script>
+<script src="./logo.js?v=20261027pit"></script>
+<script src="./footer_prestations.js?v=20261027pit"></script>
+<script src="./config.js?v=20261027pit"></script>
+<script src="./app.js?v=20261027pit"></script>
+<script src="./pdf.js?v=20261027pit"></script>
 
 </body></html>
