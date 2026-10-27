@@ -2216,6 +2216,12 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .pit{position:relative;width:196px;min-height:158px;padding:16px 13px 30px;border-radius:2px;
   box-shadow:3px 4px 10px rgba(0,0,0,.15);color:#3a3326;transition:transform .12s,box-shadow .12s;}
 .pit .pit-ed:empty:before{color:currentColor;opacity:.42;}
+/* Un texte collé depuis Word, Outlook ou une page web arrive avec son fond
+   blanc et sa police : on neutralise tout pour qu'il prenne l'allure du papier. */
+.pit-ed *{background:transparent!important;background-color:transparent!important;
+  color:inherit!important;font-family:inherit!important;font-size:inherit!important;
+  line-height:inherit!important;border:0!important;box-shadow:none!important;
+  margin:0!important;padding:0!important;text-shadow:none!important;}
 .pit:hover{box-shadow:4px 6px 16px rgba(0,0,0,.2);transform:rotate(0deg) scale(1.02)!important;z-index:2;}
 .pit-pin{position:absolute;top:-7px;left:50%;margin-left:-7px;width:15px;height:15px;border-radius:50%;
   background:radial-gradient(circle at 35% 32%,#ff8a8a,#c62828);

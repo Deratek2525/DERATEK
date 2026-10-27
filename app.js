@@ -935,9 +935,43 @@ function _postitDiffere() {
   _postitTimer = setTimeout(savePostits, 700);
 }
 
+// Coller dans un post-it : on ne garde QUE le texte. Sans cela, un copier-coller
+// venu de Word, d'Outlook ou d'une page web amène avec lui son fond blanc, sa
+// police et ses couleurs, qui s'affichent en pavé blanc sur le papier coloré.
+function initPostitPaste() {
+  const board = document.getElementById('postit-board');
+  if (!board || board.dataset.paste) return;
+  board.dataset.paste = '1';
+  board.addEventListener('paste', function (e) {
+    const t = e.target;
+    if (!t || !t.classList || !t.classList.contains('pit-ed')) return;
+    e.preventDefault();
+    const cd = e.clipboardData || window.clipboardData;
+    let txt = (cd && cd.getData('text/plain')) || '';
+    const titre = t.classList.contains('pit-ti');
+    txt = String(txt).replace(/\r/g, '');
+    if (titre) txt = txt.replace(/\n+/g, ' ').trim();   // un titre tient sur une ligne
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    r.deleteContents();
+    const frag = document.createDocumentFragment();
+    txt.split('\n').forEach(function (ligne, i) {
+      if (i) frag.appendChild(document.createElement('br'));
+      frag.appendChild(document.createTextNode(ligne));
+    });
+    const fin = frag.lastChild;
+    r.insertNode(frag);
+    if (fin) { const r2 = document.createRange(); r2.setStartAfter(fin); r2.collapse(true);
+               sel.removeAllRanges(); sel.addRange(r2); }
+    const carte = t.closest('.pit');
+    if (carte) postitEdit(carte.dataset.id, titre ? 'titre' : 'texte', t.innerText);
+  });
+}
 function renderPostits() {
   const board = document.getElementById('postit-board');
   if (!board) return;
+  initPostitPaste();
   const n = document.getElementById('postit-nb');
   if (n) n.textContent = _postits.length ? _postits.length : '';
   if (!_postits.length) {
