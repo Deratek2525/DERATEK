@@ -2,6 +2,16 @@
 // comme les devis, factures et bons. Repli automatique sur Helvetica si le
 // fichier de police n'est pas charge — les largeurs sont identiques, la mise
 // en page ne bouge pas.
+// Une case « vide » d'un éditeur enrichi contient en réalité des <div><br></div>.
+// Ce contrôle dit si, une fois le code retiré, il reste quelque chose à imprimer.
+function _pdfVide(t) {
+  return !String(t == null ? '' : t)
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+    .replace(/[\s\u00a0\u200b\u200c\ufeff]+/g, '')
+    .length;
+}
 function _rapFont() {
   try { return (typeof _PDFF === 'function') ? _PDFF('normal') : 'helvetica'; }
   catch (e) { return 'helvetica'; }
@@ -270,7 +280,7 @@ function generatePDF(rapport, statut) {
     }
 
     function textBox(text, bgColor) {
-      if (!text) return;
+      if (_pdfVide(text)) return;
       doc.setFont(_rapFont(), 'normal');
       doc.setFontSize(9);
       const maxW = CW - 10;
@@ -457,17 +467,20 @@ function generatePDF(rapport, statut) {
     }
 
     // ── OBSERVATIONS ─────────────────────────────────────────
-    sTitle('Observations sur place');
     // Sécurité : retire d'éventuels marqueurs internes restés dans la description
-    textBox(String(rapport.description || '').replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '').replace(/\s*\[LOC:[^\]]*\]/g, '').replace(/\s*\[ARCHIVE\]/g, '').trim());
-    if (rapport.origine) {
+    const _obs = String(rapport.description || '')
+      .replace(/\s*\[NBPASS:[^\]]*\]/g, '').replace(/\s*\[DATESINT:[^\]]*\]/g, '')
+      .replace(/\s*\[LOC:[^\]]*\]/g, '').replace(/\s*\[ARCHIVE\]/g, '').trim();
+    // Case laissée vide : ni le bandeau ni le cadre ne sont imprimés.
+    if (!_pdfVide(_obs)) { sTitle('Observations sur place'); textBox(_obs); }
+    if (!_pdfVide(rapport.origine)) {
       checkPage(15);
       doc.setFont(_rapFont(), 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
       doc.text('ORIGINE PROBABLE', M, y + 4);
       y += 7;
       textBox(rapport.origine);
     }
-    if (rapport.contraintes) {
+    if (!_pdfVide(rapport.contraintes)) {
       checkPage(15);
       doc.setFont(_rapFont(), 'bold'); doc.setFontSize(8); doc.setTextColor(...C.muted);
       doc.text('CONTRAINTES', M, y + 4);
@@ -613,30 +626,6 @@ function generatePDF(rapport, statut) {
     }
 
     // ── RÉSULTAT & RECOMMANDATIONS ────────────────────────────
-    sTitle('Résultat & Recommandations');
-    checkPage(30);
-    if (rapport.resultat) {
-      doc.setFillColor(232, 247, 240);
-      doc.roundedRect(M, y, CW, 10, 2, 2, 'F');
-      doc.setDrawColor(110, 231, 183);
-      doc.roundedRect(M, y, CW, 10, 2, 2, 'S');
-      doc.setFont(_rapFont(), 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(6, 95, 70);
-      doc.text('Résultat :', M + 3, y + 6.5);
-      doc.setFont(_rapFont(), 'normal');
-      doc.text(rapport.resultat, M + 30, y + 6.5);
-      y += 14;
-    }
-    if (rapport.recommandations) {
-      checkPage(22);
-      // Libellé + bandeau de couleur distincte pour la conclusion
-      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(9); doc.setTextColor(67, 56, 202);
-      doc.text('RECOMMANDATION / CONCLUSION', M + 1, y + 4);
-      y += 7;
-      textBox(rapport.recommandations, [237, 240, 253]);   // fond bleu-lavande
-    }
-
     // RDV + Garantie + Montant + Durée selon coches
     const showPrix = rapport.showPrix !== false;
     const showDuree = rapport.showDuree !== false;
@@ -652,6 +641,31 @@ function generatePDF(rapport, statut) {
     }
     if (showGarantie && rapport.garantie) boxes.push([rapport.garantie, 'Garantie', [240,243,248], C.navy]);
     if (showDuree && rapport.duree) boxes.push([rapport.duree + ' h', 'Durée', [240,243,248], C.navy]);
+
+    // Rien à mettre dedans : on n'imprime même pas le bandeau.
+    const _aResultat = !_pdfVide(rapport.resultat) || !_pdfVide(rapport.recommandations) || boxes.length;
+    if (_aResultat) { sTitle('Résultat & Recommandations'); checkPage(30); }
+    if (!_pdfVide(rapport.resultat)) {
+      doc.setFillColor(232, 247, 240);
+      doc.roundedRect(M, y, CW, 10, 2, 2, 'F');
+      doc.setDrawColor(110, 231, 183);
+      doc.roundedRect(M, y, CW, 10, 2, 2, 'S');
+      doc.setFont(_rapFont(), 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(6, 95, 70);
+      doc.text('Résultat :', M + 3, y + 6.5);
+      doc.setFont(_rapFont(), 'normal');
+      doc.text(rapport.resultat, M + 30, y + 6.5);
+      y += 14;
+    }
+    if (!_pdfVide(rapport.recommandations)) {
+      checkPage(22);
+      // Libellé + bandeau de couleur distincte pour la conclusion
+      doc.setFont(_rapFont(), 'bold'); doc.setFontSize(9); doc.setTextColor(67, 56, 202);
+      doc.text('RECOMMANDATION / CONCLUSION', M + 1, y + 4);
+      y += 7;
+      textBox(rapport.recommandations, [237, 240, 253]);   // fond bleu-lavande
+    }
 
     if (boxes.length) {
       checkPage(25);

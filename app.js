@@ -3678,10 +3678,21 @@ function richColor(id, hex) {
   try { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, hex); } catch (e) {}
   _richSync(id);
 }
+// Un éditeur enrichi « vide » ne l'est pas vraiment : le navigateur y laisse des
+// <div><br></div>. Sans ce contrôle, une case laissée vide est enregistrée avec
+// ce code et ressort sous forme de cadre vide dans le PDF.
+function _htmlVide(h) {
+  return !String(h == null ? '' : h)
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+    .replace(/[\s\u00a0\u200b\u200c\ufeff]+/g, '')
+    .length;
+}
 function _richSync(id) {
   const ed = document.getElementById(id + '-rich'); const ta = document.getElementById(id);
   if (!ed || !ta) return;
-  ta.value = ed.innerHTML;
+  ta.value = _htmlVide(ed.innerHTML) ? '' : ed.innerHTML;
   ta.dispatchEvent(new Event('input'));   // relance l'aperçu / la sauvegarde en mémoire
 }
 // Transforme la textarea #id en éditeur enrichi (idempotent).
