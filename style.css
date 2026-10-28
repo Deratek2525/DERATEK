@@ -2243,3 +2243,20 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .pit-pal button{width:20px;height:20px;border-radius:50%;border:1px solid rgba(0,0,0,.18);cursor:pointer;padding:0;}
 .pit-pal button:hover{transform:scale(1.15);}
 @media(max-width:700px){.pit{width:calc(50% - 8px);}}
+
+/* ── Liste déroulante du titre d'un post-it ───────────────────────────────── */
+.pit-th{display:flex;align-items:flex-start;gap:3px;}
+.pit-th .pit-ti{flex:1;min-width:0;}
+.pit-ch{border:none;background:rgba(0,0,0,.07);color:inherit;cursor:pointer;font-size:11px;line-height:1;
+  padding:3px 5px;border-radius:5px;opacity:.5;flex-shrink:0;transition:opacity .12s;font-family:inherit;}
+.pit:hover .pit-ch{opacity:.9;}
+.pit-ch:hover{background:rgba(0,0,0,.16);opacity:1;}
+.pit-ttl{display:none;position:absolute;left:8px;top:40px;width:232px;max-height:272px;overflow-y:auto;
+  background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:5px;z-index:5;
+  box-shadow:0 10px 30px rgba(0,0,0,.22);}
+.pit.ttl-on .pit-ttl{display:block;}
+.pit-ttl .pit-tg{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#9ca3af;
+  padding:7px 8px 3px;position:sticky;top:-5px;background:#fff;}
+.pit-ttl button{display:block;width:100%;text-align:left;border:none;background:none;cursor:pointer;
+  font-size:12px;font-family:inherit;color:#1f2937;padding:6px 8px;border-radius:7px;line-height:1.3;}
+.pit-ttl button:hover{background:#eef2ff;color:var(--navy);font-weight:700;}

@@ -942,6 +942,7 @@ function initPostitPaste() {
   const board = document.getElementById('postit-board');
   if (!board || board.dataset.paste) return;
   board.dataset.paste = '1';
+  document.addEventListener('mousedown', _postitDehors, true);
   board.addEventListener('paste', function (e) {
     const t = e.target;
     if (!t || !t.classList || !t.classList.contains('pit-ed')) return;
@@ -968,6 +969,57 @@ function initPostitPaste() {
     if (carte) postitEdit(carte.dataset.id, titre ? 'titre' : 'texte', t.innerText);
   });
 }
+// ── Liste déroulante du titre d'un post-it ───────────────────────────────────
+// Deux familles : ce qu'il y a à faire (devis urgent, BCM, traitement en cours…)
+// et le nuisible concerné. Un clic écrit l'intitulé dans le titre ; on peut
+// toujours taper librement par-dessus.
+const POSTIT_ACTIONS = [
+  ['🔴', 'Devis urgent'], ['📝', 'Demande de devis'], ['✅', 'Devis accepté'],
+  ['🧪', 'Traitement en cours'], ['📄', 'Faire un BCM'], ['📞', 'À rappeler'],
+  ['📅', 'Rendez-vous à fixer'], ['🔁', 'Second passage à prévoir'],
+  ['💰', 'À facturer'], ['⏳', 'En attente de la gérance'], ['✔️', 'Terminé'],
+];
+const POSTIT_NUIS_ICO = {
+  'Blattes': '🪳', 'Cafards': '🪳', 'Blattes germaniques': '🪳', 'Blattes orientales': '🪳',
+  'Fourmis': '🐜', 'Punaises de lit': '🛏️', 'Puces': '🦟', "Poissons d'argent": '🐟', 'Araignées': '🕷️',
+  'Guêpes': '🐝', 'Frelons': '🐝', 'Frelons asiatiques': '🐝', 'Abeilles (relocalisation)': '🐝',
+  'Mouches': '🪰', 'Moustiques': '🦟', 'Mites alimentaires': '🦋', 'Mites textiles': '🦋',
+  'Souris': '🐭', 'Rats': '🐀', 'Mulots': '🐁', 'Loirs': '🐿️',
+  'Fouines': '🦝', 'Martres': '🦝', 'Taupes': '🦫', 'Pigeons': '🐦', 'Corbeaux': '🐦', 'Étourneaux': '🐦',
+};
+function _postitMenuHtml(id) {
+  const bt = (ico, txt) => `<button type="button" onclick="postitTitre('${id}', '${String(txt).replace(/'/g, "\\'")}', '${ico}')">${ico} ${_postitEsc(txt)}</button>`;
+  let h = '<div class="pit-tg">À faire</div>' + POSTIT_ACTIONS.map(a => bt(a[0], a[1])).join('');
+  (typeof BON_NOTE_NUISIBLES !== 'undefined' ? BON_NOTE_NUISIBLES : []).forEach(g => {
+    h += '<div class="pit-tg">' + _postitEsc(g.groupe) + '</div>'
+       + g.items.map(n => bt(POSTIT_NUIS_ICO[n] || '•', n)).join('');
+  });
+  return h;
+}
+// Écrit l'intitulé choisi dans le titre : il remplace un titre vide, sinon il
+// s'ajoute à la suite — on peut donc cumuler « 🐝 Guêpes · 📄 Faire un BCM ».
+function postitTitre(id, txt, ico) {
+  const p = _postits.find(x => x.id === id); if (!p) return;
+  const lbl = (ico ? ico + ' ' : '') + txt;
+  const actuel = String(p.titre || '').trim();
+  if (!actuel) p.titre = lbl;
+  else if (actuel.indexOf(txt) >= 0) p.titre = actuel;      // déjà présent : on ne double pas
+  else p.titre = actuel + ' · ' + lbl;
+  _postitSale = true;
+  renderPostits(); savePostits();
+}
+function postitMenuTitre(id) {
+  const el = document.querySelector('.pit[data-id="' + id + '"]');
+  if (!el) return;
+  const ouvert = el.classList.contains('ttl-on');
+  document.querySelectorAll('.pit.ttl-on, .pit.pal-on').forEach(x => { x.classList.remove('ttl-on'); x.classList.remove('pal-on'); });
+  if (!ouvert) el.classList.add('ttl-on');
+}
+// Un clic en dehors referme les menus ouverts sur les post-it
+function _postitDehors(e) {
+  if (e.target && e.target.closest && e.target.closest('.pit')) return;
+  document.querySelectorAll('.pit.ttl-on, .pit.pal-on').forEach(x => { x.classList.remove('ttl-on'); x.classList.remove('pal-on'); });
+}
 function renderPostits() {
   const board = document.getElementById('postit-board');
   if (!board) return;
@@ -984,8 +1036,13 @@ function renderPostits() {
     const coul = p.couleur || '#fff3b0';
     return `<div class="pit" data-id="${p.id}" style="background:${coul};color:${_postitTexte(coul)};transform:rotate(${ROT[i % ROT.length]}deg);">
       <span class="pit-pin"></span>
-      <div class="pit-ed pit-ti" contenteditable="true" data-ph="Titre…"
-        oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>
+      <div class="pit-th">
+        <div class="pit-ed pit-ti" contenteditable="true" data-ph="Titre…"
+          oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>
+        <button type="button" class="pit-ch" title="Choisir un intitulé : nuisible, devis, BCM…"
+          onclick="postitMenuTitre('${p.id}')">▾</button>
+      </div>
+      <div class="pit-ttl">${_postitMenuHtml(p.id)}</div>
       <div class="pit-ed pit-tx" contenteditable="true" data-ph="Écris ici…"
         oninput="postitEdit('${p.id}','texte',this.innerText)">${_postitEsc(p.texte || '')}</div>
       <div class="pit-ft">
