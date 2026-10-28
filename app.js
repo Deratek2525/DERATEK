@@ -908,6 +908,7 @@ async function loadPostits() {
     if (row && row.contenu) { try { arr = JSON.parse(row.contenu); } catch (e) { arr = []; } }
     _postits = Array.isArray(arr) ? arr : [];
     _postitCharge = true;
+    if (_postitMigrerIco()) { renderPostits(); savePostits(); return; }
   } catch (e) {}
   renderPostits();
 }
@@ -988,23 +989,62 @@ const POSTIT_NUIS_ICO = {
   'Fouines': '🦝', 'Martres': '🦝', 'Taupes': '🦫', 'Pigeons': '🐦', 'Corbeaux': '🐦', 'Étourneaux': '🐦',
 };
 function _postitMenuHtml(id) {
-  const bt = (ico, txt) => `<button type="button" onclick="postitTitre('${id}', '${String(txt).replace(/'/g, "\\'")}', '${ico}')">${ico} ${_postitEsc(txt)}</button>`;
-  let h = '<div class="pit-tg">À faire</div>' + POSTIT_ACTIONS.map(a => bt(a[0], a[1])).join('');
+  const bt = (ico, txt, nuis) => `<button type="button" onclick="postitTitre('${id}', '${String(txt).replace(/'/g, "\\'")}', '${ico}', ${nuis ? 1 : 0})">${ico} ${_postitEsc(txt)}</button>`;
+  let h = '<div class="pit-tg">À faire</div>' + POSTIT_ACTIONS.map(a => bt(a[0], a[1], false)).join('');
   (typeof BON_NOTE_NUISIBLES !== 'undefined' ? BON_NOTE_NUISIBLES : []).forEach(g => {
     h += '<div class="pit-tg">' + _postitEsc(g.groupe) + '</div>'
-       + g.items.map(n => bt(POSTIT_NUIS_ICO[n] || '•', n)).join('');
+       + g.items.map(n => bt(POSTIT_NUIS_ICO[n] || '•', n, true)).join('');
   });
   return h;
 }
+// Tous les pictogrammes de nuisibles connus (pour les reconnaître dans un
+// ancien titre et les remonter dans le coin de la carte)
+function _postitIcoConnus() {
+  const v = []; for (const k in POSTIT_NUIS_ICO) if (v.indexOf(POSTIT_NUIS_ICO[k]) < 0) v.push(POSTIT_NUIS_ICO[k]);
+  return v;
+}
+// Reprend les post-it écrits avant : si le titre commence par un pictogramme de
+// nuisible, on le sort du texte pour l'afficher en grand dans le coin.
+function _postitMigrerIco() {
+  let change = false;
+  const icos = _postitIcoConnus();
+  _postits.forEach(p => {
+    if (p.ico) return;
+    let t = String(p.titre || '');
+    for (const ic of icos) {
+      if (t.indexOf(ic) >= 0) {
+        p.ico = ic;
+        p.titre = t.split(ic).join('').replace(/\s{2,}/g, ' ').replace(/^[\s·—-]+/, '').trim();
+        change = true;
+        break;
+      }
+    }
+  });
+  return change;
+}
 // Écrit l'intitulé choisi dans le titre : il remplace un titre vide, sinon il
 // s'ajoute à la suite — on peut donc cumuler « 🐝 Guêpes · 📄 Faire un BCM ».
-function postitTitre(id, txt, ico) {
+function postitTitre(id, txt, ico, nuisible) {
   const p = _postits.find(x => x.id === id); if (!p) return;
-  const lbl = (ico ? ico + ' ' : '') + txt;
   const actuel = String(p.titre || '').trim();
-  if (!actuel) p.titre = lbl;
-  else if (actuel.indexOf(txt) >= 0) p.titre = actuel;      // déjà présent : on ne double pas
-  else p.titre = actuel + ' · ' + lbl;
+  if (nuisible) {
+    // Le nuisible donne son pictogramme au coin de la carte ; son nom s'écrit
+    // dans le titre, sans l'emoji (il est déjà en grand dans le coin).
+    p.ico = ico;
+    if (!actuel) p.titre = txt;
+    else if (actuel.indexOf(txt) < 0) p.titre = txt + ' · ' + actuel;
+  } else {
+    const lbl = (ico ? ico + ' ' : '') + txt;
+    if (!actuel) p.titre = lbl;
+    else if (actuel.indexOf(txt) < 0) p.titre = actuel + ' · ' + lbl;
+  }
+  _postitSale = true;
+  renderPostits(); savePostits();
+}
+// Clic sur le grand pictogramme : on l'enlève
+function postitIcoRetirer(id) {
+  const p = _postits.find(x => x.id === id); if (!p || !p.ico) return;
+  p.ico = '';
   _postitSale = true;
   renderPostits(); savePostits();
 }
@@ -1036,17 +1076,16 @@ function renderPostits() {
     const coul = p.couleur || '#fff3b0';
     return `<div class="pit" data-id="${p.id}" style="background:${coul};color:${_postitTexte(coul)};transform:rotate(${ROT[i % ROT.length]}deg);">
       <span class="pit-pin"></span>
-      <div class="pit-th">
-        <div class="pit-ed pit-ti" contenteditable="true" data-ph="Titre…"
-          oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>
-        <button type="button" class="pit-ch" title="Choisir un intitulé : nuisible, devis, BCM…"
-          onclick="postitMenuTitre('${p.id}')">▾</button>
-      </div>
+      ${p.ico ? `<button type="button" class="pit-ico" title="Cliquer pour retirer le pictogramme"
+        onclick="postitIcoRetirer('${p.id}')">${p.ico}</button>` : ''}
+      <div class="pit-ed pit-ti${p.ico ? ' avec-ico' : ''}" contenteditable="true" data-ph="Titre…"
+        oninput="postitEdit('${p.id}','titre',this.innerText)">${_postitEsc(p.titre || '')}</div>
       <div class="pit-ttl">${_postitMenuHtml(p.id)}</div>
       <div class="pit-ed pit-tx" contenteditable="true" data-ph="Écris ici…"
         oninput="postitEdit('${p.id}','texte',this.innerText)">${_postitEsc(p.texte || '')}</div>
       <div class="pit-ft">
         <span class="pit-dt">${p.date ? fmtDate(p.date) : ''}</span>
+        <button type="button" class="pit-b pit-ch" title="Choisir un intitulé : nuisible, devis, BCM…" onclick="postitMenuTitre('${p.id}')">🏷</button>
         <button type="button" class="pit-b" title="Changer la couleur" onclick="postitPalette('${p.id}')">🎨</button>
         <button type="button" class="pit-b" title="Retirer ce post-it" onclick="postitSuppr('${p.id}')">✕</button>
       </div>

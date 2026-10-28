@@ -2245,12 +2245,13 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 @media(max-width:700px){.pit{width:calc(50% - 8px);}}
 
 /* ── Liste déroulante du titre d'un post-it ───────────────────────────────── */
-.pit-th{display:flex;align-items:flex-start;gap:3px;}
-.pit-th .pit-ti{flex:1;min-width:0;}
-.pit-ch{border:none;background:rgba(0,0,0,.07);color:inherit;cursor:pointer;font-size:11px;line-height:1;
-  padding:3px 5px;border-radius:5px;opacity:.5;flex-shrink:0;transition:opacity .12s;font-family:inherit;}
-.pit:hover .pit-ch{opacity:.9;}
-.pit-ch:hover{background:rgba(0,0,0,.16);opacity:1;}
+/* Grand pictogramme du nuisible, dans le coin haut droit du papier */
+.pit-ico{position:absolute;top:4px;right:7px;font-size:30px;line-height:1;border:none;background:none;
+  padding:0;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.18));transition:transform .12s;}
+.pit-ico:hover{transform:scale(1.12) rotate(-6deg);}
+.pit-ti.avec-ico{padding-right:36px;min-height:20px;}
+.pit-b.pit-ch{opacity:.55;}
+.pit:hover .pit-b.pit-ch{opacity:.9;}
 .pit-ttl{display:none;position:absolute;left:8px;top:40px;width:232px;max-height:272px;overflow-y:auto;
   background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:5px;z-index:5;
   box-shadow:0 10px 30px rgba(0,0,0,.22);}
