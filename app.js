@@ -1263,7 +1263,15 @@ function _globalSearchNow(q) {
   const res = [];
   (DB.bons || []).forEach(function (b) {
     if (match(b.numero, b.geranceNom, b.gerantNom, b.locataireNom, b.immeuble, b.gerantTel, (typeof _bonProblemeClean === 'function' ? _bonProblemeClean(b) : b.probleme)))
-      res.push({ icon: '📄', type: 'Bon', title: b.numero || '(sans n°)', sub: [b.geranceNom, b.locataireNom || b.immeuble].filter(Boolean).join(' · '), go: function () { _gsOpenBon(b); } });
+      res.push({ icon: '📄', type: 'Bon', title: b.numero || '(sans n°)',
+        sub: [b.geranceNom, b.locataireNom || b.immeuble].filter(Boolean).join(' · '),
+        montant: (function () {
+          try {
+            const c = _bonNoteCalc(_bonNoteData(b));
+            return c && c.ttc ? _displayMontant(c.ttc) + ' CHF' : '';
+          } catch (e) { return ''; }
+        })(),
+        go: function () { _gsOpenBon(b); } });
   });
   (DB.documents || []).forEach(function (d) {
     const isFact = d.type === 'facture';
@@ -1280,8 +1288,10 @@ function _globalSearchNow(q) {
     if (match(d.numero, d.clientNom, d.locataireNom, d.proprietaire, d.notes, lignesTxt, _bdNum, _dvNum, _fcNum))
       res.push({
         icon: isFact ? '🧾' : '📝', type: isFact ? 'Facture' : 'Devis', title: d.numero || '(sans n°)',
-        sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', _dvNum ? ('📝 Devis ' + _dvNum) : '', _fcNum ? ('🧾 Facturé : ' + _fcNum) : '',
-              (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : '')].filter(Boolean).join(' · '),
+        sub: [d.clientNom, _bdNum ? ('📄 Bon ' + _bdNum) : '', _dvNum ? ('📝 Devis ' + _dvNum) : '', _fcNum ? ('🧾 Facturé : ' + _fcNum) : ''].filter(Boolean).join(' · '),
+        // Le montant a sa propre place, bien en vue : dans le sous-titre il
+        // était coupé par les points de suspension dès que la ligne était longue.
+        montant: (typeof _displayMontant === 'function' ? _displayMontant(d.total || 0) + ' CHF' : ''),
         meta: _gsDocMeta(d),   // payée / pas payée + rubrique où elle se trouve
         go: function () { _gsOpenDoc(d); }
       });
@@ -1326,7 +1336,10 @@ function _globalSearchNow(q) {
   const ligne = function (r, i) {
     return '<div onclick="(window._gsActions[' + i + ']||function(){})()" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f1f3f7;cursor:pointer;" onmouseover="this.style.background=\'#f5f7fb\'" onmouseout="this.style.background=\'\'">'
       + '<span style="font-size:16px;">' + r.icon + '</span>'
-      + '<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + '</div>'
+      + '<div style="min-width:0;flex:1;"><div style="display:flex;align-items:baseline;gap:8px;">'
+      + '<span style="font-size:13px;font-weight:700;color:#0d1b3e;">' + (r.title || '').replace(/</g, '&lt;') + '</span>'
+      + (r.montant ? '<span style="margin-left:auto;font-size:13px;font-weight:800;color:#15803d;white-space:nowrap;">' + r.montant.replace(/</g, '&lt;') + '</span>' : '')
+      + '</div>'
       + (r.sub ? '<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.sub.replace(/</g, '&lt;') + '</div>' : '')
       + (r.meta ? '<div style="margin-top:3px;">' + r.meta + '</div>' : '')
       + '</div></div>';
