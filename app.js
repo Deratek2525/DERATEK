@@ -1364,13 +1364,22 @@ document.addEventListener('click', function (e) {
   box.style.display = 'none';
 });
 
+// Numéro de semaine selon la norme ISO 8601, celle utilisée en Suisse :
+// la semaine commence le lundi et la semaine 1 est celle du premier jeudi de l'année.
+function noSemaine(d) {
+  const t = new Date(Date.UTC((d || new Date()).getFullYear(), (d || new Date()).getMonth(), (d || new Date()).getDate()));
+  const jour = t.getUTCDay() || 7;            // dimanche = 7
+  t.setUTCDate(t.getUTCDate() + 4 - jour);    // on se place sur le jeudi de la semaine
+  const jan1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - jan1) / 86400000 + 1) / 7);
+}
 function renderDashboard() {
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
   const now = new Date();
   const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   const dd = $('dash-date');
-  if (dd) dd.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+  if (dd) dd.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}  ·  Semaine ${noSemaine(now)}`;
   if (typeof loadDashNotes === 'function') loadDashNotes();
   if (typeof loadPostits === 'function') loadPostits();
 
@@ -1439,7 +1448,7 @@ function renderDashboard() {
     }
     dw.innerHTML = html;
     const wt = $('dash-week-title');
-    if (wt) wt.textContent = `📅 Semaine du ${_monday.getDate()} ${moisAbr[_monday.getMonth()]} au ${_sunday.getDate()} ${moisAbr[_sunday.getMonth()]}`;
+    if (wt) wt.textContent = `📅 Semaine ${noSemaine(_monday)} — du ${_monday.getDate()} ${moisAbr[_monday.getMonth()]} au ${_sunday.getDate()} ${moisAbr[_sunday.getMonth()]}`;
   }
 
   // --- Bons entrés cette semaine (liste) ---
