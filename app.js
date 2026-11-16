@@ -20044,9 +20044,9 @@ function renderFournisseurs() {
       ${kpi('Factures classées', items.length)}
       ${kpi('Moyenne / mois', (nbMois ? _displayMontant(totTTC / nbMois) : '—') + ' <span>CHF</span>', 'or')}
     </div>
-    ${(nbSansTva || nbAClasser) ? `<div class="fo-alerte">
-      ${nbAClasser ? `<b>❓ ${nbAClasser} facture(s) à classer</b> — clique sur la catégorie pour les voir.` : ''}
-      ${nbSansTva ? `${nbAClasser ? '<br>' : ''}🧮 <b>${nbSansTva} facture(s)</b> sans montant HT ni TVA : le bouton « TVA 8.1 % » les complète en un clic (et la TVA récupérable ci-dessus augmentera d'autant).` : ''}
+    ${(nbSansTva || nbAClasser) ? `<div class="fo-chips">
+      ${nbAClasser ? `<span class="fo-chip rd" title="Ces factures n'ont pas encore de catégorie comptable">❓ ${nbAClasser} à classer</span>` : ''}
+      ${nbSansTva ? `<span class="fo-chip or" title="Leur montant HT et leur TVA ne sont pas renseignés : ils ne comptent pas dans la TVA récupérable">🧮 ${nbSansTva} sans HT ni TVA</span>` : ''}
     </div>` : ''}`;
 
   if (!toutes.length) {
@@ -20054,23 +20054,11 @@ function renderFournisseurs() {
     return;
   }
 
-  // ---- Répartition par catégorie -------------------------------------------
+  // ---- Poids de chaque catégorie (repris dans l'en-tête de son dossier) ----
   const parCat = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; parCat[k] = (parCat[k] || 0) + (parseFloat(f.montant) || 0); });
-  const cats = Object.keys(parCat).sort((a, b) => parCat[b] - parCat[a]);
-  const maxCat = cats.length ? parCat[cats[0]] : 1;
-  const repart = cats.length ? `<div class="fo-rep">${cats.map(c => {
-      const col = SECTEUR_COLORS[c] || '#64748b';
-      const on = _fournCatFiltre === c;
-      const nb = items.filter(f => (f.secteur || 'À classer') === c).length;
-      const pc = Math.round(parCat[c] / (totTTC || 1) * 100);
-      return `<button class="fo-row${on ? ' on' : ''}" onclick="fournSetCat('${String(c).replace(/'/g, "\\'")}')" title="Afficher uniquement cette catégorie">
-        <span class="n"><span class="e">${_fournIco(c)}</span>${_escapeHtml(c)}</span>
-        <span class="t"><span class="f" style="width:${Math.max(3, Math.round(parCat[c] / maxCat * 100))}%;background:${col};"></span></span>
-        <span class="p">${pc} %</span>
-        <span class="q">${nb}</span>
-        <span class="v">${_displayMontant(parCat[c])}</span></button>`;
-    }).join('')}</div>` : '';
+  const maxCat = Math.max(1, ...Object.values(parCat));
+  const repart = '';
 
   const actions = `<div class="fo-acts">
       <button class="fo-ab pri" onclick="fournExportCsv()">⬇&nbsp; Export comptable</button>
@@ -20138,14 +20126,21 @@ function renderFournisseurs() {
           </tr></tfoot>` : ''}
         </table>
       </div>`;
+    const pc = Math.round(totTtc / (totTTC || 1) * 100);
+    const larg = Math.max(2, Math.round(totTtc / maxCat * 100));
     return `<div class="fo-fold${ouvert ? ' open' : ''}">
         <button class="fo-fh" onclick="fournDossier('${String(sec).replace(/'/g, "\\'")}')">
-          <span class="ic" style="background:${_hexTint(col, 0.16)};color:${col};">${_fournIco(sec)}</span>
-          <span class="nm">${_escapeHtml(sec)}</span>
-          ${avecTva ? '' : '<span class="nt">sans TVA</span>'}
-          <span class="ct">${arr.length}</span>
-          <span class="tt">${_displayMontant(totTtc)}<span class="c"> CHF</span></span>
-          <span class="cv">${ouvert ? '▾' : '▸'}</span>
+          <span class="ic" style="background:${_hexTint(col, 0.14)};color:${col};">${_fournIco(sec)}</span>
+          <span class="mid">
+            <span class="l1">
+              <span class="nm">${_escapeHtml(sec)}</span>
+              ${avecTva ? '' : '<span class="nt">sans TVA</span>'}
+              <span class="sub">${arr.length} pièce${arr.length > 1 ? 's' : ''} · ${pc} % des charges</span>
+            </span>
+            <span class="bar"><i style="width:${larg}%;background:${col};"></i></span>
+          </span>
+          <span class="tt">${_displayMontant(totTtc)}<span class="c">CHF</span></span>
+          <span class="cv">${ouvert ? '⌃' : '⌄'}</span>
         </button>
         ${corps}
       </div>`;
