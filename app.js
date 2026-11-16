@@ -56,7 +56,7 @@ const TABLE_FIELDS = {
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
-  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht' } },
+  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht', tvaTaux: 'tva_taux' } },
   releves:    { js2db: { pdfPath: 'pdf_path', dateImport: 'date_import', nbPaiements: 'nb_paiements', nbReconnus: 'nb_reconnus', createdAt: 'created_at' } },
   contrats:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom',
@@ -18052,12 +18052,79 @@ function renderTVA() {
 // ============================================================
 // FOURNISSEURS — lecture IA du PDF + classement par secteur
 // ============================================================
-const SECTEURS_FOURN = ['Matériel', 'Informatique', 'Garage / véhicules', 'Communication / marketing', 'Administratif', 'Carburant', 'Assurances', 'Produits / consommables', 'Autre'];
-const SECTEUR_COLORS = {
-  'Matériel': '#f97316', 'Informatique': '#3b82f6', 'Garage / véhicules': '#6b7280',
-  'Communication / marketing': '#ec4899', 'Administratif': '#8b5cf6', 'Carburant': '#ef4444',
-  'Assurances': '#14b8a6', 'Produits / consommables': '#10b981', 'Autre': '#64748b'
-};
+// ── Catégories comptables des factures fournisseurs ──────────────────────────
+// Elles servent au classement ET au bouclement : chacune dit si elle porte de
+// la TVA récupérable. Les charges sociales, le loyer, les assurances, les
+// impôts et les frais bancaires n'en portent pas : elles ne doivent donc pas
+// gonfler la TVA à récupérer.
+const FOURN_CATS = [
+  { n: 'Produits / consommables',   i: '🧴', c: '#10b981', tva: true  },
+  { n: 'Matériel / outillage',      i: '🧰', c: '#f97316', tva: true  },
+  { n: 'Vêtements / EPI',           i: '👕', c: '#f59e0b', tva: true  },
+  { n: 'Informatique / logiciels',  i: '💻', c: '#3b82f6', tva: true  },
+  { n: 'Sites web / domaines',      i: '🌐', c: '#0ea5e9', tva: true  },
+  { n: 'Téléphone / Internet',      i: '📞', c: '#6366f1', tva: true  },
+  { n: 'Communication / marketing', i: '📣', c: '#ec4899', tva: true  },
+  { n: 'Véhicule / garage',         i: '🚗', c: '#64748b', tva: true  },
+  { n: 'Carburant',                 i: '⛽', c: '#ef4444', tva: true  },
+  { n: 'Location de matériel',      i: '🏗', c: '#a16207', tva: true  },
+  { n: 'Sous-traitance',            i: '👷', c: '#0d9488', tva: true  },
+  { n: 'Honoraires / fiduciaire',   i: '📑', c: '#b45309', tva: true  },
+  { n: 'Formation / documentation', i: '📚', c: '#7c3aed', tva: true  },
+  { n: 'Frais de port / douane',    i: '📮', c: '#94a3b8', tva: true  },
+  { n: 'Loyer / local',             i: '🏠', c: '#16a34a', tva: false },
+  { n: 'Assurances',                i: '🛡', c: '#14b8a6', tva: false },
+  { n: 'Charges sociales / AVS',    i: '🏛', c: '#8b5cf6', tva: false },
+  { n: 'Impôts / taxes',            i: '🧾', c: '#dc2626', tva: false },
+  { n: 'Frais bancaires',           i: '🏦', c: '#475569', tva: false },
+  { n: 'Salaires',                  i: '💰', c: '#be185d', tva: false },
+  { n: 'À classer',                 i: '❓', c: '#9ca3af', tva: true  },
+  { n: 'Autre',                     i: '📦', c: '#64748b', tva: true  },
+];
+const SECTEURS_FOURN = FOURN_CATS.map(c => c.n);
+const SECTEUR_COLORS = (function () {
+  const o = {};
+  FOURN_CATS.forEach(c => { o[c.n] = c.c; });
+  // anciens libellés, pour que rien ne reste sans couleur
+  o['Matériel'] = '#f97316'; o['Informatique'] = '#3b82f6'; o['Garage / véhicules'] = '#64748b';
+  o['Administratif'] = '#8b5cf6'; o['Produits / consommables'] = '#10b981';
+  return o;
+})();
+function _fournCat(nom) { return FOURN_CATS.find(c => c.n === nom) || null; }
+function _fournIco(nom) { const c = _fournCat(nom); return c ? c.i : '📦'; }
+function _fournAvecTva(nom) { const c = _fournCat(nom); return c ? c.tva : true; }
+
+// Devine la catégorie d'après le fournisseur et le descriptif.
+// Sert au dépôt d'un nouveau PDF ET au rangement des factures déjà en ligne.
+const _FOURN_REGLES = [
+  [/avs|caisse de compensation|lpp|2e pilier|deuxi.me pilier|allocations familiales|suva/i, 'Charges sociales / AVS'],
+  [/assurance|vaudoise|mobili.re|helvetia|allianz|\\baxa\\b|baloise|zurich assur|generali|rc pro/i, 'Assurances'],
+  [/imp.t|taxe|administration fiscale|tva administration|afc/i, 'Impôts / taxes'],
+  [/fiduciaire|comptab|notaire|avocat|honoraire|conseil juridique/i, 'Honoraires / fiduciaire'],
+  [/loyer|r.gie|g.rance .*(local|d.p.t)|bail/i, 'Loyer / local'],
+  [/banque|postfinance|raiffeisen|\\bubs\\b|credit suisse|frais bancaire|transaction service fee|commission bancaire/i, 'Frais bancaires'],
+  [/swisscom|sunrise|\\bsalt\\b|t.l.phone|t.l.com|\\binternet\\b|fibre optique|abonnement mobile/i, 'Téléphone / Internet'],
+  [/infomaniak|domaine|h.bergement|hosting|nom de domaine|webflow|wix|ovh|godaddy/i, 'Sites web / domaines'],
+  [/microsoft|adobe|google workspace|logiciel|licence|software|subscription|artlist|canva|apple|abonnement ia|openai|anthropic/i, 'Informatique / logiciels'],
+  [/carburant|essence|diesel|station.service|socar|migrol|\\bavia\\b|\\bshell\\b|\\bbp\\b|tamoil|coop pronto/i, 'Carburant'],
+  [/garage|pneu|service v.hicule|carrosserie|amag|emil frey|contr.le technique|hylly|liukutaso|am.nagement.*(fourgon|camionnette)/i, 'Véhicule / garage'],
+  [/location|nacelle|nacellessa|.chafaudage|lev.*nacelle|rental/i, 'Location de matériel'],
+  [/imprim|pixart|flyer|.tiquette|affiche|publicit|marketing|annonce|local\.ch|google ads|facebook/i, 'Communication / marketing'],
+  [/formation|cours|s.minaire|certification|livre|abonnement revue/i, 'Formation / documentation'],
+  [/pose d.app|sous-trait|intervention pour notre compte|zoo control/i, 'Sous-traitance'],
+  [/polo|casquette|v.tement|t-shirt|pantalon|chaussure|combinaison|gant|masque|ffp2|ffp3|lunette|protection p\.|epi\b|bestroas/i, 'Vêtements / EPI'],
+  [/killgerm|paradif|appat|app.t|insecticide|rodenticide|gel |raticide|biocide|produit chimique|mite killer|sorkil|bombex|protect-b|nettoyage|d.sinfect/i, 'Produits / consommables'],
+  [/frais de port|livraison|transport|douane|dhl|dpd|poste colis/i, 'Frais de port / douane'],
+  [/hgc|quincaill|outil|visse|peinture|silicone|soudal|c.ble|mat.riel|.chelle|batterie/i, 'Matériel / outillage'],
+];
+function _fournCatAuto(nom, description, secteurActuel) {
+  const txt = ((nom || '') + ' ' + (description || '')).toLowerCase();
+  for (const [re, cat] of _FOURN_REGLES) { if (re.test(txt)) return cat; }
+  // Rien de reconnu : on garde la catégorie actuelle si elle fait partie de la
+  // nouvelle liste, sinon on la marque « À classer » pour qu'elle soit visible.
+  if (secteurActuel && _fournCat(secteurActuel)) return secteurActuel;
+  return 'À classer';
+}
 let _pendingFournPdf = null;
 
 function fournHandleDrop(e) {
@@ -18633,9 +18700,10 @@ function fournShowConfirm(infos, fileName) {
         ${champ('Montant TTC (CHF)', 'montant', infos.montant)}
       </div>
       <div style="margin-bottom:8px;">
-        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Secteur</label>
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--g600);text-transform:uppercase;margin-bottom:3px;">Catégorie comptable</label>
         <select class="form-input" id="fournf-secteur" style="font-size:13px;">
-          ${SECTEURS_FOURN.map(s => `<option value="${s}">${s}</option>`).join('')}
+          ${(() => { const auto = _fournCatAuto(infos.fournisseur, infos.description, ''); 
+            return FOURN_CATS.map(c => `<option value="${c.n}" ${c.n === auto ? 'selected' : ''}>${c.i} ${c.n}${c.tva ? '' : ' (sans TVA)'}</option>`).join(''); })()}
         </select>
       </div>
       <div style="margin-bottom:8px;">
@@ -18681,10 +18749,11 @@ async function fournConfirmSave() {
     montantHt: parseFloat(v('montant_ht')) || 0,
     tva: parseFloat(v('tva')) || 0,
     montant: parseFloat(v('montant')) || 0,
-    secteur: v('secteur') || 'Autre',
+    secteur: v('secteur') || 'À classer',
     description: v('description'),
     pdfPath: pdfPath
   };
+  fourn.tvaTaux = (fourn.montantHt && fourn.tva) ? Math.round((fourn.tva / fourn.montantHt) * 1000) / 10 : null;
   if (!fourn.nom && !fourn.numero) { toast('Rien à enregistrer (fournisseur vide)', '#e63946'); return; }
   const list = DB.fournisseurs;
   list.push(fourn);
@@ -19684,48 +19753,225 @@ function contratGenererPdf(id, mode) {
   toast('📄 Contrat généré : ' + fname, '#2d9e6b');
 }
 
+// ── Rubrique Fournisseurs : classement + bouclement de l'année ───────────────
+let _fournAnnee = '';      // '' = toutes les années
+let _fournCatFiltre = '';
+function fournSetAnnee(a) { _fournAnnee = (a === _fournAnnee && a !== '') ? '' : a; renderFournisseurs(); }
+function fournSetCat(c)   { _fournCatFiltre = (c === _fournCatFiltre) ? '' : c; renderFournisseurs(); }
+function _fournAn(f) { return String((f && f.dateDoc) || '').slice(0, 4); }
+function _fournHT(f) {
+  const ht = parseFloat(f && f.montantHt);
+  if (!isNaN(ht) && ht > 0) return ht;
+  const ttc = parseFloat(f && f.montant) || 0;
+  return _fournAvecTva(f && f.secteur) ? 0 : ttc;   // sans TVA : HT = TTC
+}
+function _fournTVA(f) {
+  const t = parseFloat(f && f.tva);
+  if (!isNaN(t) && t > 0) return t;
+  return 0;
+}
+// Complète HT et TVA d'une facture au taux suisse standard, à la demande.
+function fournCalcTva(id, taux) {
+  const list = DB.fournisseurs;
+  const f = list.find(x => x.id === id); if (!f) return;
+  const ttc = parseFloat(f.montant) || 0;
+  if (!ttc) { toast('Montant TTC manquant', '#e63946'); return; }
+  const tx = parseFloat(taux) || 8.1;
+  f.montantHt = Math.round((ttc / (1 + tx / 100)) * 100) / 100;
+  f.tva = Math.round((ttc - f.montantHt) * 100) / 100;
+  f.tvaTaux = tx;
+  DB.fournisseurs = list;
+  renderFournisseurs();
+  toast('TVA ' + tx + ' % calculée : ' + _displayMontant(f.tva) + ' CHF', '#2d9e6b');
+}
+
+// ── Fenêtre de modification d'une facture fournisseur ────────────────────────
+let _fournEditId = null;
+function openFournEdit(id) {
+  const f = (DB.fournisseurs || []).find(x => x.id === id); if (!f) return;
+  _fournEditId = id;
+  const old = document.getElementById('modal-fourn-edit'); if (old) old.remove();
+  const ch = (lbl, k, v, type) =>
+    `<div class="fe-ch"><label>${lbl}</label><input id="fe-${k}" type="${type || 'text'}" class="form-input" value="${String(v == null ? '' : v).replace(/"/g, '&quot;')}"></div>`;
+  const d = document.createElement('div');
+  d.id = 'modal-fourn-edit'; d.className = 'modal-bg'; d.style.display = 'flex';
+  d.innerHTML = `<div class="modal fe-box" onclick="event.stopPropagation()">
+      <h3>🧾 Facture fournisseur</h3>
+      <div class="fe-g2">
+        ${ch('Fournisseur', 'nom', f.nom)}
+        ${ch('N° de facture', 'numero', f.numero)}
+        ${ch('Date', 'dateDoc', f.dateDoc, 'date')}
+        <div class="fe-ch"><label>Catégorie comptable</label>
+          <select id="fe-secteur" class="form-input">
+            ${FOURN_CATS.map(c => `<option value="${c.n}" ${c.n === (f.secteur || '') ? 'selected' : ''}>${c.i} ${c.n}${c.tva ? '' : ' (sans TVA)'}</option>`).join('')}
+          </select></div>
+        ${ch('Montant HT', 'montantHt', f.montantHt, 'number')}
+        ${ch('TVA (CHF)', 'tva', f.tva, 'number')}
+        ${ch('Montant TTC', 'montant', f.montant, 'number')}
+        ${ch('Taux TVA (%)', 'tvaTaux', f.tvaTaux, 'number')}
+      </div>
+      <div class="fe-ch"><label>Description</label><textarea id="fe-description" class="form-input" rows="3">${_escapeHtml(f.description || '')}</textarea></div>
+      <div class="fe-aide">Astuce : laisse HT et TVA vides puis clique sur « TVA 8.1 % » dans la liste, l'application les calcule depuis le TTC.</div>
+      <div class="fe-btns">
+        <button class="btn btn-ghost" onclick="closeFournEdit()">Annuler</button>
+        <button class="btn btn-navy" onclick="saveFournEdit()">💾 Enregistrer</button>
+      </div>
+    </div>`;
+  d.onclick = closeFournEdit;
+  document.body.appendChild(d);
+}
+function closeFournEdit() { const d = document.getElementById('modal-fourn-edit'); if (d) d.remove(); _fournEditId = null; }
+function saveFournEdit() {
+  const list = DB.fournisseurs;
+  const f = list.find(x => x.id === _fournEditId); if (!f) { closeFournEdit(); return; }
+  const v = k => { const el = document.getElementById('fe-' + k); return el ? String(el.value).trim() : ''; };
+  const num = k => { const x = parseFloat(v(k)); return isNaN(x) ? null : x; };
+  f.nom = v('nom'); f.numero = v('numero'); f.dateDoc = v('dateDoc');
+  f.secteur = v('secteur') || 'À classer';
+  f.montantHt = num('montantHt'); f.tva = num('tva');
+  f.montant = num('montant') || 0; f.tvaTaux = num('tvaTaux');
+  f.description = v('description');
+  DB.fournisseurs = list;
+  closeFournEdit(); renderFournisseurs();
+  toast('✓ Facture fournisseur enregistrée', '#2d9e6b');
+}
+
+// ── Export comptable (CSV lisible par Excel et par la fiduciaire) ────────────
+function fournExportCsv() {
+  const items = _fournFiltrees();
+  if (!items.length) { toast('Aucune facture à exporter', '#d97706'); return; }
+  const esc = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
+  const lignes = [['Date', 'Fournisseur', 'N° facture', 'Catégorie', 'Montant HT', 'TVA', 'Taux TVA %', 'Montant TTC', 'TVA récupérable', 'Description'].map(esc).join(';')];
+  items.slice().sort((a, b) => String(a.dateDoc || '').localeCompare(String(b.dateDoc || ''))).forEach(f => {
+    lignes.push([
+      f.dateDoc || '', f.nom || '', f.numero || '', f.secteur || '',
+      (f.montantHt != null ? f.montantHt : ''), (f.tva != null ? f.tva : ''),
+      (f.tvaTaux != null ? f.tvaTaux : ''), (f.montant != null ? f.montant : ''),
+      _fournAvecTva(f.secteur) ? 'oui' : 'non',
+      String(f.description || '').replace(/[\r\n]+/g, ' ')
+    ].map(esc).join(';'));
+  });
+  const nom = 'DERATEK_charges_' + (_fournAnnee || 'toutes-annees') + '.csv';
+  const blob = new Blob(['﻿' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast('⬇ ' + items.length + ' ligne(s) exportée(s) — ' + nom, '#2d9e6b');
+}
+
+function _fournFiltrees() {
+  const q = (($('fourn-search') || {}).value || '').toLowerCase();
+  let items = (DB.fournisseurs || []).slice();
+  if (_fournAnnee) items = items.filter(f => _fournAn(f) === _fournAnnee);
+  if (_fournCatFiltre) items = items.filter(f => (f.secteur || 'À classer') === _fournCatFiltre);
+  if (q) items = items.filter(f => ((f.nom || '') + ' ' + (f.numero || '') + ' ' + (f.description || '') + ' ' + (f.secteur || '')).toLowerCase().includes(q));
+  return items;
+}
+
 function renderFournisseurs() {
   updateNavCounts();
   const list = $('fournisseurs-list');
   const count = $('fournisseurs-count');
-  const q = (($('fourn-search') || {}).value || '').toLowerCase();
-  let items = (DB.fournisseurs || []).slice();
-  if (q) items = items.filter(f => ((f.nom||'')+' '+(f.numero||'')+' '+(f.description||'')+' '+(f.secteur||'')).toLowerCase().includes(q));
+  const toutes = DB.fournisseurs || [];
+  const items = _fournFiltrees();
   if (count) count.textContent = items.length ? items.length + ' facture(s) fournisseur' : '';
   if (!list) return;
-  if (!items.length) {
+
+  // ---- Barre des années -----------------------------------------------------
+  const annees = Array.from(new Set(toutes.map(_fournAn).filter(Boolean))).sort().reverse();
+  const bAn = (val, lbl) => {
+    const on = _fournAnnee === val;
+    return `<button onclick="fournSetAnnee('${val}')" class="fo-yr${on ? ' on' : ''}">${lbl}</button>`;
+  };
+  const barre = `<div class="fo-bar">${annees.map(a => bAn(a, a)).join('')}${bAn('', 'Toutes les années')}</div>`;
+
+  // ---- Chiffres de l'année --------------------------------------------------
+  const totTTC = items.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+  const totTVA = items.filter(f => _fournAvecTva(f.secteur)).reduce((s, f) => s + _fournTVA(f), 0);
+  const nbSansTva = items.filter(f => _fournAvecTva(f.secteur) && !_fournTVA(f)).length;
+  const nbAClasser = items.filter(f => (f.secteur || 'À classer') === 'À classer').length;
+  const mois = {};
+  items.forEach(f => { const m = String(f.dateDoc || '').slice(0, 7); if (m) mois[m] = (mois[m] || 0) + (parseFloat(f.montant) || 0); });
+  const nbMois = Object.keys(mois).length;
+  const kpi = (l, v, cls) => `<div class="fo-kpi ${cls || ''}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const entete = `<div class="fo-kpis">
+      ${kpi('Charges' + (_fournAnnee ? ' ' + _fournAnnee : ''), _displayMontant(totTTC) + ' <span>CHF</span>')}
+      ${kpi('TVA récupérable', _displayMontant(totTVA) + ' <span>CHF</span>', 'gr')}
+      ${kpi('Factures classées', items.length)}
+      ${kpi('Moyenne / mois', (nbMois ? _displayMontant(totTTC / nbMois) : '—') + ' <span>CHF</span>', 'or')}
+    </div>
+    ${(nbSansTva || nbAClasser) ? `<div class="fo-alerte">
+      ${nbAClasser ? `<b>❓ ${nbAClasser} facture(s) à classer</b> — clique sur la catégorie pour les voir.` : ''}
+      ${nbSansTva ? `${nbAClasser ? '<br>' : ''}🧮 <b>${nbSansTva} facture(s)</b> sans montant HT ni TVA : le bouton « TVA 8.1 % » les complète en un clic (et la TVA récupérable ci-dessus augmentera d'autant).` : ''}
+    </div>` : ''}`;
+
+  if (!toutes.length) {
     list.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Aucune facture fournisseur.<br>Glisse un PDF ci-dessus pour commencer.</div></div>';
     return;
   }
+
+  // ---- Répartition par catégorie -------------------------------------------
+  const parCat = {};
+  items.forEach(f => { const k = f.secteur || 'À classer'; parCat[k] = (parCat[k] || 0) + (parseFloat(f.montant) || 0); });
+  const cats = Object.keys(parCat).sort((a, b) => parCat[b] - parCat[a]);
+  const maxCat = cats.length ? parCat[cats[0]] : 1;
+  const repart = cats.length ? `<div class="fo-rep">${cats.map(c => {
+      const col = SECTEUR_COLORS[c] || '#64748b';
+      const on = _fournCatFiltre === c;
+      return `<button class="fo-row${on ? ' on' : ''}" onclick="fournSetCat('${String(c).replace(/'/g, "\\'")}')" title="Afficher uniquement cette catégorie">
+        <span class="n">${_fournIco(c)} ${_escapeHtml(c)}</span>
+        <span class="t"><span class="f" style="width:${Math.max(3, Math.round(parCat[c] / maxCat * 100))}%;background:${col};"></span></span>
+        <span class="v">${_displayMontant(parCat[c])}</span></button>`;
+    }).join('')}</div>` : '';
+
+  const actions = `<div class="fo-acts">
+      <button class="btn btn-green btn-sm" onclick="fournExportCsv()">⬇ Export comptable (Excel / CSV)</button>
+      ${_fournCatFiltre ? `<button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="fournSetCat('')">✕ ${_escapeHtml(_fournCatFiltre)} — tout afficher</button>` : ''}
+    </div>`;
+
+  // ---- Liste, regroupée par catégorie --------------------------------------
+  if (!items.length) {
+    list.innerHTML = barre + entete + actions + '<div class="empty"><div class="empty-icon">🔎</div><div class="empty-text">Aucune facture pour ce filtre.</div></div>';
+    return;
+  }
   const groups = {};
-  items.forEach(f => { const k = f.secteur || 'Autre'; (groups[k] = groups[k] || []).push(f); });
-  list.innerHTML = Object.keys(groups).sort().map(sec => {
-    const arr = groups[sec].sort((a, b) => (b.dateDoc||'').localeCompare(a.dateDoc||''));
+  items.forEach(f => { const k = f.secteur || 'À classer'; (groups[k] = groups[k] || []).push(f); });
+  const ordre = SECTEURS_FOURN.filter(k => groups[k]).concat(Object.keys(groups).filter(k => !SECTEURS_FOURN.includes(k)));
+  list.innerHTML = barre + entete + repart + actions + ordre.map(sec => {
+    const arr = groups[sec].sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
     const col = SECTEUR_COLORS[sec] || '#64748b';
-    const totalSec = arr.reduce((s, f) => s + (parseFloat(f.montant)||0), 0);
+    const totalSec = arr.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+    const avecTva = _fournAvecTva(sec);
     return `
       <div style="margin-top:14px;">
         <div style="font-size:13px;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${col};padding-bottom:4px;">
-          📦 ${sec} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(totalSec)} CHF)</span>
+          ${_fournIco(sec)} ${_escapeHtml(sec)} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(totalSec)} CHF)</span>
+          ${avecTva ? '' : '<span class="fo-not">sans TVA récupérable</span>'}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          ${arr.map(f => `
+          ${arr.map(f => {
+            const ht = parseFloat(f.montantHt), tv = parseFloat(f.tva);
+            const aHT = !isNaN(ht) && ht > 0, aTVA = !isNaN(tv) && tv > 0;
+            return `
             <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${col};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
               <div style="min-width:150px;">
-                <div style="font-size:13px;font-weight:800;color:var(--navy);">${f.nom||'—'}</div>
-                <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(f.dateDoc)||'—'}${f.numero?' · N° '+f.numero:''}</div>
+                <div style="font-size:13px;font-weight:800;color:var(--navy);">${_escapeHtml(f.nom || '—')}</div>
+                <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(f.dateDoc) || '—'}${f.numero ? ' · N° ' + _escapeHtml(f.numero) : ''}</div>
               </div>
-              <div style="flex:2;min-width:160px;font-size:12px;color:var(--g600);">${f.description||''}</div>
-              <div style="min-width:140px;text-align:right;">
-                ${(f.montantHt||f.tva) ? `<div style="font-size:11px;color:var(--g600);">HT ${_displayMontant(f.montantHt||0)} · TVA ${_displayMontant(f.tva||0)}</div>` : ''}
-                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant||0)} CHF <span style="font-size:9px;color:var(--g400);">TTC</span></div>
+              <div style="flex:2;min-width:160px;font-size:12px;color:var(--g600);">${_escapeHtml(String(f.description || '').slice(0, 150))}</div>
+              <div style="min-width:150px;text-align:right;">
+                ${(aHT || aTVA) ? `<div style="font-size:11px;color:var(--g600);">HT ${_displayMontant(ht || 0)} · TVA ${_displayMontant(tv || 0)}${f.tvaTaux ? ' (' + f.tvaTaux + ' %)' : ''}</div>`
+                  : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le montant TTC, au taux suisse de 8.1 %">🧮 TVA 8.1 %</button>` : '')}
+                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant || 0)} CHF <span style="font-size:9px;color:var(--g400);">TTC</span></div>
               </div>
               <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
                 ${f.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewFournPdf('${f.id}')" title="Voir le PDF">📎 PDF</button>` : ''}
-                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteFourn('${f.id}','${(f.nom||'').replace(/'/g,"\\'")}')" title="Supprimer">🗑</button>
+                <button class="btn btn-navy btn-sm" onclick="openFournEdit('${f.id}')" title="Modifier la catégorie, les montants, la date…">✏️</button>
+                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">🗑</button>
               </div>
-            </div>
-          `).join('')}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
   }).join('');
