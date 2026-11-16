@@ -2354,3 +2354,20 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
   .fo-row .n{width:130px;}
   .fo-fh .nm{font-size:12.5px;}
 }
+
+/* ── Alerte doublon à la dépose d'une facture fournisseur ─────────────────── */
+.fo-dbl{background:#fff5f5;border:1px solid #fecaca;border-radius:12px;padding:12px 14px;margin-bottom:14px;}
+.fo-dbl .t{font-size:13px;font-weight:800;color:#b91c1c;margin-bottom:8px;}
+.fo-dbl .l{font-size:12px;color:#7f1d1d;line-height:1.6;padding:5px 0;border-top:1px solid #fee2e2;}
+.fo-dbl .l:first-of-type{border-top:none;}
+.fo-dbl .m{display:inline-block;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;
+  border-radius:20px;padding:1px 9px;margin-left:6px;}
+.fo-dbl .a{font-size:11.5px;color:#9a3412;margin-top:8px;line-height:1.5;}
+.fo-dblg{border:1px solid #e8ebf0;border-radius:11px;padding:10px 12px;margin-bottom:9px;background:#fbfcfe;}
+.fo-dblg .h{font-size:12px;font-weight:800;color:#b91c1c;margin-bottom:7px;}
+.fo-dblg .r{display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-top:1px solid #eef1f6;}
+.fo-dblg .r:first-of-type{border-top:none;}
+.fo-dblg .d{color:#9ca3af;width:78px;flex-shrink:0;}
+.fo-dblg .n{color:#4b5563;width:120px;flex-shrink:0;font-weight:600;}
+.fo-dblg .x{color:#9ca3af;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fo-dblg .m{font-weight:750;color:var(--navy);width:100px;text-align:right;}

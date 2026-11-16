@@ -18680,6 +18680,102 @@ function ancValider() {
   ancProcessFile();
 }
 
+// ── Détection des doublons de factures fournisseurs ─────────────────────────
+// Le même PDF déposé deux fois, ou la même facture reçue par courrier puis par
+// e-mail : sans contrôle elle est comptée deux fois dans les charges de l'année.
+function _fdNom(x) {
+  return String(x == null ? '' : x).toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/\b(sa|sarl|gmbh|ag|ltd|llc|spa|s\.p\.a|sas|oy|inc|co|cie)\b/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+function _fdNum(x) { return String(x == null ? '' : x).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+function _fdMontant(x) { const n = parseFloat(x); return isNaN(n) ? null : Math.round(n * 100) / 100; }
+
+// Renvoie les factures déjà enregistrées qui ressemblent à celle-ci.
+// Chaque entrée porte le motif, pour que le message soit explicite.
+function _fournDoublons(info, ignorerId) {
+  const nom = _fdNom(info && (info.nom || info.fournisseur));
+  const num = _fdNum(info && info.numero);
+  const mt  = _fdMontant(info && info.montant);
+  const dt  = String((info && (info.dateDoc || info.date)) || '').slice(0, 10);
+  if (!nom && !num) return [];
+  const out = [];
+  (DB.fournisseurs || []).forEach(f => {
+    if (ignorerId && f.id === ignorerId) return;
+    const fn = _fdNom(f.nom), fnum = _fdNum(f.numero), fmt = _fdMontant(f.montant);
+    const fdt = String(f.dateDoc || '').slice(0, 10);
+    let motif = '';
+    if (nom && num && fn === nom && fnum === num) motif = 'même fournisseur et même n° de facture';
+    else if (num && num.length >= 4 && fnum === num && mt != null && fmt === mt) motif = 'même n° de facture et même montant';
+    else if (nom && fn === nom && dt && fdt === dt && mt != null && fmt === mt) motif = 'même fournisseur, même date et même montant';
+    else if (nom && fn === nom && mt != null && fmt === mt && !num && !fnum) motif = 'même fournisseur et même montant';
+    if (motif) out.push({ f: f, motif: motif });
+  });
+  return out;
+}
+function _fournDoublonHtml(liste) {
+  if (!liste.length) return '';
+  return `<div class="fo-dbl">
+      <div class="t">⚠️ ${liste.length === 1 ? 'Cette facture est peut-être déjà enregistrée' : 'Cette facture ressemble à ' + liste.length + ' factures déjà enregistrées'}</div>
+      ${liste.map(d => `<div class="l">
+        <b>${_escapeHtml(d.f.nom || '—')}</b>${d.f.numero ? ' · n° ' + _escapeHtml(d.f.numero) : ''}
+        · ${fmtDate(d.f.dateDoc) || 'sans date'} · <b>${_displayMontant(d.f.montant || 0)} CHF</b>
+        <span class="m">${d.motif}</span>
+      </div>`).join('')}
+      <div class="a">Vérifie avant d'enregistrer : une facture comptée deux fois fausse le total de l'année et la TVA récupérable.</div>
+    </div>`;
+}
+
+// Passe en revue tout le dossier et regroupe les factures qui se ressemblent.
+function fournChercherDoublons() {
+  const tous = (DB.fournisseurs || []).slice();
+  const vus = {}, groupes = [];
+  tous.forEach((f, i) => {
+    if (vus[f.id]) return;
+    const sim = _fournDoublons(f, f.id).filter(d => !vus[d.f.id]);
+    if (!sim.length) return;
+    vus[f.id] = 1; sim.forEach(d => { vus[d.f.id] = 1; });
+    groupes.push({ ref: f, autres: sim });
+  });
+  const box = document.getElementById('modal-fourn-dbl');
+  if (box) box.remove();
+  const d = document.createElement('div');
+  d.id = 'modal-fourn-dbl'; d.className = 'modal-bg'; d.style.display = 'flex';
+  const nbTot = groupes.reduce((s, g) => s + 1 + g.autres.length, 0);
+  d.innerHTML = `<div class="modal fe-box" style="max-width:760px;" onclick="event.stopPropagation()">
+      <h3>🔍 Doublons dans le dossier fournisseurs</h3>
+      ${!groupes.length
+        ? '<div class="fe-aide" style="font-size:13px;">Aucun doublon repéré : chaque facture est unique.</div>'
+        : `<div class="fe-aide" style="font-size:12.5px;margin-bottom:12px;">
+             ${groupes.length} groupe(s) suspect(s), ${nbTot} facture(s) concernées. Garde la bonne et supprime l'autre.
+           </div>` + groupes.map(g => {
+             const toutes = [g.ref].concat(g.autres.map(x => x.f));
+             return `<div class="fo-dblg">
+               <div class="h">${_escapeHtml(g.ref.nom || '—')} — ${g.autres[0].motif}</div>
+               ${toutes.map(f => `<div class="r">
+                  <span class="d">${fmtDate(f.dateDoc) || 'sans date'}</span>
+                  <span class="n">${f.numero ? 'n° ' + _escapeHtml(f.numero) : '<i>sans n°</i>'}</span>
+                  <span class="x">${_escapeHtml(String(f.description || '').slice(0, 60))}</span>
+                  <span class="m">${_displayMontant(f.montant || 0)} CHF</span>
+                  <button class="fo-b su" title="Supprimer celle-ci"
+                    onclick="fournSupprDoublon('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')">🗑</button>
+                </div>`).join('')}
+             </div>`;
+           }).join('')}
+      <div class="fe-btns"><button class="btn btn-navy" onclick="document.getElementById('modal-fourn-dbl').remove()">Fermer</button></div>
+    </div>`;
+  d.onclick = () => d.remove();
+  document.body.appendChild(d);
+}
+function fournSupprDoublon(id, nom) {
+  if (!confirm('Supprimer définitivement cette facture ?\n\n' + (nom || '') + '\n\nCette action est irréversible.')) return;
+  DB.fournisseurs = (DB.fournisseurs || []).filter(x => x.id !== id);
+  renderFournisseurs();
+  const m = document.getElementById('modal-fourn-dbl'); if (m) m.remove();
+  fournChercherDoublons();
+  toast('Facture supprimée', '#b45309');
+}
+
 function fournShowConfirm(infos, fileName) {
   const box = $('fourn-confirm'); if (!box) return;
   const champ = (label, key, val) =>
@@ -18690,7 +18786,8 @@ function fournShowConfirm(infos, fileName) {
   box.innerHTML = `
     <div style="background:#fff;border:2px solid var(--navy);border-radius:12px;padding:18px;box-shadow:0 4px 18px rgba(13,27,62,.12);">
       <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">✅ Document fournisseur analysé</div>
-      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifie, choisis le secteur, puis valide. Fichier : <b>${fileName||''}</b></div>
+      <div style="font-size:12px;color:var(--g600);margin-bottom:14px;">Vérifie, choisis la catégorie, puis valide. Fichier : <b>${fileName||''}</b></div>
+      ${(() => { const dbl = _fournDoublons({ nom: infos.fournisseur, numero: infos.numero, montant: infos.montant, dateDoc: infos.date }); return _fournDoublonHtml(dbl); })()}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px;">
         ${champ('Fournisseur', 'fournisseur', infos.fournisseur)}
         ${champ('N° de facture', 'numero', infos.numero)}
@@ -18712,7 +18809,7 @@ function fournShowConfirm(infos, fileName) {
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
         <button class="btn btn-ghost" onclick="fournCancel()">Annuler</button>
-        <button class="btn btn-navy" onclick="fournConfirmSave()">✓ Enregistrer le fournisseur</button>
+        <button class="btn btn-navy" onclick="fournConfirmSave()">${_fournDoublons({ nom: infos.fournisseur, numero: infos.numero, montant: infos.montant, dateDoc: infos.date }).length ? '⚠️ Enregistrer quand même' : '✓ Enregistrer le fournisseur'}</button>
       </div>
     </div>`;
   box.style.display = 'block';
@@ -18755,6 +18852,17 @@ async function fournConfirmSave() {
   };
   fourn.tvaTaux = (fourn.montantHt && fourn.tva) ? Math.round((fourn.tva / fourn.montantHt) * 1000) / 10 : null;
   if (!fourn.nom && !fourn.numero) { toast('Rien à enregistrer (fournisseur vide)', '#e63946'); return; }
+  const _dbl = _fournDoublons(fourn);
+  if (_dbl.length) {
+    const d = _dbl[0].f;
+    if (!confirm('⚠️ Doublon probable (' + _dbl[0].motif + ') :\n\n'
+      + (d.nom || '') + (d.numero ? ' · n° ' + d.numero : '') + '\n'
+      + (fmtDate(d.dateDoc) || 'sans date') + ' · ' + _displayMontant(d.montant || 0) + ' CHF\n\n'
+      + 'Enregistrer quand même cette nouvelle facture ?')) {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Enregistrer le fournisseur'; }
+      return;
+    }
+  }
   const list = DB.fournisseurs;
   list.push(fourn);
   DB.fournisseurs = list;
@@ -19962,6 +20070,7 @@ function renderFournisseurs() {
 
   const actions = `<div class="fo-acts">
       <button class="btn btn-green btn-sm" onclick="fournExportCsv()">⬇ Export comptable (Excel / CSV)</button>
+      <button class="btn btn-sm" style="border:1px solid #e3e7ee;background:#fff;color:var(--navy);font-weight:700;" onclick="fournChercherDoublons()">🔍 Chercher les doublons</button>
       ${nbSansTva ? `<button class="btn btn-sm" style="border:1.5px solid #d97706;background:#fffbeb;color:#b45309;font-weight:800;" onclick="fournCalcTvaToutes(8.1)">🧮 Calculer la TVA 8.1 % sur ${nbSansTva > 1 ? 'les ' + nbSansTva + ' factures' : 'la facture'} sans TVA</button>` : ''}
       ${_fournCatFiltre ? `<button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="fournSetCat('')">✕ ${_escapeHtml(_fournCatFiltre)} — tout afficher</button>` : ''}
     </div>`;
