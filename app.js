@@ -11160,6 +11160,17 @@ function _bonsGroupesParGerance(bons) {
 }
 
 // Liste des devis/factures
+// Le bon rattaché à une facture / un devis. On suit d'abord le lien direct
+// (bonId) ; à défaut on retrouve le bon par son NUMÉRO, car beaucoup de
+// documents anciens ne portent que « bonCommande ».
+function _docBonLie(d) {
+  if (!d) return null;
+  const bons = DB.bons || [];
+  if (d.bonId) { const b = bons.find(x => x.id === d.bonId); if (b) return b; }
+  const num = _factNorm(d.bonCommande || '');
+  if (!num) return null;
+  return bons.find(x => _factNorm(x.numero) === num) || null;
+}
 function renderDocuments() {
   updateNavCounts();
   const list = $('documents-list');
@@ -11319,7 +11330,7 @@ function renderDocuments() {
   const cardCockpit = (d) => {
     const isDevis = d.type === 'devis';
     const st = statutColors[d.statut] || statutColors.brouillon;
-    const _bon = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+    const _bon = _docBonLie(d);
     const _bonNum = (_bon && _bon.numero) || d.bonCommande || '';
     const _adrInt = (_bon && _bon.immeuble) || d.locataireAdresse || '';
     let _tech = '';
@@ -11362,6 +11373,20 @@ function renderDocuments() {
           ${_bon ? (_bon.pdfPath
             ? bt(`viewBonPdf('${_bon.id}')`, CK_ICO.pdfDoc, `Ouvrir le PDF du bon ${_bonNum}`)
             : bt(`generateBonPDF('${_bon.id}')`, CK_ICO.pdf, `Générer le PDF du bon ${_bonNum}`)) : ''}
+          ${_bon ? (() => {
+            // Mêmes accès que sur le ruban d'un bon : pièces jointes, rapport, fiche.
+            const _nbPj = (typeof _bonPJ === 'function' ? _bonPJ(_bon) : []).length;
+            const _re = _bonRapEtat(_bon);
+            const _rc = { transmis: 'ico-rap-tr', fait: 'ico-rap', brouillon: 'ico-rap-br', aucun: 'btn-ghost' }[_re.etat];
+            const _rt = _re.etat === 'aucun'
+              ? `Créer le rapport depuis le bon ${_bonNum}`
+              : _bonRapLabel(_bon) + ' — ouvrir';
+            return bt(`openBonPieces('${_bon.id}')`, CK_ICO.trombone,
+                      _nbPj ? `Pièces jointes du bon ${_bonNum} (${_nbPj}) — photos, plans, listes` : `Ajouter une pièce jointe au bon ${_bonNum}`,
+                      _nbPj ? 'ico-pj' : 'btn-ghost')
+              + `<button class="btn ${_rc} ck-b-b" onclick="openBonRapMenu('${_bon.id}', this)" data-tip="${_rt}" aria-label="${_rt}">${CK_ICO.rapport}${_re.etat === 'transmis' ? '<span class="ck-b-pt tr"></span>' : _re.etat === 'fait' ? '<span class="ck-b-pt ok"></span>' : ''}</button>`
+              + bt(`editBon('${_bon.id}')`, CK_ICO.ouvrir, `Ouvrir la fiche complète du bon ${_bonNum}`, 'ico-bcm');
+          })() : ''}
           ${isDevis ? bt(`duplicateDoc('${d.id}')`, CK_ICO.copie, 'Dupliquer ce devis (nouveau numéro attribué)') : ''}
           ${isDevis && !_bon ? bt(`createBonFromDevis('${d.id}')`, CK_ICO.bonPlus, 'Créer un bon manuel à partir de ce devis') : ''}
           ${isDevis ? bt(`convertDevisToFacture('${d.id}')`, CK_ICO.fleche, 'Convertir ce devis en facture', 'btn-green') : ''}
@@ -11386,7 +11411,7 @@ function renderDocuments() {
     const isDevis = d.type === 'devis';
     const st = statutColors[d.statut] || statutColors.brouillon;
     // Bon lié → n° de bon + adresse d'intervention ; rapport lié → technicien
-    const _bon = d.bonId ? (DB.bons || []).find(b => b.id === d.bonId) : null;
+    const _bon = _docBonLie(d);
     const _bonNum = (_bon && _bon.numero) || d.bonCommande || '';
     const _adrInt = (_bon && _bon.immeuble) || d.locataireAdresse || '';
     let _tech = '';
@@ -11430,6 +11455,13 @@ function renderDocuments() {
           ${_bon ? (_bon.pdfPath
             ? `<button class="btn btn-sm" onclick="viewBonPdf('${_bon.id}')" onmouseenter="bonPdfPreview('${_bon.id}', this)" onmouseleave="bonPdfPreviewHide()" title="PDF du bon ${_bonNum} — survol = aperçu · clic = ouvrir" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📎 Bon</button>`
             : `<button class="btn btn-sm" onclick="generateBonPDF('${_bon.id}')" title="Générer le PDF imprimable du bon ${_bonNum}" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">🖨 Bon</button>`) : ''}
+          ${_bon ? (() => {
+            const _nbPj = (typeof _bonPJ === 'function' ? _bonPJ(_bon) : []).length;
+            const _re = _bonRapEtat(_bon);
+            return `<button class="btn btn-sm" onclick="openBonPieces('${_bon.id}')" title="Pièces jointes du bon ${_bonNum} — photos, plans, listes" style="font-weight:700;border:1.5px solid ${_nbPj ? '#0d9488' : '#d1d5db'};background:${_nbPj ? '#ecfeff' : '#fff'};color:${_nbPj ? '#0f766e' : '#6b7280'};">📎${_nbPj ? ' (' + _nbPj + ')' : ''}</button>`
+              + `<button class="btn btn-sm" onclick="openBonRapMenu('${_bon.id}', this)" title="${_re.etat === 'aucun' ? 'Créer le rapport depuis le bon ' + _bonNum : 'Rapport du bon ' + _bonNum + ' — ouvrir'}" style="font-weight:700;border:1.5px solid ${_re.etat === 'aucun' ? '#d1d5db' : '#dc2626'};background:${_re.etat === 'aucun' ? '#fff' : '#fef2f2'};color:${_re.etat === 'aucun' ? '#6b7280' : '#b91c1c'};">📋</button>`
+              + `<button class="btn btn-sm" onclick="editBon('${_bon.id}')" title="Ouvrir la fiche complète du bon ${_bonNum}" style="font-weight:700;border:1.5px solid #2563eb;background:#eff6ff;color:#1d4ed8;">📄 Fiche</button>`;
+          })() : ''}
           ${isDevis?`<select onchange="createRapportFromDoc('${d.id}', this.value); this.selectedIndex=0;" title="Créer un rapport depuis ce devis" style="font-weight:700;font-size:12px;border:1.5px solid #7c3aed;background:#faf5ff;color:#6d28d9;border-radius:6px;padding:5.5px 4px;cursor:pointer;max-width:118px;">
             <option value="" selected>📋 Rapport ▾</option>
             <option value="general">📋 Rapport général</option>
