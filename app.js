@@ -20082,7 +20082,8 @@ function renderFournisseurs() {
       <button onclick="fournTousDossiers(false)">⊖ Tout fermer</button>
     </div>`;
   list.innerHTML = barre + entete + repart + actions + barreDossiers + ordre.map(sec => {
-    const arr = groups[sec].sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
+    // Classement chronologique : de janvier à décembre, comme dans un classeur.
+    const arr = groups[sec].sort((a, b) => String(a.dateDoc || '9999').localeCompare(String(b.dateDoc || '9999')));
     const col = SECTEUR_COLORS[sec] || '#64748b';
     const totTtc = arr.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
     const totHt  = arr.reduce((s, f) => s + (parseFloat(f.montantHt) || 0), 0);
