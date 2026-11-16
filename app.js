@@ -19755,6 +19755,15 @@ function contratGenererPdf(id, mode) {
 
 // ── Rubrique Fournisseurs : classement + bouclement de l'année ───────────────
 let _fournAnnee = '';      // '' = toutes les années
+// Dossiers ouverts/fermés, retenus d'une visite à l'autre
+let _fournOuverts = (function () { try { return JSON.parse(localStorage.getItem('deratek_fourn_dossiers') || '{}') || {}; } catch (e) { return {}; } })();
+function _fournMemo() { try { localStorage.setItem('deratek_fourn_dossiers', JSON.stringify(_fournOuverts)); } catch (e) {} }
+function fournDossier(cat) { _fournOuverts[cat] = !_fournOuverts[cat]; _fournMemo(); renderFournisseurs(); }
+function fournTousDossiers(ouvrir) {
+  const cats = Array.from(new Set((DB.fournisseurs || []).map(f => f.secteur || 'À classer')));
+  cats.forEach(c => { _fournOuverts[c] = !!ouvrir; });
+  _fournMemo(); renderFournisseurs();
+}
 let _fournCatFiltre = '';
 function fournSetAnnee(a) { _fournAnnee = (a === _fournAnnee && a !== '') ? '' : a; renderFournisseurs(); }
 function fournSetCat(c)   { _fournCatFiltre = (c === _fournCatFiltre) ? '' : c; renderFournisseurs(); }
@@ -19965,43 +19974,70 @@ function renderFournisseurs() {
   const groups = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; (groups[k] = groups[k] || []).push(f); });
   const ordre = SECTEURS_FOURN.filter(k => groups[k]).concat(Object.keys(groups).filter(k => !SECTEURS_FOURN.includes(k)));
-  list.innerHTML = barre + entete + repart + actions + ordre.map(sec => {
+  // Une recherche ou un filtre de catégorie ouvre tout : on cherche à voir le contenu.
+  const forceOuvert = !!(_fournCatFiltre || (($('fourn-search') || {}).value || '').trim());
+  const barreDossiers = `<div class="fo-dact">
+      <button onclick="fournTousDossiers(true)">⊕ Tout ouvrir</button>
+      <button onclick="fournTousDossiers(false)">⊖ Tout fermer</button>
+    </div>`;
+  list.innerHTML = barre + entete + repart + actions + barreDossiers + ordre.map(sec => {
     const arr = groups[sec].sort((a, b) => (b.dateDoc || '').localeCompare(a.dateDoc || ''));
     const col = SECTEUR_COLORS[sec] || '#64748b';
-    const totalSec = arr.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+    const totTtc = arr.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+    const totHt  = arr.reduce((s, f) => s + (parseFloat(f.montantHt) || 0), 0);
+    const totTva = arr.reduce((s, f) => s + (parseFloat(f.tva) || 0), 0);
     const avecTva = _fournAvecTva(sec);
-    return `
-      <div style="margin-top:14px;">
-        <div style="font-size:13px;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-bottom:2px solid ${col};padding-bottom:4px;">
-          ${_fournIco(sec)} ${_escapeHtml(sec)} <span style="font-weight:500;color:var(--g600);">(${arr.length} · ${_displayMontant(totalSec)} CHF)</span>
-          ${avecTva ? '' : '<span class="fo-not">sans TVA récupérable</span>'}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
+    const ouvert = forceOuvert || !!_fournOuverts[sec];
+    const corps = !ouvert ? '' : `
+      <div class="fo-fb">
+        <table class="fo-tbl">
+          <thead><tr>
+            <th style="width:82px;">Date</th><th style="width:165px;">Fournisseur</th><th style="width:108px;">Pièce</th>
+            <th>Libellé</th><th class="r" style="width:86px;">HT</th><th class="r" style="width:86px;">TVA</th>
+            <th class="r" style="width:98px;">TTC</th><th style="width:112px;"></th>
+          </tr></thead>
+          <tbody>
           ${arr.map(f => {
             const ht = parseFloat(f.montantHt), tv = parseFloat(f.tva);
             const aHT = !isNaN(ht) && ht > 0, aTVA = !isNaN(tv) && tv > 0;
-            return `
-            <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${col};border-radius:8px;padding:10px 14px;flex-wrap:wrap;">
-              <div style="min-width:150px;">
-                <div style="font-size:13px;font-weight:800;color:var(--navy);">${_escapeHtml(f.nom || '—')}</div>
-                <div style="font-size:11px;color:var(--g600);">📅 ${fmtDate(f.dateDoc) || '—'}${f.numero ? ' · N° ' + _escapeHtml(f.numero) : ''}</div>
-              </div>
-              <div style="flex:2;min-width:160px;font-size:12px;color:var(--g600);">${_escapeHtml(String(f.description || '').slice(0, 150))}</div>
-              <div style="min-width:150px;text-align:right;">
-                ${(aHT || aTVA) ? `<div style="font-size:11px;color:var(--g600);">HT ${_displayMontant(ht || 0)} · TVA ${_displayMontant(tv || 0)}${f.tvaTaux ? ' (' + f.tvaTaux + ' %)' : ''}</div>`
-                  : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le montant TTC, au taux suisse de 8.1 %">🧮 TVA 8.1 %</button>` : '')}
-                <div style="font-size:14px;font-weight:800;color:var(--navy);">${_displayMontant(f.montant || 0)} CHF <span style="font-size:9px;color:var(--g400);">TTC</span></div>
-              </div>
-              <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
-                ${f.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="viewFournPdf('${f.id}')" title="Voir le PDF">📎 PDF</button>` : ''}
-                <button class="btn btn-navy btn-sm" onclick="openFournEdit('${f.id}')" title="Modifier la catégorie, les montants, la date…">✏️</button>
-                <button class="btn btn-red btn-sm btn-xs" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">🗑</button>
-              </div>
-            </div>`;
+            return `<tr>
+              <td class="mut">${fmtDate(f.dateDoc) || '—'}</td>
+              <td><b>${_escapeHtml(f.nom || '—')}</b></td>
+              <td class="mut">${_escapeHtml(f.numero || '—')}</td>
+              <td class="lib" title="${_escapeHtml(String(f.description || ''))}">${_escapeHtml(String(f.description || '').slice(0, 110))}</td>
+              <td class="r num">${aHT ? _displayMontant(ht) : '<span class="mut">—</span>'}</td>
+              <td class="r num">${aTVA ? _displayMontant(tv) + (f.tvaTaux ? `<span class="tx">${f.tvaTaux}%</span>` : '')
+                   : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">8.1 %</button>` : '<span class="mut">—</span>')}</td>
+              <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
+              <td class="act">
+                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" title="Ouvrir le PDF">📎</button>` : '<span class="fo-b vide"></span>'}
+                <button class="fo-b ed" onclick="openFournEdit('${f.id}')" title="Modifier">✏️</button>
+                <button class="fo-b su" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">🗑</button>
+              </td>
+            </tr>`;
           }).join('')}
-        </div>
+          </tbody>
+          ${(totHt || totTva) ? `<tfoot><tr>
+            <td colspan="4" class="mut">Sous-total — ${arr.length} pièce${arr.length > 1 ? 's' : ''}</td>
+            <td class="r num">${_displayMontant(totHt)}</td>
+            <td class="r num">${_displayMontant(totTva)}</td>
+            <td class="r num tot">${_displayMontant(totTtc)}</td><td></td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>`;
+    return `<div class="fo-fold${ouvert ? ' open' : ''}">
+        <button class="fo-fh" onclick="fournDossier('${String(sec).replace(/'/g, "\\'")}')">
+          <span class="ic" style="background:${_hexTint(col, 0.16)};color:${col};">${_fournIco(sec)}</span>
+          <span class="nm">${_escapeHtml(sec)}</span>
+          ${avecTva ? '' : '<span class="nt">sans TVA</span>'}
+          <span class="ct">${arr.length}</span>
+          <span class="tt">${_displayMontant(totTtc)}<span class="c"> CHF</span></span>
+          <span class="cv">${ouvert ? '▾' : '▸'}</span>
+        </button>
+        ${corps}
       </div>`;
   }).join('');
+
 }
 
 // ============================================================
