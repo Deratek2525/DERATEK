@@ -19898,6 +19898,13 @@ let _fournAnnee = '';      // '' = toutes les années
 let _fournOuverts = (function () { try { return JSON.parse(localStorage.getItem('deratek_fourn_dossiers') || '{}') || {}; } catch (e) { return {}; } })();
 function _fournMemo() { try { localStorage.setItem('deratek_fourn_dossiers', JSON.stringify(_fournOuverts)); } catch (e) {} }
 function fournDossier(cat) { _fournOuverts[cat] = !_fournOuverts[cat]; _fournMemo(); renderFournisseurs(); }
+function fournAllerDossier(cat) {
+  _fournOuverts[cat] = true; _fournMemo(); renderFournisseurs();
+  setTimeout(() => {
+    const el = [...document.querySelectorAll('.fo-fold')].find(x => x.getAttribute('data-cat') === cat);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
+  }, 30);
+}
 function fournTousDossiers(ouvrir) {
   const cats = Array.from(new Set((DB.fournisseurs || []).map(f => f.secteur || 'À classer')));
   cats.forEach(c => { _fournOuverts[c] = !!ouvrir; });
@@ -20089,7 +20096,26 @@ function renderFournisseurs() {
   const parCat = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; parCat[k] = (parCat[k] || 0) + (parseFloat(f.montant) || 0); });
   const maxCat = Math.max(1, ...Object.values(parCat));
-  const repart = '';
+  // ---- Vue d'ensemble : toute l'année d'un coup d'œil ----------------------
+  // Une barre unique découpée par catégorie, et en dessous chaque catégorie
+  // avec son montant. Un clic ouvre le dossier correspondant et y descend.
+  const _catsTri = Object.keys(parCat).sort((a, b) => parCat[b] - parCat[a]);
+  const repart = _catsTri.length ? `<div class="fo-ov">
+      <div class="fo-stack">${_catsTri.map(c => {
+        const col = SECTEUR_COLORS[c] || '#64748b';
+        return `<i style="flex:${Math.max(parCat[c], totTTC * 0.006)};background:${col};" title="${_escapeHtml(c)} — ${_displayMontant(parCat[c])} CHF"></i>`;
+      }).join('')}</div>
+      <div class="fo-leg">${_catsTri.map(c => {
+        const col = SECTEUR_COLORS[c] || '#64748b';
+        const pc = Math.round(parCat[c] / (totTTC || 1) * 100);
+        return `<button class="fo-lg" onclick="fournAllerDossier('${String(c).replace(/'/g, "\\'")}')" title="Ouvrir le dossier ${_escapeHtml(c)}">
+          <span class="dt" style="background:${col};"></span>
+          <span class="n">${_escapeHtml(c)}</span>
+          <span class="v">${_displayMontant(parCat[c])}</span>
+          <span class="p">${pc} %</span>
+        </button>`;
+      }).join('')}</div>
+    </div>` : '';
 
   const actions = `<div class="fo-acts">
       <button class="fo-ab pri" onclick="fournExportCsv()">${CK_ICO.telech}Export comptable</button>
@@ -20105,7 +20131,12 @@ function renderFournisseurs() {
   }
   const groups = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; (groups[k] = groups[k] || []).push(f); });
-  const ordre = SECTEURS_FOURN.filter(k => groups[k]).concat(Object.keys(groups).filter(k => !SECTEURS_FOURN.includes(k)));
+  const _totG = k => groups[k].reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+  const ordre = Object.keys(groups).sort((a, b) => {
+    if (a === 'À classer') return -1;          // ce qui demande une action passe devant
+    if (b === 'À classer') return 1;
+    return _totG(b) - _totG(a);                // puis du plus gros poste au plus petit
+  });
   // Une recherche ou un filtre de catégorie ouvre tout : on cherche à voir le contenu.
   const forceOuvert = !!(_fournCatFiltre || (($('fourn-search') || {}).value || '').trim());
   const barreDossiers = `<div class="fo-dact">
@@ -20160,7 +20191,7 @@ function renderFournisseurs() {
       </div>`;
     const pc = Math.round(totTtc / (totTTC || 1) * 100);
     const larg = Math.max(2, Math.round(totTtc / maxCat * 100));
-    return `<div class="fo-fold${ouvert ? ' open' : ''}">
+    return `<div class="fo-fold${ouvert ? ' open' : ''}${sec === 'À classer' ? ' alerte' : ''}" data-cat="${_escapeHtml(sec)}">
         <button class="fo-fh" onclick="fournDossier('${String(sec).replace(/'/g, "\\'")}')">
           <span class="ic" style="background:${_hexTint(col, 0.12)};color:${col};">${_fournSvg(sec)}</span>
           <span class="mid">
