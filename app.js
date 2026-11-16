@@ -20096,25 +20096,45 @@ function renderFournisseurs() {
   const parCat = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; parCat[k] = (parCat[k] || 0) + (parseFloat(f.montant) || 0); });
   const maxCat = Math.max(1, ...Object.values(parCat));
-  // ---- Vue d'ensemble : toute l'année d'un coup d'œil ----------------------
-  // Une barre unique découpée par catégorie, et en dessous chaque catégorie
-  // avec son montant. Un clic ouvre le dossier correspondant et y descend.
+  // ---- Répartition par catégorie : anneau + tableau -------------------------
+  // À gauche un anneau (le poids de chaque poste d'un coup d'œil), à droite la
+  // liste détaillée. Un clic sur une ligne ouvre le dossier et y descend.
   const _catsTri = Object.keys(parCat).sort((a, b) => parCat[b] - parCat[a]);
-  const repart = _catsTri.length ? `<div class="fo-ov">
-      <div class="fo-stack">${_catsTri.map(c => {
-        const col = SECTEUR_COLORS[c] || '#64748b';
-        return `<i style="flex:${Math.max(parCat[c], totTTC * 0.006)};background:${col};" title="${_escapeHtml(c)} — ${_displayMontant(parCat[c])} CHF"></i>`;
-      }).join('')}</div>
-      <div class="fo-leg">${_catsTri.map(c => {
-        const col = SECTEUR_COLORS[c] || '#64748b';
-        const pc = Math.round(parCat[c] / (totTTC || 1) * 100);
-        return `<button class="fo-lg" onclick="fournAllerDossier('${String(c).replace(/'/g, "\\'")}')" title="Ouvrir le dossier ${_escapeHtml(c)}">
-          <span class="dt" style="background:${col};"></span>
-          <span class="n">${_escapeHtml(c)}</span>
-          <span class="v">${_displayMontant(parCat[c])}</span>
-          <span class="p">${pc} %</span>
-        </button>`;
-      }).join('')}</div>
+  const _nbCat = c => items.filter(f => (f.secteur || 'À classer') === c).length;
+  let _cumul = 0;
+  const _anneau = _catsTri.map(c => {
+    const col = SECTEUR_COLORS[c] || '#64748b';
+    const pc = parCat[c] / (totTTC || 1) * 100;
+    const seg = Math.max(0.01, pc - (pc > 1.2 ? 0.6 : 0));      // petit jour entre deux segments
+    const off = 25 - _cumul;
+    _cumul += pc;
+    return `<circle cx="21" cy="21" r="15.9155" fill="none" stroke="${col}" stroke-width="5.2"
+      stroke-dasharray="${seg.toFixed(3)} ${(100 - seg).toFixed(3)}" stroke-dashoffset="${off.toFixed(3)}">
+      <title>${_escapeHtml(c)} — ${_displayMontant(parCat[c])} CHF (${pc.toFixed(1)} %)</title></circle>`;
+  }).join('');
+  const repart = _catsTri.length ? `<div class="fo-rp">
+      <div class="fo-rp-h"><b>Répartition par catégorie</b><span>${_catsTri.length} catégorie${_catsTri.length > 1 ? 's' : ''}</span></div>
+      <div class="fo-rp-b">
+        <div class="fo-donut">
+          <svg viewBox="0 0 42 42" aria-hidden="true">
+            <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#f1f3f7" stroke-width="5.2"></circle>
+            ${_anneau}
+          </svg>
+          <div class="ctr"><b>${_displayMontant(totTTC)}</b><span>CHF${_fournAnnee ? ' en ' + _fournAnnee : ''}</span></div>
+        </div>
+        <div class="fo-rp-l">${_catsTri.map(c => {
+          const col = SECTEUR_COLORS[c] || '#64748b';
+          const pc = parCat[c] / (totTTC || 1) * 100;
+          return `<button class="fo-rl" onclick="fournAllerDossier('${String(c).replace(/'/g, "\\'")}')" title="Ouvrir le dossier ${_escapeHtml(c)}">
+            <span class="sq" style="background:${col};"></span>
+            <span class="n">${_escapeHtml(c)}</span>
+            <span class="t"><i style="width:${Math.max(1.5, parCat[c] / maxCat * 100).toFixed(1)}%;background:${col};"></i></span>
+            <span class="p">${pc.toFixed(1)} %</span>
+            <span class="q">${_nbCat(c)}</span>
+            <span class="v">${_displayMontant(parCat[c])}</span>
+          </button>`;
+        }).join('')}</div>
+      </div>
     </div>` : '';
 
   const actions = `<div class="fo-acts">
