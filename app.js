@@ -20062,17 +20062,21 @@ function renderFournisseurs() {
   const repart = cats.length ? `<div class="fo-rep">${cats.map(c => {
       const col = SECTEUR_COLORS[c] || '#64748b';
       const on = _fournCatFiltre === c;
+      const nb = items.filter(f => (f.secteur || 'À classer') === c).length;
+      const pc = Math.round(parCat[c] / (totTTC || 1) * 100);
       return `<button class="fo-row${on ? ' on' : ''}" onclick="fournSetCat('${String(c).replace(/'/g, "\\'")}')" title="Afficher uniquement cette catégorie">
-        <span class="n">${_fournIco(c)} ${_escapeHtml(c)}</span>
+        <span class="n"><span class="e">${_fournIco(c)}</span>${_escapeHtml(c)}</span>
         <span class="t"><span class="f" style="width:${Math.max(3, Math.round(parCat[c] / maxCat * 100))}%;background:${col};"></span></span>
+        <span class="p">${pc} %</span>
+        <span class="q">${nb}</span>
         <span class="v">${_displayMontant(parCat[c])}</span></button>`;
     }).join('')}</div>` : '';
 
   const actions = `<div class="fo-acts">
-      <button class="btn btn-green btn-sm" onclick="fournExportCsv()">⬇ Export comptable (Excel / CSV)</button>
-      <button class="btn btn-sm" style="border:1px solid #e3e7ee;background:#fff;color:var(--navy);font-weight:700;" onclick="fournChercherDoublons()">🔍 Chercher les doublons</button>
-      ${nbSansTva ? `<button class="btn btn-sm" style="border:1.5px solid #d97706;background:#fffbeb;color:#b45309;font-weight:800;" onclick="fournCalcTvaToutes(8.1)">🧮 Calculer la TVA 8.1 % sur ${nbSansTva > 1 ? 'les ' + nbSansTva + ' factures' : 'la facture'} sans TVA</button>` : ''}
-      ${_fournCatFiltre ? `<button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="fournSetCat('')">✕ ${_escapeHtml(_fournCatFiltre)} — tout afficher</button>` : ''}
+      <button class="fo-ab pri" onclick="fournExportCsv()">⬇&nbsp; Export comptable</button>
+      <button class="fo-ab" onclick="fournChercherDoublons()">🔍&nbsp; Chercher les doublons</button>
+      ${nbSansTva ? `<button class="fo-ab warn" onclick="fournCalcTvaToutes(8.1)">🧮&nbsp; Calculer la TVA 8.1 %<span class="b">${nbSansTva}</span></button>` : ''}
+      ${_fournCatFiltre ? `<button class="fo-ab clr" onclick="fournSetCat('')">✕&nbsp; ${_escapeHtml(_fournCatFiltre)}</button>` : ''}
     </div>`;
 
   // ---- Liste, regroupée par catégorie --------------------------------------
