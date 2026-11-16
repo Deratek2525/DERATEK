@@ -2322,7 +2322,8 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .fo-fh:hover{background:#fafbfd;}
 .fo-fold.open .fo-fh{border-bottom:1px solid #eef1f6;}
 .fo-fh .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
-  font-size:19px;flex-shrink:0;}
+  flex-shrink:0;}
+.fo-fh .ic svg{display:block;}
 .fo-fh .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
 .fo-fh .l1{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
 .fo-fh .nm{font-size:14px;font-weight:700;color:#111827;letter-spacing:-.2px;}
@@ -2338,7 +2339,7 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .fo-fold.open .fo-fh .cv{color:var(--navy);}
 
 /* Tableau comptable à l'intérieur du dossier */
-.fo-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.fo-tbl{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;}
 .fo-tbl th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#aab1bd;
   font-weight:700;padding:9px 10px 7px;background:#fafbfd;border-bottom:1px solid #eef1f6;}
 .fo-tbl th.r{text-align:right;}
@@ -2361,9 +2362,10 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .fo-b.ed{background:var(--navy);border-color:var(--navy);color:#fff;}
 .fo-b.su{background:#fff5f5;border-color:#fecaca;color:#dc2626;}
 .fo-b.vide{display:inline-block;border:none;background:none;}
-.fo-tva{border:1px dashed #d97706;background:#fffbeb;color:#b45309;border-radius:6px;padding:2px 7px;
-  font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;}
-.fo-tva:hover{background:#fef3c7;}
+.fo-tva{border:none;background:none;color:#c3c9d4;border-radius:6px;padding:3px 7px;
+  font-size:11px;font-weight:650;cursor:pointer;font-family:inherit;transition:.12s;}
+.fo-tva:hover{background:#fff6e6;color:#b45309;}
+.fo-tbl tbody tr:hover .fo-tva{color:#d97706;}
 
 /* Fenêtre de modification */
 .fe-box{max-width:620px;width:94%;padding:22px 24px;border-radius:16px;}
@@ -2397,3 +2399,12 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .fo-dblg .n{color:#4b5563;width:120px;flex-shrink:0;font-weight:600;}
 .fo-dblg .x{color:#9ca3af;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .fo-dblg .m{font-weight:750;color:var(--navy);width:100px;text-align:right;}
+/* Pictogrammes au trait dans la rubrique Fournisseurs */
+.fo-b{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;}
+.fo-b svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.fo-b.ed svg{stroke:#fff;}
+.fo-b.su svg{stroke:#dc2626;}
+.fo-ab svg{width:15px;height:15px;margin-right:8px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;}
+.fo-chip{display:inline-flex;align-items:center;gap:7px;}
+.fo-chip i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block;}

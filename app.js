@@ -18090,6 +18090,37 @@ const SECTEUR_COLORS = (function () {
   o['Administratif'] = '#8b5cf6'; o['Produits / consommables'] = '#10b981';
   return o;
 })();
+// Pictogrammes au trait (même famille graphique que le reste de l'application) :
+// les emojis, dont le rendu change d'un appareil à l'autre, faisaient « vieux »
+// une fois alignés en colonne.
+const FOURN_SVG = {
+  'Produits / consommables':   '<path d="M9 3h6M10 3v6L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9V3"/><path d="M7.2 15h9.6"/>',
+  'Matériel / outillage':      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  'Vêtements / EPI':           '<path d="M20.4 7.3 16 4a4 4 0 0 1-8 0L3.6 7.3 5 11l2-1v10h10V10l2 1z"/>',
+  'Informatique / logiciels':  '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 20h20"/>',
+  'Sites web / domaines':      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  'Téléphone / Internet':      '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  'Communication / marketing': '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
+  'Véhicule / garage':         '<path d="M4 17v-5l2-5h12l2 5v5z"/><path d="M6 17v2M18 17v2"/><circle cx="8" cy="13.5" r="1"/><circle cx="16" cy="13.5" r="1"/>',
+  'Carburant':                 '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M4 10h11"/><path d="M15 8h2l2 2v8a1.5 1.5 0 0 1-3 0v-4h-1"/>',
+  'Location de matériel':      '<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  'Sous-traitance':            '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.6a3 3 0 0 1 0 6M21 20a5 5 0 0 0-4-4.9"/>',
+  'Honoraires / fiduciaire':   '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  'Formation / documentation': '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/>',
+  'Frais de port / douane':    '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  'Loyer / local':             '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  'Assurances':                '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+  'Charges sociales / AVS':    '<path d="M3 21h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 10h18L12 4z"/>',
+  'Impôts / taxes':            '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="m9 14 6-6M9.5 8.5h.01M14.5 13.5h.01"/>',
+  'Frais bancaires':           '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
+  'Salaires':                  '<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><circle cx="16" cy="13.5" r="1"/>',
+  'À classer':                 '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.8 1c0 1.7-2.3 2-2.3 3.5M12 17h.01"/>',
+  'Autre':                     '<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+};
+function _fournSvg(nom) {
+  const d = FOURN_SVG[nom] || FOURN_SVG['Autre'];
+  return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+}
 function _fournCat(nom) { return FOURN_CATS.find(c => c.n === nom) || null; }
 function _fournIco(nom) { const c = _fournCat(nom); return c ? c.i : '📦'; }
 function _fournAvecTva(nom) { const c = _fournCat(nom); return c ? c.tva : true; }
@@ -20045,8 +20076,8 @@ function renderFournisseurs() {
       ${kpi('Moyenne / mois', (nbMois ? _displayMontant(totTTC / nbMois) : '—') + ' <span>CHF</span>', 'or')}
     </div>
     ${(nbSansTva || nbAClasser) ? `<div class="fo-chips">
-      ${nbAClasser ? `<span class="fo-chip rd" title="Ces factures n'ont pas encore de catégorie comptable">❓ ${nbAClasser} à classer</span>` : ''}
-      ${nbSansTva ? `<span class="fo-chip or" title="Leur montant HT et leur TVA ne sont pas renseignés : ils ne comptent pas dans la TVA récupérable">🧮 ${nbSansTva} sans HT ni TVA</span>` : ''}
+      ${nbAClasser ? `<span class="fo-chip rd" title="Ces factures n'ont pas encore de catégorie comptable"><i></i>${nbAClasser} à classer</span>` : ''}
+      ${nbSansTva ? `<span class="fo-chip or" title="Leur montant HT et leur TVA ne sont pas renseignés : ils ne comptent pas dans la TVA récupérable"><i></i>${nbSansTva} sans HT ni TVA</span>` : ''}
     </div>` : ''}`;
 
   if (!toutes.length) {
@@ -20061,9 +20092,9 @@ function renderFournisseurs() {
   const repart = '';
 
   const actions = `<div class="fo-acts">
-      <button class="fo-ab pri" onclick="fournExportCsv()">⬇&nbsp; Export comptable</button>
-      <button class="fo-ab" onclick="fournChercherDoublons()">🔍&nbsp; Chercher les doublons</button>
-      ${nbSansTva ? `<button class="fo-ab warn" onclick="fournCalcTvaToutes(8.1)">🧮&nbsp; Calculer la TVA 8.1 %<span class="b">${nbSansTva}</span></button>` : ''}
+      <button class="fo-ab pri" onclick="fournExportCsv()">${CK_ICO.telech}Export comptable</button>
+      <button class="fo-ab" onclick="fournChercherDoublons()">${CK_ICO.copie}Chercher les doublons</button>
+      ${nbSansTva ? `<button class="fo-ab warn" onclick="fournCalcTvaToutes(8.1)">Calculer la TVA 8.1 %<span class="b">${nbSansTva}</span></button>` : ''}
       ${_fournCatFiltre ? `<button class="fo-ab clr" onclick="fournSetCat('')">✕&nbsp; ${_escapeHtml(_fournCatFiltre)}</button>` : ''}
     </div>`;
 
@@ -20109,12 +20140,12 @@ function renderFournisseurs() {
               <td class="lib" title="${_escapeHtml(String(f.description || ''))}">${_escapeHtml(String(f.description || '').slice(0, 110))}</td>
               <td class="r num">${aHT ? _displayMontant(ht) : '<span class="mut">—</span>'}</td>
               <td class="r num">${aTVA ? _displayMontant(tv) + (f.tvaTaux ? `<span class="tx">${f.tvaTaux}%</span>` : '')
-                   : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">8.1 %</button>` : '<span class="mut">—</span>')}</td>
+                   : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">+ TVA</button>` : '<span class="mut">—</span>')}</td>
               <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
               <td class="act">
-                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" title="Ouvrir le PDF">📎</button>` : '<span class="fo-b vide"></span>'}
-                <button class="fo-b ed" onclick="openFournEdit('${f.id}')" title="Modifier">✏️</button>
-                <button class="fo-b su" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">🗑</button>
+                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" title="Ouvrir le PDF">${CK_ICO.trombone}</button>` : '<span class="fo-b vide"></span>'}
+                <button class="fo-b ed" onclick="openFournEdit('${f.id}')" title="Modifier">${CK_ICO.crayon}</button>
+                <button class="fo-b su" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">${CK_ICO.suppr}</button>
               </td>
             </tr>`;
           }).join('')}
@@ -20131,7 +20162,7 @@ function renderFournisseurs() {
     const larg = Math.max(2, Math.round(totTtc / maxCat * 100));
     return `<div class="fo-fold${ouvert ? ' open' : ''}">
         <button class="fo-fh" onclick="fournDossier('${String(sec).replace(/'/g, "\\'")}')">
-          <span class="ic" style="background:${_hexTint(col, 0.14)};color:${col};">${_fournIco(sec)}</span>
+          <span class="ic" style="background:${_hexTint(col, 0.12)};color:${col};">${_fournSvg(sec)}</span>
           <span class="mid">
             <span class="l1">
               <span class="nm">${_escapeHtml(sec)}</span>
