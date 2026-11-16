@@ -19785,6 +19785,32 @@ function fournCalcTva(id, taux) {
   toast('TVA ' + tx + ' % calculée : ' + _displayMontant(f.tva) + ' CHF', '#2d9e6b');
 }
 
+// Complète d'un coup toutes les factures affichées qui n'ont ni HT ni TVA.
+// Volontairement déclenché à la main : une facture étrangère ne porte pas de
+// TVA suisse récupérable, et il ne faut pas en inventer.
+function fournCalcTvaToutes(taux) {
+  const tx = parseFloat(taux) || 8.1;
+  const cibles = _fournFiltrees().filter(f =>
+    (parseFloat(f.montant) || 0) > 0 &&
+    !(parseFloat(f.montantHt) > 0) && !(parseFloat(f.tva) > 0) &&
+    _fournAvecTva(f.secteur));
+  if (!cibles.length) { toast('Aucune facture à compléter', '#d97706'); return; }
+  if (!confirm('Calculer le HT et la TVA à ' + tx + ' % sur ' + cibles.length + ' facture(s) ?\n\n'
+    + 'À ne faire que sur des factures SUISSES : un fournisseur étranger ne facture pas de TVA suisse récupérable.\n'
+    + 'Tu pourras corriger chaque ligne avec le crayon ✏️.')) return;
+  const list = DB.fournisseurs;
+  cibles.forEach(c => {
+    const f = list.find(x => x.id === c.id); if (!f) return;
+    const ttc = parseFloat(f.montant) || 0;
+    f.montantHt = Math.round((ttc / (1 + tx / 100)) * 100) / 100;
+    f.tva = Math.round((ttc - f.montantHt) * 100) / 100;
+    f.tvaTaux = tx;
+  });
+  DB.fournisseurs = list;
+  renderFournisseurs();
+  toast('🧮 TVA ' + tx + ' % calculée sur ' + cibles.length + ' facture(s)', '#2d9e6b');
+}
+
 // ── Fenêtre de modification d'une facture fournisseur ────────────────────────
 let _fournEditId = null;
 function openFournEdit(id) {
@@ -19927,6 +19953,7 @@ function renderFournisseurs() {
 
   const actions = `<div class="fo-acts">
       <button class="btn btn-green btn-sm" onclick="fournExportCsv()">⬇ Export comptable (Excel / CSV)</button>
+      ${nbSansTva ? `<button class="btn btn-sm" style="border:1.5px solid #d97706;background:#fffbeb;color:#b45309;font-weight:800;" onclick="fournCalcTvaToutes(8.1)">🧮 Calculer la TVA 8.1 % sur ${nbSansTva > 1 ? 'les ' + nbSansTva + ' factures' : 'la facture'} sans TVA</button>` : ''}
       ${_fournCatFiltre ? `<button class="btn btn-ghost btn-sm" style="color:#b91c1c;" onclick="fournSetCat('')">✕ ${_escapeHtml(_fournCatFiltre)} — tout afficher</button>` : ''}
     </div>`;
 
