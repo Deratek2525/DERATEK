@@ -584,7 +584,7 @@ function showScreen(name) {
   if (typeof updateBonsCounts === 'function') updateBonsCounts();
   // Sur téléphone : un écran complet ouvert reste ouvert tant qu'on ne touche pas la barre d'onglets
   if (typeof mobActif === 'function' && mobActif()) {
-    const plein = ['rapport-edit', 'agenda', 'rapports', 'devis', 'factures', 'clients', 'locataires', 'contrats', 'rapprochement', 'bons'];
+    const plein = ['rapport-edit', 'agenda', 'rapports', 'devis', 'factures', 'clients', 'locataires', 'contrats', 'rapprochement', 'bons', 'fournisseurs'];
     _mobEcranOuvert = plein.indexOf(name) >= 0;
     document.body.classList.toggle('mob-on', !_mobEcranOuvert);
   }
@@ -598,7 +598,7 @@ function showScreen(name) {
   if (name === 'locataires')   renderLocataires();
   if (name === 'bons')         { renderBons(); setTimeout(adjustStickyOffsets, 0); }
   if (name === 'devis')        renderDocuments();
-  if (name === 'fournisseurs') renderFournisseurs();
+  if (name === 'fournisseurs') { _tkRamener(); renderFournisseurs(); }
   if (name === 'contrats')     renderContrats();
   if (name === 'rapprochement') renderRapprochement();
   if (name === 'tva')          renderTVA();
@@ -5106,6 +5106,7 @@ function mobNouveauRapport(fn) {
 function renderMobile() {
   const box = document.getElementById('mob-shell');
   if (!box) return;
+  _tkRamener();   // le bloc « Tickets » revient à sa place avant de redessiner l'accueil
   if (!mobActif()) { box.style.display = 'none'; document.body.classList.remove('mob-on'); return; }
   box.style.display = 'block';
   // mob-on = accueil terrain visible. Si un écran complet est ouvert (rapport en cours
@@ -5146,6 +5147,13 @@ function renderMobile() {
             <div class="s">${_escapeHtml(b.geranceNom || '')}${b.immeuble ? '<br>📍 ' + _escapeHtml(b.immeuble) : ''}</div>
           </div>`).join('') || '<div class="mob-vide">Rien en attente. 👍</div>'}
       </div>`;
+  } else if (_mobOnglet === 'tickets') {
+    const mois = (DB.fournisseurs || []).filter(f => /^Ticket de caisse/.test(f.description || '') && String(f.dateDoc || '').slice(0, 7) === today().slice(0, 7));
+    const tot = mois.reduce((a, f) => a + (parseFloat(f.montant) || 0), 0);
+    corps = `
+      <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Tickets de caisse</h2>
+        <div class="s">${mois.length ? mois.length + ' ticket' + (mois.length > 1 ? 's' : '') + ' ce mois · ' + _displayMontant(tot) + ' CHF' : 'Carburant, matériel, restaurant…'}</div></div>
+      <div class="mob-body"><div id="tk-mob-slot"></div></div>`;
   } else if (_mobOnglet === 'bons') {
     corps = _mobFiche ? _mobFicheBon() : _mobListeBons();
   } else if (_mobOnglet === 'rapport') {
@@ -5185,6 +5193,7 @@ function renderMobile() {
         ${it('🏢', 'Clients', "showScreen('clients')")}
         ${it('🏠', 'Locataires', "showScreen('locataires')")}
         ${it('📜', 'Contrats', "showScreen('contrats')")}
+        ${it('📦', 'Fournisseurs & dépenses', "showScreen('fournisseurs')")}
         ${it('⚙️', 'Options d\'affichage', 'openOptions()')}
         ${it('🔐', 'Changer mon mot de passe', 'changerMotDePasse()')}
         ${it('🚪', 'Déconnexion', 'doLogout()')}
@@ -5193,8 +5202,12 @@ function renderMobile() {
 
   box.innerHTML = `<div id="mob-corps">${corps}</div>
     <div class="mob-tabbar">
-      ${tab('journee', '📅', 'Journée')}${tab('bons', '📄', 'Bons')}${tab('rapport', '📋', 'Rapport')}${tab('plus', '⋯', 'Plus')}
+      ${tab('journee', '📅', 'Journée')}${tab('bons', '📄', 'Bons')}${tab('rapport', '📋', 'Rapport')}${tab('tickets', '🧾', 'Tickets')}${tab('plus', '⋯', 'Plus')}
     </div>`;
+  if (_mobOnglet === 'tickets') {
+    const slot = document.getElementById('tk-mob-slot'), card = document.getElementById('tk-card');
+    if (slot && card) { slot.appendChild(card); renderTickets(); }
+  }
 }
 // --- Liste des bons, avec les deux sous-onglets « Bons » et « En cours » -----
 let _mobBonsVue = 'actifs';   // actifs | encours
@@ -18098,6 +18111,7 @@ const FOURN_CATS = [
   { n: 'Honoraires / fiduciaire',   i: '📑', c: '#b45309', tva: true  },
   { n: 'Formation / documentation', i: '📚', c: '#7c3aed', tva: true  },
   { n: 'Frais de port / douane',    i: '📮', c: '#94a3b8', tva: true  },
+  { n: 'Repas / restaurant',        i: '🍽', c: '#e11d48', tva: true  },
   { n: 'Loyer / local',             i: '🏠', c: '#16a34a', tva: false },
   { n: 'Assurances',                i: '🛡', c: '#14b8a6', tva: false },
   { n: 'Charges sociales / AVS',    i: '🏛', c: '#8b5cf6', tva: false },
@@ -18128,6 +18142,7 @@ const FOURN_SVG = {
   'Téléphone / Internet':      '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   'Communication / marketing': '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
   'Véhicule / garage':         '<path d="M4 17v-5l2-5h12l2 5v5z"/><path d="M6 17v2M18 17v2"/><circle cx="8" cy="13.5" r="1"/><circle cx="16" cy="13.5" r="1"/>',
+  'Repas / restaurant':        '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10"/><path d="M17 21V3c-2 1-3 3.5-3 7h3"/>',
   'Carburant':                 '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M4 10h11"/><path d="M15 8h2l2 2v8a1.5 1.5 0 0 1-3 0v-4h-1"/>',
   'Location de matériel':      '<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
   'Sous-traitance':            '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.6a3 3 0 0 1 0 6M21 20a5 5 0 0 0-4-4.9"/>',
@@ -18164,6 +18179,7 @@ const _FOURN_REGLES = [
   [/infomaniak|domaine|h.bergement|hosting|nom de domaine|webflow|wix|ovh|godaddy/i, 'Sites web / domaines'],
   [/microsoft|adobe|google workspace|logiciel|licence|software|subscription|artlist|canva|apple|abonnement ia|openai|anthropic/i, 'Informatique / logiciels'],
   [/carburant|essence|diesel|station.service|socar|migrol|\\bavia\\b|\\bshell\\b|\\bbp\\b|tamoil|coop pronto/i, 'Carburant'],
+  [/restaurant|ristorante|caf.|pizzeria|brasserie|bistro|auberge|h.tel|buvette|tea.room|boulangerie|traiteur|mcdonald|burger king|kebab|sushi|repas/i, 'Repas / restaurant'],
   [/garage|pneu|service v.hicule|carrosserie|amag|emil frey|contr.le technique|hylly|liukutaso|am.nagement.*(fourgon|camionnette)/i, 'Véhicule / garage'],
   [/location|nacelle|nacellessa|.chafaudage|lev.*nacelle|rental/i, 'Location de matériel'],
   [/imprim|pixart|flyer|.tiquette|affiche|publicit|marketing|annonce|local\.ch|google ads|facebook/i, 'Communication / marketing'],
@@ -18928,6 +18944,252 @@ async function fournConfirmSave() {
   fournCancel();
   renderFournisseurs();
 }
+
+// ============================================================
+// TICKETS DE CAISSE — photo depuis le téléphone, lecture par l'IA, saisie en lot
+// ============================================================
+const TK_CATS = ['Carburant', 'Matériel / outillage', 'Repas / restaurant', 'Véhicule / garage',
+  'Produits / consommables', 'Vêtements / EPI', 'Frais de port / douane', 'Communication / marketing', 'Autre'];
+let _tk = [];            // { id, img, statut: attente|lecture|ok|erreur, err, garder, infos:{...} }
+let _tkEnCours = false;
+let _tkEnregistre = false;
+
+// Le bloc « Tickets » vit dans l'écran Fournisseurs ; sur téléphone il est déplacé
+// dans l'onglet « Tickets ». On le remet chez lui avant tout redessin de l'accueil mobile.
+function _tkRamener() {
+  const card = document.getElementById('tk-card'), dz = document.getElementById('fourn-dropzone');
+  if (card && dz && card.nextElementSibling !== dz) dz.parentNode.insertBefore(card, dz);
+}
+function tkPhoto()  { const i = $('tk-cam');   if (i) { i.value = ''; i.click(); } }
+function tkGalerie(){ const i = $('tk-galer'); if (i) { i.value = ''; i.click(); } }
+async function tkFichiers(e) {
+  const fs = Array.from((e && e.target && e.target.files) || []).filter(f => /^image\//i.test(f.type || '') || /\.(jpe?g|png|heic|webp)$/i.test(f.name || ''));
+  if (!fs.length) return;
+  for (const f of fs) {
+    const img = await _clientImageVersDataUrl(f);
+    if (!img) { toast('Photo illisible : ' + (f.name || ''), '#e63946'); continue; }
+    _tk.push({ id: newId(), img, statut: 'attente', err: '', garder: true, infos: {} });
+  }
+  renderTickets();
+  tkTraiter();
+}
+function tkHandleDrop(e) {
+  e.preventDefault();
+  const z = $('tk-card'); if (z) z.classList.remove('drag');
+  tkFichiers({ target: { files: e.dataTransfer.files } });
+}
+
+function _tkNombre(v) {
+  if (v == null) return '';
+  const n = parseFloat(String(v).replace(/[^\d.,-]/g, '').replace(/'/g, '').replace(',', '.'));
+  return isFinite(n) ? (Math.round(n * 100) / 100).toFixed(2) : '';
+}
+async function _tkLireIA(img) {
+  const consigne =
+    "Voici la photo d'un TICKET DE CAISSE suisse (station-service, magasin de bricolage, restaurant…). " +
+    "Lis-le et réponds UNIQUEMENT par un objet JSON valide, sans texte autour, avec ces clés (chaîne vide si absent) :\n" +
+    '{"fournisseur":"nom du commerce (ex. Migrol, Coop Pronto, Jumbo, Restaurant du Port)",' +
+    '"date":"date du ticket au format AAAA-MM-JJ",' +
+    '"montant":"TOTAL payé TTC en CHF, chiffres uniquement (ex 85.40)",' +
+    '"tva":"montant de la TVA en CHF, chiffres uniquement",' +
+    '"taux_tva":"taux de TVA principal en % (ex 8.1)",' +
+    '"numero":"numéro du ticket / de la transaction s\'il apparaît",' +
+    '"description":"résumé très court (ex. Diesel 45.2 L, Vis et silicone, Repas 2 pers.)",' +
+    '"categorie":"une seule valeur parmi : ' + TK_CATS.join(' | ') + '"}\n' +
+    "Règles : le montant est le TOTAL final payé (pas un sous-total ni le rendu de monnaie). " +
+    "Si la TVA n'est pas écrite en francs mais que le taux est indiqué, calcule-la : TVA = total × taux / (100 + taux). " +
+    "Les dates suisses s'écrivent JJ.MM.AA ou JJ.MM.AAAA. N'INVENTE RIEN.";
+  let brut = await _mistralFetch({
+    model: (DERATEK_CONFIG.mistral.modelVision || DERATEK_CONFIG.mistral.model), temperature: 0, max_tokens: 600,
+    messages: [{ role: 'user', content: [{ type: 'text', text: consigne }, { type: 'image_url', image_url: img }] }]
+  }) || '{}';
+  brut = String(brut).replace(/```(?:json)?/gi, '').trim();
+  const i = brut.indexOf('{'), j = brut.lastIndexOf('}');
+  if (i >= 0 && j > i) brut = brut.slice(i, j + 1);
+  const o = JSON.parse(brut);
+  const ttc = _tkNombre(o.montant);
+  let tva = _tkNombre(o.tva);
+  const taux = parseFloat(String(o.taux_tva || '').replace(',', '.'));
+  if (!tva && ttc && isFinite(taux) && taux > 0 && taux < 30) tva = (Math.round(ttc * taux / (100 + taux) * 100) / 100).toFixed(2);
+  let cat = TK_CATS.find(c => c.toLowerCase() === String(o.categorie || '').toLowerCase().trim());
+  if (!cat) { const a = _fournCatAuto(o.fournisseur, o.description, ''); cat = (a && a !== 'À classer') ? a : 'Autre'; }
+  let date = String(o.date || '').trim();
+  const m = date.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (m) date = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = '';
+  return { fournisseur: String(o.fournisseur || '').trim(), date, montant: ttc, tva,
+           numero: String(o.numero || '').trim(), description: String(o.description || '').trim(), categorie: cat };
+}
+async function tkTraiter() {
+  if (_tkEnCours) return;
+  _tkEnCours = true;
+  try {
+    let t;
+    while ((t = _tk.find(x => x.statut === 'attente'))) {
+      t.statut = 'lecture'; _tkMajItem(t);
+      try {
+        t.infos = await _tkLireIA(t.img);
+        t.statut = 'ok';
+        const dbl = _tkDoublons(t);
+        if (dbl.length) t.garder = false;     // doublon probable : décoché par défaut
+      } catch (e) { console.warn('ticket', e); t.statut = 'erreur'; t.err = e.message || 'lecture impossible'; t.infos = { categorie: 'Autre' }; t.garder = false; }
+      _tkMajItem(t);
+    }
+  } finally { _tkEnCours = false; }
+}
+function tkRelire(id) { const t = _tk.find(x => x.id === id); if (!t) return; t.statut = 'attente'; t.err = ''; renderTickets(); tkTraiter(); }
+function tkRetirer(id) { _tk = _tk.filter(x => x.id !== id); renderTickets(); }
+function tkVider() {
+  if (_tk.some(t => t.statut === 'ok') && !confirm('Retirer tous les tickets de la liste sans les enregistrer ?')) return;
+  _tk = []; renderTickets();
+}
+function tkMaj(id, cle, val) {
+  const t = _tk.find(x => x.id === id); if (!t) return;
+  if (cle === 'garder') t.garder = !!val; else t.infos[cle] = val;
+  if (cle !== 'garder' && cle !== 'description') { const el = $('tk-dbl-' + id); if (el) el.innerHTML = _tkDoublonTxt(t); }
+  _tkMajBouton();
+}
+function tkVoir(id) {
+  const t = _tk.find(x => x.id === id); if (!t) return;
+  const w = window.open(''); if (w) w.document.write('<title>Ticket</title><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="' + t.img + '" style="max-width:100%;height:auto"></body>');
+}
+function _tkDoublons(t) {
+  const i = t.infos || {};
+  const autres = _fournDoublons({ nom: i.fournisseur, numero: i.numero, montant: i.montant, dateDoc: i.date });
+  // même ticket ajouté deux fois dans ce lot
+  const memeLot = _tk.some(x => x !== t && x.statut === 'ok' && x.infos.montant && x.infos.montant === i.montant
+    && x.infos.date === i.date && _fdNom(x.infos.fournisseur) === _fdNom(i.fournisseur) && _tk.indexOf(x) < _tk.indexOf(t));
+  return memeLot ? autres.concat([{ f: { nom: i.fournisseur, dateDoc: i.date, montant: i.montant }, motif: 'déjà dans cette série de photos' }]) : autres;
+}
+function _tkDoublonTxt(t) {
+  const d = _tkDoublons(t);
+  if (!d.length) return '';
+  return '⚠️ Déjà enregistré ? ' + _escapeHtml(d[0].motif);
+}
+function _tkPret(t) { return (t.statut === 'ok' || t.statut === 'erreur') && t.garder; }
+function _tkMajBouton() {
+  const b = $('tk-save'); if (!b) return;
+  const n = _tk.filter(_tkPret).length;
+  const tot = _tk.filter(_tkPret).reduce((s, t) => s + (parseFloat(t.infos.montant) || 0), 0);
+  b.disabled = !n || _tkEnregistre;
+  b.innerHTML = n ? '✓ Enregistrer ' + n + ' ticket' + (n > 1 ? 's' : '') + ' · ' + _displayMontant(tot) + ' CHF' : 'Aucun ticket à enregistrer';
+}
+function _tkOpts(sel) {
+  return TK_CATS.concat(FOURN_CATS.map(c => c.n).filter(n => TK_CATS.indexOf(n) < 0 && n !== 'Salaires'))
+    .map(n => `<option value="${n}" ${n === sel ? 'selected' : ''}>${_fournIco(n)} ${n}</option>`).join('');
+}
+function _tkHdHtml() {
+  const enLecture = _tk.filter(t => t.statut === 'attente' || t.statut === 'lecture').length;
+  return `<div><b>${_tk.length} ticket${_tk.length > 1 ? 's' : ''}</b>${enLecture ? ` · <span class="tk-lect">lecture de ${enLecture} en cours…</span>` : ' · vérifiez puis enregistrez'}</div>
+      <button class="tk-lien" onclick="tkVider()">Tout retirer</button>`;
+}
+function _tkItemHtml(t) {
+  const i = t.infos || {};
+  const v = k => _escapeHtml(i[k] || '').replace(/"/g, '&quot;');
+  if (t.statut === 'attente' || t.statut === 'lecture') return `
+    <div class="tk-it lecture" id="tk-it-${t.id}"><img src="${t.img}" alt=""><div class="tk-ph"><span class="tk-spin"></span>${t.statut === 'lecture' ? 'L\'IA lit le ticket…' : 'En attente…'}</div></div>`;
+  return `
+    <div class="tk-it ${t.garder ? '' : 'off'} ${t.statut === 'erreur' ? 'err' : ''}" id="tk-it-${t.id}">
+      <img src="${t.img}" alt="" onclick="tkVoir('${t.id}')" title="Agrandir">
+      <div class="tk-f">
+        ${t.statut === 'erreur' ? `<div class="tk-er">Lecture impossible (${_escapeHtml(t.err)}) — <a href="#" onclick="tkRelire('${t.id}');return false;">réessayer</a> ou remplissez à la main puis cochez « Enregistrer ».</div>` : ''}
+        <div class="tk-row">
+          <input class="tk-in tk-nom" placeholder="Commerce" value="${v('fournisseur')}" oninput="tkMaj('${t.id}','fournisseur',this.value)">
+          <input class="tk-in tk-dt" type="date" value="${v('date')}" onchange="tkMaj('${t.id}','date',this.value)">
+        </div>
+        <div class="tk-row">
+          <label class="tk-mt"><span>Total CHF</span><input class="tk-in" inputmode="decimal" value="${v('montant')}" oninput="tkMaj('${t.id}','montant',this.value)"></label>
+          <label class="tk-mt"><span>dont TVA</span><input class="tk-in" inputmode="decimal" value="${v('tva')}" oninput="tkMaj('${t.id}','tva',this.value)"></label>
+        </div>
+        <select class="tk-in" onchange="tkMaj('${t.id}','categorie',this.value)">${_tkOpts(i.categorie || 'Autre')}</select>
+        <input class="tk-in tk-desc" placeholder="Détail (facultatif)" value="${v('description')}" oninput="tkMaj('${t.id}','description',this.value)">
+        <div class="tk-dbl" id="tk-dbl-${t.id}">${t.statut === 'ok' ? _tkDoublonTxt(t) : ''}</div>
+        <div class="tk-act">
+          <label class="tk-chk"><input type="checkbox" ${t.garder ? 'checked' : ''} onchange="tkMaj('${t.id}','garder',this.checked);this.closest('.tk-it').classList.toggle('off',!this.checked)"> Enregistrer</label>
+          <button class="tk-lien rouge" onclick="tkRetirer('${t.id}')">Retirer</button>
+        </div>
+      </div>
+    </div>`;
+}
+// Met à jour un seul ticket (sans toucher aux champs en cours de saisie des autres)
+function _tkMajItem(t) {
+  const el = $('tk-it-' + t.id), hd = $('tk-hd');
+  if (!el || !hd) { renderTickets(); return; }
+  el.outerHTML = _tkItemHtml(t);
+  hd.innerHTML = _tkHdHtml();
+  _tkMajBouton();
+}
+function renderTickets() {
+  const box = $('tk-liste'); if (!box) return;
+  if (!_tk.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="tk-hd" id="tk-hd">${_tkHdHtml()}</div>
+    ${_tk.map(_tkItemHtml).join('')}
+    <div class="tk-foot">
+      <button class="tk-btn sec" onclick="tkPhoto()">📷 Ticket suivant</button>
+      <button class="tk-btn" id="tk-save" onclick="tkEnregistrer()"></button>
+    </div>`;
+  _tkMajBouton();
+}
+function _tkBlob(dataUrl) {
+  const [tete, b64] = dataUrl.split(',');
+  const mime = (tete.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64); const u = new Uint8Array(bin.length);
+  for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+  return new Blob([u], { type: mime });
+}
+async function tkEnregistrer() {
+  const aGarder = _tk.filter(_tkPret);
+  if (!aGarder.length || _tkEnregistre) return;
+  const sansMontant = aGarder.filter(t => !(parseFloat(t.infos.montant) > 0));
+  if (sansMontant.length && !confirm(sansMontant.length + ' ticket(s) sans montant. Enregistrer quand même ?')) return;
+  _tkEnregistre = true;
+  const b = $('tk-save'); if (b) { b.disabled = true; b.textContent = 'Enregistrement…'; }
+  let uid = '';
+  try { const { data: { session } } = await sb.auth.getSession(); uid = session ? session.user.id : ''; } catch (e) {}
+  const list = DB.fournisseurs;
+  let n = 0, sansPhoto = 0;
+  for (const t of aGarder) {
+    const i = t.infos, fId = newId();
+    if (b) b.textContent = 'Enregistrement ' + (n + 1) + ' / ' + aGarder.length + '…';
+    let pdfPath = '';
+    if (sb && uid) {
+      try {
+        const blob = _tkBlob(t.img);
+        const ext = blob.type === 'image/png' ? 'png' : (blob.type === 'image/webp' ? 'webp' : 'jpg');
+        const path = `${uid}/${fId}-ticket.${ext}`;
+        const { error } = await sb.storage.from('fournisseurs-pdfs').upload(path, blob, { contentType: blob.type, upsert: true });
+        if (!error) pdfPath = path; else console.warn('upload ticket', error);
+      } catch (e) { console.warn(e); }
+    }
+    if (!pdfPath) sansPhoto++;
+    const ttc = parseFloat(String(i.montant || '').replace(',', '.')) || 0;
+    const tva = parseFloat(String(i.tva || '').replace(',', '.')) || 0;
+    const ht = tva ? Math.round((ttc - tva) * 100) / 100 : 0;
+    list.push({
+      id: fId,
+      nom: i.fournisseur || 'Ticket de caisse',
+      numero: i.numero || '',
+      dateDoc: i.date || '',
+      montantHt: ht, tva: tva, montant: ttc,
+      tvaTaux: (ht && tva) ? Math.round((tva / ht) * 1000) / 10 : null,
+      secteur: i.categorie || 'Autre',
+      description: 'Ticket de caisse' + (i.description ? ' — ' + i.description : ''),
+      pdfPath: pdfPath
+    });
+    n++;
+  }
+  DB.fournisseurs = list;
+  _tk = _tk.filter(t => !_tkPret(t));
+  _tkEnregistre = false;
+  renderTickets();
+  renderFournisseurs();
+  toast('✓ ' + n + ' ticket' + (n > 1 ? 's' : '') + ' enregistré' + (n > 1 ? 's' : '') + (sansPhoto ? ' (' + sansPhoto + ' sans photo)' : ''), sansPhoto ? '#d97706' : '#2d9e6b');
+}
+window.addEventListener('beforeunload', e => {
+  if (_tk.some(_tkPret)) { e.preventDefault(); e.returnValue = ''; }
+});
 
 async function viewFournPdf(id) {
   const f = (DB.fournisseurs || []).find(x => x.id === id);

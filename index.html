@@ -5,17 +5,17 @@
 <title>DERATEK — Professional Pest Control</title>
 
 <!-- Application installable sur l'ecran d'accueil (iPhone, Android, ordinateur) -->
-<link rel="manifest" href="./manifest.json?v=20261118pdf">
+<link rel="manifest" href="./manifest.json?v=20261118tik">
 <meta name="theme-color" content="#0d1b3e">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20261118pdf">
-<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20261118pdf">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20261118pdf">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icone-192.png?v=20261118tik">
+<link rel="apple-touch-icon" href="./icons/icone-180.png?v=20261118tik">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icone-180.png?v=20261118tik">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DERATEK">
-<meta name="app-version" content="20261118pdf">
-<link rel="stylesheet" href="./style.css?v=20261118pdf">
+<meta name="app-version" content="20261118tik">
+<link rel="stylesheet" href="./style.css?v=20261118tik">
 </head>
 <body>
 
@@ -1338,6 +1338,23 @@
       </div>
     </div>
     <div class="page-body">
+      <div id="tk-card" class="tk-card"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="tkHandleDrop(event)">
+        <div class="tk-tt">
+          <div class="tk-ic">🧾</div>
+          <div><div class="tk-t1">Tickets de caisse</div>
+          <div class="tk-t2">Carburant, matériel, restaurant… Photographiez vos tickets : l'IA lit le commerce, la date, le total et la TVA.</div></div>
+        </div>
+        <div class="tk-bts">
+          <button class="tk-btn" onclick="tkPhoto()">📷 Prendre en photo</button>
+          <button class="tk-btn sec" onclick="tkGalerie()">🖼 Choisir des photos</button>
+        </div>
+        <input type="file" id="tk-cam" accept="image/*" capture="environment" style="display:none" onchange="tkFichiers(event)">
+        <input type="file" id="tk-galer" accept="image/*" multiple style="display:none" onchange="tkFichiers(event)">
+        <div id="tk-liste" style="display:none;"></div>
+      </div>
       <div id="fourn-dropzone" class="bon-dropzone"
            onclick="document.getElementById('fourn-file-input').click()"
            ondragover="event.preventDefault();this.classList.add('drag')"
@@ -1565,16 +1582,16 @@
 <!-- Scripts -->
 <script src="./email_min.js"></script>
 <script src="./jspdf_umd_min.js"></script>
-  <script src="./fonts_arial.js?v=20261118pdf"></script>
+  <script src="./fonts_arial.js?v=20261118tik"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="./logo.js?v=20261118pdf"></script>
-<script src="./footer_prestations.js?v=20261118pdf"></script>
-<script src="./config.js?v=20261118pdf"></script>
-<script src="./app.js?v=20261118pdf"></script>
-<script src="./pdf.js?v=20261118pdf"></script>
+<script src="./logo.js?v=20261118tik"></script>
+<script src="./footer_prestations.js?v=20261118tik"></script>
+<script src="./config.js?v=20261118tik"></script>
+<script src="./app.js?v=20261118tik"></script>
+<script src="./pdf.js?v=20261118tik"></script>
 
 </body></html>

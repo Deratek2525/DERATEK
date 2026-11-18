@@ -2441,3 +2441,55 @@ svg.nz { width: 100%; height: 100%; display: block; fill: currentColor; stroke: 
 .fo-fold.alerte{border-color:#fecaca;box-shadow:inset 4px 0 0 #ef4444,0 1px 2px rgba(16,24,40,.03);}
 .fo-fold.flash{animation:foFlash 1.3s ease;}
 @keyframes foFlash{0%{box-shadow:0 0 0 0 rgba(99,102,241,.0);}25%{box-shadow:0 0 0 4px rgba(99,102,241,.28);}100%{box-shadow:0 0 0 0 rgba(99,102,241,0);}}
+
+/* ===== Tickets de caisse (Fournisseurs) ===== */
+.tk-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(15,23,42,.05);transition:border-color .15s,background .15s}
+.tk-card.drag{border-color:#2563eb;background:#eff6ff}
+.tk-tt{display:flex;gap:12px;align-items:flex-start}
+.tk-ic{width:42px;height:42px;border-radius:12px;background:#fff1f2;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.tk-t1{font-size:16px;font-weight:800;color:var(--navy)}
+.tk-t2{font-size:12.5px;color:#64748b;margin-top:2px;line-height:1.4}
+.tk-bts{display:flex;gap:10px;margin-top:14px}
+.tk-btn{flex:1;border:0;border-radius:12px;padding:13px 14px;font-size:15px;font-weight:700;background:var(--navy);color:#fff;cursor:pointer;font-family:inherit}
+.tk-btn.sec{background:#f1f5f9;color:var(--navy)}
+.tk-btn:disabled{opacity:.45;cursor:default}
+.tk-hd{display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px;font-size:13px;color:#334155}
+.tk-lect{color:#2563eb;font-weight:600}
+.tk-lien{background:none;border:0;color:#64748b;font-size:13px;cursor:pointer;padding:4px;font-family:inherit;text-decoration:underline}
+.tk-lien.rouge{color:#dc2626}
+.tk-it{display:flex;gap:12px;border:1px solid #e5e7eb;border-radius:14px;padding:10px;margin-bottom:10px;background:#fff}
+.tk-it.off{opacity:.55;background:#f8fafc}
+.tk-it.err{border-color:#fca5a5}
+.tk-it>img{width:78px;height:104px;object-fit:cover;border-radius:10px;flex:none;background:#f1f5f9;cursor:zoom-in}
+.tk-it.lecture{align-items:center}
+.tk-ph{font-size:13px;color:#2563eb;display:flex;align-items:center;gap:8px}
+.tk-spin{width:16px;height:16px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:tkspin .8s linear infinite}
+@keyframes tkspin{to{transform:rotate(360deg)}}
+.tk-f{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.tk-row{display:flex;gap:6px}
+.tk-in{width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:9px;padding:8px 9px;font-size:16px;font-family:inherit;background:#fff;color:#0f172a;min-width:0}
+.tk-nom{font-weight:700}
+.tk-dt{max-width:150px}
+.tk-mt{flex:1;display:flex;flex-direction:column;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase;gap:2px}
+.tk-desc{font-size:14px;color:#475569}
+.tk-dbl{font-size:12px;color:#b91c1c;font-weight:600}
+.tk-dbl:empty{display:none}
+.tk-er{font-size:12px;color:#b91c1c}
+.tk-act{display:flex;justify-content:space-between;align-items:center}
+.tk-chk{font-size:13px;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:6px}
+.tk-chk input{width:18px;height:18px}
+.tk-foot{display:flex;gap:10px;position:sticky;bottom:0;background:#fff;padding:10px 0 4px}
+.tk-foot .tk-btn:not(.sec){background:#16a34a;flex:2}
+@media (max-width:520px){
+  .tk-bts{flex-direction:column}
+  .tk-it>img{width:64px;height:88px}
+  .tk-row{flex-wrap:wrap}
+  .tk-dt{max-width:none}
+  .tk-foot{flex-direction:column-reverse}
+}
+#mob-shell .tk-card{margin:0;border:0;box-shadow:none;padding:14px}
+#mob-shell .tk-card .tk-tt{display:none}
+#mob-shell .tk-card .tk-bts{margin-top:0}
+#mob-shell .tk-foot{position:fixed;left:0;right:0;bottom:calc(62px + env(safe-area-inset-bottom));padding:10px 13px;background:rgba(255,255,255,.96);border-top:1px solid #e4e9f2;z-index:899;flex-direction:row}
+#mob-shell #tk-liste{padding-bottom:80px}
+#mob-shell .tk-foot .tk-btn{padding:12px 10px;font-size:14.5px}
