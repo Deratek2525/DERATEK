@@ -18100,8 +18100,7 @@ function renderTVA() {
 // impôts et les frais bancaires n'en portent pas : elles ne doivent donc pas
 // gonfler la TVA à récupérer.
 const FOURN_CATS = [
-  { n: 'Produits / consommables',   i: '🧴', c: '#10b981', tva: true  },
-  { n: 'Matériel / outillage',      i: '🧰', c: '#f97316', tva: true  },
+  { n: 'Produits / matériel',       i: '🧴', c: '#10b981', tva: true  },
   { n: 'Vêtements / EPI',           i: '👕', c: '#f59e0b', tva: true  },
   { n: 'Informatique / logiciels',  i: '💻', c: '#3b82f6', tva: true  },
   { n: 'Sites web / domaines',      i: '🌐', c: '#0ea5e9', tva: true  },
@@ -18130,15 +18129,14 @@ const SECTEUR_COLORS = (function () {
   FOURN_CATS.forEach(c => { o[c.n] = c.c; });
   // anciens libellés, pour que rien ne reste sans couleur
   o['Matériel'] = '#f97316'; o['Informatique'] = '#3b82f6'; o['Garage / véhicules'] = '#64748b';
-  o['Administratif'] = '#8b5cf6'; o['Produits / consommables'] = '#10b981';
+  o['Administratif'] = '#8b5cf6'; o['Produits / consommables'] = '#10b981'; o['Matériel / outillage'] = '#10b981';
   return o;
 })();
 // Pictogrammes au trait (même famille graphique que le reste de l'application) :
 // les emojis, dont le rendu change d'un appareil à l'autre, faisaient « vieux »
 // une fois alignés en colonne.
 const FOURN_SVG = {
-  'Produits / consommables':   '<path d="M9 3h6M10 3v6L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9V3"/><path d="M7.2 15h9.6"/>',
-  'Matériel / outillage':      '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  'Produits / matériel':       '<path d="M9 3h6M10 3v6L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9V3"/><path d="M7.2 15h9.6"/>',
   'Vêtements / EPI':           '<path d="M20.4 7.3 16 4a4 4 0 0 1-8 0L3.6 7.3 5 11l2-1v10h10V10l2 1z"/>',
   'Informatique / logiciels':  '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 20h20"/>',
   'Sites web / domaines':      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -18165,7 +18163,9 @@ function _fournSvg(nom) {
   const d = FOURN_SVG[nom] || FOURN_SVG['Autre'];
   return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 }
-function _fournCat(nom) { return FOURN_CATS.find(c => c.n === nom) || null; }
+// Anciennes catégories regroupées (« Produits / consommables » + « Matériel / outillage »)
+const FOURN_ALIAS = { 'Produits / consommables': 'Produits / matériel', 'Matériel / outillage': 'Produits / matériel', 'Matériel': 'Produits / matériel' };
+function _fournCat(nom) { nom = FOURN_ALIAS[nom] || nom; return FOURN_CATS.find(c => c.n === nom) || null; }
 function _fournIco(nom) { const c = _fournCat(nom); return c ? c.i : '📦'; }
 function _fournAvecTva(nom) { const c = _fournCat(nom); return c ? c.tva : true; }
 
@@ -18189,9 +18189,9 @@ const _FOURN_REGLES = [
   [/formation|cours|s.minaire|certification|livre|abonnement revue/i, 'Formation / documentation'],
   [/pose d.app|sous-trait|intervention pour notre compte|zoo control/i, 'Sous-traitance'],
   [/polo|casquette|v.tement|t-shirt|pantalon|chaussure|combinaison|gant|masque|ffp2|ffp3|lunette|protection p\.|epi\b|bestroas/i, 'Vêtements / EPI'],
-  [/killgerm|paradif|appat|app.t|insecticide|rodenticide|gel |raticide|biocide|produit chimique|mite killer|sorkil|bombex|protect-b|nettoyage|d.sinfect/i, 'Produits / consommables'],
+  [/killgerm|paradif|appat|app.t|insecticide|rodenticide|gel |raticide|biocide|produit chimique|mite killer|sorkil|bombex|protect-b|nettoyage|d.sinfect/i, 'Produits / matériel'],
   [/frais de port|livraison|transport|douane|dhl|dpd|poste colis/i, 'Frais de port / douane'],
-  [/hgc|quincaill|outil|visse|peinture|silicone|soudal|c.ble|mat.riel|.chelle|batterie/i, 'Matériel / outillage'],
+  [/hgc|quincaill|outil|visse|peinture|silicone|soudal|c.ble|mat.riel|.chelle|batterie/i, 'Produits / matériel'],
 ];
 function _fournCatAuto(nom, description, secteurActuel) {
   const txt = ((nom || '') + ' ' + (description || '')).toLowerCase();
@@ -18951,8 +18951,8 @@ async function fournConfirmSave() {
 // ============================================================
 // TICKETS DE CAISSE — photo depuis le téléphone, lecture par l'IA, saisie en lot
 // ============================================================
-const TK_CATS = ['Carburant', 'Matériel / outillage', 'Repas / restaurant', 'Véhicule / garage',
-  'Produits / consommables', 'Vêtements / EPI', 'Frais de port / douane', 'Communication / marketing', 'Autre'];
+const TK_CATS = ['Carburant', 'Produits / matériel', 'Repas / restaurant', 'Véhicule / garage',
+  'Vêtements / EPI', 'Frais de port / douane', 'Communication / marketing', 'Autre'];
 let _tk = [];            // { id, img, statut: attente|lecture|ok|erreur, err, garder, infos:{...} }
 let _tkEnCours = false;
 let _tkEnregistre = false;
@@ -20375,6 +20375,7 @@ function _fournFiltrees() {
 
 function renderFournisseurs() {
   updateNavCounts();
+  (DB.fournisseurs || []).forEach(f => { if (f && FOURN_ALIAS[f.secteur]) f.secteur = FOURN_ALIAS[f.secteur]; });   // anciennes catégories regroupées
   const list = $('fournisseurs-list');
   const count = $('fournisseurs-count');
   const toutes = DB.fournisseurs || [];
