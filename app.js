@@ -6654,20 +6654,47 @@ function bonPdfPreviewHide() {
     if (p && !p.matches(':hover')) p.style.display = 'none';
   }, 180);
 }
-function _showPdfHoverPreview(url, el) {
+// Aperçu au survol du justificatif FOURNISSEUR (PDF ou photo de ticket)
+let _fournPdfUrlCache = {};
+function fournPdfPreview(id, el) {
+  clearTimeout(_bonPdfHoverTimer);
+  _bonPdfHoverTimer = setTimeout(async () => {
+    const f = (DB.fournisseurs || []).find(x => x.id === id);
+    if (!f || !f.pdfPath || !sb) return;
+    let c = _fournPdfUrlCache[id];
+    if (!c || Date.now() - c.t > 50 * 60 * 1000) {      // lien valable 1 h : on le renouvelle avant
+      try {
+        const { data, error } = await _sbLienSigne('fournisseurs-pdfs', f.pdfPath, { silencieux: true });
+        if (error || !data || !data.signedUrl) return;
+        c = _fournPdfUrlCache[id] = { url: data.signedUrl, t: Date.now() };
+      } catch (e) { return; }
+    }
+    _showPdfHoverPreview(c.url, el, /\.(jpe?g|png|webp|gif|heic)$/i.test(f.pdfPath));
+  }, 250);
+}
+function _showPdfHoverPreview(url, el, estImage) {
   let p = document.getElementById('pdf-hover-preview');
   if (!p) {
     p = document.createElement('div');
     p.id = 'pdf-hover-preview';
     p.style.cssText = 'position:fixed;z-index:99999;width:540px;height:720px;max-height:88vh;background:#fff;border:2px solid #0d1b3e;border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.35);overflow:hidden;display:none;';
-    p.innerHTML = '<div style="font-size:11px;font-weight:700;color:#0d1b3e;padding:4px 8px;background:#eef2f8;">📎 Aperçu du PDF</div><iframe style="width:100%;height:calc(100% - 22px);border:0;"></iframe>';
+    p.innerHTML = '<div class="pdfhp-t" style="font-size:11px;font-weight:700;color:#0d1b3e;padding:4px 8px;background:#eef2f8;">📎 Aperçu du PDF</div><iframe style="width:100%;height:calc(100% - 22px);border:0;"></iframe><div class="pdfhp-img" style="display:none;width:100%;height:calc(100% - 22px);overflow:auto;background:#f4f6fa;text-align:center;"><img style="max-width:100%;height:auto;display:inline-block;"></div>';
     document.body.appendChild(p);
     p.addEventListener('mouseenter', () => { p.style.display = 'block'; });
     p.addEventListener('mouseleave', () => { p.style.display = 'none'; });
   }
-  const ifr = p.querySelector('iframe');
-  const full = url + '#toolbar=0&navpanes=0&view=FitH';
-  if (ifr.getAttribute('src') !== full) ifr.setAttribute('src', full);
+  const ifr = p.querySelector('iframe'), boiteImg = p.querySelector('.pdfhp-img'), titre = p.querySelector('.pdfhp-t');
+  if (estImage && boiteImg) {
+    ifr.style.display = 'none'; boiteImg.style.display = 'block';
+    const im = boiteImg.querySelector('img'); if (im.getAttribute('src') !== url) im.setAttribute('src', url);
+    if (titre) titre.textContent = '📎 Aperçu du justificatif';
+  } else {
+    if (boiteImg) boiteImg.style.display = 'none';
+    ifr.style.display = 'block';
+    if (titre) titre.textContent = '📎 Aperçu du PDF';
+    const full = url + '#toolbar=0&navpanes=0&view=FitH';
+    if (ifr.getAttribute('src') !== full) ifr.setAttribute('src', full);
+  }
   const r = el.getBoundingClientRect();
   const W = 540, H = Math.min(720, Math.round(window.innerHeight * 0.88));
   let left = r.left - 280; if (left < 8) left = 8;
@@ -20518,7 +20545,7 @@ function renderFournisseurs() {
                    : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">+ TVA</button>` : '<span class="mut">—</span>')}</td>
               <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
               <td class="act">
-                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" title="Ouvrir le PDF">${CK_ICO.trombone}</button>` : '<span class="fo-b vide"></span>'}
+                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" onmouseenter="fournPdfPreview('${f.id}', this)" onmouseleave="bonPdfPreviewHide()">${CK_ICO.trombone}</button>` : '<span class="fo-b vide"></span>'}
                 <button class="fo-b ed" onclick="openFournEdit('${f.id}')" title="Modifier">${CK_ICO.crayon}</button>
                 <button class="fo-b su" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">${CK_ICO.suppr}</button>
               </td>
