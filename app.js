@@ -19069,7 +19069,7 @@ async function _tkLireIA(img) {
     '"montant":"TOTAL payé TTC en CHF, chiffres uniquement (ex 85.40)",' +
     '"tva":"montant de la TVA en CHF, chiffres uniquement",' +
     '"taux_tva":"taux de TVA principal en % (ex 8.1)",' +
-    '"numero":"numéro du ticket / de la transaction s\'il apparaît",' +
+
     '"description":"résumé très court (ex. Diesel 45.2 L, Vis et silicone, Repas 2 pers.)",' +
     '"categorie":"une seule valeur parmi : ' + TK_CATS.join(' | ') + '"}\n' +
     "Règles : le montant est le TOTAL final payé (pas un sous-total ni le rendu de monnaie). " +
@@ -19095,7 +19095,7 @@ async function _tkLireIA(img) {
   if (m) date = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = '';
   return { fournisseur: String(o.fournisseur || '').trim(), date, montant: ttc, tva,
-           numero: String(o.numero || '').trim(), description: String(o.description || '').trim(), categorie: cat };
+           numero: '', description: String(o.description || '').trim(), categorie: cat };
 }
 async function tkTraiter() {
   if (_tkEnCours) return;
@@ -19130,13 +19130,21 @@ function tkVoir(id) {
   const t = _tk.find(x => x.id === id); if (!t) return;
   const w = window.open(''); if (w) w.document.write('<title>Ticket</title><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="' + t.img + '" style="max-width:100%;height:auto"></body>');
 }
+// Doublon d'un ticket : même montant ET même date (le « numéro » lu sur un ticket est souvent
+// celui de la station ou du terminal, identique d'un ticket à l'autre : on ne s'y fie pas).
 function _tkDoublons(t) {
   const i = t.infos || {};
-  const autres = _fournDoublons({ nom: i.fournisseur, numero: i.numero, montant: i.montant, dateDoc: i.date });
-  // même ticket ajouté deux fois dans ce lot
-  const memeLot = _tk.some(x => x !== t && x.statut === 'ok' && x.infos.montant && x.infos.montant === i.montant
-    && x.infos.date === i.date && _fdNom(x.infos.fournisseur) === _fdNom(i.fournisseur) && _tk.indexOf(x) < _tk.indexOf(t));
-  return memeLot ? autres.concat([{ f: { nom: i.fournisseur, dateDoc: i.date, montant: i.montant }, motif: 'déjà dans cette série de photos' }]) : autres;
+  const mt = _fdMontant(i.montant), dt = String(i.date || '').slice(0, 10);
+  if (mt == null || !dt) return [];
+  const out = [];
+  (DB.fournisseurs || []).forEach(f => {
+    if (_fdMontant(f.montant) === mt && String(f.dateDoc || '').slice(0, 10) === dt)
+      out.push({ f: f, motif: 'même date et même montant (' + (f.nom || '—') + ')' });
+  });
+  const avant = _tk.slice(0, _tk.indexOf(t));
+  if (avant.some(x => x.infos && _fdMontant(x.infos.montant) === mt && String(x.infos.date || '').slice(0, 10) === dt))
+    out.push({ f: { nom: i.fournisseur, dateDoc: i.date, montant: i.montant }, motif: 'déjà dans cette série de photos' });
+  return out;
 }
 function _tkDoublonTxt(t) {
   const d = _tkDoublons(t);
