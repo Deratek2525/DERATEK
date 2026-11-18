@@ -712,6 +712,32 @@ function setFilter(sc, val, el) {
   if (sc === 'interventions') renderInterventions();
 }
 
+// ---- Lien signé Supabase Storage robuste ----
+// Si la session a expiré, Supabase répond « Object not found » (le fichier devient
+// invisible pour un visiteur non connecté). On rafraîchit la session et on réessaie ;
+// si elle est vraiment perdue, on propose de se reconnecter.
+async function _sbLienSigne(bucket, path, opts) {
+  opts = opts || {};
+  const essai = () => sb.storage.from(bucket).createSignedUrl(path, opts.duree || 3600);
+  let r = await essai();
+  if (!r.error && r.data && r.data.signedUrl) return r;
+  let session = null;
+  try { const x = await sb.auth.refreshSession(); session = x && x.data && x.data.session; } catch (e) {}
+  if (session) {
+    r = await essai();
+    if (!r.error && r.data && r.data.signedUrl) return r;
+  } else {
+    try { const g = await sb.auth.getSession(); session = g && g.data && g.data.session; } catch (e) {}
+  }
+  if (!session) {
+    r = { data: null, error: { message: 'session expirée — reconnectez-vous' } };
+    if (!opts.silencieux && confirm('Votre session a expiré, le fichier ne peut pas être ouvert.\n\nSe reconnecter maintenant ?')) doLogout();
+  } else if (r.error && /not found/i.test(r.error.message || '')) {
+    r.error.message = 'fichier introuvable dans le stockage';
+  }
+  return r;
+}
+
 // ============================================================
 // LOGIN
 // ============================================================
@@ -6419,7 +6445,7 @@ async function bonPJOuvrir(bonId, index) {
   const f = _bonPJ(b)[index]; if (!f) return;
   if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
   try {
-    const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(f.p, 3600);
+    const { data, error } = await _sbLienSigne('bons-pdfs', f.p);
     if (error || !data || !data.signedUrl) { toast('Lien impossible : ' + (error && error.message || '?'), '#e63946'); return; }
     window.open(data.signedUrl, '_blank');
   } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
@@ -6517,7 +6543,7 @@ async function viewBonPdf(bonId) {
   if (!bon || !bon.pdfPath) { toast('Aucun PDF associé à ce bon', '#e63946'); return; }
   if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
   try {
-    const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(bon.pdfPath, 3600);
+    const { data, error } = await _sbLienSigne('bons-pdfs', bon.pdfPath);
     if (error || !data || !data.signedUrl) { toast('Erreur génération du lien : ' + (error?.message||'?'), '#e63946'); return; }
     window.open(data.signedUrl, '_blank');
   } catch (e) {
@@ -6536,7 +6562,7 @@ async function bonPdfPreview(bonId, el) {
     let url = _bonPdfUrlCache[bonId];
     if (!url) {
       try {
-        const { data, error } = await sb.storage.from('bons-pdfs').createSignedUrl(bon.pdfPath, 3600);
+        const { data, error } = await _sbLienSigne('bons-pdfs', bon.pdfPath, { silencieux: true });
         if (error || !data || !data.signedUrl) return;
         url = data.signedUrl; _bonPdfUrlCache[bonId] = url;
       } catch (e) { return; }
@@ -18907,7 +18933,7 @@ async function viewFournPdf(id) {
   const f = (DB.fournisseurs || []).find(x => x.id === id);
   if (!f || !f.pdfPath) { toast('Aucun PDF associé', '#e63946'); return; }
   try {
-    const { data, error } = await sb.storage.from('fournisseurs-pdfs').createSignedUrl(f.pdfPath, 3600);
+    const { data, error } = await _sbLienSigne('fournisseurs-pdfs', f.pdfPath);
     if (error || !data) { toast('Erreur lien PDF', '#e63946'); return; }
     window.open(data.signedUrl, '_blank');
   } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
@@ -19714,7 +19740,7 @@ async function viewContratFile(id) {
   if (!c || !c.filePath) { toast('Aucun fichier associé', '#e63946'); return; }
   if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
   try {
-    const { data, error } = await sb.storage.from('contrats-files').createSignedUrl(c.filePath, 3600);
+    const { data, error } = await _sbLienSigne('contrats-files', c.filePath);
     if (error || !data || !data.signedUrl) { toast('Erreur lien : ' + (error && error.message || '?'), '#e63946'); return; }
     window.open(data.signedUrl, '_blank');
   } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
@@ -20368,7 +20394,7 @@ async function rappVoirReleve(id) {
   if (!r || !r.pdfPath) { toast('PDF non disponible pour ce relevé', '#e63946'); return; }
   if (!sb) { toast('Connexion Supabase indisponible', '#e63946'); return; }
   try {
-    const { data, error } = await sb.storage.from('releves-pdfs').createSignedUrl(r.pdfPath, 3600);
+    const { data, error } = await _sbLienSigne('releves-pdfs', r.pdfPath);
     if (error || !data || !data.signedUrl) { toast('Erreur génération du lien : ' + (error?.message || '?'), '#e63946'); return; }
     window.open(data.signedUrl, '_blank');
   } catch (e) { toast('Erreur : ' + e.message, '#e63946'); }
