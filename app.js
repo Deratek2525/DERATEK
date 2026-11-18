@@ -56,7 +56,7 @@ const TABLE_FIELDS = {
     locataireNom: 'locataire_nom', locataireAdresse: 'locataire_adresse',
     elementsTouches: 'elements_touches', bonId: 'bon_id',
   } },
-  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht', tvaTaux: 'tva_taux' } },
+  fournisseurs:{ js2db: { dateDoc: 'date_doc', pdfPath: 'pdf_path', montantHt: 'montant_ht', tvaTaux: 'tva_taux', createdAt: 'created_at' } },
   releves:    { js2db: { pdfPath: 'pdf_path', dateImport: 'date_import', nbPaiements: 'nb_paiements', nbReconnus: 'nb_reconnus', createdAt: 'created_at' } },
   contrats:   { js2db: {
     clientId: 'client_id', clientNom: 'client_nom',
@@ -139,7 +139,7 @@ function toJs(table, row) {
   const out = {};
   for (const k of Object.keys(row)) {
     if (META_COLS.has(k) && k !== 'created_at') continue;
-    if (k === 'created_at' && table !== 'locataires' && table !== 'bons') continue;
+    if (k === 'created_at' && table !== 'locataires' && table !== 'bons' && table !== 'fournisseurs') continue;
     out[reverse[k] || k] = row[k];
   }
   return out;
@@ -5156,7 +5156,18 @@ function renderMobile() {
     corps = `
       <div class="mob-hd"><div class="mob-logo">DER<span>A</span>TEK</div><h2>Tickets de caisse</h2>
         <div class="s">${mois.length ? mois.length + ' ticket' + (mois.length > 1 ? 's' : '') + ' ce mois · ' + _displayMontant(tot) + ' CHF' : 'Carburant, matériel, restaurant…'}</div></div>
-      <div class="mob-body"><div id="tk-mob-slot"></div></div>`;
+      <div class="mob-body"><div id="tk-mob-slot"></div>
+        ${(() => {
+          const der = (DB.fournisseurs || []).filter(f => f.createdAt)
+            .sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt))).slice(0, 10);
+          if (!der.length) return '';
+          return `<div class="mob-sec">📥 Derniers reçus</div>` + der.map(f => `
+            <div class="mob-c" style="border-left-color:${SECTEUR_COLORS[f.secteur] || '#94a3b8'}">
+              <div class="t" style="display:flex;justify-content:space-between;gap:8px"><span>${_escapeHtml(f.nom || '—')}</span><span>${_displayMontant(f.montant || 0)}</span></div>
+              <div class="s">${_fournIco(f.secteur)} ${_escapeHtml(f.secteur || '')}${f.dateDoc ? ' · du ' + fmtDate(f.dateDoc) : ''}<br>📥 reçu le ${_fournRecu(f, true)}</div>
+            </div>`).join('');
+        })()}
+      </div>`;
   } else if (_mobOnglet === 'bons') {
     corps = _mobFiche ? _mobFicheBon() : _mobListeBons();
   } else if (_mobOnglet === 'rapport') {
@@ -18965,7 +18976,8 @@ async function fournConfirmSave() {
     montant: parseFloat(v('montant')) || 0,
     secteur: v('secteur') || 'À classer',
     description: v('description'),
-    pdfPath: pdfPath
+    pdfPath: pdfPath,
+    createdAt: new Date().toISOString()
   };
   fourn.tvaTaux = (fourn.montantHt && fourn.tva) ? Math.round((fourn.tva / fourn.montantHt) * 1000) / 10 : null;
   if (!fourn.nom && !fourn.numero) { toast('Rien à enregistrer (fournisseur vide)', '#e63946'); return; }
@@ -19260,6 +19272,7 @@ async function tkEnregistrer() {
       montantHt: ht, tva: tva, montant: ttc,
       tvaTaux: (ht && tva) ? Math.round((tva / ht) * 1000) / 10 : null,
       secteur: i.categorie || 'Autre',
+      createdAt: new Date().toISOString(),
       description: 'Ticket de caisse' + (i.description ? ' — ' + i.description : ''),
       pdfPath: pdfPath
     });
@@ -20293,6 +20306,13 @@ function _fournHT(f) {
   const ttc = parseFloat(f && f.montant) || 0;
   return _fournAvecTva(f && f.secteur) ? 0 : ttc;   // sans TVA : HT = TTC
 }
+// Date à laquelle le document a été reçu / enregistré dans l'application
+function _fournRecu(f, avecHeure) {
+  if (!f || !f.createdAt) return '';
+  const d = new Date(f.createdAt); if (isNaN(d)) return '';
+  const j = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+  return avecHeure ? j + ' à ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : j;
+}
 // Facture sans TVA suisse (fournisseur étranger, personne non assujettie) : taux mis à 0
 function _fournSansTvaCH(f) { return f && f.tvaTaux !== null && f.tvaTaux !== undefined && f.tvaTaux !== '' && parseFloat(f.tvaTaux) === 0; }
 function _fournTVA(f) {
@@ -20353,6 +20373,7 @@ function openFournEdit(id) {
   d.id = 'modal-fourn-edit'; d.className = 'modal-bg'; d.style.display = 'flex';
   d.innerHTML = `<div class="modal fe-box" onclick="event.stopPropagation()">
       <h3>🧾 Facture fournisseur</h3>
+      ${_fournRecu(f) ? `<div class="fe-recu">📥 Reçu et enregistré le <b>${_fournRecu(f, true)}</b></div>` : ''}
       <div class="fe-g2">
         ${ch('Fournisseur', 'nom', f.nom)}
         ${ch('N° de facture', 'numero', f.numero)}
@@ -20397,14 +20418,15 @@ function fournExportCsv() {
   const items = _fournFiltrees();
   if (!items.length) { toast('Aucune facture à exporter', '#d97706'); return; }
   const esc = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
-  const lignes = [['Date', 'Fournisseur', 'N° facture', 'Catégorie', 'Montant HT', 'TVA', 'Taux TVA %', 'Montant TTC', 'TVA récupérable', 'Description'].map(esc).join(';')];
+  const lignes = [['Date', 'Fournisseur', 'N° facture', 'Catégorie', 'Montant HT', 'TVA', 'Taux TVA %', 'Montant TTC', 'TVA récupérable', 'Description', 'Reçu le'].map(esc).join(';')];
   items.slice().sort((a, b) => String(a.dateDoc || '').localeCompare(String(b.dateDoc || ''))).forEach(f => {
     lignes.push([
       f.dateDoc || '', f.nom || '', f.numero || '', f.secteur || '',
       (f.montantHt != null ? f.montantHt : ''), (f.tva != null ? f.tva : ''),
       (f.tvaTaux != null ? f.tvaTaux : ''), (f.montant != null ? f.montant : ''),
       _fournAvecTva(f.secteur) ? 'oui' : 'non',
-      String(f.description || '').replace(/[\r\n]+/g, ' ')
+      String(f.description || '').replace(/[\r\n]+/g, ' '),
+      _fournRecu(f)
     ].map(esc).join(';'));
   });
   const nom = 'DERATEK_charges_' + (_fournAnnee || 'toutes-annees') + '.csv';
@@ -20561,7 +20583,7 @@ function renderFournisseurs() {
             const ht = parseFloat(f.montantHt), tv = parseFloat(f.tva);
             const aHT = !isNaN(ht) && ht > 0, aTVA = !isNaN(tv) && tv > 0;
             return `<tr>
-              <td class="mut">${fmtDate(f.dateDoc) || '—'}</td>
+              <td class="mut">${fmtDate(f.dateDoc) || '—'}${_fournRecu(f) ? `<div class="fo-recu" title="Document reçu et enregistré le ${_fournRecu(f, true)}">reçu ${_fournRecu(f)}</div>` : ''}</td>
               <td><b>${_escapeHtml(f.nom || '—')}</b></td>
               <td class="mut">${_escapeHtml(f.numero || '—')}</td>
               <td class="lib" title="${_escapeHtml(String(f.description || ''))}">${_escapeHtml(String(f.description || '').slice(0, 110))}</td>
