@@ -775,6 +775,8 @@ async function doLogin() {
       try { emailjs.init(DERATEK_CONFIG.emailjs.publicKey); } catch (e) {}
     }
     renderDashboard();
+    try { optApply(); } catch (e) {}
+    try { _mobOnglet = 'journee'; _mobEcranOuvert = false; renderMobile(); } catch (e) { console.warn('mobile', e); }   // 📱 interface terrain après une connexion manuelle aussi
     setTimeout(_autoBackupCheck, 1500);
   } catch (err) {
     if (errEl) { errEl.textContent = 'Erreur : ' + err.message; errEl.style.display = 'block'; }
@@ -786,6 +788,7 @@ async function doLogin() {
 async function doLogout() {
   try { if (sb) await sb.auth.signOut(); } catch (e) {}
   DB._resetCache();
+  try { _tkRamener(); const ms = $('mob-shell'); if (ms) { ms.style.display = 'none'; ms.innerHTML = ''; } document.body.classList.remove('mob-on'); } catch (e) {}
   $('app').style.display = 'none';
   $('login-screen').style.display = 'flex';
   const e = $('login-email'); if (e) e.value = '';
@@ -18966,12 +18969,44 @@ async function tkFichiers(e) {
   const fs = Array.from((e && e.target && e.target.files) || []).filter(f => /^image\//i.test(f.type || '') || /\.(jpe?g|png|heic|webp)$/i.test(f.name || ''));
   if (!fs.length) return;
   for (const f of fs) {
-    const img = await _clientImageVersDataUrl(f);
+    const img = await _tkCompresser(f);
     if (!img) { toast('Photo illisible : ' + (f.name || ''), '#e63946'); continue; }
     _tk.push({ id: newId(), img, statut: 'attente', err: '', garder: true, infos: {} });
   }
   renderTickets();
   tkTraiter();
+}
+// Réduit la photo du ticket à ~200 Ko (JPEG) en gardant le texte lisible
+const TK_CIBLE_OCTETS = 200 * 1024;
+function _tkCompresser(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onerror = () => { URL.revokeObjectURL(url); _clientImageVersDataUrl(file).then(resolve); };
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      const W = im.naturalWidth, H = im.naturalHeight;
+      // départ : 2000 px max sur le grand côté et 1,6 million de pixels max
+      let r = Math.min(1, 2000 / Math.max(W, H), Math.sqrt(1600000 / (W * H)));
+      const cv = document.createElement('canvas'), cx = cv.getContext('2d');
+      const taille = d => Math.round((d.length - d.indexOf(',') - 1) * 3 / 4);
+      let meilleur = '';
+      for (let tour = 0; tour < 6; tour++) {
+        cv.width = Math.max(1, Math.round(W * r)); cv.height = Math.max(1, Math.round(H * r));
+        cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+        cx.imageSmoothingQuality = 'high';
+        cx.drawImage(im, 0, 0, cv.width, cv.height);
+        for (const q of [0.78, 0.7, 0.62, 0.55]) {
+          const d = cv.toDataURL('image/jpeg', q);
+          meilleur = d;
+          if (taille(d) <= TK_CIBLE_OCTETS) { resolve(d); return; }
+        }
+        r *= 0.82;   // encore trop lourd : on réduit un peu les dimensions
+      }
+      resolve(meilleur);
+    };
+    im.src = url;
+  });
 }
 function tkHandleDrop(e) {
   e.preventDefault();
