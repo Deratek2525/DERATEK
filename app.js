@@ -18250,11 +18250,22 @@ async function fournProcessFile(file) {
     if (!texte || texte.length < 20) { setStatus(''); toast('Ce PDF ne contient pas de texte lisible.', '#e63946'); return; }
     setStatus('🤖 Analyse du document par l\'IA…');
     const infos = await fournExtractInfosIA(texte);
+    _fournTvaAuto(infos, texte);
     setStatus('');
     fournShowConfirm(infos, file.name);
   } catch (err) { setStatus(''); console.error('Fourn error:', err); toast('Erreur : ' + err.message, '#e63946'); }
 }
 
+// TVA absente mais facture suisse (n° CHE…, MWST, 8.1 %) : on calcule 8.1 % depuis le TTC
+function _fournTvaAuto(infos, texte) {
+  const ttc = parseFloat(String(infos.montant || '').replace(',', '.'));
+  const tva = parseFloat(String(infos.tva || '').replace(',', '.'));
+  if (!(ttc > 0) || tva > 0) return infos;
+  if (!/CHE[-\s.]?\d{3}|MWST|\bTVA\b.*8[.,]1|8[.,]1\s?%/i.test(texte || '')) return infos;
+  const ht = Math.round(ttc / 1.081 * 100) / 100;
+  infos.montant_ht = ht.toFixed(2); infos.tva = (Math.round((ttc - ht) * 100) / 100).toFixed(2);
+  return infos;
+}
 async function fournExtractInfosIA(texte) {
   const systemPrompt =
     'Tu extrais les informations d\'une FACTURE FOURNISSEUR. Réponds UNIQUEMENT par un objet JSON valide, ' +
@@ -19073,6 +19084,7 @@ async function _tkLireIA(img) {
   let tva = _tkNombre(o.tva);
   const taux = parseFloat(String(o.taux_tva || '').replace(',', '.'));
   if (!tva && ttc && isFinite(taux) && taux > 0 && taux < 30) tva = (Math.round(ttc * taux / (100 + taux) * 100) / 100).toFixed(2);
+  if (!tva && ttc) tva = (Math.round(ttc * 8.1 / 108.1 * 100) / 100).toFixed(2);   // ticket suisse : 8.1 % par défaut
   let cat = TK_CATS.find(c => c.toLowerCase() === String(o.categorie || '').toLowerCase().trim());
   if (!cat) { const a = _fournCatAuto(o.fournisseur, o.description, ''); cat = (a && a !== 'À classer') ? a : 'Autre'; }
   let date = String(o.date || '').trim();
@@ -20270,6 +20282,8 @@ function _fournHT(f) {
   const ttc = parseFloat(f && f.montant) || 0;
   return _fournAvecTva(f && f.secteur) ? 0 : ttc;   // sans TVA : HT = TTC
 }
+// Facture sans TVA suisse (fournisseur étranger, personne non assujettie) : taux mis à 0
+function _fournSansTvaCH(f) { return f && f.tvaTaux !== null && f.tvaTaux !== undefined && f.tvaTaux !== '' && parseFloat(f.tvaTaux) === 0; }
 function _fournTVA(f) {
   const t = parseFloat(f && f.tva);
   if (!isNaN(t) && t > 0) return t;
@@ -20296,7 +20310,7 @@ function fournCalcTva(id, taux) {
 function fournCalcTvaToutes(taux) {
   const tx = parseFloat(taux) || 8.1;
   const cibles = _fournFiltrees().filter(f =>
-    (parseFloat(f.montant) || 0) > 0 &&
+    (parseFloat(f.montant) || 0) > 0 && !_fournSansTvaCH(f) &&
     !(parseFloat(f.montantHt) > 0) && !(parseFloat(f.tva) > 0) &&
     _fournAvecTva(f.secteur));
   if (!cibles.length) { toast('Aucune facture à compléter', '#d97706'); return; }
@@ -20421,7 +20435,7 @@ function renderFournisseurs() {
   // ---- Chiffres de l'année --------------------------------------------------
   const totTTC = items.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
   const totTVA = items.filter(f => _fournAvecTva(f.secteur)).reduce((s, f) => s + _fournTVA(f), 0);
-  const nbSansTva = items.filter(f => _fournAvecTva(f.secteur) && !_fournTVA(f)).length;
+  const nbSansTva = items.filter(f => _fournAvecTva(f.secteur) && !_fournTVA(f) && !_fournSansTvaCH(f)).length;
   const nbAClasser = items.filter(f => (f.secteur || 'À classer') === 'À classer').length;
   const mois = {};
   items.forEach(f => { const m = String(f.dateDoc || '').slice(0, 7); if (m) mois[m] = (mois[m] || 0) + (parseFloat(f.montant) || 0); });
@@ -20542,6 +20556,7 @@ function renderFournisseurs() {
               <td class="lib" title="${_escapeHtml(String(f.description || ''))}">${_escapeHtml(String(f.description || '').slice(0, 110))}</td>
               <td class="r num">${aHT ? _displayMontant(ht) : '<span class="mut">—</span>'}</td>
               <td class="r num">${aTVA ? _displayMontant(tv) + (f.tvaTaux ? `<span class="tx">${f.tvaTaux}%</span>` : '')
+                   : _fournSansTvaCH(f) ? '<span class="mut" title="Pas de TVA suisse sur cette facture (fournisseur étranger ou non assujetti)">sans TVA CH</span>'
                    : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">+ TVA</button>` : '<span class="mut">—</span>')}</td>
               <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
               <td class="act">
