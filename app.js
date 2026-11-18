@@ -18144,6 +18144,7 @@ const FOURN_CATS = [
   { n: 'Loyer / local',             i: '🏠', c: '#16a34a', tva: false },
   { n: 'Assurances',                i: '🛡', c: '#14b8a6', tva: false },
   { n: 'Charges sociales / AVS',    i: '🏛', c: '#8b5cf6', tva: false },
+  { n: 'Décompte TVA',              i: '🧾', c: '#0f766e', tva: false },
   { n: 'Impôts / taxes',            i: '🧾', c: '#dc2626', tva: false },
   { n: 'Frais bancaires',           i: '🏦', c: '#475569', tva: false },
   { n: 'Salaires',                  i: '💰', c: '#be185d', tva: false },
@@ -18171,6 +18172,7 @@ const FOURN_SVG = {
   'Communication / marketing': '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
   'Véhicule / garage':         '<path d="M4 17v-5l2-5h12l2 5v5z"/><path d="M6 17v2M18 17v2"/><circle cx="8" cy="13.5" r="1"/><circle cx="16" cy="13.5" r="1"/>',
   'Repas / restaurant':        '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10"/><path d="M17 21V3c-2 1-3 3.5-3 7h3"/>',
+  'Décompte TVA':              '<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3"/><path d="M9 16l6-6"/><circle cx="9.5" cy="10.5" r="1"/><circle cx="14.5" cy="15.5" r="1"/>',
   'Carburant':                 '<path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M4 10h11"/><path d="M15 8h2l2 2v8a1.5 1.5 0 0 1-3 0v-4h-1"/>',
   'Location de matériel':      '<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
   'Sous-traitance':            '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.6a3 3 0 0 1 0 6M21 20a5 5 0 0 0-4-4.9"/>',
@@ -18201,6 +18203,7 @@ function _fournAvecTva(nom) { const c = _fournCat(nom); return c ? c.tva : true;
 const _FOURN_REGLES = [
   [/avs|caisse de compensation|lpp|2e pilier|deuxi.me pilier|allocations familiales|suva/i, 'Charges sociales / AVS'],
   [/assurance|vaudoise|mobili.re|helvetia|allianz|\\baxa\\b|baloise|zurich assur|generali|rc pro/i, 'Assurances'],
+  [/administration f.d.rale des contributions|d.compte (de la )?tva|\bestv\b|eidg.*steuerverwaltung|tdfn|dette fiscale nette/i, 'Décompte TVA'],
   [/imp.t|taxe|administration fiscale|tva administration|afc/i, 'Impôts / taxes'],
   [/fiduciaire|comptab|notaire|avocat|honoraire|conseil juridique/i, 'Honoraires / fiduciaire'],
   [/loyer|r.gie|g.rance .*(local|d.p.t)|bail/i, 'Loyer / local'],
@@ -20556,7 +20559,7 @@ function renderFournisseurs() {
               <td class="lib" title="${_escapeHtml(String(f.description || ''))}">${_escapeHtml(String(f.description || '').slice(0, 110))}</td>
               <td class="r num">${aHT ? _displayMontant(ht) : '<span class="mut">—</span>'}</td>
               <td class="r num">${aTVA ? _displayMontant(tv) + (f.tvaTaux ? `<span class="tx">${f.tvaTaux}%</span>` : '')
-                   : _fournSansTvaCH(f) ? '<span class="mut" title="Pas de TVA suisse sur cette facture (fournisseur étranger ou non assujetti)">sans TVA CH</span>'
+                   : (avecTva && _fournSansTvaCH(f)) ? '<span class="mut" title="Pas de TVA suisse sur cette facture (fournisseur étranger ou non assujetti)">sans TVA CH</span>'
                    : (avecTva ? `<button class="fo-tva" onclick="fournCalcTva('${f.id}', 8.1)" title="Calculer le HT et la TVA depuis le TTC, au taux suisse de 8.1 %">+ TVA</button>` : '<span class="mut">—</span>')}</td>
               <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
               <td class="act">
