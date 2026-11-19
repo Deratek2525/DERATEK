@@ -12149,104 +12149,283 @@ function _saveRappelDoc(ed, niv) {
   DB.documents = docs;
 }
 
-// Génère un PDF imprimable pour un bon manuel (bon de travail sans PDF scanné).
-function generateBonPDF(bonId) {
+// Génère un PDF imprimable pour un bon manuel (BCM) : mise en page soignée, toutes les infos.
+function _bonPdfDoc(b) {
+  const co = DERATEK_CONFIG.company;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, X0 = 20, X1 = 190, LW = X1 - X0;
+  const NAVY = [13, 27, 62], RED = [230, 57, 70], GRIS = [110, 118, 135], FOND = [244, 246, 250], BORD = [218, 223, 232];
+  const F = st => doc.setFont(_PDFF(st), st);
+  const txt = v => String(v == null ? '' : v).trim();
+  // Bas de page réservé à la bande « Nos prestations »
+  const BAS = H - 16;   // bon de travail : pas de bande « prestations », tout tient sur une page
+  let page = 1;
+  const enTete = () => {
+    const logoW = 62, logoH = logoW * 199 / 900, logoY = 13;
+    if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', X0, logoY, logoW, logoH); } catch (e) {} }
+    else { F('bold'); doc.setFontSize(20); doc.setTextColor(...NAVY); doc.text('DERATEK', X0, 23); }
+    const cy0 = logoY + 4;
+    F('normal'); doc.setFontSize(8.5); doc.setTextColor(70);
+    [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel].forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
+    [co.email, co.tva].forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
+    doc.setTextColor(...NAVY);
+    try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); } catch (e) { doc.text('www.deratek.ch', 146, cy0 + 2 * 4.4); }
+    const fy = logoY + logoH + 5;
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.4); doc.line(X0, fy, X1, fy);
+    return fy + 7;
+  };
+  const piedEtNouvellePage = () => {
+    doc.addPage(); page++;
+    const y = enTete();
+    F('bold'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+    doc.text('Bon de travail ' + txt(b.numero) + ' — suite', X0, y);
+    return y + 6;
+  };
+  let y = enTete();
+  const place = h => { if (y + h > BAS) y = piedEtNouvellePage(); };
+
+  // ---- Données ----
+  const nd = _bonNoteData(b);
+  const cli = (b.geranceId && (DB.clients || []).find(c => c.id === b.geranceId))
+           || (b.geranceNom && (DB.clients || []).find(c => (c.nom || '').toLowerCase() === String(b.geranceNom).toLowerCase())) || null;
+  const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId))
+           || (b.locataireNom && (DB.locataires || []).find(l => (l.nom || '').toLowerCase() === String(b.locataireNom).toLowerCase())) || null;
+  const ctr = b.contratId ? (DB.contrats || []).find(c => c.id === b.contratId) : null;
+  // Devis à l'origine du bon (lié par bonId, ou cité dans le texte « … depuis le devis D-2026-012 »)
+  const devis = (() => {
+    const docs = (DB.documents || []).filter(d => d && d.type === 'devis');
+    const lies = docs.filter(d => d.bonId === b.id);
+    const m = String(b.probleme || '').match(/\b(D-\d{4}-\d+)\b/);
+    const cite = m ? docs.filter(d => d.numero === m[1]) : [];
+    const tous = lies.concat(cite.filter(d => lies.indexOf(d) < 0));
+    return tous.find(d => d.statut === 'accepte') || tous[0] || null;
+  })();
+  const devisLignes = (() => {
+    if (!devis) return [];
+    let l = devis.lignes;
+    if (typeof l === 'string') { try { l = JSON.parse(l); } catch (e) { l = []; } }
+    return Array.isArray(l) ? l.filter(x => x && String(x.desc || '').trim()) : [];
+  })();
+  const adr = o => o ? [o.adresse, `${o.npa || ''} ${o.ville || ''}`.trim()].filter(Boolean).join(', ') : '';
+  const dates = _bonDatesInterv(b);
+  let rdv = '';
+  if (b.dateIntervention) {
+    rdv = fmtDate(b.dateIntervention) + (b.heureIntervention ? ' à ' + String(b.heureIntervention).slice(0, 5) : '')
+        + (b.heureFinIntervention ? ' – ' + String(b.heureFinIntervention).slice(0, 5) : '')
+        + (b.dateFinIntervention && b.dateFinIntervention !== b.dateIntervention ? ' (jusqu\'au ' + fmtDate(b.dateFinIntervention) + ')' : '');
+  }
+  const datesTxt = dates.filter(d => d !== b.dateIntervention).map(fmtDate).join(', ');
+
+  // ---- Bandeau titre ----
+  doc.setFillColor(...NAVY); doc.roundedRect(X0, y, LW, 15, 2, 2, 'F');
+  doc.setFillColor(...RED); doc.rect(X0, y + 13.6, LW, 1.4, 'F');
+  F('bold'); doc.setFontSize(15); doc.setTextColor(255);
+  doc.text('BON DE TRAVAIL', X0 + 5, y + 9.6);
+  doc.setFontSize(12); doc.text(txt(b.numero) || '—', X1 - 5, y + 7.2, { align: 'right' });
+  F('normal'); doc.setFontSize(8.5); doc.setTextColor(205, 213, 230);
+  doc.text('Établi le ' + (fmtDate(b.date) || '—'), X1 - 5, y + 11.6, { align: 'right' });
+  y += 21;
+
+  // ---- Deux cartes : donneur d'ordre / lieu d'intervention ----
+  const champs = (liste) => liste.filter(r => txt(r[1]));
+  const gauche = champs([
+    ['Gérance', b.geranceNom], ['N° client', cli && cli.num], ['Gérant(e)', b.gerantNom],
+    ['Téléphone', b.gerantTel || (cli && cli.tel)], ['E-mail', b.gerantEmail || (cli && cli.email)], ['Adresse', adr(cli)],
+    ['Propriétaire', b.proprietaire],
+  ]);
+  const droite = champs([
+    ['Locataire', b.locataireNom], ['Téléphone', loc && loc.tel], ['E-mail', loc && loc.email],
+    ['Adresse', adr(loc) || b.immeuble],
+    ['Immeuble', (adr(loc) && b.immeuble && !String(b.immeuble).toLowerCase().startsWith(String(loc.adresse || '').toLowerCase())) ? b.immeuble : ''],
+    ['Contact sur place', b.contactSurPlace], ['Concierge', b.concierge],
+  ]);
+  const CW = (LW - 6) / 2;
+  const LBL = 27;
+  const mesure = (liste) => {
+    doc.setFontSize(9.5);
+    return liste.map(([k, v]) => ({ k, l: doc.splitTextToSize(txt(v), CW - LBL - 8) }));
+  };
+  const G = mesure(gauche), D = mesure(droite);
+  const hCarte = arr => 12 + arr.reduce((s, r) => s + r.l.length * 4.3 + 1.6, 0);
+  const hC = Math.max(hCarte(G), hCarte(D), 24);
+  place(hC);
+  const carte = (x, titre, arr, vide) => {
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, CW, hC, 2, 2, 'FD');
+    doc.setFillColor(...FOND); doc.roundedRect(x, y, CW, 8, 2, 2, 'F'); doc.rect(x, y + 4, CW, 4, 'F');
+    F('bold'); doc.setFontSize(8); doc.setTextColor(...NAVY); doc.text(titre, x + 5, y + 5.4);
+    let yy = y + 13.5;
+    if (!arr.length) { F('normal'); doc.setFontSize(9.5); doc.setTextColor(...GRIS); doc.text(vide, x + 5, yy); return; }
+    arr.forEach(r => {
+      F('normal'); doc.setFontSize(8); doc.setTextColor(...GRIS); doc.text(r.k, x + 5, yy);
+      F(r.k === 'Gérance' || r.k === 'Locataire' ? 'bold' : 'normal'); doc.setFontSize(9.5); doc.setTextColor(20, 24, 33);
+      r.l.forEach((ln, i) => doc.text(ln, x + 5 + LBL, yy + i * 4.3));
+      yy += r.l.length * 4.3 + 1.6;
+    });
+  };
+  carte(X0, 'DONNEUR D\'ORDRE', G, 'Non renseigné');
+  carte(X0 + CW + 6, 'LIEU D\'INTERVENTION', D, 'Non renseigné');
+  y += hC + 6;
+
+  // ---- Intervention : grille d'informations ----
+  const nuis = [nd.nuisible, nd.nuisible2].filter(Boolean).join(' + ');
+  const infos = [
+    ['Nuisible', nuis], ['Type d\'intervention', nd.typeInterv], ['Technicien', _bonAffecte(b)],
+    ['Rendez-vous', rdv], ['Dates d\'intervention', datesTxt], ['Contrat', ctr ? (ctr.numero || ctr.titre || 'lié') : ''],
+    ['Statut', nd.statut],
+    ['Prix convenu', (nd.prixHT !== '' && nd.prixHT != null && parseFloat(nd.prixHT) > 0)
+      ? (() => { const c = _bonNoteCalc(nd); return _displayMontant(c.ttc) + ' CHF TTC (' + _displayMontant(c.htNet) + ' HT' + (c.rab ? ', rabais ' + c.rab + ' %' : '') + ')'; })()
+      : (devis && parseFloat(devis.total) > 0 ? _displayMontant(devis.total) + ' CHF TTC (devis)' : '')],
+    ['Devis', devis ? (devis.numero || '') + (devis.statut === 'accepte' ? ' · accepté' : '') + (devis.dateDoc ? ' · du ' + fmtDate(devis.dateDoc) : '') : ''],
+  ].filter(r => txt(r[1]));
+  if (infos.length) {
+    const CW3 = (LW - 6) / 4;
+    doc.setFontSize(10);
+    doc.setFontSize(9.5);
+    const cell = infos.map(([k, v]) => ({ k, l: doc.splitTextToSize(txt(v), CW3 - 5) }));
+    const lignes = [];
+    for (let i = 0; i < cell.length; i += 4) lignes.push(cell.slice(i, i + 4));
+    const hL = lignes.map(l => 5 + Math.max(...l.map(c => c.l.length)) * 4.6 + 2.5);
+    const hI = 10 + hL.reduce((a, c) => a + c, 0);
+    place(hI);
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.roundedRect(X0, y, LW, hI, 2, 2, 'D');
+    doc.setFillColor(...RED); doc.rect(X0, y + 2, 1.2, hI - 4, 'F');
+    F('bold'); doc.setFontSize(8); doc.setTextColor(...NAVY); doc.text('INTERVENTION', X0 + 5, y + 6);
+    let yy = y + 11;
+    lignes.forEach((l, li) => {
+      l.forEach((c, ci) => {
+        const x = X0 + 5 + ci * CW3;
+        F('normal'); doc.setFontSize(7); doc.setTextColor(...GRIS); doc.text(c.k.toUpperCase(), x, yy);
+        F('bold'); doc.setFontSize(9.5); doc.setTextColor(20, 24, 33);
+        c.l.forEach((ln, i) => doc.text(ln, x, yy + 4.6 + i * 4.6));
+      });
+      yy += hL[li];
+    });
+    y += hI + 6;
+  }
+
+  // ---- Encadrés de texte : problème, remarques ----
+  const encadre = (titre, texte, coul) => {
+    if (!txt(texte)) return;
+    doc.setFontSize(10);
+    const lignes = doc.splitTextToSize(txt(texte), LW - 12);
+    let i = 0;
+    while (i < lignes.length) {
+      const dispo = Math.floor((BAS - y - 12) / 5);
+      if (dispo < 1) { y = piedEtNouvellePage(); continue; }
+      const part = lignes.slice(i, i + dispo);
+      const h = 11 + part.length * 5;
+      doc.setFillColor(...FOND); doc.roundedRect(X0, y, LW, h, 2, 2, 'F');
+      doc.setFillColor(...coul); doc.rect(X0, y, 1.2, h, 'F');
+      F('bold'); doc.setFontSize(8); doc.setTextColor(...NAVY); doc.text(titre + (i ? ' (suite)' : ''), X0 + 5, y + 6);
+      F('normal'); doc.setFontSize(10); doc.setTextColor(20, 24, 33);
+      part.forEach((ln, k) => doc.text(ln, X0 + 5, y + 11.5 + k * 5));
+      y += h + 4; i += part.length;
+      if (i < lignes.length) y = piedEtNouvellePage();
+    }
+  };
+  const probTxt = _bonProblemeClean(b).replace(/Bon créé automatiquement depuis le devis\s*D-\d{4}-\d+\.?/i, '').trim();
+  if (probTxt || !devisLignes.length) encadre('PROBLÈME SIGNALÉ / TRAVAUX DEMANDÉS', probTxt || '—', RED);
+  // ---- Travaux à réaliser, repris du devis ----
+  if (devisLignes.length) {
+    place(14);
+    F('bold'); doc.setFontSize(8); doc.setTextColor(...NAVY);
+    doc.text('TRAVAUX À RÉALISER — selon le devis ' + (devis.numero || '') + (devis.statut === 'accepte' ? ' (accepté)' : ''), X0, y + 3);
+    y += 7;
+    devisLignes.forEach((ln, n) => {
+      const brut = String(ln.desc || '').replace(/\r/g, '').split('\n');
+      const titre = (brut.find(t => t.trim()) || '').trim();
+      const corps = brut.slice(brut.indexOf(brut.find(t => t.trim())) + 1).map(t => t.trim()).filter(Boolean)
+        .map(t => t.replace(/^[*•\-]\s*/, '• '));
+      const qte = parseFloat(ln.qte);
+      doc.setFontSize(10); F('bold');
+      const tl = doc.splitTextToSize((n + 1) + '. ' + titre + (qte && qte !== 1 ? '  (×' + qte + ')' : ''), LW - 10);
+      doc.setFontSize(8.8); F('normal');
+      const cl = [];
+      corps.forEach(par => doc.splitTextToSize(par, par.startsWith('• ') ? LW - 16 : LW - 12).forEach((t, i) => cl.push({ t, puce: par.startsWith('• ') && i > 0 })));
+      // titre + au moins 2 lignes du détail ensemble
+      place(tl.length * 5 + Math.min(cl.length, 2) * 4 + 4);
+      doc.setFillColor(...RED); doc.circle(X0 + 1.4, y + 2.2, 0.9, 'F');
+      F('bold'); doc.setFontSize(10); doc.setTextColor(20, 24, 33);
+      tl.forEach((t, i) => doc.text(t, X0 + 5, y + 3.2 + i * 5));
+      y += tl.length * 5 + 1.5;
+      F('normal'); doc.setFontSize(8.8); doc.setTextColor(70, 76, 90);
+      cl.forEach(c => {
+        if (y + 4 > BAS) y = piedEtNouvellePage();
+        doc.text(c.t, X0 + (c.puce ? 9 : 5), y + 2.6);
+        y += 3.9;
+      });
+      y += 3.5;
+    });
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(X0, y - 1, X1, y - 1);
+    y += 4;
+  }
+  encadre('REMARQUES', nd.texte, NAVY);
+
+  // ---- À remplir sur place : travaux effectués + produits ----
+  place(38);
+  doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.roundedRect(X0, y, LW, 34, 2, 2, 'D');
+  F('bold'); doc.setFontSize(8); doc.setTextColor(...NAVY); doc.text('À REMPLIR SUR PLACE — travaux effectués / produits utilisés', X0 + 5, y + 6);
+  F('normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
+  doc.text('Date et heure de passage : ....................................          Durée : ..................', X0 + 5, y + 30.5);
+  doc.setDrawColor(225, 229, 236);
+  [12.5, 18.5, 24.5].forEach(dy => doc.line(X0 + 5, y + dy, X1 - 5, y + dy));
+  y += 38;
+
+  // ---- Signatures ----
+  place(24);
+  const SW = (LW - 6) / 2;
+  [['Signature du technicien', X0], ['Signature du client / locataire', X0 + SW + 6]].forEach(([t, x]) => {
+    doc.setDrawColor(...BORD); doc.roundedRect(x, y, SW, 22, 2, 2, 'D');
+    F('normal'); doc.setFontSize(8); doc.setTextColor(...GRIS); doc.text(t, x + 5, y + 5.5);
+    doc.text('Date : ....................', x + 5, y + 19);
+  });
+  y += 24;
+
+  // ---- Pied de page ----
+  const nbPages = doc.getNumberOfPages();
+  for (let p = 1; p <= nbPages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(...RED); doc.setLineWidth(0.5); doc.line(X0, H - 12, X1, H - 12);
+    F('normal'); doc.setFontSize(7.5); doc.setTextColor(150);
+    doc.text('DERATEK · Lutte antiparasitaire · ' + [co.tel, co.email].filter(Boolean).join(' · '), X0, H - 7.5);
+    doc.text('Bon de travail ' + txt(b.numero) + (nbPages > 1 ? '  ·  page ' + p + ' / ' + nbPages : ''), X1, H - 7.5, { align: 'right' });
+  }
+  return doc;
+}
+function _bonPdfNom(b) { return 'bon-' + String(b.numero || 'sans-numero').replace(/[^\w-]+/g, '_') + '.pdf'; }
+// Ouvre l'aperçu du bon avant de le télécharger ou de l'imprimer
+function generateBonPDF(bonId, mode) {
   const b = (DB.bons || []).find(x => x.id === bonId);
   if (!b) { toast('Bon introuvable', '#e63946'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non chargée', '#e63946'); return; }
-  try {
-    const co = DERATEK_CONFIG.company;
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const W = 210, H = 297;
-    // --- En-tête (logo + coordonnées + filet) ---
-    const logoW = 62, logoH = logoW * 199 / 900, logoY = 13;
-    const headerFiletY = logoY + logoH + 5;
-    if (typeof LOGO_B64 !== 'undefined') { try { doc.addImage(LOGO_B64, 'PNG', 20, logoY, logoW, logoH); } catch (e) {} }
-    else { doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(20); doc.setTextColor(13, 27, 62); doc.text('DERATEK', 20, 23); }
-    const cy0 = logoY + 4;
-    const colA = [co.rue, `${co.npa} ${co.ville}`, 'Tél. ' + co.tel];
-    const colB = [co.email, co.tva];
-    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(8.5); doc.setTextColor(70);
-    colA.forEach((l, i) => { if (l) doc.text(l, 92, cy0 + i * 4.4); });
-    colB.forEach((l, i) => { if (l) doc.text(l, 146, cy0 + i * 4.4); });
-    doc.setTextColor(13, 27, 62);
-    try { doc.textWithLink('www.deratek.ch', 146, cy0 + 2 * 4.4, { url: 'https://www.deratek.ch' }); } catch (e) { doc.text('www.deratek.ch', 146, cy0 + 2 * 4.4); }
-    doc.setTextColor(0);
-    doc.setDrawColor(200, 205, 213); doc.setLineWidth(0.4); doc.line(20, headerFiletY, 190, headerFiletY);
-    // --- Bandeau titre ---
-    let y = headerFiletY + 8;
-    doc.setFillColor(13, 27, 62); doc.rect(20, y, 170, 11, 'F');
-    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(13); doc.setTextColor(255);
-    doc.text('BON DE TRAVAIL', 24, y + 7.4);
-    doc.setFontSize(11); doc.text(String(b.numero || ''), 186, y + 7.4, { align: 'right' });
-    doc.setTextColor(0); y += 17;
-    // Date
-    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
-    doc.text('Date : ' + (fmtDate(b.date) || '—'), 20, y); y += 9;
-    // Fiches liées : on récupère les coordonnées complètes (téléphones, e-mails, adresses)
-    const cli = (b.geranceId && (DB.clients || []).find(c => c.id === b.geranceId))
-             || (b.geranceNom && (DB.clients || []).find(c => (c.nom || '').toLowerCase() === String(b.geranceNom).toLowerCase()))
-             || null;
-    const loc = (b.locataireId && (DB.locataires || []).find(l => l.id === b.locataireId))
-             || (b.locataireNom && (DB.locataires || []).find(l => (l.nom || '').toLowerCase() === String(b.locataireNom).toLowerCase()))
-             || null;
-    const gerTel   = b.gerantTel   || (cli ? cli.tel   : '');
-    const gerEmail = b.gerantEmail || (cli ? cli.email : '');
-    const gerAdr   = cli ? [cli.adresse, `${cli.npa || ''} ${cli.ville || ''}`.trim()].filter(Boolean).join(', ') : '';
-    const locTel   = loc ? (loc.tel   || '') : '';
-    const locEmail = loc ? (loc.email || '') : '';
-    const locAdr   = (loc ? [loc.adresse, `${loc.npa || ''} ${loc.ville || ''}`.trim()].filter(Boolean).join(', ') : '') || b.immeuble || '';
-    // --- Champs (label : valeur) ---
-    const rows = [
-      ['Gérance', b.geranceNom || '—'],
-      ['Gérant', b.gerantNom || ''],
-      ['Tél. gérance', gerTel],
-      ['E-mail gérance', gerEmail],
-      ['Adresse gérance', gerAdr],
-      ['Propriétaire', b.proprietaire || ''],
-      ['Locataire', b.locataireNom || '—'],
-      ['Tél. locataire', locTel],
-      ['E-mail locataire', locEmail],
-      ['Adresse locataire', locAdr],
-      ['Immeuble', b.immeuble || ''],
-      ['Contact sur place', b.contactSurPlace || ''],
-      ['Concierge', b.concierge || ''],
-    ].filter(r => r[1]);
-    doc.setFontSize(10);
-    rows.forEach(([k, v]) => {
-      doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(90); doc.text(k + ' :', 20, y);
-      doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
-      const lines = doc.splitTextToSize(String(v), 110);
-      lines.forEach((ln, i) => doc.text(ln, 74, y + i * 5));
-      y += Math.max(6, lines.length * 5 + 1);
-    });
-    y += 4;
-    // --- Nuisible / problème ---
-    doc.setFillColor(245, 247, 250); doc.rect(20, y, 170, 8, 'F');
-    doc.setFont(_PDFF('bold'), 'bold'); doc.setFontSize(9); doc.setTextColor(13, 27, 62);
-    doc.text('NUISIBLE / PROBLÈME SIGNALÉ', 24, y + 5.5); doc.setTextColor(0); y += 12;
-    doc.setFont(_PDFF('normal'), 'normal'); doc.setFontSize(10);
-    doc.splitTextToSize(_bonProblemeClean(b) || '—', 168).forEach(ln => { doc.text(ln, 22, y); y += 5; });
-    y += 6;
-    // --- Dates d'intervention ---
-    const dates = _bonDatesInterv(b);
-    doc.setFont(_PDFF('bold'), 'bold'); doc.setTextColor(90); doc.text('Dates d\'intervention :', 20, y);
-    doc.setFont(_PDFF('normal'), 'normal'); doc.setTextColor(0);
-    doc.text(dates.length ? dates.map(fmtDate).join(', ') : '—', 74, y);
-    y += 22;
-    // --- Zone de signatures ---
-    doc.setDrawColor(160); doc.setLineWidth(0.3);
-    doc.line(24, y, 92, y); doc.line(118, y, 186, y);
-    doc.setFontSize(8.5); doc.setTextColor(110);
-    doc.text('Signature technicien', 24, y + 4);
-    doc.text('Signature client', 118, y + 4);
-    doc.setTextColor(0);
-    if (typeof _drawPrestationsFooter === 'function') _drawPrestationsFooter(doc, W, H);
-    const fname = 'bon-' + String(b.numero || 'sans-numero').replace(/[^\w-]+/g, '_') + '.pdf';
-    doc.save(fname);
-    toast('PDF du bon généré', '#2d9e6b');
-  } catch (e) { console.error(e); toast('Erreur lors de la génération du PDF du bon', '#e63946'); }
+  let doc;
+  try { doc = _bonPdfDoc(b); } catch (e) { console.error(e); toast('Erreur lors de la génération du PDF du bon', '#e63946'); return; }
+  if (mode === 'download') { doc.save(_bonPdfNom(b)); return; }
+  const url = doc.output('bloburl');
+  if (typeof mobActif === 'function' && mobActif()) { window.open(url, '_blank'); return; }
+  const old = document.getElementById('modal-bon-apercu'); if (old) old.remove();
+  const m = document.createElement('div');
+  m.id = 'modal-bon-apercu'; m.className = 'modal-bg'; m.style.display = 'flex';
+  m.onclick = () => m.remove();
+  m.innerHTML = `<div class="modal bap-box" onclick="event.stopPropagation()">
+      <div class="bap-hd">
+        <div><b>Bon de travail ${_escapeHtml(b.numero || '')}</b><span>${_escapeHtml(b.geranceNom || '')}${b.locataireNom ? ' · ' + _escapeHtml(b.locataireNom) : ''}</span></div>
+        <div class="bap-act">
+          <button class="btn btn-ghost" onclick="document.getElementById('modal-bon-apercu').remove()">Fermer</button>
+          <button class="btn btn-ghost" onclick="bonApercuImprimer()">🖨 Imprimer</button>
+          <button class="btn btn-navy" onclick="generateBonPDF('${b.id}','download')">⬇ Télécharger le PDF</button>
+        </div>
+      </div>
+      <iframe id="bap-frame" src="${url}#toolbar=0&navpanes=0&view=FitH"></iframe>
+    </div>`;
+  document.body.appendChild(m);
+}
+function bonApercuImprimer() {
+  const f = document.getElementById('bap-frame'); if (!f) return;
+  try { f.contentWindow.focus(); f.contentWindow.print(); }
+  catch (e) { window.open(f.src.split('#')[0], '_blank'); }
 }
 
 function downloadDocPDF(id, mode) {
@@ -19083,10 +19262,15 @@ async function _tkLireIA(img) {
     '"taux_tva":"taux de TVA principal en % (ex 8.1)",' +
 
     '"description":"résumé très court (ex. Diesel 45.2 L, Vis et silicone, Repas 2 pers.)",' +
-    '"categorie":"une seule valeur parmi : ' + TK_CATS.join(' | ') + '"}\n' +
+    '"categorie":"une seule valeur parmi : ' + TK_CATS.join(' | ') + '",' +
+    '"date_sure":"oui ou non"}\n' +
     "Règles : le montant est le TOTAL final payé (pas un sous-total ni le rendu de monnaie). " +
     "Si la TVA n'est pas écrite en francs mais que le taux est indiqué, calcule-la : TVA = total × taux / (100 + taux). " +
-    "Les dates suisses s'écrivent JJ.MM.AA ou JJ.MM.AAAA. N'INVENTE RIEN.";
+    "DATE : prends la date de l'ACHAT (de la transaction), imprimée en général juste à côté de l'heure (ex. « 14.10.26 17:32 »), " +
+    "souvent en haut ou tout en bas du ticket. Les dates suisses s'écrivent JJ.MM.AA ou JJ.MM.AAAA (jour d'abord, puis mois). " +
+    "IGNORE les autres dates : validité d'une vignette ou d'un bon (« 2026 », « gültig bis », « valable jusqu'au »), promotions (« dès le », « ab »), " +
+    "dates de péremption, numéros de caisse, de filiale ou de transaction. Sur les tickets Coop et Coop Pronto, la date d'achat est à côté de l'heure et du n° de caisse. " +
+    "Si tu n'es pas sûr de la date, mets \"date_sure\":\"non\". N'INVENTE RIEN.";
   let brut = await _mistralFetch({
     model: (DERATEK_CONFIG.mistral.modelVision || DERATEK_CONFIG.mistral.model), temperature: 0, max_tokens: 600,
     messages: [{ role: 'user', content: [{ type: 'text', text: consigne }, { type: 'image_url', image_url: img }] }]
@@ -19106,7 +19290,20 @@ async function _tkLireIA(img) {
   const m = date.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (m) date = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = '';
-  return { fournisseur: String(o.fournisseur || '').trim(), date, montant: ttc, tva,
+  // Contrôle de vraisemblance : une date dans le futur ou de plus d'un an est presque toujours mal lue
+  let douteuse = String(o.date_sure || '').toLowerCase().startsWith('n');
+  if (date) {
+    const auj = today();
+    if (date > auj) {
+      const [y, mo, d] = date.split('-');
+      const inv = y + '-' + d + '-' + mo;               // jour et mois inversés ?
+      if (+d <= 12 && inv <= auj) date = inv;
+      douteuse = true;
+    }
+    const age = (new Date(auj) - new Date(date)) / 86400000;
+    if (age > 400) douteuse = true;
+  } else douteuse = true;
+  return { fournisseur: String(o.fournisseur || '').trim(), date, montant: ttc, tva, dateDouteuse: douteuse,
            numero: '', description: String(o.description || '').trim(), categorie: cat };
 }
 async function tkTraiter() {
@@ -19135,6 +19332,7 @@ function tkVider() {
 function tkMaj(id, cle, val) {
   const t = _tk.find(x => x.id === id); if (!t) return;
   if (cle === 'garder') t.garder = !!val; else t.infos[cle] = val;
+  if (cle === 'date') t.infos.dateDouteuse = false;
   if (cle !== 'garder' && cle !== 'description') { const el = $('tk-dbl-' + id); if (el) el.innerHTML = _tkDoublonTxt(t); }
   _tkMajBouton();
 }
@@ -19192,8 +19390,9 @@ function _tkItemHtml(t) {
         ${t.statut === 'erreur' ? `<div class="tk-er">Lecture impossible (${_escapeHtml(t.err)}) — <a href="#" onclick="tkRelire('${t.id}');return false;">réessayer</a> ou remplissez à la main puis cochez « Enregistrer ».</div>` : ''}
         <div class="tk-row">
           <input class="tk-in tk-nom" placeholder="Commerce" value="${v('fournisseur')}" oninput="tkMaj('${t.id}','fournisseur',this.value)">
-          <input class="tk-in tk-dt" type="date" value="${v('date')}" onchange="tkMaj('${t.id}','date',this.value)">
+          <input class="tk-in tk-dt ${i.dateDouteuse ? 'warn' : ''}" type="date" value="${v('date')}" onchange="tkMaj('${t.id}','date',this.value);this.classList.remove('warn');const w=document.getElementById('tk-dw-${t.id}');if(w)w.remove();">
         </div>
+        ${i.dateDouteuse ? `<div class="tk-dw" id="tk-dw-${t.id}">⚠️ Date à vérifier sur le ticket${i.date ? '' : ' (non trouvée)'}</div>` : ''}
         <div class="tk-row">
           <label class="tk-mt"><span>Total CHF</span><input class="tk-in" inputmode="decimal" value="${v('montant')}" oninput="tkMaj('${t.id}','montant',this.value)"></label>
           <label class="tk-mt"><span>dont TVA</span><input class="tk-in" inputmode="decimal" value="${v('tva')}" oninput="tkMaj('${t.id}','tva',this.value)"></label>
@@ -19239,6 +19438,8 @@ function _tkBlob(dataUrl) {
 async function tkEnregistrer() {
   const aGarder = _tk.filter(_tkPret);
   if (!aGarder.length || _tkEnregistre) return;
+  const dateDoute = aGarder.filter(t => t.infos.dateDouteuse);
+  if (dateDoute.length && !confirm(dateDoute.length + ' ticket(s) avec une date à vérifier (en orange).\n\nEnregistrer quand même ?')) return;
   const sansMontant = aGarder.filter(t => !(parseFloat(t.infos.montant) > 0));
   if (sansMontant.length && !confirm(sansMontant.length + ' ticket(s) sans montant. Enregistrer quand même ?')) return;
   _tkEnregistre = true;
@@ -20447,6 +20648,55 @@ function _fournFiltrees() {
   return items;
 }
 
+// ---- Vue « Tickets de caisse » : tous les tickets, de janvier à aujourd'hui, mois par mois ----
+let _fournVue = (function () { try { return localStorage.getItem('deratek_fourn_vue') || 'dossiers'; } catch (e) { return 'dossiers'; } })();
+function fournSetVue(v) { _fournVue = v; try { localStorage.setItem('deratek_fourn_vue', v); } catch (e) {} renderFournisseurs(); }
+function _fournEstTicket(f) { return /^Ticket de caisse/i.test(f.description || '') || /-ticket\.(jpe?g|png|webp)$/i.test(f.pdfPath || ''); }
+const _MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+function _fournTicketsHtml(items) {
+  const tk = items.filter(_fournEstTicket)
+    .sort((a, b) => String(a.dateDoc || '9999').localeCompare(String(b.dateDoc || '9999')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  if (!tk.length) return '<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Aucun ticket de caisse pour ce filtre.</div></div>';
+  const auj = today();
+  const mois = {};
+  tk.forEach(f => { const k = f.dateDoc ? String(f.dateDoc).slice(0, 7) : 'sans-date'; (mois[k] = mois[k] || []).push(f); });
+  const total = tk.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+  const totTva = tk.reduce((s, f) => s + (parseFloat(f.tva) || 0), 0);
+  return `<div class="fo-fold open fo-tk">
+    <div class="fo-tkh"><b>${tk.length} ticket${tk.length > 1 ? 's' : ''} de caisse</b> · du plus ancien au plus récent
+      <span class="tt">${_displayMontant(total)} <span class="c">CHF</span></span></div>
+    <div class="fo-fb"><table class="fo-tbl">
+      <thead><tr><th style="width:92px;">Date</th><th style="width:190px;">Commerce</th><th style="width:170px;">Catégorie</th>
+        <th>Détail</th><th class="r" style="width:80px;">TVA</th><th class="r" style="width:92px;">TTC</th><th style="width:112px;"></th></tr></thead>
+      ${Object.keys(mois).map(k => {
+        const arr = mois[k];
+        const st = arr.reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
+        const lib = k === 'sans-date' ? '⚠️ Sans date' : _MOIS_FR[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4);
+        return `<tbody>
+          <tr class="fo-mois"><td colspan="5">${lib} <span class="mut">· ${arr.length} ticket${arr.length > 1 ? 's' : ''}</span></td>
+            <td class="r num tot">${_displayMontant(st)}</td><td></td></tr>
+          ${arr.map(f => {
+            const tv = parseFloat(f.tva);
+            const doute = !f.dateDoc || f.dateDoc > auj;
+            return `<tr>
+              <td class="${doute ? 'fo-dout' : 'mut'}" ${doute ? 'title="Date à vérifier"' : ''}>${fmtDate(f.dateDoc) || '—'}${doute ? ' ⚠️' : ''}${_fournRecu(f) ? `<div class="fo-recu" title="Reçu et enregistré le ${_fournRecu(f, true)}">reçu ${_fournRecu(f)}</div>` : ''}</td>
+              <td><b>${_escapeHtml(f.nom || '—')}</b></td>
+              <td><span class="fo-ct" style="color:${SECTEUR_COLORS[f.secteur] || '#64748b'}">${_fournIco(f.secteur)} ${_escapeHtml(f.secteur || '')}</span></td>
+              <td class="lib">${_escapeHtml(String(f.description || '').replace(/^Ticket de caisse\s*—?\s*/i, '').slice(0, 90))}</td>
+              <td class="r num">${!isNaN(tv) && tv > 0 ? _displayMontant(tv) : '<span class="mut">—</span>'}</td>
+              <td class="r num tot">${_displayMontant(f.montant || 0)}</td>
+              <td class="act">
+                ${f.pdfPath ? `<button class="fo-b" onclick="viewFournPdf('${f.id}')" onmouseenter="fournPdfPreview('${f.id}', this)" onmouseleave="bonPdfPreviewHide()">${CK_ICO.trombone}</button>` : '<span class="fo-b vide"></span>'}
+                <button class="fo-b ed" onclick="openFournEdit('${f.id}')" title="Modifier">${CK_ICO.crayon}</button>
+                <button class="fo-b su" onclick="confirmDeleteFourn('${f.id}','${String(f.nom || '').replace(/'/g, "\\'")}')" title="Supprimer">${CK_ICO.suppr}</button>
+              </td></tr>`;
+          }).join('')}
+        </tbody>`;
+      }).join('')}
+      <tfoot><tr><td colspan="4" class="mut">Total — ${tk.length} tickets</td>
+        <td class="r num">${_displayMontant(totTva)}</td><td class="r num tot">${_displayMontant(total)}</td><td></td></tr></tfoot>
+    </table></div></div>`;
+}
 function renderFournisseurs() {
   updateNavCounts();
   (DB.fournisseurs || []).forEach(f => { if (f && FOURN_ALIAS[f.secteur]) f.secteur = FOURN_ALIAS[f.secteur]; });   // anciennes catégories regroupées
@@ -20547,6 +20797,15 @@ function renderFournisseurs() {
     list.innerHTML = barre + entete + actions + '<div class="empty"><div class="empty-icon">🔎</div><div class="empty-text">Aucune facture pour ce filtre.</div></div>';
     return;
   }
+  const _nbTk = items.filter(_fournEstTicket).length;
+  const vueSel = `<div class="fo-vue">
+      <button class="${_fournVue !== 'tickets' ? 'on' : ''}" onclick="fournSetVue('dossiers')">📁 Par dossier</button>
+      <button class="${_fournVue === 'tickets' ? 'on' : ''}" onclick="fournSetVue('tickets')">🧾 Tickets de caisse par date<span class="b">${_nbTk}</span></button>
+    </div>`;
+  if (_fournVue === 'tickets') {
+    list.innerHTML = barre + entete + repart + actions + vueSel + _fournTicketsHtml(items);
+    return;
+  }
   const groups = {};
   items.forEach(f => { const k = f.secteur || 'À classer'; (groups[k] = groups[k] || []).push(f); });
   const _totG = k => groups[k].reduce((s, f) => s + (parseFloat(f.montant) || 0), 0);
@@ -20561,7 +20820,7 @@ function renderFournisseurs() {
       <button onclick="fournTousDossiers(true)">⊕ Tout ouvrir</button>
       <button onclick="fournTousDossiers(false)">⊖ Tout fermer</button>
     </div>`;
-  list.innerHTML = barre + entete + repart + actions + barreDossiers + ordre.map(sec => {
+  list.innerHTML = barre + entete + repart + actions + vueSel + barreDossiers + ordre.map(sec => {
     // Classement chronologique : de janvier à décembre, comme dans un classeur.
     const arr = groups[sec].sort((a, b) => String(a.dateDoc || '9999').localeCompare(String(b.dateDoc || '9999')));
     const col = SECTEUR_COLORS[sec] || '#64748b';
