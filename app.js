@@ -11251,8 +11251,37 @@ function _docBonLie(d) {
   if (!num) return null;
   return bons.find(x => _factNorm(x.numero) === num) || null;
 }
+// Facture payée → son devis doit partir dans l'archivage. On répare ici les liens perdus :
+// devis supprimé puis recréé, facture faite avant le devis, paiement pointé par un autre chemin…
+// Rattachement automatique uniquement s'il n'y a qu'UN devis possible (même montant + même locataire/client).
+function _reparerArchivesDevis() {
+  const docs = DB.documents || [];
+  const devisParId = {};
+  docs.forEach(d => { if ((d.type || 'devis') === 'devis') devisParId[d.id] = d; });
+  const dejaLies = new Set(docs.filter(f => f.type === 'facture' && f.devisId && devisParId[f.devisId]).map(f => f.devisId));
+  const norm = x => String(x || '').trim().toLowerCase();
+  let change = 0;
+  docs.forEach(f => {
+    if (f.type !== 'facture' || f.statut !== 'payee') return;
+    let dv = f.devisId ? devisParId[f.devisId] : null;
+    if (!dv) {
+      const tot = Math.round((parseFloat(f.total) || 0) * 100);
+      if (!tot) return;
+      const cands = Object.values(devisParId).filter(d => !dejaLies.has(d.id)
+        && Math.round((parseFloat(d.total) || 0) * 100) === tot
+        && ((norm(f.locataireNom) && norm(d.locataireNom) === norm(f.locataireNom))
+            || (f.clientId && d.clientId === f.clientId) || (norm(f.clientNom) && norm(d.clientNom) === norm(f.clientNom))));
+      if (cands.length !== 1) return;
+      dv = cands[0]; f.devisId = dv.id; dejaLies.add(dv.id); change++;
+    }
+    if (!_isDevisArchivedWithFacture(dv)) { _setDevisArchivedFlag(dv, true); change++; }
+  });
+  if (change) DB.documents = docs;
+  return change;
+}
 function renderDocuments() {
   updateNavCounts();
+  try { _reparerArchivesDevis(); } catch (e) { console.warn('archives devis', e); }
   const list = $('documents-list');
   const count = $('documents-count');
   const q = (($('doc-search') || {}).value || '').toLowerCase();
