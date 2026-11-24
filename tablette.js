@@ -22,6 +22,9 @@
     var c = choix();
     if (c === 'off') return false;
     if (window.innerWidth <= 820) return false;            // en dessous : c'est le mode téléphone qui s'applique
+    var mm0 = window.matchMedia ? function (q) { return matchMedia(q).matches; } : function () { return false; };
+    var ecranTactile = (navigator.maxTouchPoints || 0) > 0 || mm0('(pointer: coarse)');
+    if (!ecranTactile) return false;                       // ordinateur avec souris : jamais la vue tablette
     if (c === 'on') return true;
     // Écran tactile sans souris (les tablettes Samsung se présentent souvent comme un PC : on ne se fie pas au nom)
     var mm = window.matchMedia ? function (q) { return matchMedia(q).matches; } : function () { return false; };
