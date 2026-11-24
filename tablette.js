@@ -17,13 +17,18 @@
 
   function choix() { try { return localStorage.getItem(CLE) || 'auto'; } catch (e) { return 'auto'; } }
   function estTablette() {
-    if (window.innerWidth <= 820) return false;            // en dessous : c'est le mode téléphone qui s'applique
+    // Lien ?tablette=1 (forcer) ou ?tablette=0 (annuler) : mémorisé sur l'appareil
+    try { var q = new URLSearchParams(location.search).get('tablette'); if (q === '1') localStorage.setItem(CLE, 'on'); else if (q === '0') localStorage.setItem(CLE, 'off'); else if (q === 'auto') localStorage.removeItem(CLE); } catch (e) {}
     var c = choix();
-    if (c === 'on') return true;
     if (c === 'off') return false;
-    var tactile = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || (navigator.maxTouchPoints || 0) > 1;
-    var android = /Android/i.test(navigator.userAgent || '');
-    return tactile && android;                              // Samsung Galaxy Tab
+    if (window.innerWidth <= 820) return false;            // en dessous : c'est le mode téléphone qui s'applique
+    if (c === 'on') return true;
+    // Écran tactile sans souris (les tablettes Samsung se présentent souvent comme un PC : on ne se fie pas au nom)
+    var mm = window.matchMedia ? function (q) { return matchMedia(q).matches; } : function () { return false; };
+    var sansSouris = mm('(hover: none)') && mm('(pointer: coarse)');
+    var tactile = (navigator.maxTouchPoints || 0) > 1;
+    var android = /Android|Linux x86_64|X11; Linux/i.test(navigator.userAgent || '') && !/Windows|CrOS/i.test(navigator.userAgent || '');
+    return sansSouris || (tactile && android);
   }
   window.tabletteActive = function () { return document.documentElement.classList.contains('tablette'); };
   window.tabletteBasculer = function () {
