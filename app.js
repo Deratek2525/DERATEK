@@ -18421,16 +18421,16 @@ function _fournAvecTva(nom) { const c = _fournCat(nom); return c ? c.tva : true;
 // Sert au dépôt d'un nouveau PDF ET au rangement des factures déjà en ligne.
 const _FOURN_REGLES = [
   [/avs|caisse de compensation|lpp|2e pilier|deuxi.me pilier|allocations familiales|suva/i, 'Charges sociales / AVS'],
-  [/assurance|vaudoise|mobili.re|helvetia|allianz|\\baxa\\b|baloise|zurich assur|generali|rc pro/i, 'Assurances'],
+  [/assurance|vaudoise|mobili.re|helvetia|allianz|\baxa\b|baloise|zurich assur|generali|rc pro/i, 'Assurances'],
   [/administration f.d.rale des contributions|d.compte (de la )?tva|\bestv\b|eidg.*steuerverwaltung|tdfn|dette fiscale nette/i, 'Décompte TVA'],
   [/imp.t|taxe|administration fiscale|tva administration|afc/i, 'Impôts / taxes'],
   [/fiduciaire|comptab|notaire|avocat|honoraire|conseil juridique/i, 'Honoraires / fiduciaire'],
   [/loyer|r.gie|g.rance .*(local|d.p.t)|bail/i, 'Loyer / local'],
-  [/banque|postfinance|raiffeisen|\\bubs\\b|credit suisse|frais bancaire|transaction service fee|commission bancaire/i, 'Frais bancaires'],
-  [/swisscom|sunrise|\\bsalt\\b|t.l.phone|t.l.com|\\binternet\\b|fibre optique|abonnement mobile/i, 'Téléphone / Internet'],
+  [/banque|postfinance|raiffeisen|\bubs\b|credit suisse|frais bancaire|transaction service fee|commission bancaire/i, 'Frais bancaires'],
+  [/swisscom|sunrise|\bsalt\b|t.l.phone|t.l.com|\binternet\b|fibre optique|abonnement mobile/i, 'Téléphone / Internet'],
   [/infomaniak|domaine|h.bergement|hosting|nom de domaine|webflow|wix|ovh|godaddy/i, 'Sites web / domaines'],
   [/microsoft|adobe|google workspace|logiciel|licence|software|subscription|artlist|canva|apple|abonnement ia|openai|anthropic/i, 'Informatique / logiciels'],
-  [/carburant|essence|diesel|station.service|socar|migrol|\\bavia\\b|\\bshell\\b|\\bbp\\b|tamoil|coop pronto/i, 'Carburant'],
+  [/carburant|essence|diesel|station.service|socar|migrol|\bavia\b|\bshell\b|\bbp\b|tamoil|coop pronto/i, 'Carburant'],
   [/restaurant|ristorante|caf.|pizzeria|brasserie|bistro|auberge|h.tel|buvette|tea.room|boulangerie|traiteur|mcdonald|burger king|kebab|sushi|repas/i, 'Repas / restaurant'],
   [/garage|pneu|service v.hicule|carrosserie|amag|emil frey|contr.le technique|hylly|liukutaso|am.nagement.*(fourgon|camionnette)/i, 'Véhicule / garage'],
   [/location|nacelle|nacellessa|.chafaudage|lev.*nacelle|rental/i, 'Location de matériel'],
@@ -19212,7 +19212,7 @@ async function fournConfirmSave() {
 // ============================================================
 // TICKETS DE CAISSE — photo depuis le téléphone, lecture par l'IA, saisie en lot
 // ============================================================
-const TK_CATS = ['Carburant', 'Produits / matériel', 'Repas / restaurant', 'Véhicule / garage',
+const TK_CATS = ['Carburant', 'Produits / matériel', 'Repas / restaurant', 'Véhicule / garage', 'Téléphone / Internet',
   'Vêtements / EPI', 'Frais de port / douane', 'Communication / marketing', 'Autre'];
 let _tk = [];            // { id, img, statut: attente|lecture|ok|erreur, err, garder, infos:{...} }
 let _tkEnCours = false;
