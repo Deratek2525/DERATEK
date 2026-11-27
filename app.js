@@ -21077,15 +21077,32 @@ function rappSupprimerReleve(id) {
   toast('Relevé supprimé de l\'archive', '#2d9e6b');
 }
 
+// Période couverte par un relevé PostFinance, déduite du nom du fichier :
+// « …_0_20261101013023.pdf » = relevé émis le 01.11.2026 → il couvre octobre 2026.
+function _relevePeriode(r) {
+  const m = String((r && r.filename) || '').match(/_(20\d{2})(\d{2})(\d{2})\d{6}/);
+  if (!m) return null;
+  let y = +m[1], mo = +m[2];
+  const j = +m[3];
+  if (j <= 10) { mo -= 1; if (mo < 1) { mo = 12; y -= 1; } }   // émis en début de mois → mois précédent
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const dernier = new Date(y, mo, 0).getDate();
+  const p2 = n => String(n).padStart(2, '0');
+  return { cle: y + '-' + p2(mo), mois: MOIS[mo - 1] + ' ' + y,
+           du: '01.' + p2(mo) + '.' + y, au: p2(dernier) + '.' + p2(mo) + '.' + y };
+}
 function renderRappArchives() {
   const box = $('rapp-archives'); if (!box) return;
-  const list = (DB.releves || []).slice().sort((a, b) => String(b.dateImport || '').localeCompare(String(a.dateImport || '')));
+  const cle = r => { const p = _relevePeriode(r); return p ? p.cle : String(r.dateImport || ''); };
+  const list = (DB.releves || []).slice().sort((a, b) => cle(b).localeCompare(cle(a)));
   if (!list.length) { box.innerHTML = ''; return; }
   box.innerHTML = `<div style="font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:18px 0 6px;">📂 Relevés archivés (${list.length})</div>` +
     list.map(r => `<div style="display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:9px 14px;margin-bottom:6px;flex-wrap:wrap;">
       <div style="font-size:16px;">🏦</div>
       <div style="flex:1;min-width:180px;">
-        <div style="font-size:12px;font-weight:800;color:var(--navy);word-break:break-all;">${_escapeHtml(r.filename || 'relevé')}</div>
+        ${(() => { const p = _relevePeriode(r);
+          return p ? `<div style="font-size:13px;font-weight:800;color:var(--navy);" title="${_escapeHtml(r.filename || '')}">Relevé de ${p.mois} <span style="font-weight:600;color:var(--g500);">· période du ${p.du} au ${p.au}</span></div>`
+                   : `<div style="font-size:12px;font-weight:800;color:var(--navy);word-break:break-all;">${_escapeHtml(r.filename || 'relevé')}</div>`; })()}
         <div style="font-size:11px;color:var(--g500);">importé le ${fmtDate(r.dateImport)} · ${r.nbPaiements || 0} paiement(s) · ${_rappMoney(r.total || 0)} CHF · ${r.nbReconnus || 0} reconnu(s)</div>
       </div>
       ${r.pdfPath ? `<button class="btn btn-ghost btn-sm" onclick="rappVoirReleve('${r.id}')" title="Ouvrir le PDF du relevé">📄 Voir le PDF</button>` : '<span style="font-size:11px;color:var(--g400);">PDF non conservé</span>'}
