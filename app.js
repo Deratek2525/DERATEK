@@ -4450,10 +4450,11 @@ function adjustStickyOffsets() {
   const navH = lateral ? 0 : (nav ? nav.getBoundingClientRect().height : 220);
   // Barre d'actions du rapport (Retour / PDF / Sauvegarder...)
   const pageHd = document.querySelector('#screen-rapport-edit .page-hd, .rapport-shell');
-  const actionBar = document.querySelector('.page-hd[style*="sticky"]');
+  const actionBar = document.querySelector('#screen-rapport-edit .page-hd') || document.querySelector('.page-hd[style*="sticky"]');
   if (actionBar) actionBar.style.top = navH + 'px';
   const actionH = actionBar ? actionBar.getBoundingClientRect().height : 60;
-  const tabs = document.querySelector('.tabs');
+  // Barre des étapes du rapport (1. Infos … 6. Conclusion) : reste collée sous la barre d'actions
+  const tabs = document.getElementById('rapport-tabs-bar') || document.querySelector('.tabs');
   if (tabs) tabs.style.top = (navH + actionH) + 'px';
   // Écran Bons : on borne sa hauteur sous la barre de nav pour que SEULE la liste
   // défile à l'intérieur (.page-body) et que l'en-tête (boutons Actifs/Terminés)

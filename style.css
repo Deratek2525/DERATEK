@@ -361,7 +361,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   background: var(--white); padding: 6px 18px 0;
   flex-shrink: 0;
 }
-#rapport-tabs-bar { margin-bottom: 0; }
+#rapport-tabs-bar { margin-bottom: 0; position: sticky; z-index: 99; box-shadow: 0 6px 12px -8px rgba(13,27,62,.25); }
 .tab {
   padding: 10px 14px; font-size: 11px; font-weight: 700; font-family: Arial;
   cursor: pointer; color: var(--g400); border-bottom: 2px solid transparent;
