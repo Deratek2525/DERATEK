@@ -4467,6 +4467,12 @@ function adjustStickyOffsets() {
 }
 window.addEventListener('load', adjustStickyOffsets);
 window.addEventListener('resize', adjustStickyOffsets);
+// Rapport : on recale aussi la barre des étapes dès qu'on fait défiler (sans attendre un clic)
+let _stickyRaf = 0;
+window.addEventListener('scroll', () => {
+  if (_stickyRaf) return;
+  _stickyRaf = requestAnimationFrame(() => { _stickyRaf = 0; const t = document.getElementById('rapport-tabs-bar'); if (t && t.offsetParent) adjustStickyOffsets(); });
+}, { passive: true });
 // Réajuste aussi quand on ouvre l'éditeur de rapport
 document.addEventListener('click', () => setTimeout(adjustStickyOffsets, 50));
 
